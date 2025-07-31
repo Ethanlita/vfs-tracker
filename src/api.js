@@ -1,4 +1,5 @@
-import { API, Storage } from 'aws-amplify';
+import { get, post } from 'aws-amplify/api';
+import { uploadData } from 'aws-amplify/storage';
 import { v4 as uuidv4 } from 'uuid';
 
 /**
@@ -15,10 +16,16 @@ export const uploadFile = async (file, userId) => {
   const key = `${userId}/${fileName}`;
 
   try {
-    await Storage.put(key, file, {
-      contentType: file.type,
-    });
-    return key;
+    // v6: Use uploadData instead of Storage.put
+    const result = await uploadData({
+      key: key,
+      data: file,
+      options: {
+        contentType: file.type,
+      },
+    }).result;
+    // The result object contains the final key
+    return result.key;
   } catch (error) {
     console.error('Error uploading file to S3:', error);
     throw error;
@@ -35,8 +42,13 @@ export const getAllEvents = async () => {
   try {
     const apiName = 'api';
     const path = '/all-events';
-    const response = await API.get(apiName, path);
-    return response;
+    // v6: Use the get function directly. The response body needs to be parsed from JSON.
+    const restOperation = get({
+      apiName,
+      path,
+    });
+    const { body } = await restOperation.response;
+    return await body.json();
   } catch (error) {
     console.error('Error fetching all public events:', error);
     throw error;
@@ -54,8 +66,13 @@ export const getEventsByUserId = async (userId) => {
   try {
     const apiName = 'api';
     const path = `/events/${userId}`;
-    const response = await API.get(apiName, path);
-    return response;
+    // v6: Use the get function directly.
+    const restOperation = get({
+      apiName,
+      path,
+    });
+    const { body } = await restOperation.response;
+    return await body.json();
   } catch (error) {
     console.error('Error fetching events by user ID:', error);
     throw error;
@@ -75,8 +92,8 @@ export const addEvent = async (eventData, userId) => {
   const timestamp = new Date().toISOString();
 
   const item = {
-    userId,       // Partition Key for DynamoDB
-    eventId,      // Sort Key for DynamoDB
+    userId, // Partition Key for DynamoDB
+    eventId, // Sort Key for DynamoDB
     ...eventData,
     createdAt: timestamp,
     updatedAt: timestamp,
@@ -85,12 +102,18 @@ export const addEvent = async (eventData, userId) => {
   try {
     const apiName = 'api'; // This name is defined in our Amplify config in `main.jsx`
     const path = '/events';
-    const myInit = {
-      body: item,
-    };
 
-    const response = await API.post(apiName, path, myInit);
-    return response;
+    // v6: Use the post function directly. The body is passed in the options object.
+    const restOperation = post({
+      apiName,
+      path,
+      options: {
+        body: item,
+      },
+    });
+
+    const { body } = await restOperation.response;
+    return await body.json();
   } catch (error) {
     console.error('Error adding event via API:', error);
     throw error;
