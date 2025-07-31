@@ -22,20 +22,19 @@ const SimpleRouter = () => {
 
 const AppContent = () => {
   return (
-    <Layout auth={<Auth />}>
-      <SimpleRouter />
-    </Layout>
+      <Layout auth={<Auth />}>
+        <SimpleRouter />
+      </Layout>
   );
 };
 
 function App() {
   return (
-    <Authenticator.Provider>
-      {/* We can customize the login form to match the new style later */}
+      // Quality Fix: The Authenticator.Provider is already in main.jsx, so it's not needed here.
+      // We can directly use the Authenticator component which will handle the UI.
       <Authenticator hideSignUp={true} variation="modal">
         <AppContent />
       </Authenticator>
-    </Authenticator.Provider>
   );
 }
 
