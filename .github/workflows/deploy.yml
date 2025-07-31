@@ -5,6 +5,12 @@ on:
     branches:
       - main
 
+# 权限设置：允许此工作流写入部署
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
