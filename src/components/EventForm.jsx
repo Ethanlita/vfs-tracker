@@ -3,21 +3,24 @@ import { useAuthenticator } from '@aws-amplify/ui-react';
 import { addEvent, uploadFile } from '../api';
 
 /**
- * A form for creating new voice events.
- * It handles data input, file uploads, and submission to the backend.
+ * @en A form for creating new voice events. It handles data input, file uploads, and submission to the backend.
+ * @zh 一个用于创建新的嗓音事件的表单。它处理数据输入、文件上传和向后端提交。
  * @param {object} props - The component props.
  * @param {function(object): void} props.onEventAdded - Callback function to notify the parent component when a new event is successfully added.
  * @returns {JSX.Element} The rendered form component.
  */
 const EventForm = ({ onEventAdded }) => {
+  // --- STATE MANAGEMENT ---
   const { user } = useAuthenticator((context) => [context.user]);
   const [eventType, setEventType] = useState('self_test');
   const [notes, setNotes] = useState('');
   const [file, setFile] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // --- HANDLERS ---
   /**
-   * Updates the state when a file is selected.
+   * @en Updates the state when a file is selected in the input.
+   * @zh 在输入中选择文件时更新状态。
    * @param {React.ChangeEvent<HTMLInputElement>} e - The change event from the file input.
    */
   const handleFileChange = (e) => {
@@ -25,12 +28,14 @@ const EventForm = ({ onEventAdded }) => {
   };
 
   /**
-   * Handles the form submission process.
-   * It performs validation, uploads a file if present, and then submits the event data to the API.
+   * @en Handles the form submission process. It performs validation, uploads a file if present, and then submits the event data to the API.
+   * @zh 处理表单提交流程。它执行验证，如果存在文件则上传文件，然后将事件数据提交到 API。
    * @param {React.FormEvent<HTMLFormElement>} e - The form submission event.
    */
   const handleSubmit = async (e) => {
-    e.preventDefault();
+    e.preventDefault(); // @en Prevent default form submission. @zh 阻止默认的表单提交。
+
+    // @en Basic validation. @zh 基本验证。
     if (!user) {
       alert('You must be logged in to add an event.');
       return;
@@ -42,6 +47,8 @@ const EventForm = ({ onEventAdded }) => {
     setIsSubmitting(true);
 
     let attachmentKey = null;
+    // @en If a file is selected, upload it to S3.
+    // @zh 如果选择了文件，则将其上传到 S3。
     if (file) {
       try {
         attachmentKey = await uploadFile(file, user.attributes.sub);
@@ -52,6 +59,8 @@ const EventForm = ({ onEventAdded }) => {
       }
     }
 
+    // @en Prepare the event data for the API call.
+    // @zh 准备 API 调用的事件数据。
     const eventData = {
       type: eventType,
       notes,
@@ -60,14 +69,19 @@ const EventForm = ({ onEventAdded }) => {
     };
 
     try {
+      // @en Call the API to add the event.
+      // @zh 调用 API 添加事件。
       const newEvent = await addEvent(eventData, user.attributes.sub);
       alert('Event added successfully!');
-      onEventAdded(newEvent.item); // Notify parent component to update the UI
+      onEventAdded(newEvent.item); // @en Notify parent component to update the UI. @zh 通知父组件更新 UI。
 
-      // Reset form fields
+      // @en Reset form fields to their initial state.
+      // @zh 将表单字段重置为其初始状态。
       setNotes('');
       setEventType('self_test');
       setFile(null);
+      // @en Also reset the file input visually.
+      // @zh 同时在视觉上重置文件输入。
       if (document.getElementById('file-input')) {
         document.getElementById('file-input').value = null;
       }
@@ -79,6 +93,7 @@ const EventForm = ({ onEventAdded }) => {
     }
   };
 
+  // --- RENDER ---
   return (
     <div className="bg-white p-6 rounded-xl shadow-md border border-gray-200">
       <form onSubmit={handleSubmit} className="space-y-4">
