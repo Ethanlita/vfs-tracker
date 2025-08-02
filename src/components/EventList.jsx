@@ -1,33 +1,39 @@
 import React from 'react';
-// v6 Change: Import getUrl from the 'aws-amplify/storage' sub-package
+// @en v6 Change: Import getUrl from the 'aws-amplify/storage' sub-package
+// @zh v6 变更：从 'aws-amplify/storage' 子包导入 getUrl
 import { getUrl } from 'aws-amplify/storage';
 
 /**
- * Renders a list of events in a vertical timeline format.
+ * @en Renders a list of events in a vertical timeline format.
+ * @zh 以垂直时间线格式呈现事件列表。
  * @param {object} props - The component props.
  * @param {Array<object>} props.events - An array of event objects to display.
  * @returns {JSX.Element} The rendered list of events.
  */
 const EventList = ({ events }) => {
+  // @en If there are no events, display a message.
+  // @zh 如果没有事件，则显示一条消息。
   if (!events || events.length === 0) {
     return <p className="text-gray-500">No events found. Add one using the form above!</p>;
   }
 
   /**
-   * Handles downloading an S3 attachment.
-   * It gets a temporary, pre-signed URL from S3 and opens it in a new tab.
+   * @en Handles downloading an S3 attachment. It gets a temporary, pre-signed URL from S3 and opens it in a new tab.
+   * @zh 处理下载 S3 附件。它从 S3 获取一个临时的、预签名的 URL，并在新标签页中打开它。
    * @param {string} attachmentKey - The S3 key for the file to download.
    */
   const handleDownload = async (attachmentKey) => {
     try {
-      // v6 Change: Use the getUrl function with a key and options
+      // @en v6 Change: Use the getUrl function with a key and options.
+      // @zh v6 变更：使用带有 key 和 options 的 getUrl 函数。
       const getUrlResult = await getUrl({
         key: attachmentKey,
         options: {
-          download: true, // This option forces the browser to download the file
+          download: true, // @en This option forces the browser to download the file. @zh 此选项强制浏览器下载文件。
         },
       });
-      // The result contains a URL object which needs to be converted to a string
+      // @en The result contains a URL object which needs to be converted to a string.
+      // @zh 结果包含一个需要转换为字符串的 URL 对象。
       window.open(getUrlResult.url.toString(), '_blank');
     } catch (error) {
       console.error('Error getting download URL from S3:', error);
@@ -41,25 +47,31 @@ const EventList = ({ events }) => {
           {events.map((event, eventIdx) => (
               <li key={event.eventId}>
                 <div className="relative pb-8">
-                  {/* Render a vertical line connecting timeline points, except for the last one */}
+                  {/* @en Render a vertical line connecting timeline points, except for the last one. */}
+                  {/* @zh 渲染连接时间线点的垂直线，除了最后一个。 */}
                   {eventIdx !== events.length - 1 ? (
                       <span className="absolute top-4 left-4 -ml-px h-full w-0.5 bg-gray-200" aria-hidden="true" />
                   ) : null}
                   <div className="relative flex space-x-3">
                     <div>
-                  <span className="h-8 w-8 rounded-full bg-pink-500 flex items-center justify-center ring-8 ring-white">
-                    {/* TODO: This icon could be changed based on event.type */}
-                    <svg className="h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm.75-11.25a.75.75 0 00-1.5 0v4.59L7.3 9.24a.75.75 0 00-1.1 1.02l3.25 3.5a.75.75 0 001.1 0l3.25-3.5a.75.75 0 10-1.1-1.02l-1.95 2.1V6.75z" clipRule="evenodd" />
-                    </svg>
-                  </span>
+                      <span className="h-8 w-8 rounded-full bg-pink-500 flex items-center justify-center ring-8 ring-white">
+                        {/* @en TODO: This icon could be changed based on event.type */}
+                        {/* @zh TODO: 这个图标可以根据 event.type 更改 */}
+                        <svg className="h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm.75-11.25a.75.75 0 00-1.5 0v4.59L7.3 9.24a.75.75 0 00-1.1 1.02l3.25 3.5a.75.75 0 001.1 0l3.25-3.5a.75.75 0 10-1.1-1.02l-1.95 2.1V6.75z" clipRule="evenodd" />
+                        </svg>
+                      </span>
                     </div>
                     <div className="min-w-0 flex-1 pt-1.5 flex justify-between space-x-4">
                       <div>
                         <p className="text-sm text-gray-500">
+                          {/* @en Display the event type in a readable format. */}
+                          {/* @zh 以可读格式显示事件类型。 */}
                           {event.type.replace('_', ' ').toUpperCase()}
                         </p>
                         <p className="text-sm text-gray-800 mt-1">{event.notes || 'No notes provided.'}</p>
+                        {/* @en If there is an attachment, show a download button. */}
+                        {/* @zh 如果有附件，则显示下载按钮。 */}
                         {event.attachment && (
                             <button
                                 onClick={() => handleDownload(event.attachment)}
@@ -70,6 +82,8 @@ const EventList = ({ events }) => {
                         )}
                       </div>
                       <div className="text-right text-sm whitespace-nowrap text-gray-500">
+                        {/* @en Display the creation date of the event. */}
+                        {/* @zh 显示事件的创建日期。 */}
                         <time dateTime={event.createdAt}>{new Date(event.createdAt).toLocaleDateString()}</time>
                       </div>
                     </div>

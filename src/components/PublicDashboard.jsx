@@ -3,36 +3,62 @@ import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Toolti
 import { Bar } from 'react-chartjs-2';
 import { getAllEvents } from '../api';
 
+// @en Register the necessary components for Chart.js.
+// @zh 为 Chart.js 注册必要的组件。
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
+/**
+ * @en The PublicDashboard component displays aggregated and anonymized data from all users.
+ * It includes summary statistics and a bar chart showing the distribution of event types.
+ * This component is publicly accessible.
+ * @zh PublicDashboard 组件显示来自所有用户的聚合和匿名数据。
+ * 它包括摘要统计信息和显示事件类型分布的条形图。
+ * 此组件可公开访问。
+ * @returns {JSX.Element} The rendered public dashboard component.
+ */
 const PublicDashboard = () => {
+  // --- STATE MANAGEMENT ---
   const [chartData, setChartData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [totalEvents, setTotalEvents] = useState(0);
   const [totalUsers, setTotalUsers] = useState(0);
 
+  // --- DATA FETCHING AND PROCESSING ---
   useEffect(() => {
+    /**
+     * @en Fetches all public events, processes the data for display, and updates the component's state.
+     * @zh 获取所有公共事件，处理用于显示的数据，并更新组件的状态。
+     */
     const fetchAndProcessData = async () => {
       try {
         setIsLoading(true);
+        // @en Fetch all events from the API.
+        // @zh 从 API 获取所有事件。
         const allEvents = await getAllEvents();
         setTotalEvents(allEvents.length);
+
+        // @en Calculate the number of unique users.
+        // @zh 计算唯一用户数。
         const uniqueUsers = new Set(allEvents.map(event => event.userId));
         setTotalUsers(uniqueUsers.size);
 
+        // @en Process data for the bar chart.
+        // @zh 为条形图处理数据。
         const eventTypes = ['hospital_test', 'self_test', 'training', 'surgery'];
         const counts = eventTypes.reduce((acc, type) => {
           acc[type] = allEvents.filter(event => event.type === type).length;
           return acc;
         }, {});
 
+        // @en Set the processed data for the chart.
+        // @zh 设置图表的已处理数据。
         setChartData({
           labels: eventTypes.map(type => type.replace('_', ' ').toUpperCase()),
           datasets: [
             {
               label: '# of Events',
               data: eventTypes.map(type => counts[type]),
-              backgroundColor: 'rgba(236, 72, 153, 0.6)', // Pink color
+              backgroundColor: 'rgba(236, 72, 153, 0.6)', // @en Pink color @zh 粉色
               borderColor: 'rgba(236, 72, 153, 1)',
               borderWidth: 1,
             },
@@ -46,8 +72,9 @@ const PublicDashboard = () => {
     };
 
     fetchAndProcessData();
-  }, []);
+  }, []); // @en Empty dependency array means this effect runs once on mount. @zh 空依赖数组表示此效果在挂载时运行一次。
 
+  // --- RENDER ---
   if (isLoading) {
     return <div className="text-center p-8">Loading dashboard...</div>;
   }
@@ -60,6 +87,8 @@ const PublicDashboard = () => {
           A summary of anonymized data from all users.
         </p>
       </div>
+
+      {/* @en Summary statistics cards. @zh 摘要统计卡片。 */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="bg-white p-6 rounded-xl shadow-md border border-gray-200 text-center">
           <h3 className="text-lg font-medium text-gray-500">Total Events Logged</h3>
@@ -70,6 +99,8 @@ const PublicDashboard = () => {
           <p className="mt-2 text-4xl font-bold text-pink-600">{totalUsers}</p>
         </div>
       </div>
+
+      {/* @en Bar chart for event distribution. @zh 事件分布的条形图。 */}
       <div className="bg-white p-6 rounded-xl shadow-md border border-gray-200">
         <h2 className="text-xl font-semibold text-gray-900 mb-4">Event Distribution</h2>
         {chartData ? (
