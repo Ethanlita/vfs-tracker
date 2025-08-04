@@ -14,7 +14,7 @@ const EventList = ({ events }) => {
   // @en If there are no events, display a message.
   // @zh 如果没有事件，则显示一条消息。
   if (!events || events.length === 0) {
-    return <p className="text-gray-500">No events found. Add one using the form above!</p>;
+    return <p className="text-gray-500">未找到事件。请使用上面的表单添加一个！</p>;
   }
 
   /**
@@ -37,7 +37,7 @@ const EventList = ({ events }) => {
       window.open(getUrlResult.url.toString(), '_blank');
     } catch (error) {
       console.error('Error getting download URL from S3:', error);
-      alert('Could not get download link for the file.');
+      alert('无法获取文件的下载链接。');
     }
   };
 
@@ -67,9 +67,17 @@ const EventList = ({ events }) => {
                         <p className="text-sm text-gray-500">
                           {/* @en Display the event type in a readable format. */}
                           {/* @zh 以可读格式显示事件类型。 */}
-                          {event.type.replace('_', ' ').toUpperCase()}
+                          {(() => {
+                            const typeMap = {
+                              'hospital_test': '医院检测',
+                              'self_test': '自我测试',
+                              'training': '训练',
+                              'surgery': '手术'
+                            };
+                            return typeMap[event.type] || event.type.replace('_', ' ').toUpperCase();
+                          })()}
                         </p>
-                        <p className="text-sm text-gray-800 mt-1">{event.notes || 'No notes provided.'}</p>
+                        <p className="text-sm text-gray-800 mt-1">{event.notes || '未提供备注。'}</p>
                         {/* @en If there is an attachment, show a download button. */}
                         {/* @zh 如果有附件，则显示下载按钮。 */}
                         {event.attachment && (
@@ -77,7 +85,7 @@ const EventList = ({ events }) => {
                                 onClick={() => handleDownload(event.attachment)}
                                 className="mt-2 text-sm font-medium text-indigo-600 hover:text-indigo-500"
                             >
-                              Download Attachment
+                              下载附件
                             </button>
                         )}
                       </div>

@@ -1,5 +1,5 @@
-import React from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 /**
  * @en The main layout component for the application. It provides a consistent
@@ -11,22 +11,47 @@ import { Link } from 'react-router-dom';
  * @returns {JSX.Element} The rendered layout component.
  */
 const Layout = ({ children, auth }) => {
+  const navigate = useNavigate();
+  const [isHoveringLogo, setIsHoveringLogo] = useState(false);
+
+  const handleLogoClick = () => {
+    navigate('/');
+  };
   return (
-    <div className="bg-gray-50 text-gray-800 font-sans">
+    <div className="min-h-screen bg-white text-gray-800 flex flex-col">
       {/*
         @en TODO: The original design uses Google Fonts (Inter). This is not accessible in mainland China.
         Replace with a local font or a different font provider. The font can be added in index.html.
         @zh TODO: 最初的设计使用了谷歌字体（Inter）。这在中国大陆无法访问。
         需要替换为本地字体或不同的字体提供商。可以在 index.html 中添加字体。
       */}
-      <header className="bg-white shadow-sm sticky top-0 z-10">
-        <nav className="container mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
+      <header className="bg-white shadow-lg sticky top-0 z-10 w-full">
+        <nav className="container mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center">
+          <div className="flex items-center justify-between w-full">
             {/* @en Site title and link to the homepage. @zh 网站标题及主页链接。 */}
             <div className="flex items-center">
-              <Link to="/" className="text-xl font-bold text-pink-600">
-                VoiceFem Tracker
-              </Link>
+              <button 
+                onClick={handleLogoClick}
+                onMouseEnter={() => setIsHoveringLogo(true)}
+                onMouseLeave={() => setIsHoveringLogo(false)}
+                className="vfs-title-button"
+                style={{
+                  color: isHoveringLogo ? '#be185d' : '#db2777',
+                  background: 'transparent',
+                  border: 'none',
+                  padding: '0',
+                  margin: '0',
+                  fontFamily: 'inherit',
+                  outline: 'none',
+                  fontWeight: '800',
+                  fontSize: '1.5rem',
+                  lineHeight: '2rem',
+                  cursor: 'pointer',
+                  transition: 'color 0.3s ease'
+                }}
+              >
+                VFS Tracker
+              </button>
             </div>
             {/* @en Container for the authentication component. @zh 用于身份验证组件的容器。 */}
             <div id="auth-container">
@@ -37,14 +62,14 @@ const Layout = ({ children, auth }) => {
       </header>
 
       {/* @en Main content area where page-specific components are rendered. @zh 渲染特定页面组件的主要内容区域。 */}
-      <main className="container mx-auto p-4 sm:p-6 lg:p-8 min-h-screen">
+      <main id="main-content" className="container mx-auto p-4 sm:p-6 lg:p-8 flex-grow bg-gray-100">
         {children}
       </main>
 
       {/* @en Application footer. @zh 应用程序页脚。 */}
-      <footer className="bg-white mt-12">
-        <div className="container mx-auto py-6 px-4 sm:px-6 lg:px-8 text-center text-gray-500">
-          <p>&copy; 2024 VoiceFem Tracker. An open source project.</p>
+      <footer className="bg-white shadow-lg mt-12">
+        <div className="container mx-auto py-6 px-4 sm:px-6 lg:px-8 vfs-footer-text">
+          <p>&copy; 2025 VFS Tracker. 一个开源项目。</p>
         </div>
       </footer>
     </div>

@@ -26,7 +26,7 @@ const Profile = () => {
         fetchedEvents.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
         setEvents(fetchedEvents);
       } catch (error) {
-        console.error("Failed to fetch events:", error);
+        console.error("获取事件失败:", error);
       } finally {
         setIsLoading(false);
       }
@@ -50,17 +50,17 @@ const Profile = () => {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-3xl font-bold text-gray-900">My Profile</h1>
+        <h1 className="text-3xl font-bold text-gray-900">我的资料</h1>
         <p className="mt-1 text-sm text-gray-500">
-          Welcome, {user?.username}. Here you can add new events and view your timeline.
+          欢迎，{user?.username}。在这里您可以添加新事件并查看您的时间线。
         </p>
       </div>
 
       <EventForm onEventAdded={handleEventAdded} />
 
       <div className="bg-white p-6 rounded-xl shadow-md border border-gray-200">
-        <h2 className="text-xl font-semibold text-gray-900 mb-4">My Timeline</h2>
-        {isLoading ? <p>Loading events...</p> : <EventList events={events} />}
+        <h2 className="text-xl font-semibold text-gray-900 mb-4">我的时间线</h2>
+        {isLoading ? <p>正在加载事件...</p> : <EventList events={events} />}
       </div>
     </div>
   );

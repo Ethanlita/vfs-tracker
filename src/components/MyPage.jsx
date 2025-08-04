@@ -43,7 +43,7 @@ const MyPage = () => {
       setEvents(sortedEvents);
     } catch (error) {
       console.error("Failed to fetch user events:", error);
-      alert("Could not load your events. Please try reloading the page.");
+      alert("无法加载您的事件。请尝试重新加载页面。");
     } finally {
       setIsLoading(false);
     }
@@ -73,10 +73,10 @@ const MyPage = () => {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-3xl font-bold text-gray-900">My Personal Dashboard</h1>
+        <h1 className="text-3xl font-bold text-gray-900">我的个人仪表板</h1>
         <p className="mt-1 text-sm text-gray-500">
           {/* @en Greet the user by their email. @zh 通过用户的电子邮件向他们打招呼。 */}
-          Welcome, {user?.attributes?.email || 'user'}! Here you can log and view your voice events.
+          欢迎，{user?.attributes?.email || '用户'}！在这里您可以记录和查看您的嗓音事件。
         </p>
       </div>
 
@@ -85,9 +85,9 @@ const MyPage = () => {
 
       {/* @en Container for the user's event timeline. @zh 用户事件时间线的容器。 */}
       <div className="bg-white p-6 rounded-xl shadow-md border border-gray-200">
-        <h2 className="text-2xl font-bold mb-4">My Event Timeline</h2>
+        <h2 className="text-2xl font-bold mb-4">我的事件时间线</h2>
         {isLoading ? (
-          <p>Loading events...</p>
+          <p>正在加载事件...</p>
         ) : (
           <EventList events={events} />
         )}

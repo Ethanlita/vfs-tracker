@@ -11,6 +11,40 @@ This is a web application designed to help users track the progress of their voi
   - **File Storage**: Amazon S3
   - **API**: Amazon API Gateway + AWS Lambda
 
+## Development Setup
+
+### 1. Clone and Install Dependencies
+```bash
+git clone <repository-url>
+cd vfs-tracker
+npm install
+```
+
+### 2. Environment Configuration
+
+For development, the app will run in "development mode" without requiring AWS credentials. However, for production deployment, you'll need to configure AWS services.
+
+**Development Mode (Default):**
+- No configuration needed
+- Uses mock authentication
+- Limited functionality for testing UI/UX
+
+**Production Mode:**
+1. Copy `.env.example` to `.env`
+2. Fill in your AWS Cognito credentials:
+```env
+VITE_AWS_REGION=your_aws_region
+VITE_COGNITO_USER_POOL_ID=your_user_pool_id
+VITE_COGNITO_USER_POOL_WEB_CLIENT_ID=your_web_client_id
+```
+
+### 3. Run Development Server
+```bash
+npm run dev
+```
+
+The app will be available at `http://localhost:5173/`
+
 ## Deployment
 
 This project is automatically deployed to GitHub Pages via GitHub Actions whenever code is pushed to the `main` branch.
