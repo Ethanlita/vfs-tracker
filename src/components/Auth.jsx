@@ -38,9 +38,12 @@ const Auth = () => {
           {mockUser.attributes.name}
         </span>
         <span className="text-xs text-orange-600 hidden sm:block">(开发模式)</span>
-        <Link to="/mypage" className="text-sm font-semibold text-gray-700 hover:text-pink-600">
+        <button
+          onClick={() => navigate('/mypage')}
+          className="text-sm font-semibold text-gray-700 hover:text-pink-600"
+        >
           我的页面
-        </Link>
+        </button>
         <button
           onClick={handleDevLogout}
           className="bg-gray-200 text-gray-800 hover:bg-gray-300 font-semibold py-2 px-4 rounded-lg transition-colors duration-300"
