@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 
 /**
  * @en The main layout component for the application. It provides a consistent
@@ -23,9 +24,9 @@ const Layout = ({ children, auth }) => {
           <div className="flex items-center justify-between h-16">
             {/* @en Site title and link to the homepage. @zh 网站标题及主页链接。 */}
             <div className="flex items-center">
-              <a href="/#/" className="text-xl font-bold text-pink-600">
+              <Link to="/" className="text-xl font-bold text-pink-600">
                 VoiceFem Tracker
-              </a>
+              </Link>
             </div>
             {/* @en Container for the authentication component. @zh 用于身份验证组件的容器。 */}
             <div id="auth-container">
