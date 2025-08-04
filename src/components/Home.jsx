@@ -1,52 +1,40 @@
 import React from 'react';
-import { useAuthenticator } from '@aws-amplify/ui-react';
 
 /**
- * @en The Home page component. NOTE: This component is currently not in use and is superseded by PublicDashboard as the main landing page. It is kept for reference.
- * This component was intended as a landing page for all users, providing a welcome message and navigation options.
- * @zh 主页组件。注意：此组件当前未使用，已被 PublicDashboard 作为主要着陆页取代。保留此文件以供参考。
- * 该组件旨在作为所有用户的着陆页，提供欢迎信息和导航选项。
+ * @en The Home page component, serving as the main landing page for the application.
+ * It provides a welcome message and primary navigation links.
+ * @zh 主页组件，作为应用程序的主要着陆页。
+ * 它提供欢迎信息和主要导航链接。
  * @returns {JSX.Element} The rendered home page.
  */
 const Home = () => {
-  // @en Hook to trigger the sign-in modal.
-  // @zh 用于触发登录模态框的钩子。
-  const { toSignIn } = useAuthenticator();
-
   return (
     <div>
-      {/* @en Main welcome section. @zh 主要欢迎区域。 */}
       <div className="text-center py-16">
         <h1 className="text-4xl font-bold tracking-tight text-gray-900 sm:text-5xl">
           欢迎来到嗓音记录平台
         </h1>
         <p className="mt-6 text-lg leading-8 text-gray-600">
-          请先登录以开始记录您的嗓音旅程，或查看公开的统计数据。
+          请登录以开始记录您的嗓音旅程，或查看公开的统计数据。
         </p>
         <div className="mt-10 flex items-center justify-center gap-x-6">
-          {/* @en Link to the public data dashboard. @zh 指向公共数据仪表板的链接。 */}
           <a
             href="#/dashboard"
             className="bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white rounded-md shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
           >
             查看数据汇总
           </a>
-          {/* @en Button to trigger the login flow. @zh 触发登录流程的按钮。 */}
-          <button
-            onClick={toSignIn}
-            className="text-sm font-semibold leading-6 text-gray-900"
-          >
-            登录以开始 <span aria-hidden="true">→</span>
-          </button>
+          <a href="https://github.com/lita-x/vfs-tracker" target="_blank" rel="noopener noreferrer" className="text-sm font-semibold leading-6 text-gray-900">
+            了解更多 <span aria-hidden="true">→</span>
+          </a>
         </div>
       </div>
 
-      {/* @en "About Us" section. @zh “关于我们”区域。 */}
       <div id="content-display" className="mt-12">
         <div className="bg-white p-6 rounded-xl shadow-md border border-gray-200">
-          <h2 className="text-2xl font-bold mb-4">关于我们</h2>
+          <h2 className="text-2xl font-bold mb-4">功能区</h2>
           <p className="text-gray-600">
-            VoiceFem Tracker 是一个开源项目，旨在为嗓音女性化训练和手术提供一个安全、私密且功能强大的记录工具。我们相信，通过记录和可视化数据，每个人都可以更好地了解自己的进步，并与社区分享（在自愿和匿名的前提下）宝贵的经验。
+            登录后，这里将显示您的个人事件时间线。现在，您可以先浏览公开的数据汇总。
           </p>
         </div>
       </div>

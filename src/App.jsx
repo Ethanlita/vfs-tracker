@@ -6,6 +6,7 @@ import Layout from './components/Layout';
 import Auth from './components/Auth';
 import MyPage from './components/MyPage';
 import PublicDashboard from './components/PublicDashboard';
+import Home from './components/Home';
 
 /**
  * @en A simple router based on the URL hash. It conditionally renders components
@@ -40,9 +41,15 @@ const SimpleRouter = () => {
     return <div>Loading...</div>;
   }
 
-  // Default view is the Public Dashboard, accessible to everyone
-  // 默认视图是公共仪表板，所有人都可以访问
-  return <PublicDashboard />;
+  // Route for the public data dashboard
+  // 公共数据仪表板的路由
+  if (hash === '#/dashboard') {
+    return <PublicDashboard />;
+  }
+
+  // Default view is the Home page, accessible to everyone
+  // 默认视图是主页，所有人都可以访问
+  return <Home />;
 };
 
 /**

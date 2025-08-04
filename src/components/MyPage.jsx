@@ -34,7 +34,7 @@ const MyPage = () => {
     if (!user) return; // @en Don't fetch if there's no user. @zh 如果没有用户则不获取。
     try {
       setIsLoading(true);
-      const userEvents = await getEventsByUserId();
+      const userEvents = await getEventsByUserId(user.userId);
       // @en Sort events by creation date, newest first.
       // @zh 按创建日期对事件进行排序，最新的在前。
       const sortedEvents = userEvents.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
