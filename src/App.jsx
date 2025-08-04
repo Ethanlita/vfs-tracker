@@ -9,6 +9,24 @@ import PublicDashboard from './components/PublicDashboard';
 import Home from './components/Home';
 
 /**
+ * @en A component to protect routes that require authentication in production mode.
+ * @zh 生产模式下保护需要身份验证的路由的组件。
+ */
+const ProductionProtectedRoute = () => {
+  const { authStatus } = useAuthenticator(context => [context.authStatus]);
+
+  // @en While Amplify is figuring out the auth status, show a loading indicator.
+  // @zh 在 Amplify 确定身份验证状态时，显示加载指示器。
+  if (authStatus === 'configuring') {
+    return <div>正在加载...</div>;
+  }
+
+  // @en If the user is not authenticated, redirect them to the home page.
+  // @zh 如果用户未通过身份验证，则将他们重定向到主页。
+  return authStatus === 'authenticated' ? <Outlet /> : <Navigate to="/" replace />;
+};
+
+/**
  * @en A component to protect routes that require authentication.
  * It checks the user's authentication status and redirects to the home page if not logged in.
  * @zh 一个用于保护需要身份验证的路由的组件。
@@ -16,17 +34,18 @@ import Home from './components/Home';
  * @returns {JSX.Element} The child component if authenticated, or a redirect.
  */
 const ProtectedRoute = () => {
-  const { authStatus } = useAuthenticator(context => [context.authStatus]);
+  // 检查是否有AWS配置
+  const isProductionReady = import.meta.env.VITE_COGNITO_USER_POOL_ID && 
+                           import.meta.env.VITE_COGNITO_USER_POOL_WEB_CLIENT_ID && 
+                           import.meta.env.VITE_AWS_REGION;
 
-  // @en While Amplify is figuring out the auth status, show a loading indicator.
-  // @zh 在 Amplify 确定身份验证状态时，显示加载指示器。
-  if (authStatus === 'configuring') {
-    return <div>Loading...</div>;
+  // 开发模式：总是允许访问
+  if (!isProductionReady) {
+    return <Outlet />;
   }
 
-  // @en If the user is not authenticated, redirect them to the home page.
-  // @zh 如果用户未通过身份验证，则将他们重定向到主页。
-  return authStatus === 'authenticated' ? <Outlet /> : <Navigate to="/" replace />;
+  // 生产模式：使用AWS认证组件
+  return <ProductionProtectedRoute />;
 };
 
 

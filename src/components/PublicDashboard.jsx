@@ -53,10 +53,10 @@ const PublicDashboard = () => {
         // @en Set the processed data for the chart.
         // @zh 设置图表的已处理数据。
         setChartData({
-          labels: eventTypes.map(type => type.replace('_', ' ').toUpperCase()),
+          labels: ['医院检测', '自我测试', '训练', '手术'],
           datasets: [
             {
-              label: '# of Events',
+              label: '事件数量',
               data: eventTypes.map(type => counts[type]),
               backgroundColor: 'rgba(236, 72, 153, 0.6)', // @en Pink color @zh 粉色
               borderColor: 'rgba(236, 72, 153, 1)',
@@ -76,33 +76,33 @@ const PublicDashboard = () => {
 
   // --- RENDER ---
   if (isLoading) {
-    return <div className="text-center p-8">Loading dashboard...</div>;
+    return <div className="text-center p-8">正在加载仪表板...</div>;
   }
 
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-3xl font-bold text-gray-900">Public Dashboard</h1>
+        <h1 className="text-3xl font-bold text-gray-900">公开仪表板</h1>
         <p className="mt-1 text-sm text-gray-500">
-          A summary of anonymized data from all users.
+          来自所有用户的匿名数据汇总。
         </p>
       </div>
 
       {/* @en Summary statistics cards. @zh 摘要统计卡片。 */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="bg-white p-6 rounded-xl shadow-md border border-gray-200 text-center">
-          <h3 className="text-lg font-medium text-gray-500">Total Events Logged</h3>
+          <h3 className="text-lg font-medium text-gray-500">总记录事件数</h3>
           <p className="mt-2 text-4xl font-bold text-indigo-600">{totalEvents}</p>
         </div>
         <div className="bg-white p-6 rounded-xl shadow-md border border-gray-200 text-center">
-          <h3 className="text-lg font-medium text-gray-500">Contributing Users</h3>
+          <h3 className="text-lg font-medium text-gray-500">贡献用户数</h3>
           <p className="mt-2 text-4xl font-bold text-pink-600">{totalUsers}</p>
         </div>
       </div>
 
       {/* @en Bar chart for event distribution. @zh 事件分布的条形图。 */}
       <div className="bg-white p-6 rounded-xl shadow-md border border-gray-200">
-        <h2 className="text-xl font-semibold text-gray-900 mb-4">Event Distribution</h2>
+        <h2 className="text-xl font-semibold text-gray-900 mb-4">事件分布</h2>
         {chartData ? (
           <Bar
             data={chartData}
@@ -110,7 +110,7 @@ const PublicDashboard = () => {
               responsive: true,
               plugins: {
                 legend: { display: false },
-                title: { display: true, text: 'Distribution of Event Types Across All Users' },
+                title: { display: true, text: '所有用户的事件类型分布' },
               },
               scales: {
                 y: {
@@ -120,7 +120,7 @@ const PublicDashboard = () => {
             }}
           />
         ) : (
-          <p>No chart data available.</p>
+          <p>无图表数据可用。</p>
         )}
       </div>
     </div>
