@@ -2,44 +2,50 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches:
-      - main
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
 
-# 权限设置：允许此工作流写入部署
+# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
 permissions:
   contents: read
   pages: write
   id-token: write
 
+# Allow only one concurrent deployment, skipping runs queued between the run in-progress and latest queued.
+# However, do NOT cancel in-progress runs as we want to allow these production deployments to complete.
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout
-        uses: actions/checkout@v3
+    - name: Checkout
+      uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: '20'
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
 
-      - name: Install Dependencies
-        run: npm install
+    - name: Install dependencies
+      run: npm ci
 
-      - name: Build
-        run: |
-          # Create a dummy .env file for the build process
-          echo "VITE_AWS_REGION=${{ secrets.VITE_AWS_REGION }}" > .env.local
-          echo "VITE_AWS_ACCESS_KEY_ID=${{ secrets.VITE_AWS_ACCESS_KEY_ID }}" >> .env.local
-          echo "VITE_AWS_SECRET_ACCESS_KEY=${{ secrets.VITE_AWS_SECRET_ACCESS_KEY }}" >> .env.local
-          echo "VITE_COGNITO_USER_POOL_ID=${{ secrets.VITE_COGNITO_USER_POOL_ID }}" >> .env.local
-          echo "VITE_COGNITO_USER_POOL_WEB_CLIENT_ID=${{ secrets.VITE_COGNITO_USER_POOL_WEB_CLIENT_ID }}" >> .env.local
-          npm run build
-        env:
-          CI: false # Don't treat warnings as errors
+    - name: Build
+      run: npm run build
 
-      - name: Deploy
-        uses: peaceiris/actions-gh-pages@v3
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./dist
+    - name: Setup Pages
+      uses: actions/configure-pages@v4
+
+    - name: Upload artifact
+      uses: actions/upload-pages-artifact@v3
+      with:
+        path: './dist'
+
+    - name: Deploy to GitHub Pages
+      id: deployment
+      uses: actions/deploy-pages@v4
