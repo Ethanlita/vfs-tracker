@@ -1,5 +1,6 @@
 import React from 'react';
 import { useAuthenticator } from '@aws-amplify/ui-react';
+import { Link, useNavigate } from 'react-router-dom';
 
 /**
  * @en Authentication component displayed in the header.
@@ -19,6 +20,7 @@ const Auth = () => {
     context.signOut,
     context.toSignIn,
   ]);
+  const navigate = useNavigate();
 
   // --- HANDLERS ---
   /**
@@ -28,9 +30,9 @@ const Auth = () => {
    */
   const handleSignOut = () => {
     signOut();
-    // @en Redirect to home page after sign out to ensure a clean state.
-    // @zh 登出后重定向到主页以确保状态干净。
-    window.location.hash = '#/';
+    // @en Use navigate for client-side routing after sign out.
+    // @zh 登出后使用 navigate 进行客户端路由。
+    navigate('/');
   };
 
   // --- RENDER ---
@@ -41,9 +43,9 @@ const Auth = () => {
       <div className="flex items-center gap-4">
         {/* @en Link to the user's personal dashboard. */}
         {/* @zh 指向用户个人仪表板的链接。 */}
-        <a href="#/mypage" className="text-sm font-semibold text-gray-700 hover:text-pink-600">
+        <Link to="/mypage" className="text-sm font-semibold text-gray-700 hover:text-pink-600">
           My Page
-        </a>
+        </Link>
         {/* @en Button to sign the user out. */}
         {/* @zh 用于用户登出的按钮。 */}
         <button

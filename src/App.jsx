@@ -1,6 +1,6 @@
 import { useAuthenticator } from '@aws-amplify/ui-react';
 import '@aws-amplify/ui-react/styles.css';
-import { useEffect } from 'react';
+import { Routes, Route, Navigate, Outlet } from 'react-router-dom';
 
 import Layout from './components/Layout';
 import Auth from './components/Auth';
@@ -9,48 +9,26 @@ import PublicDashboard from './components/PublicDashboard';
 import Home from './components/Home';
 
 /**
- * @en A simple router based on the URL hash. It conditionally renders components
- * based on the hash value and user authentication status.
- * @zh 一个基于 URL哈希的简易路由器。它根据哈希值和用户认证状态来条件性地渲染组件。
- * @returns {JSX.Element} The component to be rendered for the current route.
+ * @en A component to protect routes that require authentication.
+ * It checks the user's authentication status and redirects to the home page if not logged in.
+ * @zh 一个用于保护需要身份验证的路由的组件。
+ * 它会检查用户的身份验证状态，如果未登录则重定向到主页。
+ * @returns {JSX.Element} The child component if authenticated, or a redirect.
  */
-const SimpleRouter = () => {
-  // Get authentication status and sign-in function from Amplify
-  // 从 Amplify 获取身份验证状态和登录函数
-  const { authStatus, toSignIn } = useAuthenticator((context) => [context.authStatus]);
-  const hash = window.location.hash;
+const ProtectedRoute = () => {
+  const { authStatus } = useAuthenticator(context => [context.authStatus]);
 
-  // Effect to check authentication for protected routes
-  // 用于检查受保护路由的身份验证的 Effect
-  useEffect(() => {
-    // If the user tries to access the 'mypage' route and is not authenticated, prompt them to sign in
-    // 如果用户尝试访问 'mypage' 路由但未通过身份验证，则提示他们登录
-    if (hash === '#/mypage' && authStatus !== 'authenticated') {
-      toSignIn();
-    }
-  }, [hash, authStatus, toSignIn]);
-
-  // Route for the user's personal page, protected by authentication
-  // 用户个人页面的路由，受身份验证保护
-  if (hash === '#/mypage') {
-    if (authStatus === 'authenticated') {
-      return <MyPage />;
-    }
-    // Display a loading message while authentication status is being checked
-    // 在检查身份验证状态时显示加载消息
+  // @en While Amplify is figuring out the auth status, show a loading indicator.
+  // @zh 在 Amplify 确定身份验证状态时，显示加载指示器。
+  if (authStatus === 'configuring') {
     return <div>Loading...</div>;
   }
 
-  // Route for the public data dashboard
-  // 公共数据仪表板的路由
-  if (hash === '#/dashboard') {
-    return <PublicDashboard />;
-  }
-
-  // Default view is the Home page, accessible to everyone
-  // 默认视图是主页，所有人都可以访问
-  return <Home />;
+  // @en If the user is not authenticated, redirect them to the home page.
+  // @zh 如果用户未通过身份验证，则将他们重定向到主页。
+  return authStatus === 'authenticated' ? <Outlet /> : <Navigate to="/" replace />;
 };
+
 
 /**
  * @en The main content container of the application. It wraps the router
@@ -61,7 +39,15 @@ const SimpleRouter = () => {
 const AppContent = () => {
   return (
     <Layout auth={<Auth />}>
-      <SimpleRouter />
+      <Routes>
+        <Route path="/" element={<Home />} />
+        <Route path="/dashboard" element={<PublicDashboard />} />
+        <Route element={<ProtectedRoute />}>
+          <Route path="/mypage" element={<MyPage />} />
+        </Route>
+        {/* @en A catch-all route to redirect any unknown paths to the homepage. @zh 一个包罗万象的路由，可将任何未知路径重定向到主页。 */}
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
     </Layout>
   );
 };

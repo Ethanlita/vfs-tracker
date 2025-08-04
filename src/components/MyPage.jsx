@@ -34,7 +34,9 @@ const MyPage = () => {
     if (!user) return; // @en Don't fetch if there's no user. @zh 如果没有用户则不获取。
     try {
       setIsLoading(true);
-      const userEvents = await getEventsByUserId(user.userId);
+      // @en Use user.attributes.sub for consistency with other components like EventForm.
+      // @zh 与 EventForm 等其他组件保持一致，使用 user.attributes.sub。
+      const userEvents = await getEventsByUserId(user.attributes.sub);
       // @en Sort events by creation date, newest first.
       // @zh 按创建日期对事件进行排序，最新的在前。
       const sortedEvents = userEvents.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));

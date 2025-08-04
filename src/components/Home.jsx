@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 
 /**
  * @en The Home page component, serving as the main landing page for the application.
@@ -18,12 +19,12 @@ const Home = () => {
           请登录以开始记录您的嗓音旅程，或查看公开的统计数据。
         </p>
         <div className="mt-10 flex items-center justify-center gap-x-6">
-          <a
-            href="#/dashboard"
+          <Link
+            to="/dashboard"
             className="bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white rounded-md shadow-sm hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600"
           >
             查看数据汇总
-          </a>
+          </Link>
           <a href="https://github.com/lita-x/vfs-tracker" target="_blank" rel="noopener noreferrer" className="text-sm font-semibold leading-6 text-gray-900">
             了解更多 <span aria-hidden="true">→</span>
           </a>
