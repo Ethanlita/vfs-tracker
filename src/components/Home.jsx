@@ -1,5 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuthenticator } from '@aws-amplify/ui-react';
+import Timeline from './Timeline';
 
 /**
  * @en The Home page component, serving as the main landing page for the application.
@@ -10,6 +12,12 @@ import { useNavigate } from 'react-router-dom';
  */
 const Home = () => {
   const navigate = useNavigate();
+  const { authStatus } = useAuthenticator(context => [context.authStatus]);
+
+  // In development, we can simulate the authenticated state.
+  // In a real scenario, you might check a mock user state as well.
+  const isDevelopment = !import.meta.env.VITE_COGNITO_USER_POOL_ID;
+  const isAuthenticated = authStatus === 'authenticated';
 
   const handleViewDashboard = () => {
     navigate('/dashboard');
@@ -18,6 +26,13 @@ const Home = () => {
   const handleLearnMore = () => {
     window.open('https://github.com/Ethanlita/vfs-tracker', '_blank', 'noopener,noreferrer');
   };
+
+  // If the user is authenticated, show the Timeline component.
+  if (isAuthenticated) {
+    return <Timeline />;
+  }
+
+  // Otherwise, show the public landing page.
   return (
     <div className="space-y-12">
       <div className="text-center py-16 px-4">
