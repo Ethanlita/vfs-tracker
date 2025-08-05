@@ -21,16 +21,15 @@ const PostsDropdown = () => {
           <div
             key={item.name}
             className="dropdown-submenu-trigger"
+            style={{ position: 'relative' }}
             onMouseEnter={() => {
-              console.log('Mouse enter folder:', item.name);
               setHoveredFolder(item.name);
             }}
             onMouseLeave={() => {
-              console.log('Mouse leave folder:', item.name);
               // 延迟清除，给用户时间移动到子菜单
               setTimeout(() => {
                 setHoveredFolder(null);
-              }, 100);
+              }, 150);
             }}
           >
             <button
@@ -52,28 +51,24 @@ const PostsDropdown = () => {
                   position: 'absolute',
                   left: '100%',
                   top: '0',
-                  marginLeft: '0.25rem',
-                  zIndex: 1000,
-                  display: 'block'
+                  marginLeft: '0.5rem',
+                  zIndex: 1001,
+                  display: 'block',
+                  minWidth: '160px'
                 }}
                 onMouseEnter={() => {
-                  console.log('Mouse enter submenu:', item.name);
                   setHoveredFolder(item.name);
                 }}
                 onMouseLeave={() => {
-                  console.log('Mouse leave submenu:', item.name);
-                  setHoveredFolder(null);
+                  // 延迟清除，保持与父元素一致的时间
+                  setTimeout(() => {
+                    setHoveredFolder(null);
+                  }, 150);
                 }}
               >
                 <div className="py-1">
                   {item.children && item.children.length > 0 ? renderMenuItems(item.children) : <div className="px-4 py-2 text-sm text-gray-500">No items</div>}
                 </div>
-              </div>
-            )}
-            {/* 调试信息 */}
-            {hoveredFolder === item.name && (
-              <div style={{ position: 'absolute', top: '-20px', left: '0', background: 'yellow', fontSize: '10px', zIndex: 100 }}>
-                DEBUG: {item.name} hovered, submenu should show
               </div>
             )}
           </div>
