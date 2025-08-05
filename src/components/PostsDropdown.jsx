@@ -1,11 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 
 const PostsDropdown = () => {
   const [posts, setPosts] = useState([]);
   const [isOpen, setIsOpen] = useState(false);
-  const [hoveredFolder, setHoveredFolder] = useState(null);
   const navigate = useNavigate();
+  const timeoutRef = useRef(null);
+  const hoverStateRef = useRef(false);
 
   useEffect(() => {
     fetch('/posts.json')
@@ -18,108 +20,95 @@ const PostsDropdown = () => {
     return items.map((item) => {
       if (item.type === 'folder') {
         return (
-          <div
-            key={item.name}
-            className="dropdown-submenu-trigger"
-            style={{ position: 'relative' }}
-            onMouseEnter={() => {
-              setHoveredFolder(item.name);
-            }}
-            onMouseLeave={() => {
-              // 延迟清除，给用户时间移动到子菜单
-              setTimeout(() => {
-                setHoveredFolder(null);
-              }, 150);
-            }}
-          >
-            <button
-              onClick={() => {
-                navigate('/posts');
-                setIsOpen(false);
-              }}
-              className="dropdown-menu-button dropdown-folder-button text-sm text-left text-gray-700"
-            >
-              <span className="dropdown-folder-text">
-                {item.name}
-              </span>
+          <DropdownMenu.Sub key={item.name}>
+            <DropdownMenu.SubTrigger className="dropdown-menu-button dropdown-folder-button text-sm text-left text-gray-700">
+              <span className="dropdown-folder-text">{item.name}</span>
               <span className="dropdown-folder-arrow text-gray-400">›</span>
-            </button>
-            {hoveredFolder === item.name && (
-              <div
+            </DropdownMenu.SubTrigger>
+            <DropdownMenu.Portal>
+              <DropdownMenu.SubContent 
                 className="dropdown-submenu bg-white rounded-md shadow-[0_8px_30px_rgb(0,0,0,0.12)] dropdown-menu-container"
-                style={{
-                  position: 'absolute',
-                  left: '100%',
-                  top: '0',
-                  marginLeft: '0.5rem',
-                  zIndex: 1001,
-                  display: 'block',
-                  minWidth: '160px'
-                }}
-                onMouseEnter={() => {
-                  setHoveredFolder(item.name);
-                }}
-                onMouseLeave={() => {
-                  // 延迟清除，保持与父元素一致的时间
-                  setTimeout(() => {
-                    setHoveredFolder(null);
-                  }, 150);
-                }}
+                sideOffset={8}
+                alignOffset={-5}
               >
                 <div className="py-1">
-                  {item.children && item.children.length > 0 ? renderMenuItems(item.children) : <div className="px-4 py-2 text-sm text-gray-500">No items</div>}
+                  {item.children && item.children.length > 0 ? renderMenuItems(item.children) : <DropdownMenu.Item disabled className="px-4 py-2 text-sm text-gray-500">No items</DropdownMenu.Item>}
                 </div>
-              </div>
-            )}
-          </div>
+              </DropdownMenu.SubContent>
+            </DropdownMenu.Portal>
+          </DropdownMenu.Sub>
         );
       } else {
         return (
-          <div key={item.name}>
-            <button
-              onClick={() => {
-                navigate(`/posts/${item.path.replace(/\.md$/, '')}`);
-                setIsOpen(false);
-              }}
-              className="dropdown-menu-button text-sm text-gray-700"
-            >
-              {item.name.replace(/\.md$/, '')}
-            </button>
-          </div>
+          <DropdownMenu.Item 
+            key={item.name}
+            onSelect={() => navigate(`/posts/${item.path.replace(/\.md$/, '')}`)}
+            className="dropdown-menu-button text-sm text-gray-700"
+          >
+            {item.name.replace(/\.md$/, '')}
+          </DropdownMenu.Item>
         );
       }
     });
   };
 
-  return (
-    <div className="relative inline-block text-left" onMouseLeave={() => setIsOpen(false)}>
-      <div>
-        <button
-          type="button"
-          onMouseEnter={() => setIsOpen(true)}
-          onClick={() => {
-            navigate('/posts');
-            setIsOpen(false);
-          }}
-          className="inline-flex items-center bg-transparent border-none text-base font-medium text-gray-600 hover:text-pink-600 focus:outline-none transition-colors duration-200"
-          style={{ whiteSpace: 'nowrap' }}
-        >
-          文档
-          <svg className="ml-1 h-4 w-4 transform transition-transform duration-200" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true" style={{ transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}>
-            <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
-          </svg>
-        </button>
-      </div>
+  // 统一的打开菜单函数
+  const openMenu = () => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+    hoverStateRef.current = true;
+    setIsOpen(true);
+  };
 
-      {isOpen && (
-        <div 
-          className="origin-top-right absolute right-0 mt-2 rounded-md bg-white focus:outline-none shadow-[0_8px_30px_rgb(0,0,0,0.12)] dropdown-menu-container"
-        >
-          <div className="py-1">
-            {renderMenuItems(posts)}
-          </div>
-        </div>
-      )}
+  // 统一的关闭菜单函数
+  const closeMenu = () => {
+    hoverStateRef.current = false;
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+    }
+    timeoutRef.current = setTimeout(() => {
+      if (!hoverStateRef.current) {
+        setIsOpen(false);
+      }
+    }, 150);
+  };
+
+  return (
+    <div>
+      <DropdownMenu.Root open={isOpen} modal={false}>
+        <DropdownMenu.Trigger asChild>
+          <button
+            type="button"
+            className="inline-flex items-center bg-transparent border-none text-base font-medium text-gray-600 hover:text-pink-600 focus:outline-none transition-colors duration-200"
+            style={{ whiteSpace: 'nowrap' }}
+            onMouseEnter={openMenu}
+            onMouseLeave={closeMenu}
+          >
+            文档
+            <svg className="ml-1 h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+              <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+            </svg>
+          </button>
+        </DropdownMenu.Trigger>
+
+        <DropdownMenu.Portal>
+          <DropdownMenu.Content
+            className="origin-top-right rounded-md bg-white focus:outline-none shadow-[0_8px_30px_rgb(0,0,0,0.12)] dropdown-menu-container"
+            style={{ zIndex: 50 }}
+            sideOffset={2}
+            align="start"
+            onMouseEnter={openMenu}
+            onMouseLeave={closeMenu}
+            onOpenAutoFocus={(e) => e.preventDefault()}
+          >
+            <div className="py-1">
+              {renderMenuItems(posts)}
+            </div>
+          </DropdownMenu.Content>
+        </DropdownMenu.Portal>
+      </DropdownMenu.Root>
     </div>
   );
 };
