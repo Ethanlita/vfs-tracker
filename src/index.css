@@ -290,3 +290,116 @@ footer .text-gray-400 {
     gap: 0.75rem;
   }
 }
+
+/* 导航布局样式 */
+.nav-spacing-narrow {
+  margin-left: 0.35rem;
+  margin-right: 0.35rem;
+}
+
+.nav-spacing {
+  margin-left: 0.75rem;
+  margin-right: 0.75rem;
+}
+
+.nav-spacing-left-first {
+  margin-left: 1.5rem;
+  margin-right: 0.75rem;
+}
+
+.nav-spacing-large {
+  margin-left: 5rem; /* 80px, 等同于 ml-20 */
+}
+
+/* 下拉菜单按钮样式 */
+.dropdown-menu-button {
+  border: none;
+  background-color: #ffffff;
+  width: 100%;
+  min-width: 8rem;
+  max-width: 10rem;
+  padding: 0.75rem 1rem;
+  line-height: 1.3;
+  word-wrap: break-word;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  text-overflow: ellipsis;
+  position: relative;
+  transition: all 0.2s ease;
+  text-align: left;
+  border-radius: 0;
+}
+
+.dropdown-menu-button::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 30%;
+  background: linear-gradient(to bottom, transparent 0%, rgba(255, 255, 255, 0.95) 60%, rgba(255, 255, 255, 1) 100%);
+  pointer-events: none;
+  opacity: 0.8;
+}
+
+.dropdown-menu-button:hover {
+  background-color: #f9fafb;
+}
+
+.dropdown-menu-button:hover::after {
+  background: linear-gradient(to bottom, transparent 0%, rgba(249, 250, 251, 0.95) 60%, rgba(249, 250, 251, 1) 100%);
+}
+
+/* 文件夹按钮特殊样式 */
+.dropdown-folder-button {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  width: 100%;
+  min-width: 8rem;
+  max-width: 10rem;
+}
+
+.dropdown-folder-text {
+  flex: 1;
+  max-width: calc(100% - 1.5rem);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  text-overflow: ellipsis;
+  line-height: 1.3;
+}
+
+.dropdown-folder-arrow {
+  flex-shrink: 0;
+  margin-left: 0.5rem;
+  margin-top: 0.1rem;
+}
+
+/* 下拉菜单容器样式 */
+.dropdown-menu-container {
+  min-width: 10rem;
+  max-width: 10rem;
+  width: 10rem;
+  border-radius: 0.5rem;
+  overflow: hidden;
+}
+
+/* 子菜单样式 - 简化版本，不控制显示状态 */
+.dropdown-submenu-trigger {
+  position: relative;
+}
+
+.dropdown-submenu {
+  position: absolute;
+  left: 100%;
+  top: 0;
+  margin-top: 0;
+  margin-left: 0.25rem;
+  z-index: 50;
+}
+
+/* 移除所有CSS控制的display属性，完全交给JavaScript控制 */

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import PostsDropdown from './PostsDropdown';
 
 /**
  * @en The main layout component for the application. It provides a consistent
@@ -26,10 +27,13 @@ const Layout = ({ children, auth }) => {
         需要替换为本地字体或不同的字体提供商。可以在 index.html 中添加字体。
       */}
       <header className="bg-white shadow-lg sticky top-0 z-10 w-full">
-        <nav className="container mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center">
+        <nav 
+          className="container mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center"
+          style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif" }}
+        >
           <div className="flex items-center justify-between w-full">
             {/* @en Site title and link to the homepage. @zh 网站标题及主页链接。 */}
-            <div className="flex items-center">
+            <div className="flex items-center"> 
               <button 
                 onClick={handleLogoClick}
                 onMouseEnter={() => setIsHoveringLogo(true)}
@@ -43,7 +47,7 @@ const Layout = ({ children, auth }) => {
                   margin: '0',
                   fontFamily: 'inherit',
                   outline: 'none',
-                  fontWeight: '800',
+                  fontWeight: '700',
                   fontSize: '1.5rem',
                   lineHeight: '2rem',
                   cursor: 'pointer',
@@ -52,9 +56,13 @@ const Layout = ({ children, auth }) => {
               >
                 VFS Tracker
               </button>
+              {/* @en Wrapper to enforce spacing. @zh 用于强制设置间距的包装器。 */}
+              <div className={"nav-spacing-left-first"}>
+                <PostsDropdown />
+              </div>
             </div>
             {/* @en Container for the authentication component. @zh 用于身份验证组件的容器。 */}
-            <div id="auth-container">
+            <div id="auth-container" className={"nav-spacing"}>
               {auth}
             </div>
           </div>

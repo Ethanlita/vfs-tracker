@@ -8,6 +8,8 @@ import Auth from './components/Auth';
 import MyPage from './components/MyPage';
 import PublicDashboard from './components/PublicDashboard';
 import Home from './components/Home';
+import PostList from './components/PostList';
+import PostViewer from './components/PostViewer';
 
 /**
  * @en A component to protect routes that require authentication in production mode.
@@ -62,6 +64,8 @@ const AppContent = () => {
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/dashboard" element={<PublicDashboard />} />
+        <Route path="/posts" element={<PostList />} />
+        <Route path="/posts/*" element={<PostViewer />} />
         <Route element={<ProtectedRoute />}>
           <Route path="/mypage" element={<MyPage />} />
         </Route>
