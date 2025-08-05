@@ -60,7 +60,10 @@ const PostsDropdown = () => {
                   setHoveredFolder(item.name);
                 }}
                 onMouseLeave={() => {
-                  setHoveredFolder(null);
+                  // 延迟清除，保持与父元素一致的时间
+                  setTimeout(() => {
+                    setHoveredFolder(null);
+                  }, 150);
                 }}
               >
                 <div className="py-1">
