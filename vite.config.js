@@ -3,7 +3,7 @@ import react from '@vitejs/plugin-react'
 
 // https://vite.dev/config/
 export default defineConfig({
-  base: '/', // Use relative paths for GitHub Pages
+  base: '/', // Set base to root ('/') for custom domain deployment
   plugins: [react()],
   build: {
     outDir: 'dist',
