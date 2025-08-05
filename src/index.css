@@ -272,3 +272,21 @@ footer .text-gray-400 {
 .functionality-text-size {
   font-size: 1.125rem;
 }
+
+/* Auth组件间距修复 - 使用高特异性确保生效 */
+.auth-container {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem; /* 相当于 gap-3 */
+}
+
+.auth-container > * {
+  flex-shrink: 0;
+}
+
+/* 确保在所有屏幕尺寸下都生效 */
+@media (min-width: 640px) {
+  .auth-container {
+    gap: 0.75rem;
+  }
+}
