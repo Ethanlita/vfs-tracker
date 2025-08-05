@@ -1,6 +1,7 @@
 import { useAuthenticator } from '@aws-amplify/ui-react';
 import '@aws-amplify/ui-react/styles.css';
 import { Routes, Route, Navigate, Outlet } from 'react-router-dom';
+import { AuthProvider } from './contexts/AuthContext';
 
 import Layout from './components/Layout';
 import Auth from './components/Auth';
@@ -77,7 +78,11 @@ const AppContent = () => {
  * @returns {JSX.Element} The main application component.
  */
 function App() {
-  return <AppContent />;
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
+  );
 }
 
 export default App;

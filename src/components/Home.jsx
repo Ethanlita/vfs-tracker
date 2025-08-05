@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuthenticator } from '@aws-amplify/ui-react';
+import { useAuth } from '../contexts/AuthContext';
 import Timeline from './Timeline';
 
 /**
@@ -12,12 +12,7 @@ import Timeline from './Timeline';
  */
 const Home = () => {
   const navigate = useNavigate();
-  const { authStatus } = useAuthenticator(context => [context.authStatus]);
-
-  // In development, we can simulate the authenticated state.
-  // In a real scenario, you might check a mock user state as well.
-  const isDevelopment = !import.meta.env.VITE_COGNITO_USER_POOL_ID;
-  const isAuthenticated = authStatus === 'authenticated';
+  const { isAuthenticated } = useAuth();
 
   const handleViewDashboard = () => {
     navigate('/dashboard');
