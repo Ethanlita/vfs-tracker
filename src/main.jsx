@@ -4,6 +4,7 @@ import './index.css'
 import App from './App.jsx'
 import { Amplify } from 'aws-amplify';
 import '@aws-amplify/ui-react/styles.css';
+import { BrowserRouter, useNavigate } from 'react-router-dom';
 import { BrowserRouter } from 'react-router-dom';
 
 // 检查是否在开发环境且缺少必要的环境变量
@@ -45,9 +46,23 @@ if (isProductionReady) {
 
 import { Authenticator } from '@aws-amplify/ui-react';
 
+// 一个小组件，用于处理从 404.html 过来的重定向逻辑
+const RedirectHandler = () => {
+  const navigate = useNavigate();
+  const redirectPath = sessionStorage.getItem('redirect');
+  
+  if (redirectPath) {
+    sessionStorage.removeItem('redirect'); // 用完后立即清除
+    navigate(redirectPath, { replace: true });
+  }
+  
+  return null; // 这个组件不渲染任何东西
+};
+
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <BrowserRouter>
+      <RedirectHandler />
       {isProductionReady ? (
         <Authenticator.Provider>
           <App />
