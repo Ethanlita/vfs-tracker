@@ -1,4 +1,3 @@
-/* 移除可能影响布局的默认样式 */
 /* #root {
   max-width: 1280px;
   margin: 0 auto;
@@ -41,3 +40,118 @@
 .read-the-docs {
   color: #888;
 }
+
+/* --- Radix Dropdown Menu Styles --- */
+
+/* The main container for dropdown content */
+.dropdown-menu-container {
+  z-index: 50 !important;
+  min-width: 200px;
+}
+
+/* Styling for all menu buttons/items */
+.dropdown-menu-button {
+  display: block;
+  width: 100%;
+  padding: 8px 16px;
+  text-align: left;
+  cursor: pointer;
+  transition: none; /* 移除过渡效果 */
+}
+
+.dropdown-menu-button:hover,
+.dropdown-menu-button[data-highlighted] { /* Radix UI uses data-highlighted for keyboard navigation */
+  color: #374151; /* 简单的颜色加深效果 */
+  background-color: transparent; /* 移除背景色变化 */
+  outline: none;
+}
+
+/* Specific styling for folder items to align text and arrow */
+.dropdown-folder-button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.dropdown-folder-text {
+  flex: 1;
+}
+
+.dropdown-folder-arrow {
+  margin-left: 8px;
+  font-size: 14px;
+}
+
+
+/* Animation for Radix Content (main menu and submenus) */
+[data-radix-popper-content-wrapper] {
+  transform-origin: var(--radix-popper-transform-origin);
+  animation: scaleIn 0.1s ease-out;
+  z-index: 50; /* Ensure dropdown appears above other elements like nav */
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* 导航栏样式 */
+.nav-spacing-left-first {
+  margin-left: 2rem;
+}
+
+.nav-spacing {
+  margin-left: 1rem;
+}
+
+.vfs-title-button {
+  transition: color 0.3s ease;
+}
+
+.vfs-footer-text {
+  text-align: center;
+  color: #6b7280;
+}
+
+/* 下拉菜单悬停容器 */
+.dropdown-hover-container {
+  position: relative;
+}
+
+/* 当悬停在容器上时显示下拉菜单内容 */
+.dropdown-hover-container:hover [data-radix-dropdown-menu-content] {
+  display: block;
+}
+
+/* 默认隐藏下拉菜单内容（当没有悬停时） */
+.dropdown-hover-container [data-radix-dropdown-menu-content] {
+  display: none;
+}
+
+/* 当下拉菜单内容本身被悬停时保持显示 */
+[data-radix-dropdown-menu-content]:hover {
+  display: block !important;
+}
+
+/* 为了确保鼠标可以从按钮平滑移动到菜单，添加一个不可见的桥接区域 */
+.dropdown-hover-container::before {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  height: 8px; /* 与 sideOffset 匹配 */
+  background: transparent;
+  z-index: 49;
+}
+
+.dropdown-hover-container:hover::before {
+  display: block;
+}
+
