@@ -5,7 +5,6 @@ import App from './App.jsx'
 import { Amplify } from 'aws-amplify';
 import '@aws-amplify/ui-react/styles.css';
 import { BrowserRouter, useNavigate } from 'react-router-dom';
-import { BrowserRouter } from 'react-router-dom';
 
 // 检查是否在开发环境且缺少必要的环境变量
 const isProductionReady = import.meta.env.VITE_COGNITO_USER_POOL_ID && 
