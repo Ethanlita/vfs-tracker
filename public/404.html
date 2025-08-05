@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>VFS Tracker - Page Not Found</title>
+    <script type="text/javascript">
+      // 获取当前路径，并将其转换为查询参数
+      // 例如: https://vfs-tracker.app/mypage -> /mypage
+      const path = window.location.pathname;
+
+      // 将路径信息存储在 sessionStorage 中，以便 index.html 中的路由可以读取
+      // 使用 sessionStorage 是因为它只在当前会话中有效
+      sessionStorage.redirect = path;
+
+      // 重定向到根路径。服务器会返回 index.html
+      // 使用 replace 方法，这样用户的浏览器历史记录中不会留下这个 404 页面
+      window.location.replace(window.location.origin);
+
+    </script>
+  </head>
+  <body>
+    <!-- 你可以放一个简单的加载提示 -->
+    <p>If you are not redirected automatically, please <a href="/">click here</a>.</p>
+  </body>
+</html>
