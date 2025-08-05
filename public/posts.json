@@ -1,0 +1,23 @@
+[
+  {
+    "name": "getting-started.md",
+    "type": "file",
+    "path": "getting-started.md"
+  },
+  {
+    "name": "tutorial",
+    "type": "folder",
+    "children": [
+      {
+        "name": "part1.md",
+        "type": "file",
+        "path": "tutorial/part1.md"
+      },
+      {
+        "name": "part2.md",
+        "type": "file",
+        "path": "tutorial/part2.md"
+      }
+    ]
+  }
+]
