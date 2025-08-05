@@ -14,6 +14,8 @@ export default defineConfig({
         manualChunks: undefined,
       },
     },
+    emptyOutDir: true, // Ensure the output directory is cleared before each build
+    copyPublicDir: true, // Copy public directory to the output directory
   },
   server: {
     host: true,

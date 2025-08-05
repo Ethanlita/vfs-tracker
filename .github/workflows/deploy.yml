@@ -25,9 +25,14 @@ jobs:
       - name: Build project
         run: npm run build
 
+      - name: List build output
+        run: ls -la dist/
+
+      - name: Check index.html content
+        run: cat dist/index.html || echo "index.html is empty or missing"
+
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./dist
-
