@@ -16,12 +16,16 @@ const PostsDropdown = () => {
       .catch(error => console.error('Failed to load posts:', error));
   }, []);
 
-  const renderMenuItems = (items) => {
+  const renderMenuItems = (items, parentPath = '') => {
     return items.map((item) => {
       if (item.type === 'folder') {
+        const folderPath = parentPath ? `${parentPath}/${item.name}` : item.name;
         return (
           <DropdownMenu.Sub key={item.name}>
-            <DropdownMenu.SubTrigger className="dropdown-menu-button dropdown-folder-button text-sm text-left text-gray-700">
+            <DropdownMenu.SubTrigger
+              className="dropdown-menu-button dropdown-folder-button text-sm text-left text-gray-700"
+              onClick={() => navigate(`/posts?folder=${folderPath}`)} // 传递文件夹路径参数
+            >
               <span className="dropdown-folder-text">{item.name}</span>
               <span className="dropdown-folder-arrow text-gray-400">›</span>
             </DropdownMenu.SubTrigger>
@@ -32,7 +36,7 @@ const PostsDropdown = () => {
                 alignOffset={-5}
               >
                 <div className="py-1">
-                  {item.children && item.children.length > 0 ? renderMenuItems(item.children) : <DropdownMenu.Item disabled className="px-4 py-2 text-sm text-gray-500">No items</DropdownMenu.Item>}
+                  {item.children && item.children.length > 0 ? renderMenuItems(item.children, folderPath) : <DropdownMenu.Item disabled className="px-4 py-2 text-sm text-gray-500">No items</DropdownMenu.Item>}
                 </div>
               </DropdownMenu.SubContent>
             </DropdownMenu.Portal>
@@ -85,6 +89,7 @@ const PostsDropdown = () => {
             style={{ whiteSpace: 'nowrap' }}
             onMouseEnter={openMenu}
             onMouseLeave={closeMenu}
+            onClick={() => navigate('/posts')} // 添加点击处理，点击"文档"按钮也进入文章列表
           >
             文档
             <svg className="ml-1 h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
