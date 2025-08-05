@@ -12,6 +12,11 @@
         "name": "part1.md",
         "type": "file",
         "path": "tutorial/part1.md"
+      },
+      {
+        "name": "part2.md",
+        "type": "file",
+        "path": "tutorial/part2.md"
       }
     ]
   }
