@@ -9,10 +9,29 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- GitHub Pages 客户端路由处理 -->
+    <script type="text/javascript">
+      // 处理从404页面重定向过来的路径
+      (function(l) {
+        // 检查sessionStorage中是否有重定向路径
+        var redirect = sessionStorage.redirect;
+        if (redirect) {
+          // 清除sessionStorage中的重定向信息
+          sessionStorage.removeItem('redirect');
+          // 使用history.replaceState来更新URL，避免页面刷新
+          if (window.history && window.history.replaceState) {
+            window.history.replaceState(null, null, redirect);
+          } else {
+            // 降级处理：直接替换当前URL
+            l.replace(l.protocol + '//' + l.hostname + (l.port ? ':' + l.port : '') + redirect);
+          }
+        }
+      }(window.location))
+    </script>
   </head>
   <body class="bg-gray-50 text-gray-800">
     <div id="root"></div>
     <script type="module" src="./src/main.jsx"></script>
   </body>
 </html>
-

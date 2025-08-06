@@ -1,4 +1,4 @@
-import { StrictMode } from 'react'
+import { StrictMode, useEffect } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.jsx'
@@ -48,13 +48,19 @@ import { Authenticator } from '@aws-amplify/ui-react';
 // 一个小组件，用于处理从 404.html 过来的重定向逻辑
 const RedirectHandler = () => {
   const navigate = useNavigate();
-  const redirectPath = sessionStorage.getItem('redirect');
-  
-  if (redirectPath) {
-    sessionStorage.removeItem('redirect'); // 用完后立即清除
-    navigate(redirectPath, { replace: true });
-  }
-  
+
+  useEffect(() => {
+    const redirectPath = sessionStorage.getItem('redirect');
+
+    if (redirectPath) {
+      sessionStorage.removeItem('redirect'); // 用完后立即清除
+      // 使用setTimeout确保React Router完全初始化
+      setTimeout(() => {
+        navigate(redirectPath, { replace: true });
+      }, 0);
+    }
+  }, [navigate]);
+
   return null; // 这个组件不渲染任何东西
 };
 
