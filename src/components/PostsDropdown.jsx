@@ -46,7 +46,7 @@ const PostsDropdown = () => {
         return (
           <DropdownMenu.Item 
             key={item.name}
-            onSelect={() => navigate(`/posts/${item.path.replace(/\.md$/, '')}`)}
+            onSelect={() => navigate(`/docs?doc=${item.path}`)}
             className="dropdown-menu-button text-sm text-gray-700"
           >
             {item.name.replace(/\.md$/, '')}

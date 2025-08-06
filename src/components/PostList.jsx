@@ -58,7 +58,7 @@ const PostList = () => {
           } else {
             return (
               <li key={item.name}>
-                <Link to={`/posts/${item.path.replace('.md', '')}`} className="text-blue-500 hover:underline">
+                <Link to={`/docs?doc=${item.path}`} className="text-blue-500 hover:underline">
                   📄 {item.name.replace('.md', '')}
                 </Link>
               </li>
