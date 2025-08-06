@@ -1,25 +1,79 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh-CN">
   <head>
     <meta charset="utf-8">
-    <title>VFS Tracker - Page Not Found</title>
+    <title>VFS Tracker - 正在加载...</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 100vh;
+        background-color: #f3f4f6;
+        color: #374151;
+      }
+      .loading-container {
+        text-align: center;
+        padding: 2rem;
+        background: white;
+        border-radius: 1rem;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        max-width: 400px;
+        width: 90%;
+      }
+      .spinner {
+        border: 3px solid #e5e7eb;
+        border-top: 3px solid #ec4899;
+        border-radius: 50%;
+        width: 40px;
+        height: 40px;
+        animation: spin 1s linear infinite;
+        margin: 0 auto 1rem;
+      }
+      @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+      }
+      .loading-text {
+        color: #6b7280;
+        margin-bottom: 1rem;
+      }
+      .fallback-link {
+        color: #ec4899;
+        text-decoration: none;
+        font-weight: 500;
+      }
+      .fallback-link:hover {
+        text-decoration: underline;
+      }
+    </style>
     <script type="text/javascript">
-      // 获取当前路径，并将其转换为查询参数
-      // 例如: https://vfs-tracker.app/mypage -> /mypage
-      const path = window.location.pathname;
+      // GitHub Pages SPA 路由解决方案
+      // 立即执行重定向，将路径作为查询参数传递
+      (function() {
+        var l = window.location;
+        var path = l.pathname;
 
-      // 将路径信息存储在 sessionStorage 中，以便 index.html 中的路由可以读取
-      // 使用 sessionStorage 是因为它只在当前会话中有效
-      sessionStorage.redirect = path;
-
-      // 重定向到根路径。服务器会返回 index.html
-      // 使用 replace 方法，这样用户的浏览器历史记录中不会留下这个 404 页面
-      window.location.replace(window.location.origin);
-
+        // 将当前路径作为查询参数重定向到首页
+        // 例如: /posts/getting-started -> /?p=/posts/getting-started
+        l.replace(
+          l.protocol + '//' + l.hostname + (l.port ? ':' + l.port : '') +
+          '/?p=' + encodeURIComponent(path) +
+          (l.search ? '&' + l.search.slice(1) : '') +
+          l.hash
+        );
+      })();
     </script>
   </head>
   <body>
-    <!-- 你可以放一个简单的加载提示 -->
-    <p>If you are not redirected automatically, please <a href="/">click here</a>.</p>
+    <div class="loading-container">
+      <div class="spinner"></div>
+      <div class="loading-text">正在跳转到页面...</div>
+      <p>如果没有自动跳转，请 <a href="/" class="fallback-link">点击这里</a>。</p>
+    </div>
   </body>
 </html>
