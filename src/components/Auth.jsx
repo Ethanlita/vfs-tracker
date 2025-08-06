@@ -33,12 +33,12 @@ const Auth = () => {
         <img
           src={user.attributes.picture}
           alt={user.attributes.name}
-          className="w-10 h-10 rounded-full border-2 border-pink-500 nav-spacing"
+          className="avatar-responsive rounded-full border-2 border-pink-500 nav-spacing"
         />
-        <span className="font-semibold text-gray-700 hidden sm:block">
+        <span className="font-semibold text-gray-700 text-responsive-base hidden sm:block">
           {user.attributes.name}
         </span>
-        <span className="text-xs text-orange-600 hidden sm:block">(开发模式)</span>
+        <span className="text-responsive-sm text-orange-600 hidden sm:block">(开发模式)</span>
         <button
           onClick={() => navigate('/mypage')}
           className="btn-pink nav-spacing-narrow"
@@ -56,14 +56,14 @@ const Auth = () => {
   }
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="auth-container">
       <button
         onClick={handleDevLogin}
         className="btn-pink nav-spacing-narrow"
       >
         开发登录
       </button>
-      <span className="text-xs text-orange-600 nav-spacing-narrow">(开发模式)</span>
+      <span className="text-responsive-sm text-orange-600 nav-spacing-narrow">(开发模式)</span>
     </div>
   );
 };

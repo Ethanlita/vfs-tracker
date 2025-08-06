@@ -76,51 +76,70 @@ const PublicDashboard = () => {
 
   // --- RENDER ---
   if (isLoading) {
-    return <div className="text-center p-8">正在加载仪表板...</div>;
+    return <div className="text-center spacing-responsive-y">正在加载仪表板...</div>;
   }
 
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-3xl font-bold text-gray-900">公开仪表板</h1>
-        <p className="mt-1 text-sm text-gray-500">
+        <h1 className="text-2xl font-bold text-gray-900 sm:text-3xl lg:text-4xl">公开仪表板</h1>
+        <p className="mt-1 text-responsive-sm text-gray-500">
           来自所有用户的匿名数据汇总。
         </p>
       </div>
 
       {/* @en Summary statistics cards. @zh 摘要统计卡片。 */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="bg-white p-6 rounded-xl shadow-md border border-gray-200 text-center">
-          <h3 className="text-lg font-medium text-gray-500">总记录事件数</h3>
-          <p className="mt-2 text-4xl font-bold text-indigo-600">{totalEvents}</p>
+      <div className="grid-responsive">
+        <div className="stats-card">
+          <h3 className="text-responsive-base font-medium text-gray-500">总记录事件数</h3>
+          <p className="mt-2 text-3xl font-bold text-indigo-600 sm:text-4xl">{totalEvents}</p>
         </div>
-        <div className="bg-white p-6 rounded-xl shadow-md border border-gray-200 text-center">
-          <h3 className="text-lg font-medium text-gray-500">贡献用户数</h3>
-          <p className="mt-2 text-4xl font-bold text-pink-600">{totalUsers}</p>
+        <div className="stats-card">
+          <h3 className="text-responsive-base font-medium text-gray-500">贡献用户数</h3>
+          <p className="mt-2 text-3xl font-bold text-pink-600 sm:text-4xl">{totalUsers}</p>
         </div>
       </div>
 
       {/* @en Bar chart for event distribution. @zh 事件分布的条形图。 */}
-      <div className="bg-white p-6 rounded-xl shadow-md border border-gray-200">
-        <h2 className="text-xl font-semibold text-gray-900 mb-4">事件分布</h2>
+      <div className="card">
+        <h2 className="text-responsive-lg font-semibold text-gray-900 mb-4">事件分布</h2>
         {chartData ? (
           <Bar
             data={chartData}
             options={{
               responsive: true,
+              maintainAspectRatio: false,
               plugins: {
                 legend: { display: false },
-                title: { display: true, text: '所有用户的事件类型分布' },
+                title: {
+                  display: true,
+                  text: '所有用户的事件类型分布',
+                  font: {
+                    size: window.innerWidth < 640 ? 12 : 14
+                  }
+                },
               },
               scales: {
                 y: {
-                  beginAtZero: true
+                  beginAtZero: true,
+                  ticks: {
+                    font: {
+                      size: window.innerWidth < 640 ? 10 : 12
+                    }
+                  }
+                },
+                x: {
+                  ticks: {
+                    font: {
+                      size: window.innerWidth < 640 ? 10 : 12
+                    }
+                  }
                 }
               }
             }}
           />
         ) : (
-          <p>无图表数据可用。</p>
+          <p className="text-responsive-sm text-gray-500">无可用数据。</p>
         )}
       </div>
     </div>
