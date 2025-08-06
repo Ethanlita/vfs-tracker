@@ -12,22 +12,22 @@
 
     <!-- GitHub Pages 客户端路由处理 -->
     <script type="text/javascript">
-      // 处理GitHub Pages的SPA路由
+      // 处理GitHub Pages的SPA路由重定向
       (function(l) {
-        // 检查URL中是否有路径参数 (?p=/posts/getting-started)
         if (l.search) {
-          var q = {};
-          l.search.slice(1).split('&').forEach(function(v) {
-            var a = v.split('=');
-            q[a[0]] = a.slice(1).join('=').replace(/~and~/g, '&');
-          });
+          var params = new URLSearchParams(l.search);
+          var redirectPath = params.get('_redirect');
+          var searchParams = params.get('_search');
+          var hashParams = params.get('_hash');
 
-          if (q.p !== undefined) {
+          if (redirectPath) {
+            // 构建完整的目标URL
+            var targetUrl = redirectPath +
+              (searchParams ? '?' + searchParams : '') +
+              (hashParams ? '#' + hashParams : '');
+
             // 使用history.replaceState来更新URL到正确的路径
-            window.history.replaceState(null, null,
-              l.pathname.slice(0, -1) + (q.p || '') +
-              (q.q ? ('?' + q.q) : '') + l.hash
-            );
+            window.history.replaceState(null, null, targetUrl);
           }
         }
       }(window.location));

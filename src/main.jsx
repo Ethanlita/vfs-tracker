@@ -1,10 +1,10 @@
-import { StrictMode, useEffect } from 'react'
+import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.jsx'
 import { Amplify } from 'aws-amplify';
 import '@aws-amplify/ui-react/styles.css';
-import { BrowserRouter, useNavigate } from 'react-router-dom';
+import { BrowserRouter } from 'react-router-dom';
 
 // 检查是否在开发环境且缺少必要的环境变量
 const isProductionReady = import.meta.env.VITE_COGNITO_USER_POOL_ID && 
@@ -45,29 +45,9 @@ if (isProductionReady) {
 
 import { Authenticator } from '@aws-amplify/ui-react';
 
-// 一个小组件，用于处理从 404.html 过来的重定向逻辑
-const RedirectHandler = () => {
-  const navigate = useNavigate();
-
-  useEffect(() => {
-    const redirectPath = sessionStorage.getItem('redirect');
-
-    if (redirectPath) {
-      sessionStorage.removeItem('redirect'); // 用完后立即清除
-      // 使用setTimeout确保React Router完全初始化
-      setTimeout(() => {
-        navigate(redirectPath, { replace: true });
-      }, 0);
-    }
-  }, [navigate]);
-
-  return null; // 这个组件不渲染任何东西
-};
-
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <BrowserRouter>
-      <RedirectHandler />
       {isProductionReady ? (
         <Authenticator.Provider>
           <App />
