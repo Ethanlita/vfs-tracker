@@ -167,13 +167,13 @@ const VoiceFrequencyChart = ({ userId, isProductionReady }) => {
               </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-            <XAxis 
-              dataKey="date" 
+            <XAxis
+              dataKey="date"
               stroke="#6b7280"
               fontSize={12}
               tickFormatter={(date) => new Date(date).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })}
             />
-            <YAxis 
+            <YAxis
               stroke="#6b7280"
               fontSize={12}
               domain={['dataMin - 5', 'dataMax + 5']}
