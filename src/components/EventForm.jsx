@@ -16,8 +16,6 @@ const EventForm = ({ onEventAdded }) => {
                            import.meta.env.VITE_AWS_REGION;
 
   // --- STATE MANAGEMENT ---
-  // @en Get the authenticated user object conditionally based on production readiness.
-  // @zh 根据生产环境就绪状态有条件地获取经过身份验证的用户对象。
   const authenticatorContext = isProductionReady ? useAuthenticator((context) => [context.user]) : null;
   const user = authenticatorContext?.user || {
     attributes: {
@@ -32,24 +30,13 @@ const EventForm = ({ onEventAdded }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // --- HANDLERS ---
-  /**
-   * @en Updates the state when a file is selected in the input.
-   * @zh 在输入中选择文件时更新状态。
-   * @param {React.ChangeEvent<HTMLInputElement>} e - The change event from the file input.
-   */
   const handleFileChange = (e) => {
     setFile(e.target.files[0]);
   };
 
-  /**
-   * @en Handles the form submission process. It performs validation, uploads a file if present, and then submits the event data to the API.
-   * @zh 处理表单提交流程。它执行验证，如果存在文件则上传文件，然后将事件数据提交到 API。
-   * @param {React.FormEvent<HTMLFormElement>} e - The form submission event.
-   */
   const handleSubmit = async (e) => {
-    e.preventDefault(); // @en Prevent default form submission. @zh 阻止默认的表单提交。
+    e.preventDefault();
 
-    // @en Basic validation. @zh 基本验证。
     if (!user) {
       alert('您必须登录才能添加事件。');
       return;
@@ -60,9 +47,7 @@ const EventForm = ({ onEventAdded }) => {
     }
     setIsSubmitting(true);
 
-    // 在开发模式下使用模拟数据
     if (!isProductionReady) {
-      // 模拟提交过程
       setTimeout(() => {
         const mockEvent = {
           eventId: `mock-${Date.now()}`,
@@ -73,11 +58,8 @@ const EventForm = ({ onEventAdded }) => {
           createdAt: new Date().toISOString(),
           userId: user.attributes.sub
         };
-
         alert('事件添加成功！（演示模式）');
         onEventAdded(mockEvent);
-
-        // 重置表单
         setNotes('');
         setEventType('self_test');
         setFile(null);
@@ -90,8 +72,6 @@ const EventForm = ({ onEventAdded }) => {
     }
 
     let attachmentKey = null;
-    // @en If a file is selected, upload it to S3.
-    // @zh 如果选择了文件，则将其上传到 S3。
     if (file) {
       try {
         attachmentKey = await uploadFile(file, user.attributes.sub);
@@ -103,8 +83,6 @@ const EventForm = ({ onEventAdded }) => {
       }
     }
 
-    // @en Prepare the event data for the API call.
-    // @zh 准备 API 调用的事件数据。
     const eventData = {
       type: eventType,
       notes,
@@ -113,19 +91,12 @@ const EventForm = ({ onEventAdded }) => {
     };
 
     try {
-      // @en Call the API to add the event.
-      // @zh 调用 API 添加事件。
       const newEvent = await addEvent(eventData, user.attributes.sub);
       alert('事件添加成功！');
-      onEventAdded(newEvent.item); // @en Notify parent component to update the UI. @zh 通知父组件更新 UI。
-
-      // @en Reset form fields to their initial state.
-      // @zh 将表单字段重置为其初始状态。
+      onEventAdded(newEvent.item);
       setNotes('');
       setEventType('self_test');
       setFile(null);
-      // @en Also reset the file input visually.
-      // @zh 同时在视觉上重置文件输入。
       if (document.getElementById('file-input')) {
         document.getElementById('file-input').value = null;
       }
@@ -139,54 +110,52 @@ const EventForm = ({ onEventAdded }) => {
 
   // --- RENDER ---
   return (
-    <div className="bg-white p-6 rounded-xl shadow-md border border-gray-200">
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <h3 className="text-xl font-semibold text-gray-900">添加新事件</h3>
-        <div>
-          <label htmlFor="event-type" className="block text-sm font-medium text-gray-700">事件类型</label>
-          <select
-            id="event-type"
-            value={eventType}
-            onChange={(e) => setEventType(e.target.value)}
-            className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
-          >
-            <option value="hospital_test">医院检测</option>
-            <option value="self_test">自我测试</option>
-            <option value="training">训练</option>
-            <option value="surgery">手术</option>
-          </select>
-        </div>
-        <div>
-          <label htmlFor="notes" className="block text-sm font-medium text-gray-700">备注</label>
-          <textarea
-            id="notes"
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            rows={3}
-            className="mt-1 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md"
-          />
-        </div>
-        <div>
-          <label htmlFor="file-input" className="block text-sm font-medium text-gray-700">附件</label>
-          <input
-            id="file-input"
-            type="file"
-            onChange={handleFileChange}
-            className="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-pink-50 file:text-pink-700 hover:file:bg-pink-100"
-          />
-          <p className="mt-1 text-xs text-gray-500">医院检测时必须上传。</p>
-        </div>
-        <div className="text-right">
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
-          >
-            {isSubmitting ? '添加中...' : '添加事件'}
-          </button>
-        </div>
-      </form>
-    </div>
+    <form onSubmit={handleSubmit} className="space-y-6">
+      <div>
+        <label htmlFor="event-type" className="block text-sm font-semibold text-gray-800 mb-1">事件类型</label>
+        <select
+          id="event-type"
+          value={eventType}
+          onChange={(e) => setEventType(e.target.value)}
+          className="mt-1 block w-full rounded-lg border-gray-300 bg-gray-50 py-3 px-4 text-base text-gray-800 shadow-sm transition-all duration-300 focus:border-pink-500 focus:ring-2 focus:ring-pink-500 focus:ring-opacity-50 focus:outline-none"
+        >
+          <option value="hospital_test">医院检测</option>
+          <option value="self_test">自我测试</option>
+          <option value="training">训练</option>
+          <option value="surgery">手术</option>
+        </select>
+      </div>
+      <div>
+        <label htmlFor="notes" className="block text-sm font-semibold text-gray-800 mb-1">备注</label>
+        <textarea
+          id="notes"
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          rows={4}
+          className="mt-1 block w-full rounded-lg border-gray-300 bg-gray-50 py-3 px-4 text-base text-gray-800 shadow-sm transition-all duration-300 focus:border-pink-500 focus:ring-2 focus:ring-pink-500 focus:ring-opacity-50 focus:outline-none"
+          placeholder="例如：今天进行了30分钟的发声练习..."
+        />
+      </div>
+      <div>
+        <label htmlFor="file-input" className="block text-sm font-semibold text-gray-800 mb-1">附件 (可选)</label>
+        <input
+          id="file-input"
+          type="file"
+          onChange={handleFileChange}
+          className="mt-1 block w-full text-sm text-gray-600 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-pink-100 file:text-pink-700 hover:file:bg-pink-200 transition-colors cursor-pointer"
+        />
+        <p className="mt-2 text-xs text-gray-500">在“医院检测”类型中，此项为必填。</p>
+      </div>
+      <div className="pt-4">
+        <button
+          type="submit"
+          disabled={isSubmitting}
+          className="w-full inline-flex justify-center py-3 px-4 border border-transparent shadow-lg text-base font-medium rounded-lg text-white bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-700 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 disabled:opacity-60 transition-all duration-300 ease-in-out transform hover:scale-105 disabled:scale-100"
+        >
+          {isSubmitting ? '添加中...' : '添加事件'}
+        </button>
+      </div>
+    </form>
   );
 };
 
