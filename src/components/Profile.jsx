@@ -10,7 +10,22 @@ import { getEventsByUserId } from '../api';
  * @returns {JSX.Element} The rendered profile page.
  */
 const Profile = () => {
-  const { user } = useAuthenticator((context) => [context.user]);
+  // 检查是否为生产环境 - 使用函数避免依赖问题
+  const isProductionReady = () => {
+    return !!(import.meta.env.VITE_COGNITO_USER_POOL_ID &&
+             import.meta.env.VITE_COGNITO_USER_POOL_WEB_CLIENT_ID &&
+             import.meta.env.VITE_AWS_REGION);
+  };
+
+  // 条件性使用认证
+  const authenticatorContext = isProductionReady() ? useAuthenticator((context) => [context.user]) : null;
+  const user = authenticatorContext?.user || {
+    attributes: {
+      email: 'demo@example.com',
+      sub: 'demo-user-123'
+    }
+  };
+
   const [events, setEvents] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -18,7 +33,7 @@ const Profile = () => {
    * Fetches the user's events from the backend and sorts them by date.
    */
   const fetchEvents = useCallback(async () => {
-    if (user) {
+    if (user?.attributes?.sub) {
       try {
         setIsLoading(true);
         const fetchedEvents = await getEventsByUserId(user.attributes.sub);
@@ -27,11 +42,15 @@ const Profile = () => {
         setEvents(fetchedEvents);
       } catch (error) {
         console.error("获取事件失败:", error);
+        // 在开发模式下不显示错误提示
+        if (isProductionReady()) {
+          alert("无法加载您的事件。请尝试重新加载页面。");
+        }
       } finally {
         setIsLoading(false);
       }
     }
-  }, [user]);
+  }, [user?.attributes?.sub]); // 只依赖于用户ID，避免循环
 
   useEffect(() => {
     fetchEvents();

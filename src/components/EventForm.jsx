@@ -10,8 +10,22 @@ import { addEvent, uploadFile } from '../api';
  * @returns {JSX.Element} The rendered form component.
  */
 const EventForm = ({ onEventAdded }) => {
+  // 检查是否为生产环境
+  const isProductionReady = import.meta.env.VITE_COGNITO_USER_POOL_ID &&
+                           import.meta.env.VITE_COGNITO_USER_POOL_WEB_CLIENT_ID &&
+                           import.meta.env.VITE_AWS_REGION;
+
   // --- STATE MANAGEMENT ---
-  const { user } = useAuthenticator((context) => [context.user]);
+  // @en Get the authenticated user object conditionally based on production readiness.
+  // @zh 根据生产环境就绪状态有条件地获取经过身份验证的用户对象。
+  const authenticatorContext = isProductionReady ? useAuthenticator((context) => [context.user]) : null;
+  const user = authenticatorContext?.user || {
+    attributes: {
+      email: 'demo@example.com',
+      sub: 'demo-user-123'
+    }
+  };
+
   const [eventType, setEventType] = useState('self_test');
   const [notes, setNotes] = useState('');
   const [file, setFile] = useState(null);
@@ -45,6 +59,35 @@ const EventForm = ({ onEventAdded }) => {
       return;
     }
     setIsSubmitting(true);
+
+    // 在开发模式下使用模拟数据
+    if (!isProductionReady) {
+      // 模拟提交过程
+      setTimeout(() => {
+        const mockEvent = {
+          eventId: `mock-${Date.now()}`,
+          type: eventType,
+          notes,
+          attachment: file ? `mock-attachment-${file.name}` : null,
+          status: eventType === 'hospital_test' ? 'pending_approval' : 'approved',
+          createdAt: new Date().toISOString(),
+          userId: user.attributes.sub
+        };
+
+        alert('事件添加成功！（演示模式）');
+        onEventAdded(mockEvent);
+
+        // 重置表单
+        setNotes('');
+        setEventType('self_test');
+        setFile(null);
+        if (document.getElementById('file-input')) {
+          document.getElementById('file-input').value = null;
+        }
+        setIsSubmitting(false);
+      }, 1000);
+      return;
+    }
 
     let attachmentKey = null;
     // @en If a file is selected, upload it to S3.
