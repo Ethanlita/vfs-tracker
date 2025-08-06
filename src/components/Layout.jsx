@@ -27,7 +27,7 @@ const Layout = ({ children, auth }) => {
         需要替换为本地字体或不同的字体提供商。可以在 index.html 中添加字体。
       */}
       <header className="bg-white shadow-lg sticky top-0 z-10 w-full">
-        <nav
+        <nav 
           className="container mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center"
           style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif" }}
         >

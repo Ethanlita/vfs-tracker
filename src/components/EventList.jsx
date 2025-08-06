@@ -46,7 +46,7 @@ const EventList = ({ events }) => {
         <ul role="list" className="-mb-8">
           {events.map((event, eventIdx) => (
               <li key={event.eventId}>
-                <div className="event-item relative">
+                <div className="relative pb-8">
                   {/* @en Render a vertical line connecting timeline points, except for the last one. */}
                   {/* @zh 渲染连接时间线点的垂直线，除了最后一个。 */}
                   {eventIdx !== events.length - 1 ? (
@@ -54,7 +54,7 @@ const EventList = ({ events }) => {
                   ) : null}
                   <div className="relative flex space-x-3">
                     <div>
-                      <span className="avatar-responsive rounded-full bg-pink-500 flex items-center justify-center ring-8 ring-white">
+                      <span className="h-8 w-8 rounded-full bg-pink-500 flex items-center justify-center ring-8 ring-white">
                         {/* @en TODO: This icon could be changed based on event.type */}
                         {/* @zh TODO: 这个图标可以根据 event.type 更改 */}
                         <svg className="h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
@@ -62,9 +62,9 @@ const EventList = ({ events }) => {
                         </svg>
                       </span>
                     </div>
-                    <div className="min-w-0 flex-1 pt-1.5 flex flex-col sm:flex-row sm:justify-between sm:space-x-4 space-y-2 sm:space-y-0">
+                    <div className="min-w-0 flex-1 pt-1.5 flex justify-between space-x-4">
                       <div>
-                        <p className="text-responsive-sm text-gray-500">
+                        <p className="text-sm text-gray-500">
                           {/* @en Display the event type in a readable format. */}
                           {/* @zh 以可读格式显示事件类型。 */}
                           {(() => {
@@ -77,19 +77,19 @@ const EventList = ({ events }) => {
                             return typeMap[event.type] || event.type.replace('_', ' ').toUpperCase();
                           })()}
                         </p>
-                        <p className="text-responsive-sm text-gray-800 mt-1">{event.notes || '未提供备注。'}</p>
+                        <p className="text-sm text-gray-800 mt-1">{event.notes || '未提供备注。'}</p>
                         {/* @en If there is an attachment, show a download button. */}
                         {/* @zh 如果有附件，则显示下载按钮。 */}
                         {event.attachment && (
                             <button
                                 onClick={() => handleDownload(event.attachment)}
-                                className="mt-2 text-responsive-sm font-medium text-indigo-600 hover:text-indigo-500"
+                                className="mt-2 text-sm font-medium text-indigo-600 hover:text-indigo-500"
                             >
                               下载附件
                             </button>
                         )}
                       </div>
-                      <div className="text-right text-responsive-sm whitespace-nowrap text-gray-500 self-start sm:self-center">
+                      <div className="text-right text-sm whitespace-nowrap text-gray-500">
                         {/* @en Display the creation date of the event. */}
                         {/* @zh 显示事件的创建日期。 */}
                         <time dateTime={event.createdAt}>{new Date(event.createdAt).toLocaleDateString()}</time>
