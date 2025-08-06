@@ -25,7 +25,7 @@ const copyPostsPlugin = () => {
           console.warn(`Warning: Could not copy ${src} to ${dest}:`, error.message)
         }
       }
-
+      
       // 复制posts目录到dist/posts
       copyRecursive('posts', 'dist/posts')
       console.log('✅ Posts directory copied to dist/posts')
