@@ -65,7 +65,7 @@ const AppContent = () => {
         <Route path="/" element={<Home />} />
         <Route path="/dashboard" element={<PublicDashboard />} />
         <Route path="/posts" element={<PostList />} />
-        <Route path="/posts/*" element={<PostViewer />} />
+        <Route path="/docs" element={<PostViewer />} />
         <Route element={<ProtectedRoute />}>
           <Route path="/mypage" element={<MyPage />} />
         </Route>
