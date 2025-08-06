@@ -96,16 +96,16 @@ const EventForm = ({ onEventAdded }) => {
 
   // --- RENDER ---
   return (
-    <div className="bg-white p-6 rounded-xl shadow-md border border-gray-200">
+    <div className="card form-container mx-auto">
       <form onSubmit={handleSubmit} className="space-y-4">
-        <h3 className="text-xl font-semibold text-gray-900">添加新事件</h3>
+        <h3 className="text-responsive-lg font-semibold text-gray-900">添加新事件</h3>
         <div>
-          <label htmlFor="event-type" className="block text-sm font-medium text-gray-700">事件类型</label>
+          <label htmlFor="event-type" className="block text-responsive-sm font-medium text-gray-700">事件类型</label>
           <select
             id="event-type"
             value={eventType}
             onChange={(e) => setEventType(e.target.value)}
-            className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
+            className="form-select mt-1 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
           >
             <option value="hospital_test">医院检测</option>
             <option value="self_test">自我测试</option>
@@ -114,22 +114,22 @@ const EventForm = ({ onEventAdded }) => {
           </select>
         </div>
         <div>
-          <label htmlFor="notes" className="block text-sm font-medium text-gray-700">备注</label>
+          <label htmlFor="notes" className="block text-responsive-sm font-medium text-gray-700">备注</label>
           <textarea
             id="notes"
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
             rows={3}
-            className="mt-1 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md"
+            className="form-textarea mt-1 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
           />
         </div>
         <div>
-          <label htmlFor="file-input" className="block text-sm font-medium text-gray-700">附件</label>
+          <label htmlFor="file-input" className="block text-responsive-sm font-medium text-gray-700">附件</label>
           <input
             id="file-input"
             type="file"
             onChange={handleFileChange}
-            className="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-pink-50 file:text-pink-700 hover:file:bg-pink-100"
+            className="form-input mt-1 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-pink-50 file:text-pink-700 hover:file:bg-pink-100"
           />
           <p className="mt-1 text-xs text-gray-500">医院检测时必须上传。</p>
         </div>
@@ -137,7 +137,7 @@ const EventForm = ({ onEventAdded }) => {
           <button
             type="submit"
             disabled={isSubmitting}
-            className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+            className="btn-primary disabled:opacity-50"
           >
             {isSubmitting ? '添加中...' : '添加事件'}
           </button>
