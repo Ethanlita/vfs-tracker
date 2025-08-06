@@ -52,20 +52,18 @@
       }
     </style>
     <script type="text/javascript">
-      // GitHub Pages SPA 路由解决方案
-      // 立即执行重定向，将路径作为查询参数传递
+      // GitHub Pages SPA 路由解决方案 - 使用查询参数方式
       (function() {
         var l = window.location;
-        var path = l.pathname;
 
-        // 将当前路径作为查询参数重定向到首页
-        // 例如: /posts/getting-started -> /?p=/posts/getting-started
-        l.replace(
-          l.protocol + '//' + l.hostname + (l.port ? ':' + l.port : '') +
-          '/?p=' + encodeURIComponent(path) +
-          (l.search ? '&' + l.search.slice(1) : '') +
-          l.hash
-        );
+        // 将路径转换为查询参数，避免与应用路由冲突
+        // 使用特殊的参数名 '_redirect' 来避免与应用参数冲突
+        var redirectUrl = l.protocol + '//' + l.hostname + (l.port ? ':' + l.port : '') +
+          '/?_redirect=' + encodeURIComponent(l.pathname) +
+          (l.search ? '&_search=' + encodeURIComponent(l.search.slice(1)) : '') +
+          (l.hash ? '&_hash=' + encodeURIComponent(l.hash.slice(1)) : '');
+
+        l.replace(redirectUrl);
       })();
     </script>
   </head>
