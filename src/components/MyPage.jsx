@@ -5,6 +5,14 @@ import EventForm from './EventForm';
 import VoiceFrequencyChart from './VoiceFrequencyChart';
 import InteractiveTimeline from './InteractiveTimeline';
 
+// @en Check if the environment is production-ready.
+// @zh 检查是否为生产环境。
+const isProductionReady = () => {
+  return !!(import.meta.env.VITE_COGNITO_USER_POOL_ID &&
+           import.meta.env.VITE_COGNITO_USER_POOL_WEB_CLIENT_ID &&
+           import.meta.env.VITE_AWS_REGION);
+};
+
 /**
  * @en The MyPage component serves as the user's personal dashboard. It fetches,
  * displays, and manages the user's voice events. It includes a form to add new
@@ -14,13 +22,6 @@ import InteractiveTimeline from './InteractiveTimeline';
  * @returns {JSX.Element} The rendered personal dashboard page.
  */
 const MyPage = () => {
-  // 检查是否为生产环境 - 使用函数调用
-  const isProductionReady = () => {
-    return !!(import.meta.env.VITE_COGNITO_USER_POOL_ID &&
-             import.meta.env.VITE_COGNITO_USER_POOL_WEB_CLIENT_ID &&
-             import.meta.env.VITE_AWS_REGION);
-  };
-
   // --- STATE MANAGEMENT ---
   // @en Get the authenticated user object conditionally based on production readiness.
   // @zh 根据生产环境就绪状态有条件地获取经过身份验证的用户对象。
@@ -101,10 +102,16 @@ const MyPage = () => {
       </div>
 
       {/* 声音频率图表 */}
-      <VoiceFrequencyChart
-        userId={user?.attributes?.sub}
-        isProductionReady={isProductionReady}
-      />
+      <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-100">
+        <div className="mb-6">
+          <h2 className="text-2xl font-bold text-gray-800 mb-2">声音频率图表</h2>
+          <p className="text-gray-600">查看您的声音基频随时间的变化</p>
+        </div>
+        <VoiceFrequencyChart
+          userId={user?.attributes?.sub}
+          isProductionReady={isProductionReady}
+        />
+      </div>
 
       {/* 事件记录表单 */}
       <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-100">
