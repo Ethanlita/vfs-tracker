@@ -183,35 +183,53 @@ body {
     display: flex;
     justify-content: center;
     align-items: center;
-    padding-top: 2rem; /* 减小：从3rem改为2rem */
-    padding-bottom: 1rem; /* 减小：从1.5rem改为1rem */
-    min-height: 80px; /* 减小：从100px改为80px */
+    padding-top: 2rem;
+    padding-bottom: 1rem;
+    min-height: 80px;
+    /* 添加响应式边距 */
+    padding-left: 1rem;
+    padding-right: 1rem;
   }
 
   .ai-assistant-wrapper {
     position: relative;
     display: flex;
-    align-items: center;
-    max-width: 24rem; /* 减小：从28rem改为24rem */
+    align-items: flex-start; /* 改为flex-start，支持多行内容时的顶部对齐 */
+    max-width: 90vw; /* 响应式：最大宽度为90%视窗宽度 */
+    width: 100%;
+  }
+
+  /* 响应式：中等屏幕及以上 */
+  @media (min-width: 640px) {
+    .ai-assistant-wrapper {
+      max-width: 32rem;
+    }
+  }
+
+  /* 响应式：大屏幕 */
+  @media (min-width: 1024px) {
+    .ai-assistant-wrapper {
+      max-width: 36rem;
+    }
   }
 
   .ai-assistant-avatar {
     position: relative;
     z-index: 20;
-    width: 51px; /* 减小：从64px改为48px */
-    height: 51px; /* 减小：从64px改为48px */
+    width: 48px;
+    height: 48px;
     background: linear-gradient(135deg, #c084fc, #f472b6);
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 20px 40px -12px rgba(0, 0, 0, 0.25); /* 减小阴影 */
-    flex-shrink: 0;
+    box-shadow: 0 20px 40px -12px rgba(0, 0, 0, 0.25);
+    flex-shrink: 0; /* 防止头像被压缩 */
   }
 
   .ai-assistant-avatar svg {
-    width: 24px; /* 减小：从32px改为24px */
-    height: 24px; /* 减小：从32px改为24px */
+    width: 24px;
+    height: 24px;
     color: #ffffff;
   }
 
@@ -219,20 +237,66 @@ body {
     position: relative;
     background-color: #ffffff;
     backdrop-filter: blur(16px);
-    border-radius: 9999px;
-    box-shadow: 0 20px 40px -12px rgba(0, 0, 0, 0.25); /* 减小阴影 */
-    padding: 10px 24px 10px 36px; /* 减小：从12px 32px 12px 48px改为10px 24px 10px 36px */
-    margin-left: -18px; /* 减小：从-24px改为-18px */
+    border-radius: 1.5rem; /* 改为固定圆角，适应多行内容 */
+    box-shadow: 0 20px 40px -12px rgba(0, 0, 0, 0.25);
+    padding: 12px 20px 12px 30px;
+    margin-left: -16px;
     border: none;
     z-index: 10;
+    flex: 1; /* 占据剩余空间 */
+    min-width: 0; /* 允许内容收缩 */
+    /* 关键修复：确保高度随内容自动调整 */
+    height: auto;
+    min-height: 48px; /* 最小高度与头像对齐 */
+    display: flex;
+    align-items: center; /* 单行时垂直居中 */
   }
 
   .ai-assistant-text {
     color: #374151;
-    font-size: 16px; /* 减小：从18px改为16px */
+    font-size: 15px;
     font-weight: 500;
     margin: 0;
-    white-space: nowrap;
+    line-height: 1.5; /* 增加行高，适应多行显示 */
+    word-wrap: break-word; /* 长单词换行 */
+    overflow-wrap: break-word; /* 现代浏览器的换行属性 */
+    white-space: normal; /* 关键修复：允许换行 */
+    max-width: 100%;
+    width: 100%;
+  }
+
+  /* 小屏幕优化 */
+  @media (max-width: 640px) {
+    .ai-assistant-container {
+      padding-left: 0.5rem;
+      padding-right: 0.5rem;
+    }
+
+    .ai-assistant-wrapper {
+      max-width: 95vw;
+    }
+
+    .ai-assistant-message {
+      padding: 10px 16px 10px 24px;
+      margin-left: -12px;
+      border-radius: 1.25rem;
+      min-height: 40px; /* 小屏幕时调整最小高度 */
+    }
+
+    .ai-assistant-text {
+      font-size: 14px;
+      line-height: 1.4;
+    }
+
+    .ai-assistant-avatar {
+      width: 40px;
+      height: 40px;
+    }
+
+    .ai-assistant-avatar svg {
+      width: 20px;
+      height: 20px;
+    }
   }
 }
 
