@@ -28,8 +28,8 @@ const MyPage = () => {
   const authenticatorContext = isProductionReady() ? useAuthenticator((context) => [context.user]) : null;
   const user = authenticatorContext?.user || {
     attributes: {
-      email: 'demo@example.com',
-      sub: 'demo-user-123'
+      email: 'public-user@example.com',
+      sub: 'mock-user-1'
     }
   };
 
