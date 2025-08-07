@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Line } from 'react-chartjs-2';
 import { getEncouragingMessage } from '../api';
 import {
@@ -43,7 +43,7 @@ const Timeline = () => {
   };
 
   // 获取AI鼓励消息
-  const fetchEncouragingMessage = async () => {
+  const fetchEncouragingMessage = useCallback(async () => {
     setIsLoadingMessage(true);
     try {
       const message = await getEncouragingMessage(mockUserData);
@@ -54,14 +54,14 @@ const Timeline = () => {
     } finally {
       setIsLoadingMessage(false);
     }
-  };
+  }, []);
 
   // 组件挂载时获取AI消息
   useEffect(() => {
     // 延迟2秒后获取，避免页面加载时阻塞
     const timer = setTimeout(fetchEncouragingMessage, 2000);
     return () => clearTimeout(timer);
-  }, []);
+  }, [fetchEncouragingMessage]);
 
   // Mock data for the chart
   const chartData = {
@@ -251,7 +251,7 @@ const Timeline = () => {
                 src="/img.png"
                 alt="AI助手头像"
                 className="w-12 h-12 rounded-full object-cover"
-                style={{width: '57px', height: '57px', borderRadius: '50%', objectFit: 'cover'}}
+                style={{width: '46px', height: '46px', borderRadius: '50%', objectFit: 'cover'}}
               />
             </div>
 
