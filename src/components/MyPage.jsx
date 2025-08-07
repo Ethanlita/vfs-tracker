@@ -23,10 +23,27 @@ const isProductionReady = () => {
  */
 const MyPage = () => {
   // --- STATE MANAGEMENT ---
-  // @en Get the authenticated user object conditionally based on production readiness.
-  // @zh 根据生产环境就绪状态有条件地获取经过身份验证的用户对象。
-  const authenticatorContext = useAuthenticator ? useAuthenticator((context) => [context.user]) : null;
-  const user = (isProductionReady() && authenticatorContext?.user) || {
+  // @en Check if the environment is production-ready.
+  // @zh 检查是否为生产环境。
+  const productionReady = isProductionReady();
+
+  // @en Always call useAuthenticator, but handle gracefully when not in Authenticator context
+  // @zh 始终调用 useAuthenticator，但在非 Authenticator 上下文中优雅处理
+  let authenticatorUser = null;
+  let authError = null;
+
+  try {
+    const { user } = useAuthenticator((context) => [context.user]);
+    authenticatorUser = user;
+  } catch (error) {
+    // 记录错误但不抛出，使用默认用户
+    authError = error;
+    console.log('🔧 useAuthenticator 不在 Authenticator.Provider 上下文中，使用模拟用户');
+  }
+
+  // @en Use authenticated user in production, or fallback to mock user
+  // @zh 在生产环境中使用已认证用户，或回退到模拟用户
+  const user = (productionReady && authenticatorUser && !authError) ? authenticatorUser : {
     attributes: {
       email: 'public-user@example.com',
       sub: 'mock-user-1'
