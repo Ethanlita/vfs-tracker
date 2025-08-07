@@ -242,23 +242,28 @@ ${userProgressSummary}
       }
     });
 
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent`, {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-goog-api-key': `${geminiApiKey}`,
+        'x-goog-api-key': geminiApiKey,
       },
       body: JSON.stringify({
+        system_instruction: {
+          parts: [{
+            text: "你是一个专业的声音训练助手，负责为用户提供鼓励和建议。请用温暖、专业的语气回复，保持简洁但充满正能量。"
+          }]
+        },
         contents: [{
           parts: [{
             text: prompt
           }]
         }],
         generationConfig: {
-          temperature: 1.5,
-          topK: 40,
-          topP: 0.95,
-          maxOutputTokens: 100,
+          temperature: 0.8,        // 适中的创意度
+          topK: 20,               // 选择前20个最可能的词汇
+          topP: 0.9,              // 累积概率90%
+          maxOutputTokens: 150,   // 增加最大token数以允许更丰富的回复
         },
       })
     });
