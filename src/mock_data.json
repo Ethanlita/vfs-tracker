@@ -1,0 +1,129 @@
+{
+  "users": [
+    {
+      "userId": "mock-user-1",
+      "email": "public-user@example.com",
+      "createdAt": "2023-10-01T10:00:00Z",
+      "profile": {
+        "name": "Alice",
+        "isNamePublic": true,
+        "socials": [
+          {
+            "platform": "Twitter",
+            "handle": "@alice_vfs"
+          }
+        ],
+        "areSocialsPublic": true
+      }
+    },
+    {
+      "userId": "mock-user-2",
+      "email": "private-user@example.com",
+      "createdAt": "2023-11-15T14:30:00Z",
+      "profile": {
+        "name": "Bob",
+        "isNamePublic": false,
+        "socials": [],
+        "areSocialsPublic": false
+      }
+    }
+  ],
+  "events": [
+    {
+      "userId": "mock-user-1",
+      "eventId": "evt-001-selftest",
+      "type": "self_test",
+      "date": "2024-05-01T09:00:00Z",
+      "createdAt": "2024-05-01T09:05:00Z",
+      "details": {
+        "appUsed": "Voice Tools",
+        "sound": ["好"],
+        "voicing": ["没夹"],
+        "fundamentalFrequency": 185.5,
+        "formants": { "f1": 750, "f2": 1450, "f3": 2400 },
+        "pitch": { "max": 220, "min": 160 },
+        "jitter": 0.34,
+        "shimmer": 1.2,
+        "hnr": 22.5,
+        "attachmentUrl": "mock-uploads/mock-user-1/selftest-rec-001.wav",
+        "notes": "感觉今天状态不错，声音很稳定。"
+      }
+    },
+    {
+      "userId": "mock-user-1",
+      "eventId": "evt-002-hospitaltest",
+      "type": "hospital_test",
+      "date": "2024-04-15T14:30:00Z",
+      "createdAt": "2024-04-15T15:00:00Z",
+      "details": {
+        "location": "市中心医院耳鼻喉科",
+        "equipmentUsed": "KayPENTAX CSL",
+        "sound": ["喉咙中有痰"],
+        "voicing": ["有点夹"],
+        "fundamentalFrequency": 179.2,
+        "formants": { "f1": 760, "f2": 1480 },
+        "pitch": { "max": 210, "min": 155 },
+        "jitter": 0.45,
+        "shimmer": 1.8,
+        "hnr": 20.1,
+        "notes": "医生说有点声带水肿，建议多休息。"
+      }
+    },
+    {
+      "userId": "mock-user-1",
+      "eventId": "evt-003-training",
+      "type": "voice_training",
+      "date": "2024-05-05T18:00:00Z",
+      "createdAt": "2024-05-05T19:00:00Z",
+      "details": {
+        "trainingContent": "SOVTEs, 半元音/m/ /n/发声练习",
+        "selfPracticeContent": "每天15分钟的SOVTEs",
+        "voiceStatus": "稳定，但高音区有点紧",
+        "references": "https://www.youtube.com/watch?v=example",
+        "voicing": "放松，核心支撑",
+        "feelings": "感觉对喉部肌肉的控制更好了。",
+        "instructor": "张老师"
+      }
+    },
+    {
+      "userId": "mock-user-2",
+      "eventId": "evt-004-selfpractice",
+      "type": "self_practice",
+      "date": "2024-05-03T11:00:00Z",
+      "createdAt": "2024-05-03T11:20:00Z",
+      "details": {
+        "practiceContent": "M2练习，共鸣腔体感受",
+        "hasInstructor": false,
+        "instructor": null,
+        "references": "之前张老师的课程笔记",
+        "voiceStatus": "有点累",
+        "voicing": "尝试找到头腔共鸣",
+        "feelings": "不太确定做得对不对，需要反馈。"
+      }
+    },
+    {
+      "userId": "mock-user-2",
+      "eventId": "evt-005-surgery",
+      "type": "surgery",
+      "date": "2023-12-20T00:00:00Z",
+      "createdAt": "2023-12-20T10:00:00Z",
+      "details": {
+        "doctor": "金亨泰",
+        "customDoctor": "",
+        "location": "Yeson",
+        "customLocation": "",
+        "notes": "手术很顺利，期待恢复期的效果。"
+      }
+    },
+    {
+      "userId": "mock-user-2",
+      "eventId": "evt-006-feelinglog",
+      "type": "feeling_log",
+      "date": "2024-05-06T21:00:00Z",
+      "createdAt": "2024-05-06T21:05:00Z",
+      "details": {
+        "content": "今天和朋友聊天，他们说我的声音听起来自然多了，真的很开心！感觉所有的努力都值得了。"
+      }
+    }
+  ]
+}

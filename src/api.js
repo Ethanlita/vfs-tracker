@@ -1,6 +1,7 @@
 import { get, post } from 'aws-amplify/api';
 import { uploadData } from 'aws-amplify/storage';
 import { v4 as uuidv4 } from 'uuid';
+import mockData from './mock_data.json';
 
 // 检查是否为生产环境 - 使用更明确的检查方式
 const isProductionReady = () => {
@@ -11,36 +12,6 @@ const isProductionReady = () => {
   const ready = !!(hasUserPoolId && hasClientId && hasRegion);
   console.log('🔍 AWS配置检查:', { hasUserPoolId: !!hasUserPoolId, hasClientId: !!hasClientId, hasRegion: !!hasRegion, ready });
   return ready;
-};
-
-// 开发模式下的模拟数据生成器
-const generateMockEvents = (userId) => {
-  const eventTypes = ['hospital_test', 'self_test', 'training', 'surgery'];
-  const mockEvents = [];
-
-  for (let i = 0; i < 5; i++) {
-    const date = new Date();
-    date.setDate(date.getDate() - i * 3); // 每3天一个事件
-
-    mockEvents.push({
-      eventId: `mock-event-${i}`,
-      userId: userId,
-      type: eventTypes[i % eventTypes.length],
-      notes: `这是一个演示事件 #${i + 1}。在生产环境中，这里会显示真实的用户事件数据。`,
-      attachment: i % 2 === 0 ? `mock-attachment-${i}.pdf` : null,
-      status: 'approved',
-      createdAt: date.toISOString(),
-      updatedAt: date.toISOString(),
-      voiceParameters: {
-        fundamental: 120 + Math.random() * 20,
-        jitter: 0.5 + Math.random() * 1.5,
-        shimmer: 2 + Math.random() * 3,
-        hnr: 15 + Math.random() * 10
-      }
-    });
-  }
-
-  return mockEvents;
 };
 
 /**
@@ -88,9 +59,10 @@ export const uploadFile = async (file, userId) => {
 export const getAllEvents = async () => {
   // 在开发模式下返回模拟数据
   if (!isProductionReady()) {
-    console.log('🔧 开发模式：返回模拟的公共事件数据');
-    const mockPublicEvents = generateMockEvents('public-demo');
-    return Promise.resolve(mockPublicEvents);
+    console.log('🔧 开发模式：返回所有模拟事件作为公共数据');
+    // For the public dashboard, we can decide which events to show.
+    // Here, we'll return all events for simplicity.
+    return Promise.resolve(mockData.events);
   }
 
   try {
@@ -119,9 +91,9 @@ export const getAllEvents = async () => {
 export const getEventsByUserId = async (userId) => {
   // 在开发模式下返回模拟数据
   if (!isProductionReady()) {
-    console.log('🔧 开发模式：返回模拟的用户事件数据', userId);
-    const mockUserEvents = generateMockEvents(userId);
-    return Promise.resolve(mockUserEvents);
+    console.log(`🔧 开发模式：为用户 ${userId} 返回模拟事件数据`);
+    const userEvents = mockData.events.filter(event => event.userId === userId);
+    return Promise.resolve(userEvents);
   }
 
   try {
