@@ -22,8 +22,8 @@ const PostViewer = () => {
       return false;
     }
 
-    // 只允许字母、数字、连字符、下划线和斜杠
-    const validPathPattern = /^[a-zA-Z0-9\-_\/]+\.md$/;
+    // 只允许字母、数字、连字符、下划线、斜杠和中文字符
+    const validPathPattern = /^[a-zA-Z0-9\-_\/\u4e00-\u9fa5]+\.md$/;
     return validPathPattern.test(filePath);
   };
 
