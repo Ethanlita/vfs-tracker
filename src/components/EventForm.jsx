@@ -110,49 +110,80 @@ const EventForm = ({ onEventAdded }) => {
 
   // --- RENDER ---
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
-      <div>
-        <label htmlFor="event-type" className="block text-sm font-semibold text-gray-800 mb-1">事件类型</label>
-        <select
-          id="event-type"
-          value={eventType}
-          onChange={(e) => setEventType(e.target.value)}
-          className="mt-1 block w-full rounded-lg border-gray-300 bg-gray-50 py-3 px-4 text-base text-gray-800 shadow-sm transition-all duration-300 focus:border-pink-500 focus:ring-2 focus:ring-pink-500 focus:ring-opacity-50 focus:outline-none"
-        >
-          <option value="hospital_test">医院检测</option>
-          <option value="self_test">自我测试</option>
-          <option value="training">训练</option>
-          <option value="surgery">手术</option>
-        </select>
+    <form onSubmit={handleSubmit} className="form-container">
+      {/* 事件类型选择 */}
+      <div className="form-field">
+        <label htmlFor="event-type" className="text-lg font-semibold text-gray-800">
+          事件类型
+        </label>
+        <div className="relative">
+          <select
+            id="event-type"
+            value={eventType}
+            onChange={(e) => setEventType(e.target.value)}
+            className="form-input-base appearance-none cursor-pointer"
+          >
+            <option value="hospital_test">🏥 医院检测</option>
+            <option value="self_test">🔍 自我测试</option>
+            <option value="training">💪 训练</option>
+            <option value="surgery">⚕️ 手术</option>
+          </select>
+          <div className="absolute inset-y-0 right-0 flex items-center px-4 pointer-events-none">
+            <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
+            </svg>
+          </div>
+        </div>
       </div>
-      <div>
-        <label htmlFor="notes" className="block text-sm font-semibold text-gray-800 mb-1">备注</label>
+
+      {/* 备注输入 */}
+      <div className="form-field">
+        <label htmlFor="notes" className="text-lg font-semibold text-gray-800">
+          备注
+        </label>
         <textarea
           id="notes"
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           rows={4}
-          className="mt-1 block w-full rounded-lg border-gray-300 bg-gray-50 py-3 px-4 text-base text-gray-800 shadow-sm transition-all duration-300 focus:border-pink-500 focus:ring-2 focus:ring-pink-500 focus:ring-opacity-50 focus:outline-none"
-          placeholder="例如：今天进行了30分钟的发声练习..."
+          className="form-input-base resize-none"
+          placeholder="💭 例如：今天进行了30分钟的发声练习，感觉声音比昨天更稳定..."
         />
       </div>
-      <div>
-        <label htmlFor="file-input" className="block text-sm font-semibold text-gray-800 mb-1">附件 (可选)</label>
+
+      {/* 文件上传 */}
+      <div className="form-field">
+        <label htmlFor="file-input" className="text-lg font-semibold text-gray-800">
+          附件 <span className="text-sm text-gray-500 font-normal">(可选)</span>
+        </label>
         <input
           id="file-input"
           type="file"
           onChange={handleFileChange}
-          className="mt-1 block w-full text-sm text-gray-600 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-pink-100 file:text-pink-700 hover:file:bg-pink-200 transition-colors cursor-pointer"
+          className="form-input-base text-gray-700 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-base file:font-semibold file:bg-gradient-to-r file:from-pink-100 file:to-purple-100 file:text-pink-700 hover:file:from-pink-200 hover:file:to-purple-200 file:transition-all file:duration-300 file:cursor-pointer cursor-pointer"
         />
-        <p className="mt-2 text-xs text-gray-500">在“医院检测”类型中，此项为必填。</p>
+        <p className="text-sm text-gray-500 bg-yellow-50 border border-yellow-200 rounded-lg px-3 py-2">
+          ⚠️ 在"医院检测"类型中，此项为必填。
+        </p>
       </div>
+
+      {/* 提交按钮 */}
       <div className="pt-4">
         <button
           type="submit"
           disabled={isSubmitting}
-          className="w-full inline-flex justify-center py-3 px-4 border border-transparent shadow-lg text-base font-medium rounded-lg text-white bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-700 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 disabled:opacity-60 transition-all duration-300 ease-in-out transform hover:scale-105 disabled:scale-100"
+          className="w-full group relative inline-flex justify-center py-3 px-6 border-0 shadow-lg text-lg font-bold rounded-xl text-white bg-gradient-to-r from-pink-600 via-purple-600 to-indigo-600 hover:from-pink-700 hover:via-purple-700 hover:to-indigo-700 focus:outline-none focus:ring-4 focus:ring-offset-2 focus:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 ease-in-out transform hover:scale-105 hover:shadow-xl disabled:scale-100"
         >
-          {isSubmitting ? '添加中...' : '添加事件'}
+          <span className="absolute left-0 inset-y-0 flex items-center pl-4">
+            {isSubmitting ? (
+              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+            ) : (
+              <svg className="h-5 w-5 text-white group-hover:text-pink-200 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"></path>
+              </svg>
+            )}
+          </span>
+          {isSubmitting ? '正在添加事件...' : '✨ 添加新事件'}
         </button>
       </div>
     </form>

@@ -90,22 +90,32 @@ const MyPage = () => {
 
   // --- RENDER ---
   return (
-    <div className="space-y-8">
+    <div className="dashboard-container min-h-screen bg-gradient-to-br from-rose-100 via-purple-100 to-blue-100 -m-4 sm:-m-6 lg:-m-8">
+      {/* 装饰性背景元素 */}
+      <div className="fixed inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-pink-300 rounded-full mix-blend-multiply filter blur-xl opacity-30 animate-blob"></div>
+        <div className="absolute top-1/3 right-1/4 w-96 h-96 bg-purple-300 rounded-full mix-blend-multiply filter blur-xl opacity-30 animate-blob animation-delay-2000"></div>
+        <div className="absolute bottom-1/4 left-1/3 w-96 h-96 bg-blue-300 rounded-full mix-blend-multiply filter blur-xl opacity-30 animate-blob animation-delay-4000"></div>
+      </div>
+
       {/* 页面标题 */}
-      <div className="text-center">
-        <h1 className="text-4xl font-bold bg-gradient-to-r from-pink-600 to-purple-600 bg-clip-text text-transparent">
+      <div className="dashboard-title-section relative z-10">
+        <h1 className="text-4xl font-bold text-pink-600 mb-4">
           我的个人仪表板
         </h1>
-        <p className="mt-2 text-lg text-gray-600">
+        <p className="text-lg text-gray-700 max-w-3xl mx-auto leading-relaxed font-medium">
           欢迎，{user?.attributes?.email || '用户'}！在这里您可以记录和分析您的嗓音数据。
         </p>
       </div>
 
       {/* 声音频率图表 */}
-      <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-100">
-        <div className="mb-6">
-          <h2 className="text-2xl font-bold text-gray-800 mb-2">声音频率图表</h2>
-          <p className="text-gray-600">查看您的声音基频随时间的变化</p>
+      <div className="dashboard-card">
+        <div className="dashboard-card-header">
+          <h2 className="dashboard-card-title">
+            <span className="dashboard-card-emoji">📊</span>
+            声音频率图表
+          </h2>
+          <p className="dashboard-card-description">查看您的声音基频随时间的变化</p>
         </div>
         <VoiceFrequencyChart
           userId={user?.attributes?.sub}
@@ -114,22 +124,28 @@ const MyPage = () => {
       </div>
 
       {/* 事件记录表单 */}
-      <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-100">
-        <h2 className="text-2xl font-bold mb-4 text-gray-800">添加新事件</h2>
+      <div className="dashboard-card">
+        <h2 className="dashboard-card-title">
+          <span className="dashboard-card-emoji">✨</span>
+          添加新事件
+        </h2>
         <EventForm onEventAdded={handleEventAdded} />
       </div>
 
       {/* 交互式时间轴 */}
-      <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-100">
-        <div className="mb-6">
-          <h2 className="text-2xl font-bold text-gray-800 mb-2">我的动态时间轴</h2>
-          <p className="text-gray-600">点击事件卡片查看详细信息</p>
+      <div className="dashboard-card">
+        <div className="dashboard-card-header">
+          <h2 className="dashboard-card-title">
+            <span className="dashboard-card-emoji">📈</span>
+            我的动态时间轴
+          </h2>
+          <p className="dashboard-card-description">点击事件卡片查看详细信息</p>
         </div>
 
         {isLoading ? (
-          <div className="flex justify-center items-center h-32">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-pink-500"></div>
-            <span className="ml-3 text-gray-600">正在加载事件...</span>
+          <div className="flex justify-center items-center h-48 space-x-6">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-4 border-pink-500"></div>
+            <span className="text-xl text-gray-600 font-medium">正在加载事件...</span>
           </div>
         ) : (
           <InteractiveTimeline
