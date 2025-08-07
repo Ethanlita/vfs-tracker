@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { motion, AnimatePresence } from 'framer-motion';
+import { getEventsByUserId } from '../api';
 
 // --- SVG Icon Components (replacing lucide-react) ---
 const Lightbulb = ({ className, ...props }) => (
@@ -28,6 +29,53 @@ const CheckCircle = ({ className, ...props }) => (
 
 
 // --- Helper Functions ---
+
+// 从事件数据中提取声音参数数据
+const extractVoiceDataFromEvents = (events, metric) => {
+  const data = [];
+
+  // 筛选包含声音参数的事件类型
+  const eventsWithVoiceData = events.filter(event =>
+    (event.type === 'self_test' || event.type === 'hospital_test') &&
+    event.details &&
+    event.details.fundamentalFrequency !== undefined
+  );
+
+  eventsWithVoiceData.forEach(event => {
+    const date = event.date || event.createdAt;
+    if (!date) return;
+
+    let value;
+    switch (metric) {
+      case 'f0': // Fundamental Frequency (Hz)
+        value = event.details.fundamentalFrequency;
+        break;
+      case 'jitter': // Jitter (%)
+        value = event.details.jitter;
+        break;
+      case 'shimmer': // Shimmer (dB)
+        value = event.details.shimmer;
+        break;
+      case 'hnr': // Harmonics-to-Noise Ratio (dB)
+        value = event.details.hnr;
+        break;
+      default:
+        return;
+    }
+
+    if (value !== undefined && value !== null) {
+      data.push({
+        date: new Date(date).toISOString().split('T')[0],
+        value: parseFloat(value),
+        eventId: event.eventId,
+        eventType: event.type
+      });
+    }
+  });
+
+  // 按日期排序
+  return data.sort((a, b) => new Date(a.date) - new Date(b.date));
+};
 
 // Generates realistic mock data for demonstration purposes
 const generateMockData = (days, metric) => {
@@ -67,6 +115,31 @@ const fetchRealData = async (userId, metric, timeRange) => {
   // In a real application, you would make an API call here.
   // await new Promise(resolve => setTimeout(resolve, 1000));
   return []; // Returning empty for now
+};
+
+// 获取用户事件数据并提取声音参数
+const fetchVoiceDataFromAPI = async (userId, metric) => {
+  console.log('🔍 fetchVoiceDataFromAPI: 开始获取数据', { userId, metric });
+
+  try {
+    const events = await getEventsByUserId(userId);
+    console.log('📡 fetchVoiceDataFromAPI: API 返回的原始事件', {
+      eventCount: events?.length || 0,
+      events: events
+    });
+
+    const extractedData = extractVoiceDataFromEvents(events, metric);
+    console.log('🎯 fetchVoiceDataFromAPI: 提取的声音数据', {
+      extractedCount: extractedData.length,
+      metric,
+      data: extractedData
+    });
+
+    return extractedData;
+  } catch (error) {
+    console.error('❌ fetchVoiceDataFromAPI: 获取用户事件数据失败:', error);
+    return [];
+  }
 };
 
 
@@ -144,28 +217,59 @@ const VoiceFrequencyChart = ({ userId, isProductionReady }) => {
 
   useEffect(() => {
     const loadData = async () => {
+      console.log('🔍 VoiceFrequencyChart: 开始加载数据', {
+        userId,
+        selectedMetric,
+        timestamp: new Date().toISOString()
+      });
+
       setIsLoading(true);
-      let data;
-      // FIX: Correctly call the function to check the environment
-      if (isProductionReady()) {
-        data = await fetchRealData(userId, selectedMetric, activeRange);
-        if (data.length === 0) {
-          setIsDemoData(true);
-          data = generateMockData(90, selectedMetric); // Fallback to mock data
+      try {
+        let data;
+
+        // 首先尝试从 API 获取真实的事件数据
+        if (userId) {
+          console.log(`📊 VoiceFrequencyChart: 正在为用户 ${userId} 加载 ${selectedMetric} 数据...`);
+          data = await fetchVoiceDataFromAPI(userId, selectedMetric);
+
+          console.log('📈 VoiceFrequencyChart: API 返回的原始数据', {
+            dataLength: data.length,
+            data: data
+          });
+
+          if (data.length > 0) {
+            console.log(`✅ VoiceFrequencyChart: 成功从事件中提取到 ${data.length} 个 ${selectedMetric} 数据点`);
+            setIsDemoData(false);
+          } else {
+            console.log(`⚠️ VoiceFrequencyChart: 未找到包含 ${selectedMetric} 参数的事件，使用模拟数据`);
+            setIsDemoData(true);
+            data = generateMockData(90, selectedMetric);
+          }
         } else {
-          setIsDemoData(false);
+          console.log('🔧 VoiceFrequencyChart: 无用户ID，使用模拟数据');
+          setIsDemoData(true);
+          data = generateMockData(90, selectedMetric);
         }
-      } else {
+
+        console.log('📊 VoiceFrequencyChart: 最终设置的图表数据', {
+          dataLength: data.length,
+          isDemoData: data.length === 0 || !userId,
+          sampleData: data.slice(0, 3)
+        });
+
+        setChartData(data);
+      } catch (error) {
+        console.error('❌ VoiceFrequencyChart: 数据加载失败:', error);
+        console.log('🔧 VoiceFrequencyChart: 回退到模拟数据');
         setIsDemoData(true);
-        data = generateMockData(90, selectedMetric);
+        setChartData(generateMockData(90, selectedMetric));
+      } finally {
+        setIsLoading(false);
       }
-      setChartData(data);
-      setIsLoading(false);
     };
+
     loadData();
-    // This effect should re-run when the user or selected metric changes.
-    // The time range is handled by the filtering logic below, not by re-fetching.
-  }, [userId, selectedMetric, isProductionReady]);
+  }, [userId, selectedMetric]); // 移除 isProductionReady 依赖，因为在 API 层已经处理了
 
   const filteredData = useMemo(() => {
     if (!chartData) return [];

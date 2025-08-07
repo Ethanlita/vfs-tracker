@@ -25,11 +25,11 @@ const MyPage = () => {
   // --- STATE MANAGEMENT ---
   // @en Get the authenticated user object conditionally based on production readiness.
   // @zh 根据生产环境就绪状态有条件地获取经过身份验证的用户对象。
-  const authenticatorContext = isProductionReady() ? useAuthenticator((context) => [context.user]) : null;
-  const user = authenticatorContext?.user || {
+  const authenticatorContext = useAuthenticator ? useAuthenticator((context) => [context.user]) : null;
+  const user = (isProductionReady() && authenticatorContext?.user) || {
     attributes: {
-      email: 'demo@example.com',
-      sub: 'demo-user-123'
+      email: 'public-user@example.com',
+      sub: 'mock-user-1'
     }
   };
 
@@ -47,18 +47,36 @@ const MyPage = () => {
    * @zh 从 API 中为当前用户获取事件。它按创建日期降序对事件进行排序。
    */
   const fetchEvents = useCallback(async () => {
-    if (!user?.attributes?.sub) return; // @en Don't fetch if there's no user. @zh 如果没有用户则不获取。
+    if (!user?.attributes?.sub) {
+      console.log('❌ MyPage: 没有用户ID，跳过数据获取');
+      return;
+    }
+
+    console.log('🔍 MyPage: 开始获取事件数据', {
+      userId: user.attributes.sub,
+      isProduction: isProductionReady()
+    });
+
     try {
       setIsLoading(true);
-      // @en Use user.attributes.sub for consistency with other components like EventForm.
-      // @zh 与 EventForm 等其他组件保持一致，使用 user.attributes.sub。
       const userEvents = await getEventsByUserId(user.attributes.sub);
+
+      console.log('✅ MyPage: 成功获取事件数据', {
+        eventCount: userEvents?.length || 0,
+        events: userEvents
+      });
+
       // @en Sort events by creation date, newest first.
       // @zh 按创建日期对事件进行排序，最新的在前。
       const sortedEvents = userEvents.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
       setEvents(sortedEvents);
+
+      console.log('📊 MyPage: 排序后的事件数据', {
+        sortedCount: sortedEvents.length,
+        firstEvent: sortedEvents[0]
+      });
     } catch (error) {
-      console.error("Failed to fetch user events:", error);
+      console.error("❌ MyPage: 获取用户事件失败:", error);
       // 在开发模式下不显示错误提示
       if (isProductionReady()) {
         alert("无法加载您的事件。请尝试重新加载页面。");

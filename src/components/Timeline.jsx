@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Line } from 'react-chartjs-2';
-import { getEncouragingMessage } from '../api';
+import { getEncouragingMessage, getEventsByUserId } from '../api';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -27,6 +27,93 @@ const Timeline = () => {
   const [encouragingMessage, setEncouragingMessage] = useState("持续跟踪，持续进步 ✨");
   const [isLoadingMessage, setIsLoadingMessage] = useState(false);
 
+  // 图表数据状态
+  const [chartData, setChartData] = useState(null);
+  const [isLoadingChart, setIsLoadingChart] = useState(true);
+
+  // 从事件数据生成动态时间轴数据
+  const generateTimelineActions = (events) => {
+    if (!events || events.length === 0) {
+      // 如果没有事件数据，返回默认的模拟数据
+      return {
+        '今天': [
+          { time: '14:30', description: '完成了一次声音训练' },
+          { time: '10:15', description: '更新了个人资料' },
+        ],
+        '昨天': [
+          { time: '16:45', description: '进行了 15 分钟的发声练习' },
+          { time: '09:00', description: '创建了账户' },
+        ],
+      };
+    }
+
+    // 按日期分组事件
+    const groupedEvents = {};
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+
+    // 事件类型到中文描述的映射
+    const eventTypeDescriptions = {
+      'self_test': '进行了自我测试',
+      'hospital_test': '完成了医院检测',
+      'voice_training': '参加了嗓音训练',
+      'self_practice': '进行了自我练习',
+      'surgery': '进行了手术',
+      'feeling_log': '记录了感受'
+    };
+
+    // 处理每个事件
+    events.forEach(event => {
+      const eventDate = new Date(event.date || event.createdAt);
+      const eventDay = new Date(eventDate.getFullYear(), eventDate.getMonth(), eventDate.getDate());
+
+      let dayKey;
+      if (eventDay.getTime() === today.getTime()) {
+        dayKey = '今天';
+      } else if (eventDay.getTime() === yesterday.getTime()) {
+        dayKey = '昨天';
+      } else {
+        // 对于更早的日期，使用具体日期
+        dayKey = eventDate.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
+      }
+
+      if (!groupedEvents[dayKey]) {
+        groupedEvents[dayKey] = [];
+      }
+
+      const time = eventDate.toLocaleTimeString('zh-CN', {
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+
+      const description = eventTypeDescriptions[event.type] || '记录了一个事件';
+
+      groupedEvents[dayKey].push({
+        time,
+        description,
+        eventType: event.type,
+        eventId: event.eventId
+      });
+    });
+
+    // 按时间排序每组中的事件（最新的在前）
+    Object.keys(groupedEvents).forEach(dayKey => {
+      groupedEvents[dayKey].sort((a, b) => {
+        // 解析时间进行比较
+        const timeA = new Date(`1970-01-01 ${a.time}`);
+        const timeB = new Date(`1970-01-01 ${b.time}`);
+        return timeB - timeA; // 降序排列（最新的在前）
+      });
+    });
+
+    return groupedEvents;
+  };
+
+  // 模拟用户ID - 在实际应用中应该从认证上下文获取
+  const mockUserId = 'mock-user-1';
+
   // 模拟用户数据 - 在实际应用中这些数据应该从props或context获取
   const mockUserData = {
     events: [
@@ -42,41 +129,7 @@ const Timeline = () => {
     }
   };
 
-  // 获取AI鼓励消息
-  const fetchEncouragingMessage = useCallback(async () => {
-    setIsLoadingMessage(true);
-    try {
-      const message = await getEncouragingMessage(mockUserData);
-      setEncouragingMessage(message);
-    } catch (error) {
-      console.error('获取AI鼓励消息失败:', error);
-      // 保持默认消息
-    } finally {
-      setIsLoadingMessage(false);
-    }
-  }, []);
-
-  // 组件挂载时获取AI消息
-  useEffect(() => {
-    // 延迟2秒后获取，避免页面加载时阻塞
-    const timer = setTimeout(fetchEncouragingMessage, 2000);
-    return () => clearTimeout(timer);
-  }, [fetchEncouragingMessage]);
-
-  // Mock data for the chart
-  const chartData = {
-    labels: ['1s', '2s', '3s', '4s', '5s', '6s', '7s'],
-    datasets: [
-      {
-        label: '声音频率 (Hz)',
-        data: [120, 122, 118, 125, 123, 128, 126],
-        fill: false,
-        backgroundColor: 'rgb(219, 39, 119)',
-        borderColor: 'rgba(219, 39, 119, 0.5)',
-      },
-    ],
-  };
-
+  // 图表配置选项
   const chartOptions = {
     responsive: true,
     maintainAspectRatio: false,
@@ -95,7 +148,7 @@ const Timeline = () => {
       },
       title: {
         display: true,
-        text: '声音频率分析',
+        text: '声音基频分析',
         font: {
           size: 18,
           weight: 'bold',
@@ -146,17 +199,168 @@ const Timeline = () => {
     }
   };
 
-  // Mock data for actions
-  const actions = {
-    '今天': [
-      { time: '14:30', description: '完成了一次声音训练' },
-      { time: '10:15', description: '更新了个人资料' },
-    ],
-    '昨天': [
-      { time: '16:45', description: '进行了 15 分钟的发声练习' },
-      { time: '09:00', description: '创建了账户' },
-    ],
+  // 从事件数据生成图表数据
+  const generateChartDataFromEvents = (events) => {
+    // 筛选包含基频数据的事件
+    const eventsWithFrequency = events.filter(event =>
+      (event.type === 'self_test' || event.type === 'hospital_test') &&
+      event.details &&
+      event.details.fundamentalFrequency !== undefined
+    );
+
+    if (eventsWithFrequency.length === 0) {
+      // 如果没有真实数据，返回模拟数据
+      return {
+        labels: ['1s', '2s', '3s', '4s', '5s', '6s', '7s'],
+        datasets: [
+          {
+            label: '声音频率 (Hz)',
+            data: [120, 122, 118, 125, 123, 128, 126],
+            fill: false,
+            backgroundColor: 'rgb(219, 39, 119)',
+            borderColor: 'rgba(219, 39, 119, 0.5)',
+          },
+        ],
+      };
+    }
+
+    // 按日期排序并提取数据
+    const sortedEvents = eventsWithFrequency
+      .sort((a, b) => new Date(a.date || a.createdAt) - new Date(b.date || b.createdAt))
+      .slice(-10); // 只取最近10条记录
+
+    const labels = sortedEvents.map((event, index) => {
+      const date = new Date(event.date || event.createdAt);
+      return date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
+    });
+
+    const data = sortedEvents.map(event => event.details.fundamentalFrequency);
+
+    return {
+      labels,
+      datasets: [
+        {
+          label: '声音基频 (Hz)',
+          data,
+          fill: false,
+          backgroundColor: 'rgb(219, 39, 119)',
+          borderColor: 'rgba(219, 39, 119, 0.5)',
+        },
+      ],
+    };
   };
+
+  // 获取图表数据
+  const fetchChartData = useCallback(async () => {
+    console.log('🔍 Timeline: 开始获取图表数据', { mockUserId });
+    setIsLoadingChart(true);
+    try {
+      const events = await getEventsByUserId(mockUserId);
+      console.log('📡 Timeline: 获取到的原始事件数据', {
+        eventCount: events?.length || 0,
+        events: events
+      });
+
+      const chartConfig = generateChartDataFromEvents(events);
+      console.log('📊 Timeline: 生成的图表配置', chartConfig);
+      setChartData(chartConfig);
+    } catch (error) {
+      console.error('❌ Timeline: 获取图表数据失败:', error);
+      // 使用默认模拟数据
+      const fallbackChart = {
+        labels: ['1s', '2s', '3s', '4s', '5s', '6s', '7s'],
+        datasets: [
+          {
+            label: '声音频率 (Hz)',
+            data: [120, 122, 118, 125, 123, 128, 126],
+            fill: false,
+            backgroundColor: 'rgb(219, 39, 119)',
+            borderColor: 'rgba(219, 39, 119, 0.5)',
+          },
+        ],
+      };
+      console.log('🔧 Timeline: 使用回退图表数据', fallbackChart);
+      setChartData(fallbackChart);
+    } finally {
+      setIsLoadingChart(false);
+    }
+  }, [mockUserId]);
+
+  // 获取AI鼓励消息
+  const fetchEncouragingMessage = useCallback(async () => {
+    console.log('🤖 Timeline: 开始获取AI鼓励消息');
+    setIsLoadingMessage(true);
+    try {
+      const message = await getEncouragingMessage(mockUserData);
+      console.log('✅ Timeline: 获取到AI消息', message);
+      setEncouragingMessage(message);
+    } catch (error) {
+      console.error('❌ Timeline: 获取AI鼓励消息失败:', error);
+      // 保持默认消息
+    } finally {
+      setIsLoadingMessage(false);
+    }
+  }, []);
+
+  // 从 API 获取的事件数据状态
+  const [timelineEvents, setTimelineEvents] = useState([]);
+  const [isLoadingTimeline, setIsLoadingTimeline] = useState(true);
+
+  // 获取时间轴事件数据
+  const fetchTimelineEvents = useCallback(async () => {
+    console.log('🔍 Timeline: 开始获取时间轴事件数据', { mockUserId });
+    setIsLoadingTimeline(true);
+    try {
+      const events = await getEventsByUserId(mockUserId);
+      console.log('📡 Timeline: 获取到的时间轴原始事件', {
+        totalEvents: events?.length || 0,
+        events: events
+      });
+
+      // 修复：扩大时间范围到最近30天，如果还是没有数据，则显示所有事件
+      let recentEvents = events
+        .filter(event => {
+          const eventDate = new Date(event.date || event.createdAt);
+          const thirtyDaysAgo = new Date();
+          thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+          return eventDate >= thirtyDaysAgo;
+        });
+
+      // 如果30天内没有事件，则显示所有事件（开发模式下显示 mock 数据）
+      if (recentEvents.length === 0) {
+        console.log('⚠️ Timeline: 30天内无事件，显示所有可用事件');
+        recentEvents = events;
+      }
+
+      recentEvents = recentEvents
+        .sort((a, b) => new Date(b.date || b.createdAt) - new Date(a.date || a.createdAt)) // 最新的在前
+        .slice(0, 10); // 最多显示10个事件
+
+      console.log('⏰ Timeline: 筛选出的显示事件', {
+        recentCount: recentEvents.length,
+        recentEvents: recentEvents
+      });
+
+      setTimelineEvents(recentEvents);
+    } catch (error) {
+      console.error('❌ Timeline: 获取时间轴事件数据失败:', error);
+      setTimelineEvents([]); // 设置为空数组，将使用默认数据
+    } finally {
+      setIsLoadingTimeline(false);
+    }
+  }, [mockUserId]);
+
+  // 组件挂载时获取数据
+  useEffect(() => {
+    fetchChartData();
+    fetchTimelineEvents(); // 获取时间轴数据
+    // 延迟2秒后获取AI消息，避免页面加载时阻塞
+    const timer = setTimeout(fetchEncouragingMessage, 2000);
+    return () => clearTimeout(timer);
+  }, [fetchChartData, fetchTimelineEvents, fetchEncouragingMessage]);
+
+  // 生成动态数据
+  const actions = generateTimelineActions(timelineEvents);
 
   return (
     <div className="timeline-container">
@@ -183,7 +387,16 @@ const Timeline = () => {
             <div className="h-[500px] relative">
               <div className="absolute inset-0 bg-gradient-to-br from-pink-50 to-rose-50 rounded-xl opacity-50"></div>
               <div className="relative z-10 h-full">
-                <Line data={chartData} options={chartOptions} />
+                {isLoadingChart ? (
+                  <div className="flex items-center justify-center h-full">
+                    <svg className="animate-spin h-10 w-10 text-pink-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4.293 12.293a1 1 0 011.414 0L12 18.586l6.293-6.293a1 1 0 111.414 1.414l-7 7a1 1 0 01-1.414 0l-7-7a1 1 0 010-1.414z"></path>
+                    </svg>
+                  </div>
+                ) : (
+                  <Line data={chartData} options={chartOptions} />
+                )}
               </div>
             </div>
           </div>

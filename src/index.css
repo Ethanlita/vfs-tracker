@@ -280,7 +280,7 @@ body {
       padding: 10px 16px 10px 24px;
       margin-left: -12px;
       border-radius: 1.25rem;
-      min-height: 40px; /* 小屏幕时调整最小高度 */
+      min-height: 48px; /* 修复：保持与头像容器高度一致 */
     }
 
     .ai-assistant-text {
@@ -289,8 +289,8 @@ body {
     }
 
     .ai-assistant-avatar {
-      width: 40px;
-      height: 40px;
+      width: 48px; /* 修复：增加容器尺寸，比头像图片大2px */
+      height: 48px; /* 修复：增加容器尺寸，比头像图片大2px */
     }
 
     .ai-assistant-avatar svg {
