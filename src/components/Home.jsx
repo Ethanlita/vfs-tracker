@@ -31,7 +31,7 @@ const Home = () => {
   return (
     <div className="space-y-12">
       <div className="text-center py-16 px-4">
-        <h1 className="text-4xl font-bold tracking-tight text-gray-900 sm:text-5xl mb-6">
+        <h1 className="text-4xl font-bold tracking-tight text-grey-900 sm:text-5xl mb-6">
           欢迎来到VFS Tracker!
         </h1>
         <p className="mt-6 text-lg leading-8 text-gray-600 max-w-2xl mx-auto">
