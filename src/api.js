@@ -89,25 +89,45 @@ export const getAllEvents = async () => {
  * @throws Will throw an error if the API call fails.
  */
 export const getEventsByUserId = async (userId) => {
+  console.log('🔍 API: getEventsByUserId 被调用', {
+    userId,
+    isProduction: isProductionReady(),
+    timestamp: new Date().toISOString()
+  });
+
   // 在开发模式下返回模拟数据
   if (!isProductionReady()) {
-    console.log(`🔧 开发模式：为用户 ${userId} 返回模拟事件数据`);
+    console.log(`🔧 API: 开发模式 - 为用户 ${userId} 返回模拟事件数据`);
     const userEvents = mockData.events.filter(event => event.userId === userId);
+    console.log('📊 API: 筛选后的用户事件', {
+      totalMockEvents: mockData.events.length,
+      userSpecificEvents: userEvents.length,
+      userEvents: userEvents
+    });
     return Promise.resolve(userEvents);
   }
 
   try {
     const apiName = 'api';
     const path = `/events/${userId}`;
+    console.log(`🌐 API: 生产模式 - 调用 AWS API`, { apiName, path });
+
     // v6: Use the get function directly.
     const restOperation = get({
       apiName,
       path,
     });
     const { body } = await restOperation.response;
-    return await body.json();
+    const result = await body.json();
+
+    console.log('✅ API: AWS API 调用成功', {
+      eventCount: result?.length || 0,
+      result: result
+    });
+
+    return result;
   } catch (error) {
-    console.error('Error fetching events by user ID:', error);
+    console.error('❌ API: 获取用户事件失败:', error);
     throw error;
   }
 };
