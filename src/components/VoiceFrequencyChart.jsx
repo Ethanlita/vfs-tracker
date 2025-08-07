@@ -75,7 +75,7 @@ const fetchRealData = async (userId, metric, timeRange) => {
 const CustomTooltip = ({ active, payload, label }) => {
   if (active && payload && payload.length) {
     return (
-      <div className="p-4 bg-gray-800 bg-opacity-80 backdrop-blur-sm text-white rounded-lg shadow-xl border border-gray-700">
+      <div className="p-4 bg-gray-900/90 backdrop-blur-sm text-white rounded-xl shadow-2xl">
         <p className="label text-sm font-bold">{`日期 : ${label}`}</p>
         <p className="intro text-lg">{`数值 : ${payload[0].value}`}</p>
       </div>
@@ -85,17 +85,23 @@ const CustomTooltip = ({ active, payload, label }) => {
 };
 
 const ChartCard = ({ title, children }) => (
-  <div className="relative w-full h-full p-1 bg-gradient-to-br from-slate-50 via-white to-slate-100 rounded-2xl shadow-inner-lg border border-gray-200/80">
-    <div className="absolute -top-px -left-px -right-px h-16 bg-gradient-to-b from-white to-transparent rounded-t-2xl"></div>
-    <div className="relative w-full h-full p-6 bg-white/70 backdrop-blur-sm rounded-xl border border-white/80">
-      <h3 className="text-xl font-semibold text-gray-700 mb-4">{title}</h3>
+  <div
+    className="relative w-full h-full bg-gradient-to-br from-white/60 via-gray-50/20 to-purple-50/10 rounded-3xl shadow-inner-lg backdrop-blur-sm overflow-hidden"
+    style={{ border: 'none' }}
+  >
+    {/* 顶部装饰性渐变 */}
+    <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-pink-50/30 via-transparent to-transparent pointer-events-none"></div>
+
+    {/* 主要内容区域 */}
+    <div className="relative w-full h-full" style={{ paddingLeft: '3rem', paddingRight: '3rem', paddingTop: '0rem', paddingBottom: '1rem' }}>
+      <h3 className="font-bold text-gray-800 relative z-10" style={{ fontSize: '1.875rem', marginBottom: '2rem' }}>{title}</h3>
       {children}
     </div>
   </div>
 );
 
 const StatusIndicator = ({ isDemo, isLoading }) => (
-    <div className="flex items-center space-x-2 px-3 py-1 bg-gray-100 rounded-full text-sm text-gray-600">
+    <div className="flex items-center space-x-2 px-3 py-1 rounded-full text-sm text-gray-600">
         {isLoading ? (
             <motion.div
                 animate={{ rotate: 360 }}
@@ -192,20 +198,20 @@ const VoiceFrequencyChart = ({ userId, isProductionReady }) => {
   const latestValue = filteredData.length > 0 ? filteredData[filteredData.length - 1].value : 'N/A';
   const averageValue = filteredData.length > 0 ? (filteredData.reduce((acc, item) => acc + item.value, 0) / filteredData.length).toFixed(2) : 'N/A';
 
+  const buttonClasses = "px-4 py-1.5 text-sm font-semibold rounded-full transition-all duration-300 ease-in-out border border-transparent text-gray-600";
+  const activeClasses = "bg-pink-500 text-white shadow-md";
+  const inactiveClasses = "hover:bg-gray-200 hover:text-gray-800";
+
   return (
-    <ChartCard title="声音频率时间轴">
+    <ChartCard title="">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 space-y-4 md:space-y-0">
         {/* Metric Selection */}
-        <div className="flex flex-wrap items-center bg-gray-100 p-1.5 rounded-full">
+        <div className="flex flex-wrap items-center gap-1 bg-gray-100 p-1.5 rounded-full">
           {metrics.map(metric => (
             <button
               key={metric.key}
               onClick={() => setSelectedMetric(metric.key)}
-              className={`px-4 py-1.5 text-sm font-semibold rounded-full transition-colors duration-300 ${
-                selectedMetric === metric.key
-                  ? 'bg-white text-blue-600 shadow-md'
-                  : 'text-gray-600 hover:bg-gray-200'
-              }`}
+              className={`${buttonClasses} ${selectedMetric === metric.key ? activeClasses : inactiveClasses}`}
             >
               {metric.label}
             </button>
@@ -213,16 +219,12 @@ const VoiceFrequencyChart = ({ userId, isProductionReady }) => {
         </div>
 
         {/* Time Range Selection */}
-        <div className="flex items-center bg-gray-100 p-1.5 rounded-full">
+        <div className="flex items-center gap-1 bg-gray-100 p-1.5 rounded-full">
           {timeRanges.map(range => (
             <button
               key={range.key}
               onClick={() => setActiveRange(range.key)}
-              className={`px-4 py-1.5 text-sm font-semibold rounded-full transition-colors duration-300 ${
-                activeRange === range.key
-                  ? 'bg-white text-blue-600 shadow-md'
-                  : 'text-gray-500 hover:bg-gray-200'
-              }`}
+              className={`${buttonClasses} ${activeRange === range.key ? activeClasses : inactiveClasses}`}
             >
               {range.label}
             </button>
@@ -246,30 +248,45 @@ const VoiceFrequencyChart = ({ userId, isProductionReady }) => {
           <AreaChart data={filteredData} margin={{ top: 10, right: 30, left: 0, bottom: 20 }}>
             <defs>
               <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#8884d8" stopOpacity={0.8}/>
-                <stop offset="95%" stopColor="#8884d8" stopOpacity={0}/>
+                <stop offset="5%" stopColor="#ec4899" stopOpacity={0.8}/>
+                <stop offset="95%" stopColor="#ec4899" stopOpacity={0}/>
               </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
             <XAxis dataKey="date" tick={{ fontSize: 12 }} stroke="#6b7280" />
             <YAxis tick={{ fontSize: 12 }} stroke="#6b7280" unit={currentMetric?.unit} domain={['dataMin - 1', 'dataMax + 1']} />
             <Tooltip content={<CustomTooltip />} />
-            <Area type="monotone" dataKey="value" stroke="#8884d8" strokeWidth={2} fillOpacity={1} fill="url(#colorValue)" />
+            <Area type="monotone" dataKey="value" stroke="#ec4899" strokeWidth={2} fillOpacity={1} fill="url(#colorValue)" />
           </AreaChart>
         </ResponsiveContainer>
       </div>
-      
-      <div className="mt-6 flex justify-between items-center border-t border-gray-200 pt-4">
+
+      <div className="mt-8 flex justify-between items-center pt-6">
         <StatusIndicator isDemo={isDemoData} isLoading={isLoading} />
-        <div className="flex space-x-6 text-right">
-            <div>
-                <p className="text-sm text-gray-500">最新值</p>
-                <p className="text-xl font-semibold text-gray-800">{latestValue} <span className="text-sm font-normal text-gray-500">{currentMetric?.unit}</span></p>
+        <div className="flex items-start space-x-8">
+          {/* Latest Value */}
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-xl">✨</span>
+              <p className="text-sm font-medium text-gray-500">最新值</p>
             </div>
-            <div>
-                <p className="text-sm text-gray-500">平均值</p>
-                <p className="text-xl font-semibold text-gray-800">{averageValue} <span className="text-sm font-normal text-gray-500">{currentMetric?.unit}</span></p>
+            <p className="mt-1 text-xl font-bold text-gray-800">
+              {latestValue}
+              <span className="ml-1.5 text-sm font-normal text-gray-500">{currentMetric?.unit}</span>
+            </p>
+          </div>
+
+          {/* Average Value */}
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-xl">📊</span>
+              <p className="text-sm font-medium text-gray-500">平均值</p>
             </div>
+            <p className="mt-1 text-xl font-bold text-gray-800">
+              {averageValue}
+              <span className="ml-1.5 text-sm font-normal text-gray-500">{currentMetric?.unit}</span>
+            </p>
+          </div>
         </div>
       </div>
     </ChartCard>

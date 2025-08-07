@@ -87,11 +87,14 @@ const InteractiveTimeline = ({ events, isProductionReady }) => {
 
               {/* 事件卡片 */}
               <motion.div
-                className={`bg-white rounded-xl shadow-md border-t-4 border-${config.color}-500 overflow-hidden cursor-pointer hover:shadow-lg transition-all duration-200`}
+                className={`bg-white rounded-xl shadow-lg hover:shadow-xl overflow-hidden cursor-pointer transition-all duration-300 relative`}
                 onClick={() => setExpandedEvent(isExpanded ? null : event.eventId)}
                 whileHover={{ y: -2 }}
                 layout
               >
+                {/* 彩色顶部装饰条 */}
+                <div className={`h-1 ${config.bgColor}`}></div>
+
                 <div className="p-4">
                   <div className="flex items-start justify-between">
                     <div className="flex items-center space-x-3">
@@ -118,7 +121,7 @@ const InteractiveTimeline = ({ events, isProductionReady }) => {
                       animate={{ height: 'auto', opacity: 1 }}
                       exit={{ height: 0, opacity: 0 }}
                       transition={{ duration: 0.3, ease: 'easeInOut' }}
-                      className={`${config.lightBg} border-t border-gray-100`}
+                      className={`${config.lightBg}`}
                     >
                       <div className="p-4 space-y-3">
                         <div>

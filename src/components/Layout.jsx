@@ -70,7 +70,7 @@ const Layout = ({ children, auth }) => {
       </header>
 
       {/* @en Main content area where page-specific components are rendered. @zh 渲染特定页面组件的主要内容区域。 */}
-      <main id="main-content" className="container mx-auto p-4 sm:p-6 lg:p-8 flex-grow bg-gray-100">
+      <main id="main-content" className="container mx-auto p-4 sm:p-6 lg:p-8 flex-grow">
         {children}
       </main>
 

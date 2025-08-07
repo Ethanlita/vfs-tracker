@@ -9,6 +9,231 @@ body {
   padding: 0;
 }
 
+/* 使用@layer确保正确的层级顺序，不使用!important */
+@layer components {
+  /* 自定义组件样式 */
+  .dashboard-container {
+    min-h: 100vh;
+    padding: 0 rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem; /* 减小间距：从3rem改为2rem */
+  }
+
+  .dashboard-title-section {
+    text-align: center;
+    padding: 0rem 0; /* 减小间距：从2rem改为1rem */
+  }
+
+  .dashboard-card {
+    position: relative;
+    z-index: 10;
+    backdrop-filter: blur(16px);
+    background-color: rgba(255, 255, 255, 0.95);
+    border-radius: 2rem;
+    box-shadow: 0 35px 60px -12px rgba(0, 0, 0, 0.25);
+    transition: all 0.7s ease;
+    padding: 2rem; /* 减小间距：从2.5rem改为2rem */
+    border: none;
+    max-width: 1200px; /* 添加最大宽度限制 */
+    margin: 0 auto; /* 居中显示 */
+    width: 100%; /* 确保在小屏幕上占满宽度 */
+  }
+
+  .dashboard-card:hover {
+    box-shadow: 0 50px 100px -20px rgba(0, 0, 0, 0.35);
+    transform: scale(1.01);
+  }
+
+  .dashboard-card-header {
+    margin-bottom: 1.5rem; /* 减小间距：从2.5rem改为1.5rem */
+  }
+
+  .dashboard-card-title {
+    font-size: 2rem; /* 大幅减小：从3rem改为2rem */
+    font-weight: bold;
+    color: rgb(31, 41, 55);
+    display: flex;
+    align-items: center;
+    margin-bottom: 0rem; /* 减小间距：从1.5rem改为0.75rem */
+  }
+
+  .dashboard-card-emoji {
+    margin-right: 1rem; /* 减小间距：从1.5rem改为1rem */
+    font-size: 2.25rem; /* 减小尺寸：从3.5rem改为2.25rem */
+    filter: drop-shadow(0 4px 3px rgb(0 0 0 / 0.07));
+  }
+
+  .dashboard-card-description {
+    font-size: 1rem; /* 减小：从1.25rem改为1rem */
+    color: rgb(75, 85, 99);
+    font-weight: 500;
+    margin-left: 2.5rem; /* 减小间距：从3.5rem改为2.5rem */
+  }
+
+  .form-container {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem; /* 减小间距：从2rem改为1.5rem */
+  }
+
+  .form-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .form-input-base {
+    width: 100%;
+    border-radius: 0.75rem;
+    background: linear-gradient(to right, rgb(249, 250, 251), white);
+    font-size: 1.125rem;
+    color: rgb(31, 41, 55);
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    transition: all 0.3s ease;
+    border: 2px solid rgb(229, 231, 235);
+    padding: 0.875rem 1.25rem; /* 减小间距：从1rem 1.5rem改为0.875rem 1.25rem */
+  }
+
+  .form-input-base:hover {
+    border-color: rgb(244, 114, 182);
+  }
+
+  .form-input-base:focus {
+    outline: none;
+    border-color: rgb(236, 72, 153);
+    ring: 4px rgb(236, 72, 153) / 0.2;
+  }
+}
+
+@layer utilities {
+  /* 动画背景相关 */
+  .animate-blob {
+    animation: blob 7s infinite;
+  }
+
+  .animation-delay-2000 {
+    animation-delay: 2s;
+  }
+
+  .animation-delay-4000 {
+    animation-delay: 4s;
+  }
+}
+
+/* 动画定义 */
+@keyframes blob {
+  0% {
+    transform: translate(0px, 0px) scale(1);
+  }
+  33% {
+    transform: translate(30px, -50px) scale(1.1);
+  }
+  66% {
+    transform: translate(-20px, 20px) scale(0.9);
+  }
+  100% {
+    transform: translate(0px, 0px) scale(1);
+  }
+}
+
+/* 强制性间距修复 - 使用!important确保生效 */
+@layer utilities {
+  .space-y-20 > * + * {
+    margin-top: 5rem !important;
+  }
+
+  .space-y-16 > * + * {
+    margin-top: 4rem !important;
+  }
+
+  .space-y-12 > * + * {
+    margin-top: 3rem !important;
+  }
+
+  .space-y-8 > * + * {
+    margin-top: 2rem !important;
+  }
+
+  .p-16 {
+    padding: 4rem !important;
+  }
+
+  .p-12 {
+    padding: 3rem !important;
+  }
+
+  .mb-16 {
+    margin-bottom: 4rem !important;
+  }
+
+  .mb-12 {
+    margin-bottom: 3rem !important;
+  }
+
+  .mb-10 {
+    margin-bottom: 2.5rem !important;
+  }
+
+  .mb-8 {
+    margin-bottom: 2rem !important;
+  }
+
+  .mb-6 {
+    margin-bottom: 1.5rem !important;
+  }
+
+  .ml-20 {
+    margin-left: 5rem !important;
+  }
+
+  .ml-16 {
+    margin-left: 4rem !important;
+  }
+
+  .mr-8 {
+    margin-right: 2rem !important;
+  }
+
+  .mr-6 {
+    margin-right: 1.5rem !important;
+  }
+
+  .py-16 {
+    padding-top: 4rem !important;
+    padding-bottom: 4rem !important;
+  }
+
+  .py-12 {
+    padding-top: 3rem !important;
+    padding-bottom: 3rem !important;
+  }
+}
+
+/* 确保无边框样式生效 */
+@layer utilities {
+  .no-border {
+    border: none !important;
+  }
+
+  .border-white-subtle {
+    border: 2px solid rgba(255, 255, 255, 0.5) !important;
+  }
+}
+
+/* 自定义圆角和阴影 */
+.rounded-4xl {
+  border-radius: 2rem;
+}
+
+.shadow-3xl {
+  box-shadow: 0 35px 60px -12px rgba(0, 0, 0, 0.25);
+}
+
+.shadow-4xl {
+  box-shadow: 0 50px 100px -20px rgba(0, 0, 0, 0.35);
+}
+
 /* 自定义按钮样式 - 减少!important使用 */
 .btn-primary {
   display: inline-flex;
