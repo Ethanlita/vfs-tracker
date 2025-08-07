@@ -34,6 +34,8 @@ jobs:
 
       - name: Build project
         run: npm run build
+        env:
+          VITE_GOOGLE_GEMINI_API: ${{ secrets.GOOGLE_GEMINI_API }}
 
       - name: Setup Pages
         uses: actions/configure-pages@v5

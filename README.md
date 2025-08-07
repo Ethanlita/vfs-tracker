@@ -38,6 +38,45 @@ VITE_COGNITO_USER_POOL_ID=your_user_pool_id
 VITE_COGNITO_USER_POOL_WEB_CLIENT_ID=your_web_client_id
 ```
 
+**AI鼓励消息功能（可选）:**
+如果您想启用AI鼓励消息功能，需要在生产环境中配置以下环境变量：
+```env
+VITE_AI_ENDPOINT=your_ai_service_endpoint
+VITE_AI_API_KEY=your_ai_api_key
+```
+
+AI功能说明：
+- 仅在生产模式（`PROD=true`）下生效
+- 需要配置AI服务端点和API密钥
+- 未配置时会显示默认鼓励消息
+- AI服务会根据用户的训练数据生成个性化的鼓励评价
+
+AI接口数据格式：
+```json
+{
+  "user_progress": {
+    "total_events": 5,
+    "recent_training_count": 2,
+    "latest_voice_parameters": {
+      "fundamental": 125.5,
+      "jitter": 1.2,
+      "shimmer": 3.1,
+      "hnr": 18.7
+    },
+    "consistency_score": 75
+  },
+  "request_type": "encouraging_message",
+  "language": "zh-CN"
+}
+```
+
+期望的AI服务响应格式：
+```json
+{
+  "message": "您的训练非常有规律！本周的声音参数显示出稳定的进步，继续保持这样的节奏！"
+}
+```
+
 ### 3. Run Development Server
 ```bash
 npm run dev
