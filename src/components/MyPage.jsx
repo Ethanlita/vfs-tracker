@@ -4,6 +4,7 @@ import { getEventsByUserId } from '../api';
 import EventForm from './EventForm';
 import VoiceFrequencyChart from './VoiceFrequencyChart';
 import InteractiveTimeline from './InteractiveTimeline';
+import EventManager from './EventManager';
 
 // @en Check if the environment is production-ready.
 // @zh 检查是否为生产环境。
@@ -123,6 +124,28 @@ const MyPage = () => {
     setEvents(prevEvents => [newEvent, ...prevEvents]);
   };
 
+  /**
+   * @en Callback function for when an event is deleted from EventManager
+   * @zh 从 EventManager 删除事件时的回调函数
+   * @param {string} eventId - The ID of the deleted event
+   */
+  const handleEventDeleted = (eventId) => {
+    setEvents(prevEvents => prevEvents.filter(event => event.eventId !== eventId));
+  };
+
+  /**
+   * @en Callback function for when an event is updated from EventManager
+   * @zh 从 EventManager 更新事件时的回调函数
+   * @param {object} updatedEvent - The updated event object
+   */
+  const handleEventUpdated = (updatedEvent) => {
+    setEvents(prevEvents =>
+      prevEvents.map(event =>
+        event.eventId === updatedEvent.eventId ? updatedEvent : event
+      )
+    );
+  };
+
   // --- RENDER ---
   return (
     <div className="dashboard-container min-h-screen bg-gradient-to-br from-rose-100 via-purple-100 to-blue-100 -m-4 sm:-m-6 lg:-m-8">
@@ -185,6 +208,31 @@ const MyPage = () => {
         ) : (
           <InteractiveTimeline
             events={events}
+            isProductionReady={isProductionReady}
+          />
+        )}
+      </div>
+
+      {/* 事件管理功能卡片 */}
+      <div className="dashboard-card">
+        <div className="dashboard-card-header">
+          <h2 className="dashboard-card-title">
+            <span className="dashboard-card-emoji">🗂️</span>
+            事件管理
+          </h2>
+          <p className="dashboard-card-description">筛选、查看、编辑和删除您的事件记录</p>
+        </div>
+
+        {isLoading ? (
+          <div className="flex justify-center items-center h-48 space-x-6">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-4 border-pink-500"></div>
+            <span className="text-xl text-gray-600 font-medium">正在加载事件...</span>
+          </div>
+        ) : (
+          <EventManager
+            events={events}
+            onEventUpdated={handleEventUpdated}
+            onEventDeleted={handleEventDeleted}
             isProductionReady={isProductionReady}
           />
         )}

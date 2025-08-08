@@ -135,7 +135,8 @@ const InteractiveTimeline = ({ events, isProductionReady }) => {
   // --- Handlers ---
   const handleDownload = async (attachmentKey) => {
     try {
-      if (isProductionReady) {
+      // 修复：使用传入的 isProductionReady 函数而不是直接判断
+      if (typeof isProductionReady === 'function' ? isProductionReady() : isProductionReady) {
         const getUrlResult = await getUrl({ key: attachmentKey, options: { download: true } });
         window.open(getUrlResult.url.toString(), '_blank');
       } else {
@@ -169,6 +170,9 @@ const InteractiveTimeline = ({ events, isProductionReady }) => {
     );
   }
 
+  // 判断数据来源 - 修复数据判断逻辑
+  const isDataFromProduction = typeof isProductionReady === 'function' ? isProductionReady() : isProductionReady;
+
   return (
     <div className="relative py-8">
       {/* 时间轴线 */}
@@ -178,7 +182,7 @@ const InteractiveTimeline = ({ events, isProductionReady }) => {
       <div className="flex overflow-x-auto space-x-8 pb-8 snap-x snap-mandatory">
         {events.map((event, index) => {
           const config = eventTypeConfig[event.type] || eventTypeConfig['self_test'];
-          const dateInfo = formatDate(event.date); // Use event.date instead of createdAt
+          const dateInfo = formatDate(event.date || event.createdAt); // 兼容新旧数据格式
           const isExpanded = expandedEvent === event.eventId;
 
           return (
@@ -224,8 +228,8 @@ const InteractiveTimeline = ({ events, isProductionReady }) => {
                       </svg>
                     </motion.div>
                   </div>
-                  {event.details.notes && <p className="mt-2 text-sm text-gray-600 line-clamp-2">{event.details.notes}</p>}
-                  {event.type === 'feeling_log' && event.details.content && <p className="mt-2 text-sm text-gray-600 line-clamp-2">{event.details.content}</p>}
+                  {event.details?.notes && <p className="mt-2 text-sm text-gray-600 line-clamp-2">{event.details.notes}</p>}
+                  {event.type === 'feeling_log' && event.details?.content && <p className="mt-2 text-sm text-gray-600 line-clamp-2">{event.details.content}</p>}
                 </div>
 
                 {/* 展开的详细内容 */}
@@ -246,7 +250,7 @@ const InteractiveTimeline = ({ events, isProductionReady }) => {
 
                         <EventDetails event={event} />
 
-                        {event.details.attachmentUrl && (
+                        {event.details?.attachmentUrl && (
                           <div>
                             <motion.button
                               onClick={(e) => { e.stopPropagation(); handleDownload(event.details.attachmentUrl); }}
@@ -267,11 +271,11 @@ const InteractiveTimeline = ({ events, isProductionReady }) => {
         })}
       </div>
 
-      {/* 数据源指示器 */}
+      {/* 数据源指示器 - 修复数据来源判断 */}
       <div className="mt-4 text-center">
         <div className="inline-flex items-center space-x-2 text-sm text-gray-500">
-          <div className={`w-2 h-2 rounded-full ${isProductionReady ? 'bg-green-500' : 'bg-yellow-500'}`}></div>
-          <span>{isProductionReady ? '实时数据' : '演示数据'}</span>
+          <div className={`w-2 h-2 rounded-full ${isDataFromProduction ? 'bg-green-500' : 'bg-yellow-500'}`}></div>
+          <span>{isDataFromProduction ? '实时数据' : '演示数据'}</span>
         </div>
       </div>
     </div>

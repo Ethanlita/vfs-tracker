@@ -199,77 +199,118 @@ const VoiceFrequencyChart = ({ userId, isProductionReady }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [isDemoData, setIsDemoData] = useState(false);
   const [selectedMetric, setSelectedMetric] = useState('f0');
-  const [activeRange, setActiveRange] = useState("all"); // FIX: Default to 'all' to ensure data is shown initially
+  const [activeRange, setActiveRange] = useState('1m');
 
   const metrics = [
     { key: 'f0', label: '基频 (F0)', unit: 'Hz' },
-    { key: 'jitter', label: '抖动 (Jitter)', unit: '%' },
-    { key: 'shimmer', label: '微颤 (Shimmer)', unit: 'dB' },
-    { key: 'hnr', label: '谐噪比 (HNR)', unit: 'dB' },
+    { key: 'jitter', label: 'Jitter', unit: '%' },
+    { key: 'shimmer', label: 'Shimmer', unit: 'dB' },
+    { key: 'hnr', label: 'HNR', unit: 'dB' }
   ];
 
   const timeRanges = [
-    { key: '1w', label: '一周' },
-    { key: '1m', label: '一月' },
-    { key: '3m', label: '三月' },
-    { key: 'all', label: '全部' }, // FIX: Add 'all' option
+    { key: '1w', label: '1周' },
+    { key: '1m', label: '1月' },
+    { key: '3m', label: '3月' },
+    { key: 'all', label: '全部' }
   ];
 
+  // 修复：统一数据来源判断逻辑
+  const isUsingProductionData = useMemo(() => {
+    return typeof isProductionReady === 'function' ? isProductionReady() : isProductionReady;
+  }, [isProductionReady]);
+
+  const metricConfig = {
+    f0: { label: '基频 (F0)', unit: 'Hz', color: '#8b5cf6', target: { min: 165, max: 265 } },
+    jitter: { label: '频率微变 (Jitter)', unit: '%', color: '#06b6d4', target: { max: 1.04 } },
+    shimmer: { label: '振幅微变 (Shimmer)', unit: 'dB', color: '#10b981', target: { max: 0.35 } },
+    hnr: { label: '谐噪比 (HNR)', unit: 'dB', color: '#f59e0b', target: { min: 20 } }
+  };
+
+  // Fetch data when component mounts or when dependencies change
   useEffect(() => {
-    const loadData = async () => {
-      console.log('🔍 VoiceFrequencyChart: 开始加载数据', {
+    const fetchData = async () => {
+      if (!userId) {
+        console.log('❌ VoiceFrequencyChart: 没有用户ID，跳过数据获取');
+        setIsLoading(false);
+        return;
+      }
+
+      console.log('🔍 VoiceFrequencyChart: 开始获取数据', {
         userId,
         selectedMetric,
-        timestamp: new Date().toISOString()
+        isProductionReady: isUsingProductionData
       });
 
       setIsLoading(true);
+
       try {
         let data;
 
-        // 首先尝试从 API 获取真实的事件数据
-        if (userId) {
-          console.log(`📊 VoiceFrequencyChart: 正在为用户 ${userId} 加载 ${selectedMetric} 数据...`);
+        if (isUsingProductionData) {
+          // 生产环境：从API获取真实数据
+          console.log('🌐 VoiceFrequencyChart: 使用生产数据源');
           data = await fetchVoiceDataFromAPI(userId, selectedMetric);
+          setIsDemoData(false);
 
-          console.log('📈 VoiceFrequencyChart: API 返回的原始数据', {
-            dataLength: data.length,
-            data: data
-          });
-
-          if (data.length > 0) {
-            console.log(`✅ VoiceFrequencyChart: 成功从事件中提取到 ${data.length} 个 ${selectedMetric} 数据点`);
-            setIsDemoData(false);
-          } else {
-            console.log(`⚠️ VoiceFrequencyChart: 未找到包含 ${selectedMetric} 参数的事件，使用模拟数据`);
+          // 如果没有真实数据，回退到演示数据
+          if (!data || data.length === 0) {
+            console.log('⚠️ VoiceFrequencyChart: 没有真实数据，回退到演示数据');
+            data = generateMockData(30, selectedMetric);
             setIsDemoData(true);
-            data = generateMockData(90, selectedMetric);
           }
         } else {
-          console.log('🔧 VoiceFrequencyChart: 无用户ID，使用模拟数据');
-          setIsDemoData(true);
-          data = generateMockData(90, selectedMetric);
+          // 开发环境：优先尝试从 mock API 获取数据
+          console.log('🔧 VoiceFrequencyChart: 开发模式 - 尝试获取 mock 数据');
+          data = await fetchVoiceDataFromAPI(userId, selectedMetric);
+
+          if (data && data.length > 0) {
+            console.log('✅ VoiceFrequencyChart: 使用真实 mock 数据', { dataCount: data.length });
+
+            // 检查mock数据的日期范围，如果数据较老，自动调整时间范围为"全部"
+            const now = new Date();
+            const hasRecentData = data.some(item => {
+              const itemDate = new Date(item.date);
+              const oneMonthAgo = new Date(now);
+              oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
+              return itemDate > oneMonthAgo;
+            });
+
+            if (!hasRecentData) {
+              console.log('⚠️ VoiceFrequencyChart: mock数据较老，自动切换到"全部"时间范围');
+              setActiveRange('all');
+            }
+
+            setIsDemoData(false); // 这是真实的 mock 数据，不是生成的
+          } else {
+            console.log('⚠️ VoiceFrequencyChart: mock 数据不足，使用生成的演示数据');
+            data = generateMockData(30, selectedMetric);
+            setIsDemoData(true); // 这是生成的演示数据
+          }
         }
 
-        console.log('📊 VoiceFrequencyChart: 最终设置的图表数据', {
-          dataLength: data.length,
-          isDemoData: data.length === 0 || !userId,
-          sampleData: data.slice(0, 3)
+        console.log('✅ VoiceFrequencyChart: 数据获取完成', {
+          dataCount: data?.length || 0,
+          isDemoData: !isUsingProductionData && (!data || data.length === 0),
+          dataSource: data && data.length > 0 ? 'mock_api' : 'generated',
+          firstDataPoint: data?.[0],
+          lastDataPoint: data?.[data.length - 1]
         });
 
-        setChartData(data);
+        setChartData(data || []);
       } catch (error) {
-        console.error('❌ VoiceFrequencyChart: 数据加载失败:', error);
-        console.log('🔧 VoiceFrequencyChart: 回退到模拟数据');
+        console.error('❌ VoiceFrequencyChart: 数据获取失败:', error);
+        // 错误时使用演示数据作为后备
+        const fallbackData = generateMockData(30, selectedMetric);
+        setChartData(fallbackData);
         setIsDemoData(true);
-        setChartData(generateMockData(90, selectedMetric));
       } finally {
         setIsLoading(false);
       }
     };
 
-    loadData();
-  }, [userId, selectedMetric]); // 移除 isProductionReady 依赖，因为在 API 层已经处理了
+    fetchData();
+  }, [userId, selectedMetric, isUsingProductionData]);
 
   const filteredData = useMemo(() => {
     if (!chartData) return [];
