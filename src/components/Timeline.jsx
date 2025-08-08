@@ -229,7 +229,7 @@ const Timeline = () => {
       .sort((a, b) => new Date(a.date || a.createdAt) - new Date(b.date || b.createdAt))
       .slice(-10); // 只取最近10条记录
 
-    const labels = sortedEvents.map((event, index) => {
+    const labels = sortedEvents.map((event) => {
       const date = new Date(event.date || event.createdAt);
       return date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
     });
@@ -291,7 +291,24 @@ const Timeline = () => {
     console.log('🤖 Timeline: 开始获取AI鼓励消息');
     setIsLoadingMessage(true);
     try {
-      const message = await getEncouragingMessage(mockUserData);
+      // 使用真实的用户事件数据
+      const realUserData = {
+        events: timelineEvents, // 使用从API获取的真实事件数据
+        voiceParameters: {
+          fundamental: 125.5,
+          jitter: 1.2,
+          shimmer: 3.1,
+          hnr: 18.7
+        }
+      };
+
+      console.log('📊 Timeline: 发送给AI的真实用户数据', {
+        eventCount: timelineEvents.length,
+        eventTypes: timelineEvents.map(e => e.type),
+        events: timelineEvents
+      });
+
+      const message = await getEncouragingMessage(realUserData);
       console.log('✅ Timeline: 获取到AI消息', message);
       setEncouragingMessage(message);
     } catch (error) {
@@ -300,7 +317,7 @@ const Timeline = () => {
     } finally {
       setIsLoadingMessage(false);
     }
-  }, []);
+  }, [timelineEvents]); // 依赖于timelineEvents，确保事件数据更新时会重新获取AI消息
 
   // 从 API 获取的事件数据状态
   const [timelineEvents, setTimelineEvents] = useState([]);
@@ -354,10 +371,16 @@ const Timeline = () => {
   useEffect(() => {
     fetchChartData();
     fetchTimelineEvents(); // 获取时间轴数据
-    // 延迟2秒后获取AI消息，避免页面加载时阻塞
-    const timer = setTimeout(fetchEncouragingMessage, 2000);
-    return () => clearTimeout(timer);
-  }, [fetchChartData, fetchTimelineEvents, fetchEncouragingMessage]);
+  }, [fetchChartData, fetchTimelineEvents]);
+
+  // 当timelineEvents更新后获取AI消息
+  useEffect(() => {
+    if (timelineEvents.length > 0) {
+      // 延迟2秒后获取AI消息，确保事件数据已加载完成
+      const timer = setTimeout(fetchEncouragingMessage, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [timelineEvents, fetchEncouragingMessage]);
 
   // 生成动态数据
   const actions = generateTimelineActions(timelineEvents);

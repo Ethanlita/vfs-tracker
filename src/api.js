@@ -207,30 +207,68 @@ export const getEncouragingMessage = async (userData) => {
   try {
     // 准备发送给Gemini的数据
     const userProgressSummary = `
-用户声音训练进度：
+用户声音训练进度分析：
 - 总事件数: ${userData.events?.length || 0}
 - 近期训练次数（7天内）: ${userData.events?.filter(e => 
   e.type === 'training' && 
   new Date(e.createdAt) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
 ).length || 0}
 - 训练一致性分数: ${calculateConsistencyScore(userData.events)}/100
-${userData.voiceParameters ? `- 最新声音参数: 基频 ${userData.voiceParameters.fundamental}Hz, 抖动 ${userData.voiceParameters.jitter}%, 微颤 ${userData.voiceParameters.shimmer}%` : ''}
+
+详细事件记录：
+${userData.events?.map((event, index) => {
+  const eventDate = new Date(event.date || event.createdAt);
+  const eventTypeMap = {
+    'self_test': '自我测试',
+    'hospital_test': '医院检测', 
+    'voice_training': '嗓音训练',
+    'self_practice': '自我练习',
+    'surgery': '手术',
+    'feeling_log': '感受记录'
+  };
+  const eventTypeName = eventTypeMap[event.type] || event.type;
+  
+  let eventDetails = '';
+  if (event.details) {
+    if (event.details.fundamentalFrequency) {
+      eventDetails += ` 基频:${event.details.fundamentalFrequency}Hz`;
+    }
+    if (event.details.description) {
+      eventDetails += ` 描述:${event.details.description}`;
+    }
+    if (event.details.feeling) {
+      eventDetails += ` 感受:${event.details.feeling}`;
+    }
+  }
+  
+  return `${index + 1}. ${eventDate.toLocaleDateString('zh-CN')} - ${eventTypeName}${eventDetails}`;
+}).join('\n') || '暂无详细记录'}
+
+${userData.voiceParameters ? `最新声音参数分析:
+- 基频: ${userData.voiceParameters.fundamental}Hz
+- 抖动率: ${userData.voiceParameters.jitter}%
+- 微颤: ${userData.voiceParameters.shimmer}%
+- 谐噪比: ${userData.voiceParameters.hnr}dB` : ''}
 `;
 
-    const prompt = `作为一名专业的声音训练助手，请根据以下用户的训练数据给出简短的鼓励性评价（不超过30个字）：
+    const prompt = `作为一名专业且富有同理心的声音训练助手，请根据用户的训练数据给出个性化的鼓励性评价（25-35字）：
 
 ${userProgressSummary}
 
-请用温暖、专业的语气，针对用户的具体情况给出个性化的鼓励和建议。回复应该简洁、积极向上。`;
+请分析用户的训练模式、进步趋势和当前状态，用温暖、专业且具有激励性的语气回复。可以：
+- 赞扬用户的坚持和努力
+- 针对具体的训练类型给出认可
+- 根据数据趋势提供正面的展望
+- 用温馨的话语给予情感支持
+
+回复应该简洁但充满正能量，让用户感受到被理解和鼓励。`;
 
     console.log('🤖 发送Gemini请求:', {
       prompt: prompt.substring(0, 100) + '...',
       userDataSummary: {
         totalEvents: userData.events?.length || 0,
-        recentTraining: userData.events?.filter(e =>
-          e.type === 'training' &&
-          new Date(e.createdAt) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
-        ).length || 0
+        eventTypes: userData.events?.map(e => e.type) || [],
+        detailedEventCount: userData.events?.length || 0
       }
     });
 
@@ -252,10 +290,10 @@ ${userProgressSummary}
           }]
         }],
         generationConfig: {
-          temperature: 0.8,        // 适中的创意度
-          topK: 20,               // 选择前20个最可能的词汇
-          topP: 0.9,              // 累积概率90%
-          maxOutputTokens: 150,   // 增加最大token数以允许更丰富的回复
+          temperature: 1.2,        // 大幅提高创意度，使回复更多样化
+          topK: 40,               // 增加词汇选择范围
+          topP: 0.95,             // 提高累积概率，允许更多创意表达
+          maxOutputTokens: 200,   // 增加最大token数以允许更丰富的回复
         },
       })
     });
@@ -300,11 +338,7 @@ ${userProgressSummary}
   }
 };
 
-/**
- * 计算用户训练一致性分数
- * @param {Array} events - 用户事件列表
- * @returns {number} 0-100的一致性分数
- */
+// 计算训练一致性分数
 const calculateConsistencyScore = (events) => {
   if (!events || events.length === 0) return 0;
 
