@@ -31,85 +31,9 @@ const Timeline = () => {
   const [chartData, setChartData] = useState(null);
   const [isLoadingChart, setIsLoadingChart] = useState(true);
 
-  // 从事件数据生成动态时间轴数据
-  const generateTimelineActions = (events) => {
-    if (!events || events.length === 0) {
-      // 如果没有事件数据，返回默认的模拟数据
-      return {
-        '今天': [
-          { time: '14:30', description: '完成了一次声音训练' },
-          { time: '10:15', description: '更新了个人资料' },
-        ],
-        '昨天': [
-          { time: '16:45', description: '进行了 15 分钟的发声练习' },
-          { time: '09:00', description: '创建了账户' },
-        ],
-      };
-    }
-
-    // 按日期分组事件
-    const groupedEvents = {};
-    const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const yesterday = new Date(today);
-    yesterday.setDate(yesterday.getDate() - 1);
-
-    // 事件类型到中文描述的映射
-    const eventTypeDescriptions = {
-      'self_test': '进行了自我测试',
-      'hospital_test': '完成了医院检测',
-      'voice_training': '参加了嗓音训练',
-      'self_practice': '进行了自我练习',
-      'surgery': '进行了手术',
-      'feeling_log': '记录了感受'
-    };
-
-    // 处理每个事件
-    events.forEach(event => {
-      const eventDate = new Date(event.date || event.createdAt);
-      const eventDay = new Date(eventDate.getFullYear(), eventDate.getMonth(), eventDate.getDate());
-
-      let dayKey;
-      if (eventDay.getTime() === today.getTime()) {
-        dayKey = '今天';
-      } else if (eventDay.getTime() === yesterday.getTime()) {
-        dayKey = '昨天';
-      } else {
-        // 对于更早的日期，使用具体日期
-        dayKey = eventDate.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
-      }
-
-      if (!groupedEvents[dayKey]) {
-        groupedEvents[dayKey] = [];
-      }
-
-      const time = eventDate.toLocaleTimeString('zh-CN', {
-        hour: '2-digit',
-        minute: '2-digit'
-      });
-
-      const description = eventTypeDescriptions[event.type] || '记录了一个事件';
-
-      groupedEvents[dayKey].push({
-        time,
-        description,
-        eventType: event.type,
-        eventId: event.eventId
-      });
-    });
-
-    // 按时间排序每组中的事件（最新的在前）
-    Object.keys(groupedEvents).forEach(dayKey => {
-      groupedEvents[dayKey].sort((a, b) => {
-        // 解析时间进行比较
-        const timeA = new Date(`1970-01-01 ${a.time}`);
-        const timeB = new Date(`1970-01-01 ${b.time}`);
-        return timeB - timeA; // 降序排列（最新的在前）
-      });
-    });
-
-    return groupedEvents;
-  };
+  // 从 API 获取的事件数据状态 - 移到前面声明
+  const [timelineEvents, setTimelineEvents] = useState([]);
+  const [isLoadingTimeline, setIsLoadingTimeline] = useState(true);
 
   // 模拟用户ID - 在实际应用中应该从认证上下文获取
   const mockUserId = 'mock-user-1';
@@ -319,10 +243,6 @@ const Timeline = () => {
     }
   }, [timelineEvents]); // 依赖于timelineEvents，确保事件数据更新时会重新获取AI消息
 
-  // 从 API 获取的事件数据状态
-  const [timelineEvents, setTimelineEvents] = useState([]);
-  const [isLoadingTimeline, setIsLoadingTimeline] = useState(true);
-
   // 获取时间轴事件数据
   const fetchTimelineEvents = useCallback(async () => {
     console.log('🔍 Timeline: 开始获取时间轴事件数据', { mockUserId });
@@ -381,6 +301,86 @@ const Timeline = () => {
       return () => clearTimeout(timer);
     }
   }, [timelineEvents, fetchEncouragingMessage]);
+
+  // 从事件数据生成动态时间轴数据
+  const generateTimelineActions = (events) => {
+    if (!events || events.length === 0) {
+      // 如果没有事件数据，返回默认的模拟数据
+      return {
+        '今天': [
+          { time: '14:30', description: '完成了一次声音训练' },
+          { time: '10:15', description: '更新了个人资料' },
+        ],
+        '昨天': [
+          { time: '16:45', description: '进行了 15 分钟的发声练习' },
+          { time: '09:00', description: '创建了账户' },
+        ],
+      };
+    }
+
+    // 按日期分组事件
+    const groupedEvents = {};
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+
+    // 事件类型到中文描述的映射
+    const eventTypeDescriptions = {
+      'self_test': '进行了自我测试',
+      'hospital_test': '完成了医院检测',
+      'voice_training': '参加了嗓音训练',
+      'self_practice': '进行了自我练习',
+      'surgery': '进行了手术',
+      'feeling_log': '记录了感受'
+    };
+
+    // 处理每个事件
+    events.forEach(event => {
+      const eventDate = new Date(event.date || event.createdAt);
+      const eventDay = new Date(eventDate.getFullYear(), eventDate.getMonth(), eventDate.getDate());
+
+      let dayKey;
+      if (eventDay.getTime() === today.getTime()) {
+        dayKey = '今天';
+      } else if (eventDay.getTime() === yesterday.getTime()) {
+        dayKey = '昨天';
+      } else {
+        // 对于更早的日期，使用具体日期
+        dayKey = eventDate.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
+      }
+
+      if (!groupedEvents[dayKey]) {
+        groupedEvents[dayKey] = [];
+      }
+
+      const time = eventDate.toLocaleTimeString('zh-CN', {
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+
+      const description = eventTypeDescriptions[event.type] || '记录了一个事件';
+
+      groupedEvents[dayKey].push({
+        time,
+        description,
+        eventType: event.type,
+        eventId: event.eventId
+      });
+    });
+
+    // 按时间排序每组中的事件（最新的在前）
+    Object.keys(groupedEvents).forEach(dayKey => {
+      groupedEvents[dayKey].sort((a, b) => {
+        // 解析时间进行比较
+        const timeA = new Date(`1970-01-01 ${a.time}`);
+        const timeB = new Date(`1970-01-01 ${b.time}`);
+        return timeB - timeA; // 降序排列（最新的在前）
+      });
+    });
+
+    return groupedEvents;
+  };
 
   // 生成动态数据
   const actions = generateTimelineActions(timelineEvents);
