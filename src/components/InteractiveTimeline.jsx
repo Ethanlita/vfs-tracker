@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, motion as Motion } from 'framer-motion';
+import { AlertTriangle, CheckCircle } from 'lucide-react';
 import { getUrl } from 'aws-amplify/storage';
 
 /**
@@ -14,7 +15,6 @@ const EventDetails = ({ event }) => {
   const { details } = event;
   const detailItems = [];
 
-  // A helper to add details to the list
   const addDetail = (label, value) => {
     if (value) {
       detailItems.push(
@@ -33,9 +33,9 @@ const EventDetails = ({ event }) => {
           <span className="text-gray-600">{label}:</span>
           <span className="font-medium">{value} {unit}</span>
         </div>
-      )
+      );
     }
-  }
+  };
 
   switch (event.type) {
     case 'self_test':
@@ -82,7 +82,6 @@ const EventDetails = ({ event }) => {
       addDetail('地点', details.location);
       break;
     case 'feeling_log':
-      // The content is the main detail, which we can show separately.
       break;
     default:
       return <p className="text-sm text-gray-500">无法识别的事件类型。</p>;
@@ -96,7 +95,7 @@ const EventDetails = ({ event }) => {
           <p className="text-sm text-gray-600 whitespace-pre-wrap">{details.notes}</p>
         </div>
       )}
-       {details.content && (
+      {details.content && (
         <div>
           <h4 className="font-medium text-gray-800 mb-1">感受记录</h4>
           <p className="text-sm text-gray-600 whitespace-pre-wrap">{details.content}</p>
@@ -114,28 +113,24 @@ const EventDetails = ({ event }) => {
   );
 };
 
-
 /**
  * @en Interactive timeline component for displaying user events in a horizontal layout.
  * @zh 用于在水平布局中显示用户事件的交互式时间轴组件。
  */
 const InteractiveTimeline = ({ events, isProductionReady }) => {
-  const [expandedEvent, setExpandedEvent] = useState(null);
+  const [selectedEvent, setSelectedEvent] = useState(null);
 
-  // --- Event Type Configuration ---
   const eventTypeConfig = {
-    'hospital_test': { label: '医院检测', icon: '🏥', color: 'blue', bgColor: 'bg-blue-500', lightBg: 'bg-blue-50' },
-    'self_test': { label: '自我测试', icon: '📱', color: 'green', bgColor: 'bg-green-500', lightBg: 'bg-green-50' },
-    'voice_training': { label: '嗓音训练', icon: '🎯', color: 'purple', bgColor: 'bg-purple-500', lightBg: 'bg-purple-50' },
-    'self_practice': { label: '自我练习', icon: '✍️', color: 'indigo', bgColor: 'bg-indigo-500', lightBg: 'bg-indigo-50' },
-    'surgery': { label: '手术', icon: '⚕️', color: 'red', bgColor: 'bg-red-500', lightBg: 'bg-red-50' },
-    'feeling_log': { label: '感受记录', icon: '😊', color: 'yellow', bgColor: 'bg-yellow-500', lightBg: 'bg-yellow-50' },
+    hospital_test: { label: '医院检测', icon: '🏥', color: 'blue', bgColor: 'bg-blue-500', lightBg: 'bg-blue-50' },
+    self_test: { label: '自我测试', icon: '📱', color: 'green', bgColor: 'bg-green-500', lightBg: 'bg-green-50' },
+    voice_training: { label: '嗓音训练', icon: '🎯', color: 'purple', bgColor: 'bg-purple-500', lightBg: 'bg-purple-50' },
+    self_practice: { label: '自我练习', icon: '✍️', color: 'indigo', bgColor: 'bg-indigo-500', lightBg: 'bg-indigo-50' },
+    surgery: { label: '手术', icon: '⚕️', color: 'red', bgColor: 'bg-red-500', lightBg: 'bg-red-50' },
+    feeling_log: { label: '感受记录', icon: '😊', color: 'yellow', bgColor: 'bg-yellow-500', lightBg: 'bg-yellow-50' },
   };
 
-  // --- Handlers ---
   const handleDownload = async (attachmentKey) => {
     try {
-      // 修复：使用传入的 isProductionReady 函数而不是直接判断
       if (typeof isProductionReady === 'function' ? isProductionReady() : isProductionReady) {
         const getUrlResult = await getUrl({ key: attachmentKey, options: { download: true } });
         window.open(getUrlResult.url.toString(), '_blank');
@@ -148,7 +143,6 @@ const InteractiveTimeline = ({ events, isProductionReady }) => {
     }
   };
 
-  // --- Helpers ---
   const formatDate = (dateString) => {
     const date = new Date(dateString);
     return {
@@ -156,130 +150,137 @@ const InteractiveTimeline = ({ events, isProductionReady }) => {
       day: date.getDate(),
       time: date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
       full: date.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' }),
+      short: date.toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' }),
     };
   };
 
-  // --- Render Logic ---
+  const TimelineEventCard = ({ event, config, onClick }) => {
+    const summary = event.details?.content || event.details?.notes || '暂无内容';
+    return (
+      <Motion.div
+        className="w-64 h-40 bg-white border border-gray-200 rounded-xl shadow-md hover:shadow-xl cursor-pointer transform transition-all duration-300 flex flex-col"
+        whileHover={{ y: -4 }}
+        onClick={onClick}
+      >
+        <div className="flex items-center px-4 pt-4 text-lg font-semibold text-gray-800">
+          <span className="mr-2 text-2xl">{config.icon}</span>
+          <span>{config.label}</span>
+        </div>
+        <div className="mx-4 my-2 border-b border-gray-200" />
+        <div className="px-4 pb-4 flex-1">
+          <p className="text-sm text-gray-600 line-clamp-3">{summary}</p>
+        </div>
+      </Motion.div>
+    );
+  };
+
+  const StatusIndicator = ({ isDemo }) => (
+    <div className="flex items-center space-x-2 px-3 py-1 rounded-full text-sm text-gray-600">
+      {isDemo ? (
+        <AlertTriangle className="w-4 h-4 text-orange-500" />
+      ) : (
+        <CheckCircle className="w-4 h-4 text-green-500" />
+      )}
+      <span>{isDemo ? '演示数据源' : '实时数据源'}</span>
+    </div>
+  );
+
   if (!events || events.length === 0) {
     return (
-      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center py-12">
+      <Motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center py-12">
         <div className="text-6xl mb-4">📝</div>
         <h3 className="text-lg font-medium text-gray-900 mb-2">还没有事件记录</h3>
         <p className="text-gray-500">使用上面的表单添加您的第一个嗓音事件！</p>
-      </motion.div>
+      </Motion.div>
     );
   }
 
-  // 判断数据来源 - 修复数据判断逻辑
   const isDataFromProduction = typeof isProductionReady === 'function' ? isProductionReady() : isProductionReady;
 
   return (
-    <div className="relative py-8">
-      {/* 时间轴线 */}
-      <div className="absolute top-16 left-0 right-0 h-0.5 bg-gradient-to-r from-pink-500 via-purple-500 to-blue-500"></div>
+    <div className="relative py-16">
+      <div className="absolute top-1/2 left-0 right-0 h-0.5 bg-gradient-to-r from-pink-500 via-purple-500 to-blue-500"></div>
 
-      {/* 事件容器 */}
-      <div className="flex overflow-x-auto space-x-8 pb-8 snap-x snap-mandatory">
+      <div className="flex overflow-x-auto space-x-12 pb-8 snap-x snap-mandatory">
         {events.map((event, index) => {
           const config = eventTypeConfig[event.type] || eventTypeConfig['self_test'];
-          const dateInfo = formatDate(event.date || event.createdAt); // 兼容新旧数据格式
-          const isExpanded = expandedEvent === event.eventId;
-
+          const dateInfo = formatDate(event.date || event.createdAt);
+          const isTop = index % 2 === 0;
           return (
-            <motion.div
-              key={event.eventId}
-              initial={{ opacity: 0, y: 50 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.1, duration: 0.5 }}
-              className="relative flex-shrink-0 w-80 snap-center pt-20"
-            >
-              {/* 时间轴节点和日期 */}
-              <div className="absolute top-0 left-1/2 -translate-x-1/2 text-center">
-                <div className="text-xs font-medium text-gray-500">{dateInfo.month}</div>
-                <div className="text-lg font-bold text-gray-800">{dateInfo.day}</div>
-                <motion.div
-                  className={`absolute top-14 left-1/2 -translate-x-1/2 w-4 h-4 rounded-full ${config.bgColor} ring-4 ring-white shadow-lg`}
-                  whileHover={{ scale: 1.2 }}
-                />
-              </div>
-
-              {/* 事件卡片 */}
-              <motion.div
-                className={`bg-white rounded-xl shadow-lg hover:shadow-xl overflow-hidden cursor-pointer transition-all duration-300 relative`}
-                onClick={() => setExpandedEvent(isExpanded ? null : event.eventId)}
-                whileHover={{ y: -2 }}
-                layout
-              >
-                {/* 彩色顶部装饰条 */}
-                <div className={`h-1 ${config.bgColor}`}></div>
-
-                <div className="p-4">
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center space-x-3">
-                      <span className="text-2xl">{config.icon}</span>
-                      <div>
-                        <h3 className="font-semibold text-gray-800">{config.label}</h3>
-                        <p className="text-sm text-gray-500">{dateInfo.time}</p>
-                      </div>
-                    </div>
-                    <motion.div animate={{ rotate: isExpanded ? 180 : 0 }} transition={{ duration: 0.2 }}>
-                      <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                      </svg>
-                    </motion.div>
-                  </div>
-                  {event.details?.notes && <p className="mt-2 text-sm text-gray-600 line-clamp-2">{event.details.notes}</p>}
-                  {event.type === 'feeling_log' && event.details?.content && <p className="mt-2 text-sm text-gray-600 line-clamp-2">{event.details.content}</p>}
-                </div>
-
-                {/* 展开的详细内容 */}
-                <AnimatePresence>
-                  {isExpanded && (
-                    <motion.div
-                      initial={{ height: 0, opacity: 0 }}
-                      animate={{ height: 'auto', opacity: 1 }}
-                      exit={{ height: 0, opacity: 0 }}
-                      transition={{ duration: 0.3, ease: 'easeInOut' }}
-                      className={`${config.lightBg}`}
-                    >
-                      <div className="p-4 space-y-3">
-                        <div>
-                          <h4 className="font-medium text-gray-800 mb-1">完整日期</h4>
-                          <p className="text-sm text-gray-600">{dateInfo.full}</p>
-                        </div>
-
-                        <EventDetails event={event} />
-
-                        {event.details?.attachmentUrl && (
-                          <div>
-                            <motion.button
-                              onClick={(e) => { e.stopPropagation(); handleDownload(event.details.attachmentUrl); }}
-                              className={`w-full ${config.bgColor} text-white py-2 px-4 rounded-lg font-medium hover:opacity-90 transition-opacity duration-200`}
-                              whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
-                            >
-                              📎 下载附件
-                            </motion.button>
-                          </div>
-                        )}
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </motion.div>
-            </motion.div>
+            <div key={event.eventId} className="relative flex flex-col items-center w-64 flex-shrink-0 snap-start">
+              {isTop && (
+                <>
+                  <TimelineEventCard event={event} config={config} onClick={() => setSelectedEvent(event)} />
+                  <div className="h-6 w-px bg-gray-300" />
+                </>
+              )}
+              {!isTop && <div className="mb-2 text-sm text-gray-500">{dateInfo.short}</div>}
+              <div className={`w-4 h-4 rounded-full ${config.bgColor} ring-4 ring-white shadow-md`} />
+              {isTop && <div className="mt-2 text-sm text-gray-500">{dateInfo.short}</div>}
+              {!isTop && (
+                <>
+                  <div className="h-6 w-px bg-gray-300" />
+                  <TimelineEventCard event={event} config={config} onClick={() => setSelectedEvent(event)} />
+                </>
+              )}
+            </div>
           );
         })}
       </div>
 
-      {/* 数据源指示器 - 修复数据来源判断 */}
-      <div className="mt-4 text-center">
-        <div className="inline-flex items-center space-x-2 text-sm text-gray-500">
-          <div className={`w-2 h-2 rounded-full ${isDataFromProduction ? 'bg-green-500' : 'bg-yellow-500'}`}></div>
-          <span>{isDataFromProduction ? '实时数据' : '演示数据'}</span>
-        </div>
+      <div className="mt-8 flex justify-center">
+        <StatusIndicator isDemo={!isDataFromProduction} />
       </div>
+
+      <AnimatePresence>
+        {selectedEvent && (
+          <Motion.div
+            className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setSelectedEvent(null)}
+          >
+            <Motion.div
+              className="bg-white rounded-lg p-6 max-w-lg w-full relative shadow-xl"
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button
+                className="absolute top-3 right-3 text-gray-400 hover:text-gray-600"
+                onClick={() => setSelectedEvent(null)}
+              >
+                ✕
+              </button>
+              <div className="flex items-center mb-4">
+                <span className="text-2xl mr-2">{eventTypeConfig[selectedEvent.type]?.icon}</span>
+                <h3 className="text-lg font-semibold text-gray-800">
+                  {eventTypeConfig[selectedEvent.type]?.label}
+                </h3>
+              </div>
+              <p className="text-sm text-gray-500 mb-4">
+                {formatDate(selectedEvent.date || selectedEvent.createdAt).full}
+              </p>
+              <EventDetails event={selectedEvent} />
+              {selectedEvent.details?.attachmentUrl && (
+                <Motion.button
+                  onClick={() => handleDownload(selectedEvent.details.attachmentUrl)}
+                  className={`mt-4 w-full ${eventTypeConfig[selectedEvent.type]?.bgColor} text-white py-2 px-4 rounded-lg font-medium hover:opacity-90 transition-opacity duration-200`}
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                >
+                  📎 下载附件
+                </Motion.button>
+              )}
+            </Motion.div>
+          </Motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
 
 export default InteractiveTimeline;
+
