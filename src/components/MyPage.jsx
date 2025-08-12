@@ -1,10 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuthenticator } from '@aws-amplify/ui-react';
+import { useNavigate } from 'react-router-dom';
 import { getEventsByUserId } from '../api';
-import EventForm from './EventForm';
 import VoiceFrequencyChart from './VoiceFrequencyChart';
 import InteractiveTimeline from './InteractiveTimeline';
-import EventManager from './EventManager';
 
 // @en Check if the environment is production-ready.
 // @zh 检查是否为生产环境。
@@ -27,6 +26,7 @@ const MyPage = () => {
   // @en Check if the environment is production-ready.
   // @zh 检查是否为生产环境。
   const productionReady = isProductionReady();
+  const navigate = useNavigate();
 
   // @en Create a safe wrapper for useAuthenticator that doesn't throw
   // @zh 为 useAuthenticator 创建一个安全的包装器，避免抛出错误
@@ -113,38 +113,14 @@ const MyPage = () => {
   }, [fetchEvents]);
 
   // --- HANDLERS ---
-  /**
-   * @en Callback function passed to EventForm. It adds a newly created event
-   * to the top of the events list to update the UI instantly.
-   * @zh 传递给 EventForm 的回调函数。它将新创建的事件添加到事件列表的顶部，以立即更新 UI。
-   * @param {object} newEvent - The new event object returned from the API.
-   */
-  const handleEventAdded = (newEvent) => {
-    // @en Add the new event to the top of the list for immediate UI feedback.
-    // @zh 将新事件添加到列表顶部，以获得即时的 UI 反馈。
-    setEvents(prevEvents => [newEvent, ...prevEvents]);
+  // @en Navigation handlers for the action buttons
+  // @zh 操作按钮的导航处理器
+  const handleNavigateToAddEvent = () => {
+    navigate('/add-event');
   };
 
-  /**
-   * @en Callback function for when an event is deleted from EventManager
-   * @zh 从 EventManager 删除事件时的回调函数
-   * @param {string} eventId - The ID of the deleted event
-   */
-  const handleEventDeleted = (eventId) => {
-    setEvents(prevEvents => prevEvents.filter(event => event.eventId !== eventId));
-  };
-
-  /**
-   * @en Callback function for when an event is updated from EventManager
-   * @zh 从 EventManager 更新事件时的回调函数
-   * @param {object} updatedEvent - The updated event object
-   */
-  const handleEventUpdated = (updatedEvent) => {
-    setEvents(prevEvents =>
-        prevEvents.map(event =>
-            event.eventId === updatedEvent.eventId ? updatedEvent : event
-        )
-    );
+  const handleNavigateToEventManager = () => {
+    navigate('/event-manager');
   };
 
   // --- RENDER ---
@@ -183,15 +159,6 @@ const MyPage = () => {
           />
         </div>
 
-        {/* 事件记录表单 */}
-        <div className="dashboard-card">
-          <h2 className="dashboard-card-title">
-            <span className="dashboard-card-emoji">✨</span>
-            添加新事件
-          </h2>
-          <EventForm onEventAdded={handleEventAdded} />
-        </div>
-
         {/* 交互式时间轴 */}
         <div className="dashboard-card">
           <div className="dashboard-card-header">
@@ -208,31 +175,35 @@ const MyPage = () => {
               isProductionReady={isProductionReady}
               isLoading={isLoading}
           />
-        </div>
 
-        {/* 事件管理功能卡片 */}
-        <div className="dashboard-card">
-          <div className="dashboard-card-header">
-            <h2 className="dashboard-card-title">
-              <span className="dashboard-card-emoji">🗂️</span>
-              事件管理
-            </h2>
-            <p className="dashboard-card-description">筛选、查看、编辑和删除您的事件记录</p>
+          {/* 操作按钮区域 */}
+          <div className="mt-8 pt-6 border-t border-gray-200">
+            <div className="flex flex-col sm:flex-row gap-4 sm:gap-6">
+              <button
+                onClick={handleNavigateToAddEvent}
+                className="group relative flex items-center justify-center sm:justify-start px-6 py-4 bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 text-white rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-pink-300"
+              >
+                <span className="text-2xl mr-3">✨</span>
+                <div className="text-left">
+                  <div className="font-semibold text-lg">添加新事件</div>
+                  <div className="text-sm text-pink-100 opacity-90">记录您的嗓音数据</div>
+                </div>
+                <div className="absolute inset-0 bg-white/10 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+              </button>
+
+              <button
+                onClick={handleNavigateToEventManager}
+                className="group relative flex items-center justify-center sm:justify-start px-6 py-4 bg-gradient-to-r from-purple-500 to-indigo-500 hover:from-purple-600 hover:to-indigo-600 text-white rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-purple-300"
+              >
+                <span className="text-2xl mr-3">🗂️</span>
+                <div className="text-left">
+                  <div className="font-semibold text-lg">事件管理</div>
+                  <div className="text-sm text-purple-100 opacity-90">查看和编辑记录</div>
+                </div>
+                <div className="absolute inset-0 bg-white/10 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+              </button>
+            </div>
           </div>
-
-          {isLoading ? (
-              <div className="flex justify-center items-center h-48 space-x-6">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-4 border-pink-500"></div>
-                <span className="text-xl text-gray-600 font-medium">正在加载事件...</span>
-              </div>
-          ) : (
-              <EventManager
-                  events={events}
-                  onEventUpdated={handleEventUpdated}
-                  onEventDeleted={handleEventDeleted}
-                  isProductionReady={isProductionReady}
-              />
-          )}
         </div>
       </div>
   );
