@@ -23,17 +23,17 @@ const PostsDropdown = () => {
         return (
           <DropdownMenu.Sub key={item.name}>
             <DropdownMenu.SubTrigger
-              className="dropdown-menu-button dropdown-folder-button text-sm text-left text-gray-700"
+              className="dropdown-menu-button dropdown-folder-button text-sm text-left text-gray-700 flex items-center justify-between w-full pr-4"
               onClick={() => navigate(`/posts?folder=${folderPath}`)} // 传递文件夹路径参数
             >
-              <span className="dropdown-folder-text">{item.name}</span>
-              <span className="dropdown-folder-arrow text-gray-400">›</span>
+              <span className="dropdown-folder-text flex-1">{item.name}</span>
+              <span className="dropdown-folder-arrow text-gray-400 text-lg font-bold ml-auto">›</span>
             </DropdownMenu.SubTrigger>
             <DropdownMenu.Portal>
               <DropdownMenu.SubContent 
-                className="dropdown-submenu bg-white rounded-md shadow-[0_8px_30px_rgb(0,0,0,0.12)] dropdown-menu-container"
-                sideOffset={8}
-                alignOffset={-5}
+                className="dropdown-submenu bg-white rounded-md shadow-[0_8px_30px_rgb(0,0,0,0.12)] dropdown-menu-container z-50"
+                sideOffset={12}
+                alignOffset={-8}
               >
                 <div className="py-1">
                   {item.children && item.children.length > 0 ? renderMenuItems(item.children, folderPath) : <DropdownMenu.Item disabled className="px-4 py-2 text-sm text-gray-500">No items</DropdownMenu.Item>}
@@ -100,10 +100,10 @@ const PostsDropdown = () => {
 
         <DropdownMenu.Portal>
           <DropdownMenu.Content
-            className="origin-top-right rounded-md bg-white focus:outline-none shadow-[0_8px_30px_rgb(0,0,0,0.12)] dropdown-menu-container"
-            style={{ zIndex: 50 }}
-            sideOffset={2}
+            className="origin-top-left rounded-md bg-white focus:outline-none shadow-[0_8px_30px_rgb(0,0,0,0.12)] dropdown-menu-container z-50"
+            sideOffset={8}
             align="start"
+            alignOffset={0}
             onMouseEnter={openMenu}
             onMouseLeave={closeMenu}
             onOpenAutoFocus={(e) => e.preventDefault()}

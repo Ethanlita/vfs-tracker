@@ -103,6 +103,16 @@ body {
     @apply border-0 bg-white w-full min-w-32 max-w-40 p-3 leading-tight overflow-hidden text-left transition-all duration-200 rounded-none;
     position: relative;
   }
+
+  /* 优化下拉菜单定位和稳定性 */
+  .dropdown-menu-container {
+    animation: dropdownFadeIn 0.15s ease-out;
+    transform-origin: top;
+  }
+
+  .dropdown-submenu {
+    animation: submenuSlideIn 0.12s ease-out;
+  }
 }
 
 /* 渐变遮罩 */
@@ -122,6 +132,28 @@ body {
 @keyframes scaleIn {
   from { opacity: 0; transform: translateY(-2px) scale(0.98); }
   to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes dropdownFadeIn {
+  from { 
+    opacity: 0; 
+    transform: translateY(-8px) scale(0.95); 
+  }
+  to { 
+    opacity: 1; 
+    transform: translateY(0) scale(1); 
+  }
+}
+
+@keyframes submenuSlideIn {
+  from { 
+    opacity: 0; 
+    transform: translateX(-8px) scale(0.98); 
+  }
+  to { 
+    opacity: 1; 
+    transform: translateX(0) scale(1); 
+  }
 }
 @layer utilities {
   [data-radix-popper-content-wrapper] {
