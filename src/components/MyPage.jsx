@@ -11,8 +11,8 @@ import EventManager from './EventManager';
 // @zh 检查是否为生产环境。
 const isProductionReady = () => {
   return !!(import.meta.env.VITE_COGNITO_USER_POOL_ID &&
-           import.meta.env.VITE_COGNITO_USER_POOL_WEB_CLIENT_ID &&
-           import.meta.env.VITE_AWS_REGION);
+      import.meta.env.VITE_COGNITO_USER_POOL_WEB_CLIENT_ID &&
+      import.meta.env.VITE_AWS_REGION);
 };
 
 /**
@@ -141,99 +141,99 @@ const MyPage = () => {
    */
   const handleEventUpdated = (updatedEvent) => {
     setEvents(prevEvents =>
-      prevEvents.map(event =>
-        event.eventId === updatedEvent.eventId ? updatedEvent : event
-      )
+        prevEvents.map(event =>
+            event.eventId === updatedEvent.eventId ? updatedEvent : event
+        )
     );
   };
 
   // --- RENDER ---
   return (
-    <div className="dashboard-container min-h-screen bg-gradient-to-br from-rose-100 via-purple-100 to-blue-100 -m-4 sm:-m-6 lg:-m-8">
-      {/* 装饰性背景元素 */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-pink-300 rounded-full mix-blend-multiply filter blur-xl opacity-30 animate-blob"></div>
-        <div className="absolute top-1/3 right-1/4 w-96 h-96 bg-purple-300 rounded-full mix-blend-multiply filter blur-xl opacity-30 animate-blob animation-delay-2000"></div>
-        <div className="absolute bottom-1/4 left-1/3 w-96 h-96 bg-blue-300 rounded-full mix-blend-multiply filter blur-xl opacity-30 animate-blob animation-delay-4000"></div>
-      </div>
-
-      {/* 页面标题 */}
-      <div className="dashboard-title-section relative z-10">
-        <h1 className="text-4xl font-bold text-pink-600 mb-4">
-          我的个人仪表板
-        </h1>
-        <p className="text-lg text-gray-700 max-w-3xl mx-auto leading-relaxed font-medium">
-          欢迎，{user?.attributes?.email || '用户'}！在这里您可以记录和分析您的嗓音数据。
-        </p>
-      </div>
-
-      {/* 声音频率图表 */}
-      <div className="dashboard-card">
-        <div className="dashboard-card-header">
-          <h2 className="dashboard-card-title">
-            <span className="dashboard-card-emoji">📊</span>
-            声音频率图表
-          </h2>
-          <p className="dashboard-card-description">查看您的声音基频随时间的变化</p>
-        </div>
-        <VoiceFrequencyChart
-          userId={user?.attributes?.sub}
-          isProductionReady={isProductionReady}
-        />
-      </div>
-
-      {/* 事件记录表单 */}
-      <div className="dashboard-card">
-        <h2 className="dashboard-card-title">
-          <span className="dashboard-card-emoji">✨</span>
-          添加新事件
-        </h2>
-        <EventForm onEventAdded={handleEventAdded} />
-      </div>
-
-      {/* 交互式时间轴 */}
-      <div className="dashboard-card">
-        <div className="dashboard-card-header">
-          <h2 className="dashboard-card-title">
-            <span className="dashboard-card-emoji">📈</span>
-            我的动态时间轴
-          </h2>
-          <p className="dashboard-card-description">点击事件卡片查看详细信息</p>
+      <div className="dashboard-container relative px-3 sm:px-0">
+        {/* 装饰性背景元素 */}
+        <div className="fixed inset-0 overflow-hidden pointer-events-none">
+          <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-pink-300 rounded-full mix-blend-multiply filter blur-xl opacity-30 animate-blob"></div>
+          <div className="absolute top-1/3 right-1/4 w-96 h-96 bg-purple-300 rounded-full mix-blend-multiply filter blur-xl opacity-30 animate-blob animation-delay-2000"></div>
+          <div className="absolute bottom-1/4 left-1/3 w-96 h-96 bg-blue-300 rounded-full mix-blend-multiply filter blur-xl opacity-30 animate-blob animation-delay-4000"></div>
         </div>
 
-        {/* 使用新的时间轴组件替换旧的交互式时间轴。 */}
-        <InteractiveTimeline
-            events={events}
-            isProductionReady={isProductionReady}
-            isLoading={isLoading}
-        />
-      </div>
-
-      {/* 事件管理功能卡片 */}
-      <div className="dashboard-card">
-        <div className="dashboard-card-header">
-          <h2 className="dashboard-card-title">
-            <span className="dashboard-card-emoji">🗂️</span>
-            事件管理
-          </h2>
-          <p className="dashboard-card-description">筛选、查看、编辑和删除您的事件记录</p>
+        {/* 页面标题 */}
+        <div className="dashboard-title-section relative z-10">
+          <h1 className="text-4xl font-bold text-pink-600 mb-4">
+            我的个人仪表板
+          </h1>
+          <p className="text-lg text-gray-700 max-w-3xl mx-auto leading-relaxed font-medium">
+            欢迎，{user?.attributes?.email || '用户'}！在这里您可以记录和分析您的嗓音数据。
+          </p>
         </div>
 
-        {isLoading ? (
-          <div className="flex justify-center items-center h-48 space-x-6">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-4 border-pink-500"></div>
-            <span className="text-xl text-gray-600 font-medium">正在加载事件...</span>
+        {/* 声音频率图表 */}
+        <div className="dashboard-card">
+          <div className="dashboard-card-header">
+            <h2 className="dashboard-card-title">
+              <span className="dashboard-card-emoji">📊</span>
+              声音频率图表
+            </h2>
+            <p className="dashboard-card-description">查看您的声音基频随时间的变化</p>
           </div>
-        ) : (
-          <EventManager
-            events={events}
-            onEventUpdated={handleEventUpdated}
-            onEventDeleted={handleEventDeleted}
-            isProductionReady={isProductionReady}
+          <VoiceFrequencyChart
+              userId={user?.attributes?.sub}
+              isProductionReady={isProductionReady}
           />
-        )}
+        </div>
+
+        {/* 事件记录表单 */}
+        <div className="dashboard-card">
+          <h2 className="dashboard-card-title">
+            <span className="dashboard-card-emoji">✨</span>
+            添加新事件
+          </h2>
+          <EventForm onEventAdded={handleEventAdded} />
+        </div>
+
+        {/* 交互式时间轴 */}
+        <div className="dashboard-card">
+          <div className="dashboard-card-header">
+            <h2 className="dashboard-card-title">
+              <span className="dashboard-card-emoji">📈</span>
+              我的动态时间轴
+            </h2>
+            <p className="dashboard-card-description">点击事件卡片查看详细信息</p>
+          </div>
+
+          {/* 使用新的时间轴组件替换旧的交互式时间轴。 */}
+          <InteractiveTimeline
+              events={events}
+              isProductionReady={isProductionReady}
+              isLoading={isLoading}
+          />
+        </div>
+
+        {/* 事件管理功能卡片 */}
+        <div className="dashboard-card">
+          <div className="dashboard-card-header">
+            <h2 className="dashboard-card-title">
+              <span className="dashboard-card-emoji">🗂️</span>
+              事件管理
+            </h2>
+            <p className="dashboard-card-description">筛选、查看、编辑和删除您的事件记录</p>
+          </div>
+
+          {isLoading ? (
+              <div className="flex justify-center items-center h-48 space-x-6">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-4 border-pink-500"></div>
+                <span className="text-xl text-gray-600 font-medium">正在加载事件...</span>
+              </div>
+          ) : (
+              <EventManager
+                  events={events}
+                  onEventUpdated={handleEventUpdated}
+                  onEventDeleted={handleEventDeleted}
+                  isProductionReady={isProductionReady}
+              />
+          )}
+        </div>
       </div>
-    </div>
   );
 };
 

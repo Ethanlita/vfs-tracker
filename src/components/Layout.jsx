@@ -17,7 +17,7 @@ const Layout = ({ children, auth }) => {
 
             <header className="bg-white shadow-lg sticky top-0 z-30 w-full">
                 <nav
-                    className="container mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center"
+                    className="container mx-auto px-4 sm:px-6 lg:px-8 h-16 sm:h-20 flex items-center"
                     style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif" }}
                 >
                     <div className="flex items-center justify-between w-full">
@@ -48,7 +48,7 @@ const Layout = ({ children, auth }) => {
                                 <PostsDropdown />
                             </div>
                         </div>
-                        <div id="auth-container" className="mx-3">
+                        <div id="auth-container" className="mx-3 flex items-center gap-2 sm:gap-3 whitespace-nowrap overflow-hidden">
                             {auth}
                         </div>
                     </div>
