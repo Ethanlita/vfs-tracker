@@ -1,4 +1,4 @@
-﻿import React from 'react';
+import React from 'react';
 import { useAuthenticator } from '@aws-amplify/ui-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -33,7 +33,7 @@ const Auth = () => {
         <img
           src={user.attributes.picture}
           alt={user.attributes.name}
-          className="w-10 h-10 rounded-full border-2 border-pink-500 nav-spacing"
+          className="w-10 h-10 rounded-full border-2 border-pink-500 mx-3"
         />
         <span className="font-semibold text-gray-700 hidden sm:block">
           {user.attributes.name}
@@ -41,13 +41,13 @@ const Auth = () => {
         <span className="text-xs text-orange-600 hidden sm:block">(开发模式)</span>
         <button
           onClick={() => navigate('/mypage')}
-          className="btn-pink nav-spacing-narrow"
+          className="btn-pink mx-1.5"
         >
           我的页面
         </button>
         <button
           onClick={handleDevLogout}
-          className="btn-pink nav-spacing-narrow"
+          className="btn-pink mx-1.5"
         >
           登出
         </button>
@@ -59,11 +59,11 @@ const Auth = () => {
     <div className="flex items-center gap-2">
       <button
         onClick={handleDevLogin}
-        className="btn-pink nav-spacing-narrow"
+        className="btn-pink mx-1.5"
       >
         开发登录
       </button>
-      <span className="text-xs text-orange-600 nav-spacing-narrow">(开发模式)</span>
+      <span className="text-xs text-orange-600 mx-1.5">(开发模式)</span>
     </div>
   );
 };
