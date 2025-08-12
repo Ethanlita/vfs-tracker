@@ -3,12 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import PostsDropdown from './PostsDropdown';
 
 /**
- * @en The main layout component for the application. It provides a consistent
- * header, footer, and content area for all pages.
- * @zh 应用程序的主要布局组件。它为所有页面提供一致的页眉、页脚和内容区域。
+ * @en The layout component that wraps all pages with a header and footer.
+ * @zh 包含页头和页脚的全局布局组件。
  * @param {object} props - The component props.
- * @param {React.ReactNode} props.children - The main content to be rendered inside the layout.
- * @param {React.ReactNode} props.auth - The authentication component to be rendered in the header.
+ * @param {React.ReactNode} props.children - The main content.
+ * @param {React.ReactNode} props.auth - The auth area content (login / user info).
  * @returns {JSX.Element} The rendered layout component.
  */
 const Layout = ({ children, auth }) => {
@@ -57,12 +56,12 @@ const Layout = ({ children, auth }) => {
                 VFS Tracker
               </button>
               {/* @en Wrapper to enforce spacing. @zh 用于强制设置间距的包装器。 */}
-              <div className={"nav-spacing-left-first"}>
+              <div className="ml-6 mr-3">
                 <PostsDropdown />
               </div>
             </div>
             {/* @en Container for the authentication component. @zh 用于身份验证组件的容器。 */}
-            <div id="auth-container" className={"nav-spacing"}>
+            <div id="auth-container" className="mx-3">
               {auth}
             </div>
           </div>
