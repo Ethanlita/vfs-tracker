@@ -1,747 +1,111 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+@reference "tailwindcss";
 
-/* 应用 Inter 字体 */
+/* 使用系统字体，避免外网字体在部分地区不可访问 */
 body {
-  font-family: 'Inter', sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif;
   margin: 0;
   padding: 0;
+  min-height: 100%;
 }
 
-/* 使用@layer确保正确的层级顺序，不使用!important */
+/* 全屏统一背景（保留） */
+.app-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -10;
+  pointer-events: none;
+  background-color: #ffffff;
+  background-image:
+          radial-gradient(1200px 600px at 50% -10%, rgba(244, 114, 182, 0.25), rgba(244, 114, 182, 0) 60%),
+          linear-gradient(to bottom, #fff1f2 0%, #fafafa 55%, #eef2ff 100%);
+  background-repeat: no-repeat;
+  background-size: cover, 100% 100%;
+  background-attachment: fixed;
+}
+
+/* 组件层 */
 @layer components {
-  /* 自定义组件样式 */
+  .btn-pink {
+    @apply inline-flex items-center justify-center px-4 py-2 rounded-full bg-pink-600 text-white font-semibold shadow
+    hover:bg-pink-700 focus:outline-none focus:ring-2 focus:ring-pink-500 focus:ring-offset-2
+    transition disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center justify-center px-6 py-3 rounded-full bg-pink-600 text-white font-semibold shadow
+    hover:bg-pink-700 focus:outline-none focus:ring-2 focus:ring-pink-500 focus:ring-offset-2
+    transition disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  /* 恢复布局与间距：只在这里清除背景，其他用 Tailwind 布局 */
   .dashboard-container {
-    min-height: 100vh;
-    padding: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 1.5rem; /* 减小间距：从3rem改为2rem */
+    @apply min-h-screen flex flex-col gap-8;  /* 恢复纵向堆叠与卡片间距 */
+    background-image: none !important;
+    background-color: transparent !important;
   }
 
   .dashboard-title-section {
     text-align: center;
-    padding: 0; /* 减小间距：从2rem改为1rem */
+    padding: 0;
   }
 
   .dashboard-card {
-    position: relative;
-    z-index: 10;
+    position: relative; /* 不设置 z-index，避免遮住 sticky header */
+    -webkit-backdrop-filter: blur(16px);
     backdrop-filter: blur(16px);
     background-color: rgba(255, 255, 255, 0.95);
-    border-radius: 2rem;
+    border-radius: 2rem;             /* 等效于 @apply rounded-[2rem]; */
     box-shadow: 0 35px 60px -12px rgba(0, 0, 0, 0.25);
-    transition: all 0.7s ease;
-    padding: 2rem; /* 减小间距：从2.5rem改为2rem */
-    border: none;
-    max-width: 1200px; /* 添加最大宽度限制 */
-    margin: 0 auto; /* 居中显示 */
-    width: 100%; /* 确保在小屏幕上占满宽度 */
+    transition: transform 0.7s ease, box-shadow 0.7s ease;
+    padding: 2rem;                   /* 等效于 @apply p-8; */
+    border: 0;
+    max-width: 1200px;
+    margin-left: auto;
+    margin-right: auto;
+    width: 100%;
   }
-
   .dashboard-card:hover {
     box-shadow: 0 50px 100px -20px rgba(0, 0, 0, 0.35);
     transform: scale(1.01);
   }
 
-  .dashboard-card-header {
-    margin-bottom: 1.5rem; /* 减小间距：从2.5rem改为1.5rem */
+  /* 兜底：相邻卡片最小间距（即使脱离了 .dashboard-container 也能生效） */
+  .dashboard-card + .dashboard-card {
+    margin-top: 2rem; /* 32px，等效 space-y-8 的相邻效果 */
   }
 
+  .dashboard-card-header { margin-bottom: 1.5rem; }
+
   .dashboard-card-title {
-    font-size: 2rem; /* 大幅减小：从3rem改为2rem */
-    font-weight: bold;
+    font-size: 2rem;
+    font-weight: 700;
     color: rgb(31, 41, 55);
     display: flex;
     align-items: center;
-    margin-bottom: 0; /* 减小间距：从1.5rem改为0.75rem */
+    margin-bottom: 0;
   }
 
   .dashboard-card-emoji {
-    margin-right: 1rem; /* 减小间距：从1.5rem改为1rem */
-    font-size: 2.25rem; /* 减小尺寸：从3.5rem改为2.25rem */
+    margin-right: 1rem;
+    font-size: 2.25rem;
     filter: drop-shadow(0 4px 3px rgb(0 0 0 / 0.07));
   }
 
   .dashboard-card-description {
-    font-size: 1rem; /* 减小：从1.25rem改为1rem */
+    font-size: 1rem;
     color: rgb(75, 85, 99);
     font-weight: 500;
-    margin-left: 2.5rem; /* 减小间距：从3.5rem改为2.5rem */
+    margin-left: 2.5rem;
   }
 
-  .form-container {
-    display: flex;
-    flex-direction: column;
-    gap: 1.5rem; /* 减小间距：从2rem改为1.5rem */
-  }
-
-  .form-field {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-  }
-
-  .form-input-base {
-    width: 100%;
-    border-radius: 0.75rem;
-    background: linear-gradient(to right, rgb(249, 250, 251), white);
-    font-size: 1.125rem;
-    color: rgb(31, 41, 55);
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-    transition: all 0.3s ease;
-    border: 2px solid rgb(229, 231, 235);
-    padding: 0.875rem 1.25rem; /* 减小间距：从1rem 1.5rem改为0.875rem 1.25rem */
-  }
-
-  .form-input-base:hover {
-    border-color: rgb(244, 114, 182);
-  }
-
-  .form-input-base:focus {
-    outline: none;
-    border-color: rgb(236, 72, 153);
-    box-shadow: 0 0 0 4px rgb(236, 72, 153, 0.2);
-  }
-
-  /* Timeline组件专用样式类 */
-  .timeline-container {
-    min-height: 100vh;
-    padding: 1.5rem;
-    /* 移除背景色，将在main上应用 */
-  }
-
-  .timeline-card {
+  .dropdown-menu-button {
+    @apply border-0 bg-white w-full min-w-32 max-w-40 p-3 leading-tight overflow-hidden text-left transition-all duration-200 rounded-none;
     position: relative;
-    z-index: 10;
-    backdrop-filter: blur(16px);
-    background-color: rgba(255, 255, 255, 0.95);
-    border-radius: 2rem;
-    box-shadow: 0 35px 60px -12px rgba(0, 0, 0, 0.25);
-    transition: all 0.7s ease;
-    padding: 2rem;
-    border: none;
-    /* 修改：设置固定的宽度约束，确保两个卡片宽度一致 */
-    width: 100%;
-    max-width: 800px;
-    min-width: 500px;
-    margin: 0 auto; /* 居中显示 */
-  }
-
-  .timeline-card:hover {
-    box-shadow: 0 50px 100px -20px rgba(0, 0, 0, 0.35);
-    transform: scale(1.01);
-  }
-
-  .timeline-cards-wrapper {
-    display: flex;
-    flex-direction: column;
-    gap: 2rem;
-    max-width: 112rem; /* max-w-7xl */
-    margin: 0 auto;
-    justify-content: center;
-    align-items: center;
-  }
-
-  /* 响应式：大屏幕时左右布局，小屏幕时上下布局 */
-  @media (min-width: 1280px) {
-    .timeline-cards-wrapper {
-      flex-direction: row;
-      align-items: stretch; /* 让卡片高度一致 */
-      gap: 3rem; /* 增加水平间距 */
-    }
-
-    .timeline-card {
-      /* 大屏幕时，两个卡片平分可用空间，但仍受max-width限制 */
-      flex: 1;
-      margin: 0; /* 移除auto margin，让flex布局控制 */
-    }
-  }
-
-  /* 小屏幕时的特殊处理 */
-  @media (max-width: 500px) {
-    .timeline-card {
-      min-width: auto; /* 移除最小宽度限制 */
-      width: 100%;
-      max-width: 100%;
-    }
-
-    .timeline-cards-wrapper {
-      flex-direction: column; /* 确保小屏幕时垂直排列 */
-    }
-  }
-
-  .timeline-title-section {
-    text-align: center;
-    padding: 0;
-    margin-bottom: 3rem;
-  }
-
-  /* AI助手对话框样式 - 整体缩小 */
-  .ai-assistant-container {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    padding-top: 2rem;
-    padding-bottom: 1rem;
-    min-height: 80px;
-    /* 添加响应式边距 */
-    padding-left: 1rem;
-    padding-right: 1rem;
-  }
-
-  .ai-assistant-wrapper {
-    position: relative;
-    display: flex;
-    align-items: flex-start; /* 改为flex-start，支持多行内容时的顶部对齐 */
-    max-width: 90vw; /* 响应式：最大宽度为90%视窗宽度 */
-    width: 100%;
-  }
-
-  /* 响应式：中等屏幕及以上 */
-  @media (min-width: 640px) {
-    .ai-assistant-wrapper {
-      max-width: 32rem;
-    }
-  }
-
-  /* 响应式：大屏幕 */
-  @media (min-width: 1024px) {
-    .ai-assistant-wrapper {
-      max-width: 36rem;
-    }
-  }
-
-  .ai-assistant-avatar {
-    position: relative;
-    z-index: 20;
-    width: 48px;
-    height: 48px;
-    background: linear-gradient(135deg, #c084fc, #f472b6);
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    box-shadow: 0 20px 40px -12px rgba(0, 0, 0, 0.25);
-    flex-shrink: 0; /* 防止头像被压缩 */
-  }
-
-  .ai-assistant-avatar svg {
-    width: 24px;
-    height: 24px;
-    color: #ffffff;
-  }
-
-  .ai-assistant-message {
-    position: relative;
-    background-color: #ffffff;
-    backdrop-filter: blur(16px);
-    border-radius: 1.5rem; /* 改为固定圆角，适应多行内容 */
-    box-shadow: 0 20px 40px -12px rgba(0, 0, 0, 0.25);
-    padding: 12px 20px 12px 30px;
-    margin-left: -16px;
-    border: none;
-    z-index: 10;
-    flex: 1; /* 占据剩余空间 */
-    min-width: 0; /* 允许内容收缩 */
-    /* 关键修复：确保高度随内容自动调整 */
-    height: auto;
-    min-height: 48px; /* 最小高度与头像对齐 */
-    display: flex;
-    align-items: center; /* 单行时垂直居中 */
-  }
-
-  .ai-assistant-text {
-    color: #374151;
-    font-size: 15px;
-    font-weight: 500;
-    margin: 0;
-    line-height: 1.5; /* 增加行高，适应多行显示 */
-    word-wrap: break-word; /* 长单词换行 */
-    overflow-wrap: break-word; /* 现代浏览器的换行属性 */
-    white-space: normal; /* 关键修复：允许换行 */
-    max-width: 100%;
-    width: 100%;
-  }
-
-  /* 小屏幕优化 */
-  @media (max-width: 640px) {
-    .ai-assistant-container {
-      padding-left: 0.5rem;
-      padding-right: 0.5rem;
-    }
-
-    .ai-assistant-wrapper {
-      max-width: 95vw;
-    }
-
-    .ai-assistant-message {
-      padding: 10px 16px 10px 24px;
-      margin-left: -12px;
-      border-radius: 1.25rem;
-      min-height: 48px; /* 修复：保持与头像容器高度一致 */
-    }
-
-    .ai-assistant-text {
-      font-size: 14px;
-      line-height: 1.4;
-    }
-
-    .ai-assistant-avatar {
-      width: 48px; /* 修复：增加容器尺寸，比头像图片大2px */
-      height: 48px; /* 修复：增加容器尺寸，比头像图片大2px */
-    }
-
-    .ai-assistant-avatar svg {
-      width: 20px;
-      height: 20px;
-    }
   }
 }
 
-@layer utilities {
-  /* 动画背景相关 */
-  .animate-blob {
-    animation: blob 7s infinite;
-  }
-
-  .animation-delay-2000 {
-    animation-delay: 2s;
-  }
-
-  .animation-delay-4000 {
-    animation-delay: 4s;
-  }
-}
-
-/* 动画定义 */
-@keyframes blob {
-  0% {
-    transform: translate(0px, 0px) scale(1);
-  }
-  33% {
-    transform: translate(30px, -50px) scale(1.1);
-  }
-  66% {
-    transform: translate(-20px, 20px) scale(0.9);
-  }
-  100% {
-    transform: translate(0px, 0px) scale(1);
-  }
-}
-
-/* 强制性间距修复 - 使用!important确保生效 */
-@layer utilities {
-  .space-y-20 > * + * {
-    margin-top: 5rem !important;
-  }
-
-  .space-y-16 > * + * {
-    margin-top: 4rem !important;
-  }
-
-  .space-y-12 > * + * {
-    margin-top: 3rem !important;
-  }
-
-  .space-y-8 > * + * {
-    margin-top: 2rem !important;
-  }
-
-  .p-16 {
-    padding: 4rem !important;
-  }
-
-  .p-12 {
-    padding: 3rem !important;
-  }
-
-  .mb-16 {
-    margin-bottom: 4rem !important;
-  }
-
-  .mb-12 {
-    margin-bottom: 3rem !important;
-  }
-
-  .mb-10 {
-    margin-bottom: 2.5rem !important;
-  }
-
-  .mb-8 {
-    margin-bottom: 2rem !important;
-  }
-
-  .mb-6 {
-    margin-bottom: 1.5rem !important;
-  }
-
-  .ml-20 {
-    margin-left: 5rem !important;
-  }
-
-  .ml-16 {
-    margin-left: 4rem !important;
-  }
-
-  .mr-8 {
-    margin-right: 2rem !important;
-  }
-
-  .mr-6 {
-    margin-right: 1.5rem !important;
-  }
-}
-
-/* 确保无边框样式生效 */
-@layer utilities {
-  .no-border {
-    border: none !important;
-  }
-
-  .border-white-subtle {
-    border: 2px solid rgba(255, 255, 255, 0.5) !important;
-  }
-}
-
-/* 自定义圆角和阴影 */
-.rounded-4xl {
-  border-radius: 2rem;
-}
-
-.shadow-3xl {
-  box-shadow: 0 35px 60px -12px rgba(0, 0, 0, 0.25);
-}
-
-.shadow-4xl {
-  box-shadow: 0 50px 100px -20px rgba(0, 0, 0, 0.35);
-}
-
-/* 自定义按钮样式 - 减少!important使用 */
-.btn-primary {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0.625rem 1rem;
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: #ffffff;
-  background-color: hotpink;
-  border-radius: 0.375rem;
-  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-  transition: all 0.3s ease;
-  text-decoration: none;
-  border: none;
-  cursor: pointer;
-  outline: none;
-}
-
-.btn-primary:hover {
-  background-color: #4338ca;
-  color: #ffffff;
-  text-decoration: none;
-}
-
-.btn-primary:visited {
-  color: #ffffff;
-  background-color: #4f46e5;
-}
-
-.btn-primary:active {
-  background-color: #3730a3;
-  color: #ffffff;
-}
-
-.btn-primary:focus {
-  background-color: #4f46e5;
-  color: #ffffff;
-  outline: 2px solid #4f46e5;
-  outline-offset: 2px;
-}
-
-button.btn-primary:focus {
-  outline: none;
-  box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.5);
-}
-
-.btn-pink {
-  font-weight: 600;
-  padding: 0.5rem 1rem;
-  border-radius: 0.5rem;
-  background-color: #ec4899;
-  color: #ffffff;
-  border: none;
-  transition: all 0.3s ease;
-  cursor: pointer;
-}
-
-.btn-pink:hover {
-  background-color: #db2777;
-  color: #ffffff;
-}
-
-.btn-pink:visited {
-  color: #ffffff;
-  background-color: #ec4899;
-}
-
-/* 链接状态修复 - 提高特异性而不使用!important */
-button.btn-primary:visited,
-a.btn-primary:visited {
-  color: #ffffff;
-  background-color: #4f46e5;
-}
-
-button.btn-primary:active,
-a.btn-primary:active {
-  color: #ffffff;
-  background-color: #4f46e5;
-}
-
-/* 优化的utility类覆盖 - 仅在必要时使用!important */
-.bg-white {
-  background-color: #ffffff;
-}
-
-.shadow-md {
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-}
-
-.rounded-xl {
-  border-radius: 0.75rem;
-}
-
-/* 标题字体颜色 */
-.text-pink-600 {
-  color: #db2777;
-}
-
-/* 标题按钮样式 - 使用高特异性选择器 */
-html body header .vfs-title-button {
-  color: #db2777;
-  background: transparent;
-  border: none;
-  padding: 0;
-  margin: 0;
-  font-family: inherit;
-  outline: none;
-  font-weight: 800;
-  font-size: 1.5rem;
-  line-height: 2rem;
-  cursor: pointer;
-  transition: color 0.3s ease;
-}
-
-html body header .vfs-title-button:hover {
-  color: #be185d;
-}
-
-html body header .vfs-title-button:focus {
-  outline: none;
-  box-shadow: none;
-}
-
-/* 响应式容器间距 */
-.container {
-  padding-left: 1rem;
-  padding-right: 1rem;
-}
-
-@media (min-width: 640px) {
-  .container {
-    padding-left: 1.5rem;
-    padding-right: 1.5rem;
-  }
-}
-
-@media (min-width: 1024px) {
-  .container {
-    padding-left: 2rem;
-    padding-right: 2rem;
-  }
-}
-
-/* 页面元素间距 */
-.space-y-8 > * + * {
-  margin-top: 2rem;
-}
-
-.space-y-6 > * + * {
-  margin-top: 1.5rem;
-}
-
-/* 主内容区域样式 */
-main#main-content {
-  padding-top: 1.5rem;
-  padding-bottom: 1.5rem;
-  background: linear-gradient(135deg, #dbeafe, #e0e7ff, #f3e8ff);
-  min-height: 100vh;
-}
-
-@media (min-width: 640px) {
-  main#main-content {
-    padding-top: 2rem;
-    padding-bottom: 2rem;
-  }
-}
-
-@media (min-width: 1024px) {
-  main#main-content {
-    padding-top: 2.5rem;
-    padding-bottom: 2.5rem;
-  }
-}
-
-/* 确保灰色背景生效 */
-.bg-gray-100 {
-  background-color: #f3f4f6;
-}
-
-/* Header样式优化 - 使用高特异性选择器 */
-body header {
-  width: 100vw;
-  margin-left: calc(-50vw + 50%);
-  padding-left: 0;
-  padding-right: 0;
-  height: 5rem;
-  display: flex;
-  align-items: center;
-}
-
-body header nav {
-  height: 100%;
-  display: flex;
-  align-items: center;
-}
-
-/* 增强的阴影效果 */
-.shadow-lg {
-  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-}
-
-/* footer专用的向上投影效果 */
-footer.shadow-lg {
-  box-shadow: 0 -10px 15px -3px rgba(0, 0, 0, 0.1), 0 -4px 6px -2px rgba(0, 0, 0, 0.05);
-}
-
-/* footer样式 - 使用CSS Layer */
-@layer utilities {
-  .vfs-footer-text {
-    color: #9ca3af;
-    text-align: center;
-  }
-}
-
-/* 确保VFS标题样式在最后，覆盖所有其他样式 */
-.vfs-title-button.vfs-title-button.vfs-title-button {
-  color: #db2777;
-  background: transparent;
-  border: none;
-  padding: 0;
-  margin: 0;
-  font-family: inherit;
-  outline: none;
-  font-weight: 800;
-  font-size: 1.5rem;
-  line-height: 2rem;
-  cursor: pointer;
-  transition: color 0.3s ease;
-}
-
-.vfs-title-button.vfs-title-button.vfs-title-button:hover {
-  color: #be185d;
-}
-
-.vfs-title-button.vfs-title-button.vfs-title-button:focus {
-  outline: none;
-  box-shadow: none;
-}
-
-/* footer文字颜色确保生效 */
-footer .text-gray-400 {
-  color: #9ca3af !important;
-}
-
-/* Home页面专用样式类 - 替换内联样式 */
-.content-display-margin {
-  margin-top: 2rem;
-}
-
-.functionality-area-padding {
-  padding-left: 3rem;
-  padding-right: 3rem;
-  padding-top: 1rem;
-  padding-bottom: 1rem;
-}
-
-.functionality-title-margin {
-  margin-bottom: 2rem;
-}
-
-.functionality-text-size {
-  font-size: 1.125rem;
-}
-
-/* Auth组件间距修复 - 使用高特异性确保生效 */
-.auth-container {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem; /* 相当于 gap-3 */
-}
-
-.auth-container > * {
-  flex-shrink: 0;
-}
-
-/* 确保在所有屏幕尺寸下都生效 */
-@media (min-width: 640px) {
-  .auth-container {
-    gap: 0.75rem;
-  }
-}
-
-/* 导航布局样式 */
-.nav-spacing-narrow {
-  margin-left: 0.35rem;
-  margin-right: 0.35rem;
-}
-
-.nav-spacing {
-  margin-left: 0.75rem;
-  margin-right: 0.75rem;
-}
-
-.nav-spacing-left-first {
-  margin-left: 1.5rem;
-  margin-right: 0.75rem;
-}
-
-.nav-spacing-large {
-  margin-left: 5rem; /* 80px, 等同于 ml-20 */
-}
-
-/* 下拉菜单按钮样式 */
-.dropdown-menu-button {
-  border: none;
-  background-color: #ffffff;
-  width: 100%;
-  min-width: 8rem;
-  max-width: 10rem;
-  padding: 0.75rem 1rem;
-  line-height: 1.3;
-  word-wrap: break-word;
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  text-overflow: ellipsis;
-  position: relative;
-  transition: all 0.2s ease;
-  text-align: left;
-  border-radius: 0;
-}
-
+/* 渐变遮罩 */
 .dropdown-menu-button::after {
   content: '';
   position: absolute;
@@ -754,76 +118,19 @@ footer .text-gray-400 {
   opacity: 0.8;
 }
 
-.dropdown-menu-button:hover {
-  background-color: #f9fafb;
+/* Radix 弹层 utilities（保留） */
+@keyframes scaleIn {
+  from { opacity: 0; transform: translateY(-2px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }
-
-.dropdown-menu-button:hover::after {
-  background: linear-gradient(to bottom, transparent 0%, rgba(249, 250, 251, 0.95) 60%, rgba(249, 250, 251, 1) 100%);
-}
-
-/* 文件夹按钮特殊样式 */
-.dropdown-folder-button {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  width: 100%;
-  min-width: 8rem;
-  max-width: 10rem;
-}
-
-.dropdown-folder-text {
-  flex: 1;
-  max-width: calc(100% - 1.5rem);
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  text-overflow: ellipsis;
-  line-height: 1.3;
-}
-
-.dropdown-folder-arrow {
-  flex-shrink: 0;
-  margin-left: 0.5rem;
-  margin-top: 0.1rem;
-}
-
-/* 下拉菜单容器样式 */
-.dropdown-menu-container {
-  min-width: 10rem;
-  max-width: 10rem;
-  width: 10rem;
-  border-radius: 0.5rem;
-  overflow: hidden;
-}
-
-/* 子菜单样式 - 简化版本，不控制显示状态 */
-.dropdown-submenu-trigger {
-  position: relative;
-}
-
-.dropdown-submenu {
-  position: absolute;
-  left: 100%;
-  top: 0;
-  margin-top: 0;
-  margin-left: 0.25rem;
-  z-index: 50;
-}
-
-/* 移除所有CSS控制的display属性，完全交给JavaScript控制 */
-
-/* 新增：Radix 弹层容器的最小化样式，使用 @layer utilities 托管，无 !important */
 @layer utilities {
   [data-radix-popper-content-wrapper] {
+    animation: scaleIn 0.14s ease-out;
     transform-origin: var(--radix-popper-transform-origin);
-    animation: scaleIn 0.1s ease-out;
-    z-index: 50; /* 与 Tailwind 的 z-50 对齐 */
-  }
-
-  @keyframes scaleIn {
-    from { opacity: 0; transform: scale(0.95); }
-    to { opacity: 1; transform: scale(1); }
+    will-change: transform, opacity;
   }
 }
+
+/* 细节 */
+.vfs-title-button { transition: color 0.3s ease; }
+.vfs-footer-text { text-align: center; color: #6b7280; }

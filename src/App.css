@@ -41,15 +41,7 @@
   color: #888;
 }
 
-/* 保留的导航/页脚相关样式（其余下拉菜单与 Radix 弹层样式已移至 index.css 或移除） */
-.nav-spacing-left-first {
-  margin-left: 2rem;
-}
-
-.nav-spacing {
-  margin-left: 1rem;
-}
-
+/* 保留：标题与页脚微样式（其余“间距工具类”删除，统一使用 Tailwind 原子类） */
 .vfs-title-button {
   transition: color 0.3s ease;
 }
