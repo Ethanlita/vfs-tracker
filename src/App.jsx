@@ -6,6 +6,8 @@ import { AuthProvider } from './contexts/AuthContext';
 import Layout from './components/Layout';
 import Auth from './components/Auth';
 import MyPage from './components/MyPage';
+import AddEvent from './components/AddEvent.jsx';
+import EventManagerPage from './components/EventManagerPage';
 import PublicDashboard from './components/PublicDashboard';
 import Home from './components/Home';
 import PostList from './components/PostList';
@@ -71,6 +73,8 @@ const AppContent = () => {
         <Route path="/timeline-test" element={<TimelineTest />} />
         <Route element={<ProtectedRoute />}>
           <Route path="/mypage" element={<MyPage />} />
+          <Route path="/add-event" element={<AddEvent />} />
+          <Route path="/event-manager" element={<EventManagerPage />} />
         </Route>
         {/* @en A catch-all route to redirect any unknown paths to the homepage. @zh 一个包罗万象的路由，可将任何未知路径重定向到主页。 */}
         <Route path="*" element={<Navigate to="/" replace />} />
