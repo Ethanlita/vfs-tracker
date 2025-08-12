@@ -215,7 +215,7 @@ const InteractiveTimeline = ({ events = [], isProductionReady, isLoading = false
   const AXIS_THICKNESS = 1;       // 轴线 1px
   const DOT = 10;                 // 圆点直径
   const AXIS_GAP = 28;            // 轴线与卡片/日期距离
-  const ALIGN_NUDGE = 10;        // 对齐微调：将圆点整体向下 0.5px，避免“略高”的视觉
+  const ALIGN_NUDGE = 8.5;        // 对齐微调：将圆点整体向下 0.5px，避免“略高”的视觉
 
   // 附件下载
   const handleDownload = async (attachmentPath) => {
