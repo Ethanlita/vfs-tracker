@@ -10,6 +10,7 @@ import PublicDashboard from './components/PublicDashboard';
 import Home from './components/Home';
 import PostList from './components/PostList';
 import PostViewer from './components/PostViewer';
+import TimelineTest from './components/TimelineTest';
 
 /**
  * @en A component to protect routes that require authentication in production mode.
@@ -66,6 +67,8 @@ const AppContent = () => {
         <Route path="/dashboard" element={<PublicDashboard />} />
         <Route path="/posts" element={<PostList />} />
         <Route path="/docs" element={<PostViewer />} />
+        {/* Route for testing the new timeline component independently */}
+        <Route path="/timeline-test" element={<TimelineTest />} />
         <Route element={<ProtectedRoute />}>
           <Route path="/mypage" element={<MyPage />} />
         </Route>
