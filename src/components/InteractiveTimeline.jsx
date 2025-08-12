@@ -320,7 +320,7 @@ const InteractiveTimeline = ({ events = [], isProductionReady, isLoading = false
                       className="absolute left-1/2 -translate-x-1/2 bg-gray-300"
                       style={{
                         top: `calc(50% - ${AXIS_GAP}px)`,
-                        height: `calc(${AXIS_GAP}px - ${DOT / 2}px - ${ALIGN_NUDGE}px)`,
+                        height: `calc(${AXIS_GAP}px - ${DOT / 2}px + ${ALIGN_NUDGE}px)`,
                         width: '1px'
                       }}
                     />

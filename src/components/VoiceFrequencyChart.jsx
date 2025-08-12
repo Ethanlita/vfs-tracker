@@ -5,26 +5,26 @@ import { getEventsByUserId } from '../api';
 
 // --- SVG Icon Components (replacing lucide-react) ---
 const Lightbulb = ({ className, ...props }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} {...props}>
-    <path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5" />
-    <path d="M9 18h6" />
-    <path d="M10 22h4" />
-  </svg>
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} {...props}>
+      <path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5" />
+      <path d="M9 18h6" />
+      <path d="M10 22h4" />
+    </svg>
 );
 
 const AlertTriangle = ({ className, ...props }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} {...props}>
-    <path d="m21.73 18-8-14a2 2 0 0 0-3.46 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
-    <path d="M12 9v4" />
-    <path d="M12 17h.01" />
-  </svg>
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} {...props}>
+      <path d="m21.73 18-8-14a2 2 0 0 0-3.46 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+      <path d="M12 9v4" />
+      <path d="M12 17h.01" />
+    </svg>
 );
 
 const CheckCircle = ({ className, ...props }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} {...props}>
-    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-    <polyline points="22 4 12 14.01 9 11.01" />
-  </svg>
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} {...props}>
+      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+      <polyline points="22 4 12 14.01 9 11.01" />
+    </svg>
 );
 
 
@@ -36,9 +36,9 @@ const extractVoiceDataFromEvents = (events, metric) => {
 
   // 筛选包含声音参数的事件类型
   const eventsWithVoiceData = events.filter(event =>
-    (event.type === 'self_test' || event.type === 'hospital_test') &&
-    event.details &&
-    event.details.fundamentalFrequency !== undefined
+      (event.type === 'self_test' || event.type === 'hospital_test') &&
+      event.details &&
+      event.details.fundamentalFrequency !== undefined
   );
 
   eventsWithVoiceData.forEach(event => {
@@ -148,46 +148,46 @@ const fetchVoiceDataFromAPI = async (userId, metric) => {
 const CustomTooltip = ({ active, payload, label }) => {
   if (active && payload && payload.length) {
     return (
-      <div className="p-4 bg-gray-900/90 backdrop-blur-sm text-white rounded-xl shadow-2xl">
-        <p className="label text-sm font-bold">{`日期 : ${label}`}</p>
-        <p className="intro text-lg">{`数值 : ${payload[0].value}`}</p>
-      </div>
+        <div className="p-4 bg-gray-900/90 backdrop-blur-sm text-white rounded-xl shadow-2xl">
+          <p className="label text-sm font-bold">{`日期 : ${label}`}</p>
+          <p className="intro text-lg">{`数值 : ${payload[0].value}`}</p>
+        </div>
     );
   }
   return null;
 };
 
 const ChartCard = ({ title, children }) => (
-  <div
-    className="relative w-full h-full bg-gradient-to-br from-white/60 via-gray-50/20 to-purple-50/10 rounded-3xl shadow-inner-lg backdrop-blur-sm overflow-hidden"
-    style={{ border: 'none' }}
-  >
-    {/* 顶部装饰性渐变 */}
-    <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-pink-50/30 via-transparent to-transparent pointer-events-none"></div>
+    <div
+        className="relative w-full h-full bg-gradient-to-br from-white/60 via-gray-50/20 to-purple-50/10 rounded-3xl shadow-inner-lg backdrop-blur-sm overflow-hidden"
+        style={{ border: 'none' }}
+    >
+      {/* 顶部装饰性渐变 */}
+      <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-pink-50/30 via-transparent to-transparent pointer-events-none"></div>
 
-    {/* 主要内容区域 */}
-    <div className="relative w-full h-full" style={{ paddingLeft: '3rem', paddingRight: '3rem', paddingTop: '0rem', paddingBottom: '1rem' }}>
-      <h3 className="font-bold text-gray-800 relative z-10" style={{ fontSize: '1.875rem', marginBottom: '2rem' }}>{title}</h3>
-      {children}
+      {/* 主要内容区域 */}
+      <div className="relative w-full h-full px-4 sm:px-12 pt-0 pb-4">
+        {title ? <h3 className="font-bold text-gray-800 relative z-10 text-2xl sm:text-3xl mb-8">{title}</h3> : null}
+        {children}
+      </div>
     </div>
-  </div>
 );
 
 const StatusIndicator = ({ isDemo, isLoading }) => (
     <div className="flex items-center space-x-2 px-3 py-1 rounded-full text-sm text-gray-600">
-        {isLoading ? (
-            <motion.div
-                animate={{ rotate: 360 }}
-                transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
-            >
-                <Lightbulb className="w-4 h-4 text-yellow-500" />
-            </motion.div>
-        ) : isDemo ? (
-            <AlertTriangle className="w-4 h-4 text-orange-500" />
-        ) : (
-            <CheckCircle className="w-4 h-4 text-green-500" />
-        )}
-        <span>{isLoading ? "加载中..." : isDemo ? "演示数据源" : "实时数据源"}</span>
+      {isLoading ? (
+          <motion.div
+              animate={{ rotate: 360 }}
+              transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
+          >
+            <Lightbulb className="w-4 h-4 text-yellow-500" />
+          </motion.div>
+      ) : isDemo ? (
+          <AlertTriangle className="w-4 h-4 text-orange-500" />
+      ) : (
+          <CheckCircle className="w-4 h-4 text-green-500" />
+      )}
+      <span>{isLoading ? "加载中..." : isDemo ? "演示数据源" : "实时数据源"}</span>
     </div>
 );
 
@@ -200,6 +200,20 @@ const VoiceFrequencyChart = ({ userId, isProductionReady }) => {
   const [isDemoData, setIsDemoData] = useState(false);
   const [selectedMetric, setSelectedMetric] = useState('f0');
   const [activeRange, setActiveRange] = useState('1m');
+
+  // 紧凑模式：针对小屏进行视觉收紧
+  const [isCompact, setIsCompact] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 480px)');
+    const onChange = (e) => setIsCompact(e.matches);
+    setIsCompact(mq.matches);
+    if (mq.addEventListener) mq.addEventListener('change', onChange);
+    else mq.addListener(onChange);
+    return () => {
+      if (mq.removeEventListener) mq.removeEventListener('change', onChange);
+      else mq.removeListener(onChange);
+    };
+  }, []);
 
   const metrics = [
     { key: 'f0', label: '基频 (F0)', unit: 'Hz' },
@@ -343,98 +357,102 @@ const VoiceFrequencyChart = ({ userId, isProductionReady }) => {
   const latestValue = filteredData.length > 0 ? filteredData[filteredData.length - 1].value : 'N/A';
   const averageValue = filteredData.length > 0 ? (filteredData.reduce((acc, item) => acc + item.value, 0) / filteredData.length).toFixed(2) : 'N/A';
 
-  const buttonClasses = "px-4 py-1.5 text-sm font-semibold rounded-full transition-all duration-300 ease-in-out border border-transparent text-gray-600";
+  const buttonClasses = "px-3 py-1 text-xs sm:text-sm sm:px-4 sm:py-1.5 font-semibold rounded-full transition-all duration-300 ease-in-out border border-transparent text-gray-600";
   const activeClasses = "bg-pink-500 text-white shadow-md";
   const inactiveClasses = "hover:bg-gray-200 hover:text-gray-800";
 
+  // 紧凑模式参数
+  const chartHeight = isCompact ? 300 : 350;
+  const tickFontSize = isCompact ? 10 : 12;
+
   return (
-    <ChartCard title="">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 space-y-4 md:space-y-0">
-        {/* Metric Selection */}
-        <div className="flex flex-wrap items-center gap-1 bg-gray-100 p-1.5 rounded-full">
-          {metrics.map(metric => (
-            <button
-              key={metric.key}
-              onClick={() => setSelectedMetric(metric.key)}
-              className={`${buttonClasses} ${selectedMetric === metric.key ? activeClasses : inactiveClasses}`}
-            >
-              {metric.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Time Range Selection */}
-        <div className="flex items-center gap-1 bg-gray-100 p-1.5 rounded-full">
-          {timeRanges.map(range => (
-            <button
-              key={range.key}
-              onClick={() => setActiveRange(range.key)}
-              className={`${buttonClasses} ${activeRange === range.key ? activeClasses : inactiveClasses}`}
-            >
-              {range.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div style={{ width: '100%', height: 350 }}>
-        <AnimatePresence>
-          {isLoading ? (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 flex items-center justify-center bg-white/50 backdrop-blur-sm z-10">
-              <p className="text-lg text-gray-500">加载数据中...</p>
-            </motion.div>
-          ) : filteredData.length === 0 ? (
-             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 flex items-center justify-center bg-white/50 backdrop-blur-sm z-10">
-              <p className="text-lg text-gray-500">该时间范围内无数据</p>
-            </motion.div>
-          ) : null}
-        </AnimatePresence>
-        <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={filteredData} margin={{ top: 10, right: 30, left: 0, bottom: 20 }}>
-            <defs>
-              <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#ec4899" stopOpacity={0.8}/>
-                <stop offset="95%" stopColor="#ec4899" stopOpacity={0}/>
-              </linearGradient>
-            </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
-            <XAxis dataKey="date" tick={{ fontSize: 12 }} stroke="#6b7280" />
-            <YAxis tick={{ fontSize: 12 }} stroke="#6b7280" unit={currentMetric?.unit} domain={['dataMin - 1', 'dataMax + 1']} />
-            <Tooltip content={<CustomTooltip />} />
-            <Area type="monotone" dataKey="value" stroke="#ec4899" strokeWidth={2} fillOpacity={1} fill="url(#colorValue)" />
-          </AreaChart>
-        </ResponsiveContainer>
-      </div>
-
-      <div className="mt-8 flex justify-between items-center pt-6">
-        <StatusIndicator isDemo={isDemoData} isLoading={isLoading} />
-        <div className="flex items-start space-x-8">
-          {/* Latest Value */}
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-xl">✨</span>
-              <p className="text-sm font-medium text-gray-500">最新值</p>
-            </div>
-            <p className="mt-1 text-xl font-bold text-gray-800">
-              {latestValue}
-              <span className="ml-1.5 text-sm font-normal text-gray-500">{currentMetric?.unit}</span>
-            </p>
+      <ChartCard title="">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 space-y-4 md:space-y-0">
+          {/* Metric Selection */}
+          <div className="flex flex-wrap items-center gap-1 bg-gray-100 p-1.5 rounded-full">
+            {metrics.map(metric => (
+                <button
+                    key={metric.key}
+                    onClick={() => setSelectedMetric(metric.key)}
+                    className={`${buttonClasses} ${selectedMetric === metric.key ? activeClasses : inactiveClasses}`}
+                >
+                  {metric.label}
+                </button>
+            ))}
           </div>
 
-          {/* Average Value */}
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-xl">📊</span>
-              <p className="text-sm font-medium text-gray-500">平均值</p>
-            </div>
-            <p className="mt-1 text-xl font-bold text-gray-800">
-              {averageValue}
-              <span className="ml-1.5 text-sm font-normal text-gray-500">{currentMetric?.unit}</span>
-            </p>
+          {/* Time Range Selection */}
+          <div className="flex items-center gap-1 bg-gray-100 p-1.5 rounded-full">
+            {timeRanges.map(range => (
+                <button
+                    key={range.key}
+                    onClick={() => setActiveRange(range.key)}
+                    className={`${buttonClasses} ${activeRange === range.key ? activeClasses : inactiveClasses}`}
+                >
+                  {range.label}
+                </button>
+            ))}
           </div>
         </div>
-      </div>
-    </ChartCard>
+
+        <div style={{ width: '100%', height: chartHeight }}>
+          <AnimatePresence>
+            {isLoading ? (
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 flex items-center justify-center bg-white/50 backdrop-blur-sm z-10">
+                  <p className="text-lg text-gray-500">加载数据中...</p>
+                </motion.div>
+            ) : filteredData.length === 0 ? (
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 flex items-center justify-center bg-white/50 backdrop-blur-sm z-10">
+                  <p className="text-lg text-gray-500">该时间范围内无数据</p>
+                </motion.div>
+            ) : null}
+          </AnimatePresence>
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={filteredData} margin={{ top: 10, right: 24, left: 0, bottom: 18 }}>
+              <defs>
+                <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#ec4899" stopOpacity={0.8}/>
+                  <stop offset="95%" stopColor="#ec4899" stopOpacity={0}/>
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
+              <XAxis dataKey="date" tick={{ fontSize: tickFontSize }} stroke="#6b7280" />
+              <YAxis tick={{ fontSize: tickFontSize }} stroke="#6b7280" unit={currentMetric?.unit} domain={['dataMin - 1', 'dataMax + 1']} />
+              <Tooltip content={<CustomTooltip />} />
+              <Area type="monotone" dataKey="value" stroke="#ec4899" strokeWidth={2} fillOpacity={1} fill="url(#colorValue)" />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+
+        <div className="mt-8 flex justify-between items-center pt-6">
+          <StatusIndicator isDemo={isDemoData} isLoading={isLoading} />
+          <div className="flex items-start space-x-8">
+            {/* Latest Value */}
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xl">✨</span>
+                <p className="text-sm font-medium text-gray-500">最新值</p>
+              </div>
+              <p className="mt-1 text-xl font-bold text-gray-800">
+                {latestValue}
+                <span className="ml-1.5 text-sm font-normal text-gray-500">{currentMetric?.unit}</span>
+              </p>
+            </div>
+
+            {/* Average Value */}
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-xl">📊</span>
+                <p className="text-sm font-medium text-gray-500">平均值</p>
+              </div>
+              <p className="mt-1 text-xl font-bold text-gray-800">
+                {averageValue}
+                <span className="ml-1.5 text-sm font-normal text-gray-500">{currentMetric?.unit}</span>
+              </p>
+            </div>
+          </div>
+        </div>
+      </ChartCard>
   );
 };
 

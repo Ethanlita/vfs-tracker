@@ -40,7 +40,7 @@ body {
 
   /* 恢复布局与间距：只在这里清除背景，其他用 Tailwind 布局 */
   .dashboard-container {
-    @apply min-h-screen flex flex-col gap-8;  /* 恢复纵向堆叠与卡片间距 */
+    @apply min-h-screen flex flex-col gap-8 px-3 sm:px-0;  /* 增加移动端水平内边距 */
     background-image: none !important;
     background-color: transparent !important;
   }

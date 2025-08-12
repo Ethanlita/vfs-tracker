@@ -29,11 +29,11 @@ const Auth = () => {
 
     if (user) {
         return (
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 sm:gap-3">
                 <img
                     src={user.attributes.picture}
                     alt={user.attributes.name}
-                    className="w-10 h-10 rounded-full border-2 border-pink-500"
+                    className="w-9 h-9 sm:w-10 sm:h-10 rounded-full border-2 border-pink-500"
                 />
                 <span className="font-semibold text-gray-700 hidden sm:block">
           {user.attributes.name}
@@ -41,13 +41,13 @@ const Auth = () => {
                 <span className="text-xs text-orange-600 hidden sm:block">(开发模式)</span>
                 <button
                     onClick={() => navigate('/mypage')}
-                    className="btn-pink mx-1.5"
+                    className="btn-pink mx-1.5 text-sm px-3 py-2 sm:text-base sm:px-6 sm:py-3"
                 >
                     我的页面
                 </button>
                 <button
                     onClick={handleDevLogout}
-                    className="btn-pink mx-1.5"
+                    className="btn-pink mx-1.5 text-sm px-3 py-2 sm:text-base sm:px-6 sm:py-3"
                 >
                     登出
                 </button>
@@ -59,7 +59,7 @@ const Auth = () => {
         <div className="flex items-center gap-2">
             <button
                 onClick={handleDevLogin}
-                className="btn-pink mx-1.5"
+                className="btn-pink mx-1.5 text-sm px-3 py-2 sm:text-base sm:px-6 sm:py-3"
             >
                 开发登录
             </button>
