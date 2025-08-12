@@ -41,8 +41,7 @@
   color: #888;
 }
 
-/* 删除本文件中的导航间距类，统一改用 Tailwind 原子类 */
-
+/* 保留：标题与页脚微样式（其余“间距工具类”删除，统一使用 Tailwind 原子类） */
 .vfs-title-button {
   transition: color 0.3s ease;
 }
