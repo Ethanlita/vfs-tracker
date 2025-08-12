@@ -3,7 +3,7 @@ import { useAuthenticator } from '@aws-amplify/ui-react';
 import { getEventsByUserId } from '../api';
 import EventForm from './EventForm';
 import VoiceFrequencyChart from './VoiceFrequencyChart';
-// import InteractiveTimeline from './InteractiveTimeline';
+import InteractiveTimeline from './InteractiveTimeline';
 import NewTimeline from './NewTimeline';
 import EventManager from './EventManager';
 
@@ -202,10 +202,10 @@ const MyPage = () => {
         </div>
 
         {/* 使用新的时间轴组件替换旧的交互式时间轴。 */}
-        <NewTimeline
-          events={events}
-          isProductionReady={isProductionReady}
-          isLoading={isLoading}
+        <InteractiveTimeline
+            events={events}
+            isProductionReady={isProductionReady}
+            isLoading={isLoading}
         />
       </div>
 
