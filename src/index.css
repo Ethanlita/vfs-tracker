@@ -813,3 +813,17 @@ footer .text-gray-400 {
 }
 
 /* 移除所有CSS控制的display属性，完全交给JavaScript控制 */
+
+/* 新增：Radix 弹层容器的最小化样式，使用 @layer utilities 托管，无 !important */
+@layer utilities {
+  [data-radix-popper-content-wrapper] {
+    transform-origin: var(--radix-popper-transform-origin);
+    animation: scaleIn 0.1s ease-out;
+    z-index: 50; /* 与 Tailwind 的 z-50 对齐 */
+  }
+
+  @keyframes scaleIn {
+    from { opacity: 0; transform: scale(0.95); }
+    to { opacity: 1; transform: scale(1); }
+  }
+}
