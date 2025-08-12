@@ -194,32 +194,36 @@ const StatusIndicator = ({ isDemo, isLoading }) => (
 
 // --- Main Component ---
 
-const VoiceFrequencyChart = ({ userId, isProductionReady }) => {
+const VoiceFrequencyChart = ({ userId, isProductionReady, compact = false }) => {
   const [chartData, setChartData] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isDemoData, setIsDemoData] = useState(false);
   const [selectedMetric, setSelectedMetric] = useState('f0');
   const [activeRange, setActiveRange] = useState('1m');
 
-  // 紧凑模式：针对小屏进行视觉收紧
-  const [isCompact, setIsCompact] = useState(false);
+  // 紧凑模式：结合父组件传入的compact属性和屏幕尺寸检测
+  const [isCompact, setIsCompact] = useState(compact);
   useEffect(() => {
-    const mq = window.matchMedia('(max-width: 480px)');
-    const onChange = (e) => setIsCompact(e.matches);
-    setIsCompact(mq.matches);
-    if (mq.addEventListener) mq.addEventListener('change', onChange);
-    else mq.addListener(onChange);
-    return () => {
-      if (mq.removeEventListener) mq.removeEventListener('change', onChange);
-      else mq.removeListener(onChange);
-    };
-  }, []);
+    if (compact) {
+      setIsCompact(true);
+    } else {
+      const mq = window.matchMedia('(max-width: 640px)');
+      const onChange = (e) => setIsCompact(e.matches);
+      setIsCompact(mq.matches);
+      if (mq.addEventListener) mq.addEventListener('change', onChange);
+      else mq.addListener(onChange);
+      return () => {
+        if (mq.removeEventListener) mq.removeEventListener('change', onChange);
+        else mq.removeListener(onChange);
+      };
+    }
+  }, [compact]);
 
   const metrics = [
     { key: 'f0', label: '基频 (F0)', unit: 'Hz' },
     { key: 'jitter', label: 'Jitter', unit: '%' },
     { key: 'shimmer', label: 'Shimmer', unit: 'dB' },
-    { key: 'hnr', label: 'HNR', unit: 'dB' }
+    { key: 'hnr', label: '谐噪比 (HNR)', unit: 'dB' }
   ];
 
   const timeRanges = [
@@ -395,14 +399,25 @@ const VoiceFrequencyChart = ({ userId, isProductionReady }) => {
           </div>
         </div>
 
-        <div style={{ width: '100%', height: chartHeight }}>
+        {/* 图表容器 - 将毛玻璃效果限制在这个容器内 */}
+        <div className="relative" style={{ width: '100%', height: chartHeight }}>
           <AnimatePresence>
             {isLoading ? (
-                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 flex items-center justify-center bg-white/50 backdrop-blur-sm z-10">
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="absolute inset-0 flex items-center justify-center bg-white/70 backdrop-blur-sm z-10 rounded-lg"
+                >
                   <p className="text-lg text-gray-500">加载数据中...</p>
                 </motion.div>
             ) : filteredData.length === 0 ? (
-                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 flex items-center justify-center bg-white/50 backdrop-blur-sm z-10">
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="absolute inset-0 flex items-center justify-center bg-white/70 backdrop-blur-sm z-10 rounded-lg"
+                >
                   <p className="text-lg text-gray-500">该时间范围内无数据</p>
                 </motion.div>
             ) : null}

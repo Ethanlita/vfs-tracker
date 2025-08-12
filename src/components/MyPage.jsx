@@ -4,7 +4,6 @@ import { getEventsByUserId } from '../api';
 import EventForm from './EventForm';
 import VoiceFrequencyChart from './VoiceFrequencyChart';
 import InteractiveTimeline from './InteractiveTimeline';
-import NewTimeline from './NewTimeline';
 import EventManager from './EventManager';
 
 // @en Check if the environment is production-ready.
@@ -29,23 +28,24 @@ const MyPage = () => {
   // @zh 检查是否为生产环境。
   const productionReady = isProductionReady();
 
-  // @en Always call useAuthenticator, but handle gracefully when not in Authenticator context
-  // @zh 始终调用 useAuthenticator，但在非 Authenticator 上下文中优雅处理
-  let authenticatorUser = null;
-  let authError = null;
+  // @en Create a safe wrapper for useAuthenticator that doesn't throw
+  // @zh 为 useAuthenticator 创建一个安全的包装器，避免抛出错误
+  const useAuthenticatorSafe = () => {
+    try {
+      return useAuthenticator((context) => [context.user]);
+    } catch (error) {
+      console.log('🔧 useAuthenticator 不在 Authenticator.Provider 上下文中，使用模拟用户');
+      return { user: null };
+    }
+  };
 
-  try {
-    const { user } = useAuthenticator((context) => [context.user]);
-    authenticatorUser = user;
-  } catch (error) {
-    // 记录错误但不抛出，使用默认用户
-    authError = error;
-    console.log('🔧 useAuthenticator 不在 Authenticator.Provider 上下文中，使用模拟用户');
-  }
+  // @en Always call the hook, but handle the result safely
+  // @zh 始终调用 hook，但安全处理结果
+  const { user: authenticatorUser } = useAuthenticatorSafe();
 
   // @en Use authenticated user in production, or fallback to mock user
   // @zh 在生产环境中使用已认证用户，或回退到模拟用户
-  const user = (productionReady && authenticatorUser && !authError) ? authenticatorUser : {
+  const user = (productionReady && authenticatorUser) ? authenticatorUser : {
     attributes: {
       email: 'public-user@example.com',
       sub: 'mock-user-1'
@@ -179,6 +179,7 @@ const MyPage = () => {
           <VoiceFrequencyChart
               userId={user?.attributes?.sub}
               isProductionReady={isProductionReady}
+              compact={true} // 在手机屏幕上启用紧凑模式
           />
         </div>
 
