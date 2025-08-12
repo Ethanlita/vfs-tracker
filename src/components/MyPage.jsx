@@ -3,7 +3,8 @@ import { useAuthenticator } from '@aws-amplify/ui-react';
 import { getEventsByUserId } from '../api';
 import EventForm from './EventForm';
 import VoiceFrequencyChart from './VoiceFrequencyChart';
-import InteractiveTimeline from './InteractiveTimeline';
+// import InteractiveTimeline from './InteractiveTimeline';
+import NewTimeline from './NewTimeline';
 import EventManager from './EventManager';
 
 // @en Check if the environment is production-ready.
@@ -200,17 +201,12 @@ const MyPage = () => {
           <p className="dashboard-card-description">点击事件卡片查看详细信息</p>
         </div>
 
-        {isLoading ? (
-          <div className="flex justify-center items-center h-48 space-x-6">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-4 border-pink-500"></div>
-            <span className="text-xl text-gray-600 font-medium">正在加载事件...</span>
-          </div>
-        ) : (
-          <InteractiveTimeline
-            events={events}
-            isProductionReady={isProductionReady}
-          />
-        )}
+        {/* 使用新的时间轴组件替换旧的交互式时间轴。 */}
+        <NewTimeline
+          events={events}
+          isProductionReady={isProductionReady}
+          isLoading={isLoading}
+        />
       </div>
 
       {/* 事件管理功能卡片 */}
