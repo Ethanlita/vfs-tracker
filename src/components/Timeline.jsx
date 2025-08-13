@@ -503,7 +503,7 @@ const Timeline = () => {
                           <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
                           <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
                         </div>
-                        <span className="text-sm text-gray-500">AI正在思考...</span>
+                        <span className="text-sm text-gray-500">正在加载</span>
                       </div>
                     ) : (
                       <p className="text-sm sm:text-base">{encouragingMessage}</p>
