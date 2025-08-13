@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { getUrl } from 'aws-amplify/storage';
+import { createPortal } from 'react-dom';
 
 const StatusIndicator = ({ isDemo, isLoading }) => {
   const CheckCircle = () => (
@@ -143,7 +144,10 @@ const EventDetails = ({ event }) => {
             <span className="font-medium text-right break-all">{JSON.stringify(v)}</span>
           </div>
         );
-      } catch {}
+      } catch (e) {
+        // 忽略无法序列化的对象，避免阻塞渲染
+        void e;
+      }
     } else {
       addRow(k, k);
     }
@@ -180,6 +184,10 @@ const EventDetails = ({ event }) => {
 const InteractiveTimeline = ({ events = [], isProductionReady, isLoading = false }) => {
   const [selectedEvent, setSelectedEvent] = useState(null);
 
+  // 确保对 motion 的引用��某些构建下不会被误判为未使用
+  // eslint-disable-next-line no-unused-expressions
+  motion && null;
+
   const typeConfig = {
     hospital_test:   { label: '医院检测',  icon: '🏥', bg: 'bg-blue-500' },
     self_test:       { label: '自我测试',  icon: '📱', bg: 'bg-green-500' },
@@ -202,7 +210,7 @@ const InteractiveTimeline = ({ events = [], isProductionReady, isLoading = false
     return (
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center py-12">
         <div className="text-6xl mb-4">📝</div>
-        <h3 className="text-lg font-medium text-gray-900 mb-2">还没有事件记录</h3>
+        <h3 className="text-lg font-medium text-gray-900 mb-2">还没有事件记��</h3>
         <p className="text-gray-500">使用上面的表单添加您的第一个嗓音事件！</p>
       </motion.div>
     );
@@ -217,19 +225,8 @@ const InteractiveTimeline = ({ events = [], isProductionReady, isLoading = false
   const AXIS_GAP = 28;            // 轴线与卡片/日期距离
   const ALIGN_NUDGE = 8.5;        // 对齐微调：将圆点整体向下 0.5px，避免“略高”的视觉
 
-  // 附件下载
-  const handleDownload = async (attachmentPath) => {
-    try {
-      const res = await getUrl({ path: attachmentPath });
-      const url = res?.url || attachmentPath;
-      window.open(url, '_blank', 'noopener,noreferrer');
-    } catch {
-      window.open(attachmentPath, '_blank', 'noopener,noreferrer');
-    }
-  };
-
   return (
-    <div className="relative isolate md:pt-20 md:pb-16 pt-4 pb-4">
+    <div className="relative isolate pt-4 pb-4">
       {/* 移动端：纵向列表（不显示时间轴与箭头） */}
       <div className="md:hidden px-1 space-y-4">
         {ordered.map((event, index) => {
@@ -324,7 +321,7 @@ const InteractiveTimeline = ({ events = [], isProductionReady, isLoading = false
                         width: '1px'
                       }}
                     />
-                    {/* 圆点（与轴线精确对齐） */}
+                    {/* 圆点（与轴线精��对齐） */}
                     <div
                       className={`absolute left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full ${cfg.bg} z-20`}
                       style={{ top: `calc(50% + ${ALIGN_NUDGE}px)`, width: `${DOT}px`, height: `${DOT}px`, boxShadow: '0 1px 2px rgba(0,0,0,0.12)' }}
@@ -355,15 +352,15 @@ const InteractiveTimeline = ({ events = [], isProductionReady, isLoading = false
       </div>
 
       {/* 状态指示器：小屏居中，桌面端靠右 */}
-      <div className="mt-6 px-4 sm:px-8 flex justify-center md:justify-end">
+      <div className="px-4 sm:px-8 flex justify-center md:justify-end">
         <StatusIndicator isDemo={isDemo} isLoading={isLoading} />
       </div>
 
       {/* 详情弹窗（两种布局共用） */}
-      {selectedEvent && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
+      {selectedEvent && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center">
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setSelectedEvent(null)} />
-          <div className="relative z-10 w-full max-w-xl bg-white rounded-2xl shadow-2xl p-6 m-4 overflow-y-auto max-h-[80vh]">
+          <div className="relative z-10 w-full max-w-xl bg-white rounded-2xl shadow-2xl p-6 m-4 overflow-y-auto max-h-[80vh] overscroll-contain">
             <button
               onClick={() => setSelectedEvent(null)}
               className="absolute top-3 right-3 text-gray-400 hover:text-gray-600"
@@ -400,14 +397,15 @@ const InteractiveTimeline = ({ events = [], isProductionReady, isLoading = false
                       window.open(selectedEvent.details.attachmentUrl, '_blank', 'noopener,noreferrer');
                     }
                   }}
-                  className="w-full bg-indigo-600 text-white py-2 px-4 rounded-lg font-medium hover:bg-indigo-500 transition-colors"
+                  className="btn-pink"
                 >
-                  📎 下载附件
+                  下载附件
                 </button>
               </div>
             )}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

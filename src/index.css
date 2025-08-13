@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@plugin "@tailwindcss/typography";
 @reference "tailwindcss";
 
 /* 使用系统字体，避免外网字体在部分地区不可访问 */
