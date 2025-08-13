@@ -1,32 +1,107 @@
 # VFS Tracker
 
-这是一个用于记录与分析 VFS 相关语音事件的数据跟踪应用。前端基于 React + Vite，样式采用 Tailwind CSS；后端使用 AWS Serverless（Cognito、API Gateway、Lambda、DynamoDB）。
+一个用于记录与分析 VFS（Voice Feminization Surgery）相关语音事件的开源应用。前端基于 React + Vite，样式采用 Tailwind CSS；在具备云配置时通过 AWS Serverless（Cognito、API Gateway、Lambda、DynamoDB）提供鉴权、API 与存储。缺省情况下使用本地模拟数据运行，无需云账号即可体验。
 
-## 新增/变更亮点
+- 在线演示与文档：请参考本仓库主页与 ARCHITECTURE.md、docs/data_structures.md
+- 代码许可与贡献：参见 CONTRIBUTION.md
 
-- 新版水平时间轴 NewTimeline（src/components/NewTimeline.jsx）
-  - 上下配对卡片，居中轴线与圆点
-  - 卡片 hover 放大与阴影提升
-  - 点击卡片打开详情弹窗
-  - 数据源状态指示（演示/实时/加载中）
-- 时间轴测试页
-  - 访问 `/timeline-test` 可在隔离环境验证新时间轴的交互与样式
+## 功能概览
 
-## 样式与 Tailwind 约定
+- 事件记录与管理
+  - 支持事件类型：self_test、自我测试；hospital_test、医院检测；voice_training、嗓音训练；self_practice、自我练习；surgery、手术；feeling_log、感受记录
+  - 文件上传（生产环境经 S3，开发环境返回模拟 Key）
+  - 表单字段动态变化，严格遵循数据契约（见 docs/data_structures.md）
+- 个人时间轴与指标
+  - 基于 Chart.js 的时间序列可视化
+  - AI 鼓励消息（生产环境启用 Gemini API，否则回退为默认消息）
+- 公开仪表板
+  - 汇总匿名事件统计、事件类型分布柱状图
+  - VFS 对齐的多用户基频变化折线图与统计指标（平均提升、方差、二倍方差）
+  - 用户列表与轻量档案抽屉
+- 文章/帖子支持
+  - 构建时自动生成 posts.json；构建产物复制 posts 目录到 dist/posts
 
-- Tailwind 为主，尽量减少全局 CSS。仅当需要复用复杂样式时，才在 src/index.css 中通过 @layer components/ utilities 定义语义类。
-- 不使用 `!important`；通过层级（@layer）与结构（isolate、z-index）保证可预期的覆盖。
-- 避免在多个文件重复定义同名类。下拉菜单相关样式统一放在 src/index.css 中，已从 src/App.css 移除。
-- 渐进替换 "工具类型" 自定义类（如 .nav-spacing*、.dropdown-*），改为 Tailwind 原子类；替换完成再删除定义，确保 UI 稳定。
+## 目录结构（摘录）
 
-## 本地开发
+- src/components
+  - PublicDashboard.jsx：公开仪表板，聚合全体用户匿名数据与可视化
+  - EventForm.jsx：事件录入表单，支持文件上传与动态字段
+  - Timeline.jsx：个人时间轴与图表展示
+  - PostList.jsx / PostViewer.jsx / PostsDropdown.jsx：帖子列表与阅读
+  - Profile.jsx：个人页，集成表单与列表
+- src/api.js：对接 AWS Amplify（API/Storage），提供开发环境回退逻辑
+- scripts/generate-posts-list.js：生成 public/posts.json
+- docs/data_structures.md：数据结构契约（禁止修改）
 
-- 安装依赖：`pnpm i` 或 `npm i`
-- 启动开发：`pnpm dev` 或 `npm run dev`
-- 构建：`pnpm build` 或 `npm run build`
+## 快速开始
 
-Tailwind 扫描范围见 `tailwind.config.js` 的 `content` 配置（包含 `./src/**/*.{js,ts,jsx,tsx}`）。
+1) 克隆与安装依赖
+- 使用 npm：
+  - npm i
+- 使用 pnpm：
+  - pnpm i
 
-## 后端与架构
+2) 本地开发（含模拟数据，无需云配置）
+- npm run dev（或 pnpm dev）
+- 浏览器访问 http://localhost:3000
 
-应用采用 AWS 无服务器架构（Cognito、API Gateway、Lambda、DynamoDB）。详情可参见 ARCHITECTURE.md。
+3) 生产构建
+- npm run build（或 pnpm build）
+- 产出目录：dist（包含 posts 复制与 public 目录复制）
+
+4) 本地预览构建产物
+- npm run preview
+
+## 环境变量与 isProductionReady
+
+项目通过 isProductionReady 决定是否启用真实云服务：
+- 必需变量（全部存在才视为“生产就绪”）：
+  - VITE_COGNITO_USER_POOL_ID
+  - VITE_COGNITO_USER_POOL_WEB_CLIENT_ID
+  - VITE_AWS_REGION
+- 可选变量：
+  - VITE_GOOGLE_GEMINI_API（用于生成 AI 鼓励消息，仅生产环境使用）
+
+行为差异：
+- 开发模式（未就绪）：
+  - API 返回 mock_data.json 中的模拟事件
+  - 上传文件返回模拟 Key（不调用 S3）
+  - AI 鼓励消息使用静态默认文案
+- 生产模式（就绪）：
+  - 通过 Amplify API 调用 API Gateway/Lambda
+  - 通过 Amplify Storage 上传文件至 S3
+  - 可调用 Gemini API 生成鼓励消息
+
+代码位置：
+- src/api.js 中的 isProductionReady() 与各 API 方法（getAllEvents、getEventsByUserId、addEvent、uploadFile、getEncouragingMessage）
+- 组件内也会基于上述变量决定鉴权与 UI 行为（如 EventForm、PublicDashboard）
+
+## 数据契约（Data Contract）
+
+请严格遵循 docs/data_structures.md 中定义的结构：
+- User、Profile、SocialAccount 对象结构
+- Event 基础结构与各 type 对应的 details 字段要求
+- 所有后端/前端交互数据必须匹配该契约；如需演进，请新增兼容字段，避免破坏已定义的结构
+
+更多请阅读 docs/data_structures.md（该文件不应在本项目中被修改）
+
+## 部署
+
+- 构建：npm run build
+- 静态托管：
+  - GitHub Pages：本仓库包含 CNAME 与 vite.config.js base:'/'，可直接将 dist 发布到 gh-pages 或任何静态托管
+  - 其他平台（Netlify、Vercel、Cloudflare Pages）均可直接指向 dist
+- 后端（若启用）：
+  - 需在托管平台配置上述 VITE_* 环境变量
+  - AWS 侧需准备 Cognito、API Gateway、Lambda、DynamoDB、S3，并在 Amplify 配置中与之对应
+
+## FAQ
+
+- Q: 没有 AWS 账号能否运行？
+  - A: 可以。未配置必需环境变量时，应用使用本地模拟数据与回退逻辑。
+- Q: 图表没有数据或显示“暂无可绘制的基频数据”？
+  - A: 仪表板会在数据不足时生成额外演示数据；若仍为空，请检查 mock_data.json 或真实 API 返回。
+- Q: 上传失败如何排查？
+  - A: 在开发模式不会真的上传；生产模式请检查 S3 权限、Amplify 配置与浏览器控制台日志。
+- Q: 帖子列表为什么自动生成？
+  - A: 开发与构建时 scripts/generate-posts-list.js 会扫描 posts 目录，生成 public/posts.json，vite 插件会将 posts 复制到 dist/posts。
