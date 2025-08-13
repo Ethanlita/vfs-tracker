@@ -23,20 +23,34 @@ const PostsDropdown = () => {
         return (
           <DropdownMenu.Sub key={item.name}>
             <DropdownMenu.SubTrigger
-              className="dropdown-menu-button dropdown-folder-button text-sm text-left text-gray-700"
-              onClick={() => navigate(`/posts?folder=${folderPath}`)} // 传递文件夹路径参数
+              className="flex items-center justify-between w-full px-4 py-2 text-sm text-left text-gray-700 hover:bg-gray-100 cursor-pointer focus:outline-none focus:bg-gray-100 transition-colors duration-150"
+              onClick={() => navigate(`/posts?folder=${folderPath}`)}
             >
-              <span className="dropdown-folder-text">{item.name}</span>
-              <span className="dropdown-folder-arrow text-gray-400">›</span>
+              <span className="flex-1">{item.name}</span>
+              <svg
+                className="ml-2 h-4 w-4 text-gray-400 flex-shrink-0"
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 20 20"
+                fill="currentColor"
+              >
+                <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+              </svg>
             </DropdownMenu.SubTrigger>
             <DropdownMenu.Portal>
               <DropdownMenu.SubContent 
-                className="dropdown-submenu bg-white rounded-md shadow-[0_8px_30px_rgb(0,0,0,0.12)] dropdown-menu-container"
-                sideOffset={8}
-                alignOffset={-5}
+                className="min-w-48 bg-white rounded-md shadow-lg border border-gray-200 z-50"
+                sideOffset={4}
+                alignOffset={-4}
+                avoidCollisions={true}
+                collisionPadding={8}
               >
                 <div className="py-1">
-                  {item.children && item.children.length > 0 ? renderMenuItems(item.children, folderPath) : <DropdownMenu.Item disabled className="px-4 py-2 text-sm text-gray-500">No items</DropdownMenu.Item>}
+                  {item.children && item.children.length > 0 ?
+                    renderMenuItems(item.children, folderPath) :
+                    <DropdownMenu.Item disabled className="px-4 py-2 text-sm text-gray-500 cursor-not-allowed">
+                      暂无内容
+                    </DropdownMenu.Item>
+                  }
                 </div>
               </DropdownMenu.SubContent>
             </DropdownMenu.Portal>
@@ -47,7 +61,7 @@ const PostsDropdown = () => {
           <DropdownMenu.Item 
             key={item.name}
             onSelect={() => navigate(`/docs?doc=${item.path}`)}
-            className="dropdown-menu-button text-sm text-gray-700"
+            className="block w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer focus:outline-none focus:bg-gray-100 transition-colors duration-150"
           >
             {item.name.replace(/\.md$/, '')}
           </DropdownMenu.Item>
@@ -76,11 +90,20 @@ const PostsDropdown = () => {
       if (!hoverStateRef.current) {
         setIsOpen(false);
       }
-    }, 150);
+    }, 200); // 增加延迟时间以减少抖动
   };
 
+  // 清理定时器
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
+  }, []);
+
   return (
-    <div>
+    <div className="relative">
       <DropdownMenu.Root open={isOpen} modal={false}>
         <DropdownMenu.Trigger asChild>
           <button
@@ -89,7 +112,7 @@ const PostsDropdown = () => {
             style={{ whiteSpace: 'nowrap' }}
             onMouseEnter={openMenu}
             onMouseLeave={closeMenu}
-            onClick={() => navigate('/posts')} // 添加点击处理，点击"文档"按钮也进入文章列表
+            onClick={() => navigate('/posts')}
           >
             文档
             <svg className="ml-1 h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
@@ -100,10 +123,12 @@ const PostsDropdown = () => {
 
         <DropdownMenu.Portal>
           <DropdownMenu.Content
-            className="origin-top-right rounded-md bg-white focus:outline-none shadow-[0_8px_30px_rgb(0,0,0,0.12)] dropdown-menu-container"
-            style={{ zIndex: 50 }}
-            sideOffset={2}
+            className="min-w-48 origin-top-left bg-white rounded-md shadow-lg border border-gray-200 z-50"
+            sideOffset={4}
             align="start"
+            alignOffset={0}
+            avoidCollisions={true}
+            collisionPadding={8}
             onMouseEnter={openMenu}
             onMouseLeave={closeMenu}
             onOpenAutoFocus={(e) => e.preventDefault()}
