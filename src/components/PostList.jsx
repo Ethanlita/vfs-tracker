@@ -8,8 +8,8 @@ const PostList = () => {
 
   useEffect(() => {
     fetch('/posts.json')
-      .then((response) => response.json())
-      .then((data) => setPosts(data));
+        .then((response) => response.json())
+        .then((data) => setPosts(data));
   }, []);
 
   // 根据文件夹路径过滤内容
@@ -37,58 +37,85 @@ const PostList = () => {
     return findFolderContent(posts, folderFilter);
   };
 
-  const renderList = (items) => {
-    return (
-      <ul className="list-disc list-inside">
-        {items.map(item => {
-          if (item.type === 'folder') {
-            return (
-              <li key={item.name}>
-                <Link
-                  to={`/posts?folder=${folderFilter ? `${folderFilter}/${item.name}` : item.name}`}
-                  className="font-bold text-pink-600 hover:text-pink-800"
-                >
-                  📁 {item.name}
-                </Link>
-                <div className="ml-4">
-                  {item.children && renderList(item.children)}
-                </div>
-              </li>
-            );
-          } else {
-            return (
-              <li key={item.name}>
-                <Link to={`/docs?doc=${item.path}`} className="text-blue-500 hover:underline">
-                  📄 {item.name.replace('.md', '')}
-                </Link>
-              </li>
-            );
-          }
-        })}
-      </ul>
-    );
-  };
-
   const filteredContent = getFilteredContent();
   const pageTitle = folderFilter ? `文件夹: ${folderFilter}` : '所有文档';
 
-  return (
-    <div className="container mx-auto p-4">
-      <div className="mb-4">
-        {folderFilter && (
-          <Link to="/posts" className="text-gray-500 hover:text-gray-700 mb-2 inline-block">
-            ← 返回所有文档
-          </Link>
-        )}
-        <h1 className="text-2xl font-bold">{pageTitle}</h1>
-      </div>
+  const renderCards = (items) => {
+    return (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          {items.map((item) => {
+            if (item.type === 'folder') {
+              const target = `/posts?folder=${folderFilter ? `${folderFilter}/${item.name}` : item.name}`;
+              return (
+                  <Link
+                      key={`folder-${item.name}`}
+                      to={target}
+                      className="group block rounded-2xl bg-white/70 backdrop-blur-sm ring-1 ring-gray-200 shadow-sm p-5 hover:shadow-md hover:ring-gray-300 transition"
+                  >
+                    <div className="flex items-start gap-4">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-pink-50 text-pink-700 ring-1 ring-pink-100">
+                        <span className="text-xl">📁</span>
+                      </div>
+                      <div className="min-w-0">
+                        <h3 className="text-base font-semibold text-gray-900 truncate group-hover:text-pink-700 transition-colors">
+                          {item.name}
+                        </h3>
+                        <p className="mt-1 text-xs text-gray-500">文件夹</p>
+                      </div>
+                    </div>
+                  </Link>
+              );
+            }
 
-      {filteredContent.length === 0 ? (
-        <p className="text-gray-500">此文件夹中没有内容。</p>
-      ) : (
-        renderList(filteredContent)
-      )}
-    </div>
+            // 文件卡片
+            const fileDisplayName = item.name.replace('.md', '');
+            return (
+                <Link
+                    key={`file-${item.path || item.name}`}
+                    to={`/docs?doc=${item.path}`}
+                    className="group block rounded-2xl bg-white/70 backdrop-blur-sm ring-1 ring-gray-200 shadow-sm p-5 hover:shadow-md hover:ring-gray-300 transition"
+                >
+                  <div className="flex items-start gap-4">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-50 text-indigo-700 ring-1 ring-indigo-100">
+                      <span className="text-xl">📄</span>
+                    </div>
+                    <div className="min-w-0">
+                      <h3 className="text-base font-semibold text-gray-900 truncate group-hover:text-indigo-700 transition-colors">
+                        {fileDisplayName}
+                      </h3>
+                      <p className="mt-1 text-xs text-gray-500">文档</p>
+                    </div>
+                  </div>
+                </Link>
+            );
+          })}
+        </div>
+    );
+  };
+
+  return (
+      <div className="container mx-auto p-4">
+        <div className="mb-6">
+          {folderFilter && (
+              <Link
+                  to="/posts"
+                  className="inline-flex items-center gap-1 text-sm text-gray-600 hover:text-gray-800"
+              >
+                ← 返回所有文档
+              </Link>
+          )}
+          <h1 className="mt-2 text-2xl font-bold tracking-tight text-gray-900">{pageTitle}</h1>
+          <p className="mt-1 text-sm text-gray-500">点击卡片以浏览下一级文件夹或打开文档。</p>
+        </div>
+
+        {filteredContent.length === 0 ? (
+            <div className="rounded-2xl bg-white/70 backdrop-blur-sm ring-1 ring-gray-200 shadow-sm p-6 text-gray-500">
+              此文件夹中没有内容。
+            </div>
+        ) : (
+            renderCards(filteredContent)
+        )}
+      </div>
   );
 };
 
