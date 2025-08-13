@@ -400,7 +400,7 @@ const Timeline = () => {
           欢迎来到VFS Tracker！
         </h1>
         <p className="text-lg text-gray-700 max-w-3xl mx-auto leading-relaxed font-medium">
-          这里是你的足迹，记录您的嗓音康复之路
+          这里是你的足迹，持续追踪，持续进步~⭐️
         </p>
       </div>
 
