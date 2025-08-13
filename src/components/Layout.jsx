@@ -62,7 +62,7 @@ const Layout = ({ children, auth }) => {
 
             <footer className="bg-white shadow-lg mt-12">
                 <div className="container mx-auto py-6 px-4 sm:px-6 lg:px-8 vfs-footer-text">
-                    <p>&copy; 2025 VFS Tracker. 一个开源项目。</p>
+                    <p>&copy; 2025 VFS Tracker. 一个开源项目。我们真诚的建议您暂时使用电脑访问以获得更好体验</p>
                 </div>
             </footer>
         </div>
