@@ -177,7 +177,7 @@ const MyPage = () => {
           />
 
           {/* 操作按钮区域 */}
-          <div className="mt-8 pt-6 border-t border-gray-200">
+          <div className="pt-6 border-t border-gray-200">
             <div className="flex flex-col sm:flex-row gap-4 sm:gap-6">
               <button
                 onClick={handleNavigateToAddEvent}

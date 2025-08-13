@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 const PostViewer = () => {
   const [content, setContent] = useState('');
@@ -23,7 +24,7 @@ const PostViewer = () => {
     }
 
     // 只允许字母、数字、连字符、下划线、斜杠、空格、中文字符和中文标点
-    const validPathPattern = /^[a-zA-Z0-9\-_\/\s\u4e00-\u9fa5\u3000-\u303F]+\.md$/;
+    const validPathPattern = /^[a-zA-Z0-9\-_/\s\u4e00-\u9fa5\u3000-\u303F]+\.md$/;
     return validPathPattern.test(filePath);
   };
 
@@ -121,7 +122,7 @@ const PostViewer = () => {
             )}
           </header>
           <div className="prose prose-slate max-w-none">
-            <ReactMarkdown>{content}</ReactMarkdown>
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
           </div>
         </article>
       </div>
