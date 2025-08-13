@@ -386,116 +386,131 @@ const Timeline = () => {
   const actions = generateTimelineActions(timelineEvents);
 
   return (
-    <div className="timeline-container">
-      <div className="relative z-10 space-y-8">
-        {/* Header */}
-        <div className="timeline-title-section">
-          <h1 className="text-4xl font-bold text-pink-600 mb-2">
-            欢迎来到VFS Tracker！
-          </h1>
-          <p className="text-gray-600 text-lg">这里是你的足迹</p>
+    <div className="dashboard-container relative px-3 sm:px-0">
+      {/* 装饰性背景元素 */}
+      <div className="fixed inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-pink-300 rounded-full mix-blend-multiply filter blur-xl opacity-30 animate-blob"></div>
+        <div className="absolute top-1/3 right-1/4 w-96 h-96 bg-purple-300 rounded-full mix-blend-multiply filter blur-xl opacity-30 animate-blob animation-delay-2000"></div>
+        <div className="absolute bottom-1/4 left-1/3 w-96 h-96 bg-blue-300 rounded-full mix-blend-multiply filter blur-xl opacity-30 animate-blob animation-delay-4000"></div>
+      </div>
+
+      {/* 页面标题 */}
+      <div className="dashboard-title-section relative z-10">
+        <h1 className="text-4xl font-bold text-pink-600 mb-4">
+          欢迎来到VFS Tracker！
+        </h1>
+        <p className="text-lg text-gray-700 max-w-3xl mx-auto leading-relaxed font-medium">
+          这里是你的足迹，记录您的嗓音康复之路
+        </p>
+      </div>
+
+      {/* 声音频率图表卡片 */}
+      <div className="dashboard-card">
+        <div className="dashboard-card-header">
+          <h2 className="dashboard-card-title">
+            <span className="dashboard-card-emoji">📊</span>
+            声音频率图表
+          </h2>
+          <p className="dashboard-card-description">查看您的声音基频随时间的变化</p>
+        </div>
+        <div className="h-96 relative">
+          {isLoadingChart ? (
+            <div className="flex items-center justify-center h-full">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-4 border-pink-500"></div>
+              <span className="ml-4 text-xl text-gray-600 font-medium">正在加载图表...</span>
+            </div>
+          ) : chartData ? (
+            <Line data={chartData} options={chartOptions} />
+          ) : (
+            <div className="flex items-center justify-center h-full text-gray-500">
+              <p>暂无图表数据</p>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* 时间轴活动卡片 */}
+      <div className="dashboard-card">
+        <div className="dashboard-card-header">
+          <h2 className="dashboard-card-title">
+            <span className="dashboard-card-emoji">📈</span>
+            最近活动
+          </h2>
+          <p className="dashboard-card-description">查看您最近的嗓音相关活动记录</p>
         </div>
 
-        {/* Two Cards Layout - Responsive */}
-        <div className="timeline-cards-wrapper">
-          {/* Chart Section */}
-          <div className="timeline-card">
-            <div className="dashboard-card-header">
-              <h2 className="dashboard-card-title">
-                <span className="dashboard-card-emoji">📊</span>
-                声音频率图表
-              </h2>
-              <p className="dashboard-card-description">查看您的声音基频随时间的变化</p>
-            </div>
-            <div className="h-[500px] relative">
-              <div className="absolute inset-0 bg-gradient-to-br from-pink-50 to-rose-50 rounded-xl opacity-50"></div>
-              <div className="relative z-10 h-full">
-                {isLoadingChart ? (
-                  <div className="flex items-center justify-center h-full">
-                    <svg className="animate-spin h-10 w-10 text-pink-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4.293 12.293a1 1 0 011.414 0L12 18.586l6.293-6.293a1 1 0 111.414 1.414l-7 7a1 1 0 01-1.414 0l-7-7a1 1 0 010-1.414z"></path>
-                    </svg>
-                  </div>
-                ) : (
-                  <Line data={chartData} options={chartOptions} />
-                )}
-              </div>
-            </div>
+        {isLoadingTimeline ? (
+          <div className="flex items-center justify-center h-48">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-4 border-pink-500"></div>
+            <span className="ml-4 text-xl text-gray-600 font-medium">正在加载活动...</span>
           </div>
-
-          {/* Actions Section */}
-          <div className="timeline-card">
-            <div className="dashboard-card-header">
-              <h2 className="dashboard-card-title">
-                <span className="dashboard-card-emoji">📈</span>
-                我的动态
-              </h2>
-              <p className="dashboard-card-description">记录您的声音训练历程</p>
-            </div>
-            <div className="space-y-8 overflow-y-auto max-h-[500px] pr-2">
-              {Object.entries(actions).map(([day, dayActions]) => (
-                <div key={day} className="relative">
-                  {/* Day Header */}
-                  <div className="sticky top-0 z-20 mb-6 bg-white/80 backdrop-blur-sm py-2 -mx-2 px-2 rounded-lg">
-                    <div className="inline-block bg-gradient-to-r from-blue-500 to-indigo-500 text-white px-6 py-3 rounded-full shadow-lg">
-                      <h3 className="text-lg font-semibold">{day}</h3>
-                    </div>
-                  </div>
-
-                  {/* Timeline Line */}
-                  <div className="absolute left-8 top-16 bottom-0 w-0.5 bg-gradient-to-b from-blue-300 to-indigo-300"></div>
-
-                  {/* Actions */}
-                  <div className="space-y-4 ml-4">
-                    {dayActions.map((action, index) => (
-                      <div key={index} className="relative group/action">
-                        {/* Timeline Dot */}
-                        <div className="absolute left-4 top-4 w-4 h-4 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full shadow-lg transform group-hover/action:scale-125 transition-transform duration-200"></div>
-
-                        {/* Action Card */}
-                        <div className="ml-12 bg-white/80 backdrop-blur-sm p-6 rounded-xl shadow-lg hover:shadow-xl hover:bg-white/90 transition-all duration-300 transform hover:-translate-y-1">
-                          <div className="flex items-center space-x-4">
-                            <div className="bg-gradient-to-r from-blue-100 to-indigo-100 px-4 py-2 rounded-lg">
-                              <span className="font-mono text-sm font-semibold text-blue-700">{action.time}</span>
-                            </div>
-                            <div className="flex-1">
-                              <span className="text-gray-700 text-lg">{action.description}</span>
-                            </div>
-                            <div className="w-8 h-8 bg-gradient-to-r from-green-400 to-emerald-400 rounded-full flex items-center justify-center opacity-0 group-hover/action:opacity-100 transition-opacity duration-200">
-                              <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
-                                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"></path>
-                              </svg>
-                            </div>
-                          </div>
+        ) : (
+          <div className="space-y-6">
+            {Object.keys(actions).length > 0 ? (
+              Object.keys(actions).map((day) => (
+                <div key={day} className="border-l-4 border-pink-400 pl-4">
+                  <h3 className="text-lg font-semibold text-gray-800 mb-3">{day}</h3>
+                  <div className="space-y-2">
+                    {actions[day].map((action, index) => (
+                      <div key={index} className="flex items-center space-x-3 py-2">
+                        <div className="flex-shrink-0 w-16 text-sm text-gray-500 font-mono">
+                          {action.time}
+                        </div>
+                        <div className="flex-1 text-gray-700">
+                          {action.description}
                         </div>
                       </div>
                     ))}
                   </div>
                 </div>
-              ))}
-            </div>
+              ))
+            ) : (
+              <div className="text-center py-12 text-gray-500">
+                <p className="text-lg">暂无最近活动</p>
+                <p className="text-sm mt-2">开始记录您的嗓音康复活动吧！</p>
+              </div>
+            )}
           </div>
-        </div>
+        )}
+      </div>
 
-        {/* Footer - AI助手对话框 */}
-        <div className="ai-assistant-container">
-          <div className="ai-assistant-wrapper">
-            {/* AI助手头像 */}
-            <div className="ai-assistant-avatar">
-              <img
-                src="/img.png"
-                alt="AI助手头像"
-                className="w-12 h-12 rounded-full object-cover"
-                style={{width: '46px', height: '46px', borderRadius: '50%', objectFit: 'cover'}}
-              />
-            </div>
+      {/* AI鼓励消息 - 聊天对话框样式 */}
+      <div className="relative z-10 mb-8">
+        <div className="flex justify-center">
+          <div className="max-w-md sm:max-w-lg md:max-w-xl lg:max-w-2xl">
+            <div className="relative">
+              {/* AI头像 */}
+              <div className="flex items-start space-x-3">
+                <div className="flex-shrink-0 w-10 h-10 rounded-full overflow-hidden border-2 border-gray-300 shadow-sm">
+                  <img
+                    src="/img.png"
+                    alt="AI Assistant"
+                    className="w-full h-full object-cover"
+                  />
+                </div>
 
-            {/* 对话框主体 */}
-            <div className="ai-assistant-message">
-              <p className="ai-assistant-text">
-                {isLoadingMessage ? '加载中...' : encouragingMessage}
-              </p>
+                {/* 消息气泡 */}
+                <div className="relative bg-white rounded-2xl rounded-tl-sm px-4 py-3 shadow-md border border-gray-200 max-w-full">
+                  {/* 小尾巴 */}
+                  <div className="absolute -left-2 top-3 w-0 h-0 border-r-8 border-r-white border-t-4 border-t-transparent border-b-4 border-b-transparent"></div>
+
+                  {/* 消息内容 */}
+                  <div className="text-gray-800 leading-relaxed">
+                    {isLoadingMessage ? (
+                      <div className="flex items-center space-x-2">
+                        <div className="animate-pulse flex space-x-1">
+                          <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+                          <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                          <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                        </div>
+                        <span className="text-sm text-gray-500">AI正在思考...</span>
+                      </div>
+                    ) : (
+                      <p className="text-sm sm:text-base">{encouragingMessage}</p>
+                    )}
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
