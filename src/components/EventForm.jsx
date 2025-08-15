@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useAuthenticator } from '@aws-amplify/ui-react';
 import { addEvent, uploadFile } from '../api';
+import { isProductionReady as globalIsProductionReady } from '../env.js';
+import { useAsync } from '../utils/useAsync.js';
 
 /**
  * @en A form for creating new voice events. It handles data input, file uploads, and submission to the backend.
@@ -11,9 +13,7 @@ import { addEvent, uploadFile } from '../api';
  */
 const EventForm = ({ onEventAdded }) => {
   // 检查是否为生产环境
-  const isProductionReady = import.meta.env.VITE_COGNITO_USER_POOL_ID &&
-      import.meta.env.VITE_COGNITO_USER_POOL_WEB_CLIENT_ID &&
-      import.meta.env.VITE_AWS_REGION;
+  const isProductionReady = globalIsProductionReady;
 
   // --- STATE MANAGEMENT ---
   const authenticatorContext = isProductionReady ? useAuthenticator((context) => [context.user]) : null;
@@ -28,9 +28,14 @@ const EventForm = ({ onEventAdded }) => {
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [file, setFile] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitSuccess, setSubmitSuccess] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
 
   // 动态表单数据状态
   const [formData, setFormData] = useState({});
+
+  // 用于记录最后上传的文件（避免重复上传）
+  const lastUploadedFileRef = useRef(null);
 
   // --- FORM FIELD DEFINITIONS ---
   const eventTypeOptions = [
@@ -230,7 +235,7 @@ const EventForm = ({ onEventAdded }) => {
       case 'hospital_test':
         fields.push(<div key="hospital-header" className="form-field col-span-full"><h3 className="text-base font-semibold text-gray-900">医院检测</h3></div>);
         fields.push(renderInput('location', '医院/诊所名称', true));
-        fields.push(renderInput('equipmentUsed', '使用的设备', false));
+        fields.push(renderInput('equipmentUsed', '使用的设���', false));
         fields.push(renderMultiSelect('sound', '声音状态', soundOptions, true));
         if ((formData.sound || []).includes('其他')) {
           fields.push(renderInput('customSoundDetail', '其他声音状态详情', false));
@@ -250,7 +255,7 @@ const EventForm = ({ onEventAdded }) => {
         fields.push(renderNumberInput('f3', 'F3', 'Hz'));
 
         fields.push(<div key="pitch-header" className="form-field col-span-full"><h3 className="text-base font-semibold text-gray-900">音域范围</h3></div>);
-        fields.push(renderNumberInput('pitchMax', '最高音', 'Hz'));
+        fields.push(renderNumberInput('pitchMax', '最高��', 'Hz'));
         fields.push(renderNumberInput('pitchMin', '最低音', 'Hz'));
 
         fields.push(renderTextArea('notes', '备注'));
@@ -305,97 +310,86 @@ const EventForm = ({ onEventAdded }) => {
     return fields;
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  // 新增：独立附件上传 useAsync（惰性执行，点击提交或手动重试才触发）
+  const uploadAsync = useAsync(async () => {
+    if (!file) return '';
+    if (!user) throw new Error('未登录用户');
+    const key = await uploadFile(file, user.attributes.sub);
+    lastUploadedFileRef.current = file; // 记录已上传文件对象引用
+    return key;
+  }, [file, user?.attributes?.sub], { immediate: false });
 
-    if (!user) {
-      alert('您必须登录才能添加事件。');
-      return;
+  // useAsync 提交逻辑（依赖上传结果）
+  const submitAsync = useAsync(async () => {
+    setErrorMsg('');
+    setSubmitSuccess(false);
+    if (!user) throw new Error('未登录用户');
+
+    // 构建符合数据结构的详细信息对象
+    let details = { ...formData };
+
+    if (eventType === 'self_test' || eventType === 'hospital_test') {
+      if (formData.f1 || formData.f2 || formData.f3) {
+        details.formants = {};
+        if (formData.f1) details.formants.f1 = formData.f1;
+        if (formData.f2) details.formants.f2 = formData.f2;
+        if (formData.f3) details.formants.f3 = formData.f3;
+      }
+      if (formData.pitchMax || formData.pitchMin) {
+        details.pitch = {};
+        if (formData.pitchMax) details.pitch.max = formData.pitchMax;
+        if (formData.pitchMin) details.pitch.min = formData.pitchMin;
+      }
+      delete details.f1; delete details.f2; delete details.f3; delete details.pitchMax; delete details.pitchMin;
     }
 
-    setIsSubmitting(true);
-
-    try {
-      // 构建符合数据结构的详细信息对象
-      let details = { ...formData };
-
-      // 处理特殊字段
-      if (eventType === 'self_test' || eventType === 'hospital_test') {
-        // 构建 formants 对象
-        if (formData.f1 || formData.f2 || formData.f3) {
-          details.formants = {};
-          if (formData.f1) details.formants.f1 = formData.f1;
-          if (formData.f2) details.formants.f2 = formData.f2;
-          if (formData.f3) details.formants.f3 = formData.f3;
+    // 如果选择了文件且尚未上传（或文件已更换），执行上传
+    if (file) {
+      try {
+        if (lastUploadedFileRef.current !== file || !uploadAsync.value) {
+          await uploadAsync.execute();
         }
-
-        // 构建 pitch 对象
-        if (formData.pitchMax || formData.pitchMin) {
-          details.pitch = {};
-          if (formData.pitchMax) details.pitch.max = formData.pitchMax;
-          if (formData.pitchMin) details.pitch.min = formData.pitchMin;
-        }
-
-        // 清理临时字段
-        delete details.f1;
-        delete details.f2;
-        delete details.f3;
-        delete details.pitchMax;
-        delete details.pitchMin;
+        if (uploadAsync.error) throw uploadAsync.error;
+        if (uploadAsync.value) details.attachmentUrl = uploadAsync.value;
+      } catch (e) {
+        throw new Error('文件上传失败: ' + (e?.message || '未知错误'));
       }
+    }
 
-      // 处理文件上传
-      let attachmentUrl = null;
-      if (file) {
-        try {
-          attachmentUrl = await uploadFile(file, user.attributes.sub);
-        } catch (uploadError) {
-          console.error('File upload error:', uploadError);
-          alert('文件上传失败。请重试。');
-          setIsSubmitting(false);
-          return;
-        }
-      }
+    const eventData = {
+      type: eventType,
+      date: new Date(date).toISOString(),
+      details
+    };
 
-      if (attachmentUrl) {
-        details.attachmentUrl = attachmentUrl;
-      }
-
-      // 构建事件数据
-      const eventData = {
-        type: eventType,
-        date: new Date(date).toISOString(),
-        details
+    if (!isProductionReady) {
+      // 模拟延迟
+      await new Promise(r => setTimeout(r, 400));
+      return {
+        eventId: `mock-${Date.now()}`,
+        userId: user.attributes.sub,
+        ...eventData,
+        createdAt: new Date().toISOString()
       };
-
-      if (!isProductionReady) {
-        // 开发模式
-        setTimeout(() => {
-          const mockEvent = {
-            eventId: `mock-${Date.now()}`,
-            userId: user.attributes.sub,
-            ...eventData,
-            createdAt: new Date().toISOString(),
-          };
-          alert('事件添加成功！（演示模式）');
-          onEventAdded(mockEvent);
-          resetForm();
-        }, 1000);
-        return;
-      }
-
-      // 生产模式
-      const newEvent = await addEvent(eventData, user.attributes.sub);
-      alert('事件添加成功！');
-      onEventAdded(newEvent.item);
-      resetForm();
-
-    } catch (error) {
-      alert('添加事件失败。请查看控制台获取详细信息。');
-      console.error(error);
-    } finally {
-      setIsSubmitting(false);
     }
+
+    const apiResp = await addEvent(eventData, user.attributes.sub);
+    return apiResp.item || apiResp;
+  }, [eventType, date, formData, file, user, isProductionReady, uploadAsync.value, uploadAsync.error]);
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (uploadAsync.loading || submitAsync.loading) return; // 防抖
+    submitAsync.execute()
+      .then(newEvent => {
+        if (newEvent) {
+          setSubmitSuccess(true);
+          onEventAdded(newEvent);
+          resetForm();
+          setTimeout(() => setSubmitSuccess(false), 2500);
+        }
+      })
+      .catch(err => setErrorMsg(err.message || '提交失败'));
   };
 
   const resetForm = () => {
@@ -481,30 +475,65 @@ const EventForm = ({ onEventAdded }) => {
               <input
                   id="file-input"
                   type="file"
-                  onChange={handleFileChange}
+                  onChange={(e)=>{ setFile(e.target.files[0]); uploadAsync.reset(); lastUploadedFileRef.current = null; }}
                   className="block w-full text-gray-700 file:mr-4 file:py-2.5 file:px-4 file:rounded-lg file:border-0 file:font-medium file:bg-gradient-to-r file:from-pink-100 file:to-purple-100 file:text-pink-700 hover:file:from-pink-200 hover:file:to-purple-200"
               />
+              {/* 上传状态指示 */}
+              {file && (
+                <div className="mt-2 text-xs">
+                  {uploadAsync.loading && (
+                    <span className="inline-flex items-center text-pink-600 gap-1">
+                      <span className="animate-spin h-3 w-3 border-2 border-pink-400 border-t-transparent rounded-full" /> 正在上传...
+                    </span>
+                  )}
+                  {!uploadAsync.loading && uploadAsync.error && (
+                    <span className="inline-flex items-center text-red-600 gap-2">
+                      上传失败：{uploadAsync.error.message}
+                      <button type="button" onClick={uploadAsync.execute} className="px-2 py-0.5 rounded bg-red-600 text-white">重试</button>
+                    </span>
+                  )}
+                  {!uploadAsync.loading && !uploadAsync.error && uploadAsync.value && (
+                    <span className="inline-flex items-center text-emerald-600 gap-1">
+                      <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                      已上传
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* 提交按钮 */}
             <div className="pt-2">
               <button
                   type="submit"
-                  disabled={isSubmitting}
-                  className="w-full group relative inline-flex justify-center py-3 px-6 border-0 shadow-lg text-base font-bold rounded-xl text-white bg-gradient-to-r from-pink-600 via-purple-600 to-indigo-600 hover:from-pink-500 hover:via-purple-500 hover:to-indigo-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-pink-500 active:scale-[0.99] transition"
+                  disabled={submitAsync.loading || uploadAsync.loading}
+                  className="w-full group relative inline-flex justify-center py-3 px-6 border-0 shadow-lg text-base font-bold rounded-xl text-white bg-gradient-to-r from-pink-600 via-purple-600 to-indigo-600 hover:from-pink-500 hover:via-purple-500 hover:to-indigo-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-pink-500 active:scale-[0.99] transition disabled:opacity-60"
               >
-              <span className="absolute left-0 inset-y-0 flex items-center pl-4">
-                {isSubmitting ? (
-                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                ) : (
-                    <svg className="h-5 w-5 text-white/90 group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"></path>
-                    </svg>
-                )}
-              </span>
-                {isSubmitting ? '正在添加事件...' : '✨ 添加新事件'}
+                <span className="absolute left-0 inset-y-0 flex items-center pl-4">
+                  {(submitAsync.loading || uploadAsync.loading) ? (
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                  ) : (
+                      <svg className="h-5 w-5 text-white/90 group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"></path>
+                      </svg>
+                  )}
+                </span>
+                {(submitAsync.loading || uploadAsync.loading) ? '处理中...' : '✨ 添加新事件'}
               </button>
             </div>
+          </div>
+
+          {/* 提示信息 */}
+          <div className="mt-4">
+            {errorMsg && (
+                <div className="rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700 flex items-start justify-between gap-4">
+                  <span>{errorMsg}</span>
+                  <button type="button" onClick={()=>{ setErrorMsg(''); submitAsync.execute(); }} className="text-xs px-2 py-1 bg-red-600 hover:bg-red-500 text-white rounded">重试</button>
+                </div>
+            )}
+            {submitSuccess && !errorMsg && (
+                <div className="rounded-md bg-emerald-50 border border-emerald-200 px-4 py-3 text-sm text-emerald-700">事件添加成功！</div>
+            )}
           </div>
         </form>
       </div>

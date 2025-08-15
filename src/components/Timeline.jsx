@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Line } from 'react-chartjs-2';
 import { getEncouragingMessage, getEventsByUserId } from '../api';
+import { resolveAttachmentUrl } from '../utils/attachments.js'; // 预留若后续时间轴事件需要附件访问
+import { useAsync } from '../utils/useAsync.js';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -23,9 +25,7 @@ ChartJS.register(
 );
 
 const Timeline = () => {
-  // AI鼓励消息状态
-  const [encouragingMessage, setEncouragingMessage] = useState("持续跟踪，持续进步 ✨");
-  const [isLoadingMessage, setIsLoadingMessage] = useState(false);
+  const DEFAULT_MESSAGE = "持续跟踪，持续进步 ✨";
 
   // 图表数据状态
   const [chartData, setChartData] = useState(null);
@@ -35,22 +35,17 @@ const Timeline = () => {
   const [timelineEvents, setTimelineEvents] = useState([]);
   const [isLoadingTimeline, setIsLoadingTimeline] = useState(true);
 
-  // 模拟用户ID - 在实际应用中应该从认证上下文获取
+  // 模拟用户ID - ��实际应用中应该从认证上下文获取
   const mockUserId = 'mock-user-1';
 
   // 模拟用户数据 - 在实际应用中这些数据应该从props或context获取
   const mockUserData = {
     events: [
-      { type: 'training', createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString() },
-      { type: 'training', createdAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString() },
+      { type: 'voice_training', createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString() },
+      { type: 'self_practice', createdAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString() },
       { type: 'self_test', createdAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString() }
     ],
-    voiceParameters: {
-      fundamental: 125.5,
-      jitter: 1.2,
-      shimmer: 3.1,
-      hnr: 18.7
-    }
+    voiceParameters: { fundamental: 125.5, jitter: 1.2, shimmer: 3.1, hnr: 18.7 }
   };
 
   // 图表配置选项
@@ -174,6 +169,68 @@ const Timeline = () => {
     };
   };
 
+  // 使�� useAsync 统一管理：获取事件
+  const eventsAsync = useAsync(async () => {
+    const events = await getEventsByUserId(mockUserId);
+    return events;
+  }, [mockUserId]);
+
+  // AI 消息获取：改为依赖 timelineEvents（而非原 eventsAsync.value + 额外函数）
+  const aiAsync = useAsync(async () => {
+    if (!timelineEvents.length) return DEFAULT_MESSAGE;
+    const realUserData = { events: timelineEvents, voiceParameters: mockUserData.voiceParameters };
+    try {
+      return await getEncouragingMessage(realUserData);
+    } catch {
+      return DEFAULT_MESSAGE;
+    }
+  }, [timelineEvents]);
+
+  // 从事件生成图表与最近事件列表
+  useEffect(() => {
+    if (!eventsAsync.value) return;
+    const events = eventsAsync.value;
+    // 图表
+    try {
+      const chartConfig = generateChartDataFromEvents(events);
+      setChartData(chartConfig);
+    } catch (e) {
+      console.error('生成图表失败', e);
+    }
+    // 时间轴筛选
+    let recentEvents = events
+      .filter(ev => {
+        const eventDate = new Date(ev.date || ev.createdAt);
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        return eventDate >= thirtyDaysAgo;
+      });
+    if (recentEvents.length === 0) recentEvents = events;
+    recentEvents = recentEvents
+      .sort((a, b) => new Date(b.date || b.createdAt) - new Date(a.date || a.createdAt))
+      .slice(0, 10);
+    setTimelineEvents(recentEvents);
+    setIsLoadingTimeline(false);
+    setIsLoadingChart(false);
+  }, [eventsAsync.value]);
+
+  useEffect(() => {
+    if (eventsAsync.loading) {
+      setIsLoadingChart(true); setIsLoadingTimeline(true);
+    }
+    if (eventsAsync.error) {
+      setIsLoadingChart(false); setIsLoadingTimeline(false);
+    }
+  }, [eventsAsync.loading, eventsAsync.error]);
+
+  const anyError = eventsAsync.error || aiAsync.error;
+
+  // 重试函数
+  const handleRetry = () => {
+    eventsAsync.execute();
+    aiAsync.reset();
+  };
+
   // 获取图表数据
   const fetchChartData = useCallback(async () => {
     console.log('🔍 Timeline: 开始获取图表数据', { mockUserId });
@@ -210,39 +267,6 @@ const Timeline = () => {
     }
   }, [mockUserId]);
 
-  // 获取AI鼓励消息
-  const fetchEncouragingMessage = useCallback(async () => {
-    console.log('🤖 Timeline: 开始获取AI鼓励消息');
-    setIsLoadingMessage(true);
-    try {
-      // 使用真实的用户事件数据
-      const realUserData = {
-        events: timelineEvents, // 使用从API获取的真实事件数据
-        voiceParameters: {
-          fundamental: 125.5,
-          jitter: 1.2,
-          shimmer: 3.1,
-          hnr: 18.7
-        }
-      };
-
-      console.log('📊 Timeline: 发送给AI的真实用户数据', {
-        eventCount: timelineEvents.length,
-        eventTypes: timelineEvents.map(e => e.type),
-        events: timelineEvents
-      });
-
-      const message = await getEncouragingMessage(realUserData);
-      console.log('✅ Timeline: 获取到AI消息', message);
-      setEncouragingMessage(message);
-    } catch (error) {
-      console.error('❌ Timeline: 获取AI鼓励消息失败:', error);
-      // 保持默认消息
-    } finally {
-      setIsLoadingMessage(false);
-    }
-  }, [timelineEvents]); // 依赖于timelineEvents，确保事件数据更新时会重新获取AI消息
-
   // 获取时间轴事件数据
   const fetchTimelineEvents = useCallback(async () => {
     console.log('🔍 Timeline: 开始获取时间轴事件数据', { mockUserId });
@@ -271,7 +295,7 @@ const Timeline = () => {
 
       recentEvents = recentEvents
         .sort((a, b) => new Date(b.date || b.createdAt) - new Date(a.date || a.createdAt)) // 最新的在前
-        .slice(0, 10); // 最多显示10个事件
+        .slice(0, 10); // 最多显示10��事件
 
       console.log('⏰ Timeline: 筛选出的显示事件', {
         recentCount: recentEvents.length,
@@ -292,15 +316,6 @@ const Timeline = () => {
     fetchChartData();
     fetchTimelineEvents(); // 获取时间轴数据
   }, [fetchChartData, fetchTimelineEvents]);
-
-  // 当timelineEvents更新后获取AI消息
-  useEffect(() => {
-    if (timelineEvents.length > 0) {
-      // 延迟2秒后获取AI消息，确保事件数据已加载完成
-      const timer = setTimeout(fetchEncouragingMessage, 2000);
-      return () => clearTimeout(timer);
-    }
-  }, [timelineEvents, fetchEncouragingMessage]);
 
   // 从事件数据生成动态时间轴数据
   const generateTimelineActions = (events) => {
@@ -404,6 +419,14 @@ const Timeline = () => {
         </p>
       </div>
 
+      {anyError && (
+        <div className="mb-8 p-4 rounded-xl border border-red-200 bg-red-50 text-red-700">
+          <p className="font-semibold mb-2">数据加载失败</p>
+          <p className="text-sm mb-3">{(eventsAsync.error || aiAsync.error)?.message || '未知错误'}</p>
+          <button onClick={handleRetry} className="px-4 py-2 rounded-lg bg-red-600 text-white text-sm hover:bg-red-500">重试</button>
+        </div>
+      )}
+
       {/* 声音频率图表卡片 */}
       <div className="dashboard-card">
         <div className="dashboard-card-header">
@@ -489,14 +512,14 @@ const Timeline = () => {
                   />
                 </div>
 
-                {/* 消息气泡 */}
+                {/* 消��气泡 */}
                 <div className="relative bg-white rounded-2xl rounded-tl-sm px-4 py-3 shadow-md border border-gray-200 max-w-full">
                   {/* 小尾巴 */}
                   <div className="absolute -left-2 top-3 w-0 h-0 border-r-8 border-r-white border-t-4 border-t-transparent border-b-4 border-b-transparent"></div>
 
                   {/* 消息内容 */}
                   <div className="text-gray-800 leading-relaxed">
-                    {isLoadingMessage ? (
+                    {aiAsync.loading ? (
                       <div className="flex items-center space-x-2">
                         <div className="animate-pulse flex space-x-1">
                           <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
@@ -506,7 +529,7 @@ const Timeline = () => {
                         <span className="text-sm text-gray-500">正在加载</span>
                       </div>
                     ) : (
-                      <p className="text-sm sm:text-base">{encouragingMessage}</p>
+                      <p className="text-sm sm:text-base">{aiAsync.value}</p>
                     )}
                   </div>
                 </div>

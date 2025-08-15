@@ -11,6 +11,8 @@ This document outlines the data structures used for storing user information and
     - [Self Practice](#self-practice)
     - [VFS Surgery](#vfs-surgery)
     - [Feeling Log](#feeling-log)
+3.  [API Request/Response Formats](#api-requestresponse-formats)
+4.  [DynamoDB Table Definitions](#dynamodb-table-definitions)
 
 ---
 
@@ -58,7 +60,9 @@ Events are actions or logs recorded by the user. All events share a common struc
 | `type` | `String` | Yes | The type of event. Determines the structure of the `details` object. |
 | `date` | `String` | Yes | ISO 8601 timestamp for when the event occurred. |
 | `details` | `Object` | Yes | Contains attributes specific to the event type. |
+| `status` | `String` | Yes | Event approval status. Values: "pending", "approved", "rejected". Only "approved" events appear on public dashboard. |
 | `createdAt`| `String` | Yes | ISO 8601 timestamp of creation. |
+| `updatedAt`| `String` | No | ISO 8601 timestamp of last modification. |
 
 ### Self Test
 
@@ -162,3 +166,170 @@ A simple journal entry for the user to record their feelings.
 | Attribute | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
 | `content` | `String` | Yes | The text content of the journal entry. |
+
+---
+
+## API Request/Response Formats
+
+### GET /all-events
+
+**Description**: Retrieves all approved events for the public dashboard.
+
+**Request**:
+```http
+GET /all-events
+Content-Type: application/json
+```
+
+**Response** (200 OK):
+```json
+[
+  {
+    "userId": "cognito-user-sub-id",
+    "eventId": "550e8400-e29b-41d4-a716-446655440000",
+    "type": "voice_training",
+    "date": "2025-08-15T10:00:00.000Z",
+    "details": {
+      "trainingContent": "发音练习和气息控制",
+      "voiceStatus": "良好",
+      "instructor": "张老师",
+      "feelings": "今天的训练效果很好"
+    },
+    "createdAt": "2025-08-15T10:30:00.000Z"
+  },
+  {
+    "userId": "another-user-id",
+    "eventId": "660f9511-f3ac-52e5-b827-557766551111",
+    "type": "self_test",
+    "date": "2025-08-14T15:30:00.000Z",
+    "details": {
+      "appUsed": "Voice Tools",
+      "fundamentalFrequency": 180.5,
+      "sound": ["好"],
+      "voicing": ["没夹"],
+      "jitter": 0.02,
+      "shimmer": 0.03,
+      "hnr": 15.2
+    },
+    "createdAt": "2025-08-14T15:45:00.000Z"
+  }
+]
+```
+
+**Error Response** (500):
+```json
+{
+  "message": "Error fetching all events",
+  "error": "详细错误信息"
+}
+```
+
+### GET /events/{userId}
+
+**Description**: Retrieves all events for a specific authenticated user.
+
+**Request**:
+```http
+GET /events/{userId}
+Authorization: Bearer {cognito-jwt-token}
+Content-Type: application/json
+```
+
+**Response**: Similar to `/all-events` but includes events with all status values.
+
+### POST /events
+
+**Description**: Creates a new event for the authenticated user.
+
+**Request**:
+```http
+POST /events
+Authorization: Bearer {cognito-jwt-token}
+Content-Type: application/json
+
+{
+  "type": "voice_training",
+  "date": "2025-08-15T10:00:00.000Z",
+  "details": {
+    "trainingContent": "发音练习",
+    "voiceStatus": "良好",
+    "instructor": "张老师"
+  }
+}
+```
+
+**Response** (200):
+```json
+{
+  "item": {
+    "userId": "cognito-user-sub-id",
+    "eventId": "generated-uuid",
+    "type": "voice_training",
+    "date": "2025-08-15T10:00:00.000Z",
+    "details": {
+      "trainingContent": "发音练习",
+      "voiceStatus": "良好",
+      "instructor": "张老师"
+    },
+    "status": "pending",
+    "createdAt": "2025-08-15T10:30:00.000Z",
+    "updatedAt": "2025-08-15T10:30:00.000Z"
+  }
+}
+```
+
+---
+
+## DynamoDB Table Definitions
+
+### VoiceFemEvents Table
+
+**Table Name**: `VoiceFemEvents`
+
+**Partition Key**: `userId` (String)
+**Sort Key**: `eventId` (String)
+
+**Attributes**:
+
+| Attribute Name | Type | Description | Required |
+| :--- | :--- | :--- | :--- |
+| `userId` | String | Cognito user sub ID (Partition Key) | Yes |
+| `eventId` | String | UUID v4 identifier (Sort Key) | Yes |
+| `type` | String | Event type enum | Yes |
+| `date` | String | ISO 8601 event occurrence timestamp | Yes |
+| `details` | Map | Event-specific details object | Yes |
+| `status` | String | Approval status: "pending" \| "approved" \| "rejected" | Yes |
+| `createdAt` | String | ISO 8601 creation timestamp | Yes |
+| `updatedAt` | String | ISO 8601 last modification timestamp | No |
+
+**Global Secondary Indexes**:
+
+1. **StatusDateIndex**
+   - Partition Key: `status` (String)
+   - Sort Key: `date` (String)
+   - Purpose: Efficiently query approved events by date for public dashboard
+
+**Sample Item**:
+```json
+{
+  "userId": "us-east-1:12345678-1234-1234-1234-123456789012",
+  "eventId": "550e8400-e29b-41d4-a716-446655440000",
+  "type": "voice_training",
+  "date": "2025-08-15T10:00:00.000Z",
+  "details": {
+    "trainingContent": "发音练习和气息控制",
+    "voiceStatus": "良好",
+    "instructor": "张老师",
+    "feelings": "今天的训练效果很好"
+  },
+  "status": "approved",
+  "createdAt": "2025-08-15T10:30:00.000Z",
+  "updatedAt": "2025-08-15T11:00:00.000Z"
+}
+```
+
+**Access Patterns**:
+1. Get all events for a user: Query by `userId`
+2. Get specific event: Get item by `userId` + `eventId`
+3. Get all approved events: Query `StatusDateIndex` by `status = "approved"`
+4. Get approved events in date range: Query `StatusDateIndex` by `status` + date range

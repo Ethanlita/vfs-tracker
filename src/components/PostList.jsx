@@ -1,16 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
+import { useAsync } from '../utils/useAsync.js';
 
 const PostList = () => {
   const [posts, setPosts] = useState([]);
   const [searchParams] = useSearchParams();
   const folderFilter = searchParams.get('folder');
 
-  useEffect(() => {
-    fetch('/posts.json')
-        .then((response) => response.json())
-        .then((data) => setPosts(data));
+  // 使用 useAsync 统一数据获取
+  const postsAsync = useAsync(async () => {
+    const res = await fetch('/posts.json');
+    if (!res.ok) throw new Error('无法加载 posts.json');
+    return await res.json();
   }, []);
+
+  useEffect(() => { if (postsAsync.value) setPosts(postsAsync.value); }, [postsAsync.value]);
 
   // 根据文件夹路径过滤内容
   const getFilteredContent = () => {
@@ -95,6 +99,16 @@ const PostList = () => {
 
   return (
       <div className="container mx-auto p-4">
+        {/* 错误与加载状态 */}
+        {postsAsync.error && (
+          <div className="mb-4 p-3 rounded-md bg-red-50 border border-red-200 text-red-600 text-sm flex items-center justify-between">
+            <span>加载文档列表失败：{postsAsync.error.message}</span>
+            <button onClick={postsAsync.execute} className="px-2 py-1 text-xs bg-red-600 text-white rounded">重试</button>
+          </div>
+        )}
+        {postsAsync.loading && (
+          <div className="mb-4 p-3 rounded-md bg-gray-50 border border-gray-200 text-gray-600 text-sm">正在加载文档列表...</div>
+        )}
         <div className="mb-6">
           {folderFilter && (
               <Link
@@ -108,13 +122,13 @@ const PostList = () => {
           <p className="mt-1 text-sm text-gray-500">点击卡片以浏览下一级文件夹或打开文档。</p>
         </div>
 
-        {filteredContent.length === 0 ? (
+        {(!postsAsync.loading && !postsAsync.error && filteredContent.length === 0) ? (
             <div className="rounded-2xl bg-white/70 backdrop-blur-sm ring-1 ring-gray-200 shadow-sm p-6 text-gray-500">
               此文件夹中没有内容。
             </div>
-        ) : (
+        ) : (!postsAsync.loading && !postsAsync.error) ? (
             renderCards(filteredContent)
-        )}
+        ) : null}
       </div>
   );
 };

@@ -1,8 +1,10 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuthenticator } from '@aws-amplify/ui-react';
 import EventForm from './EventForm';
 import EventList from './EventList';
 import { getEventsByUserId } from '../api';
+import { useAsync } from '../utils/useAsync.js';
+import { isProductionReady as globalIsProductionReady } from '../env.js';
 
 /**
  * The user's profile page.
@@ -10,15 +12,10 @@ import { getEventsByUserId } from '../api';
  * @returns {JSX.Element} The rendered profile page.
  */
 const Profile = () => {
-  // 检查是否为生产环境 - 使用函数避免依赖问题
-  const isProductionReady = () => {
-    return !!(import.meta.env.VITE_COGNITO_USER_POOL_ID &&
-             import.meta.env.VITE_COGNITO_USER_POOL_WEB_CLIENT_ID &&
-             import.meta.env.VITE_AWS_REGION);
-  };
+  const productionReady = globalIsProductionReady();
 
   // 条件性使用认证
-  const authenticatorContext = isProductionReady() ? useAuthenticator((context) => [context.user]) : null;
+  const authenticatorContext = productionReady ? useAuthenticator((context) => [context.user]) : null;
   const user = authenticatorContext?.user || {
     attributes: {
       email: 'demo@example.com',
@@ -27,34 +24,14 @@ const Profile = () => {
   };
 
   const [events, setEvents] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
-
-  /**
-   * Fetches the user's events from the backend and sorts them by date.
-   */
-  const fetchEvents = useCallback(async () => {
-    if (user?.attributes?.sub) {
-      try {
-        setIsLoading(true);
-        const fetchedEvents = await getEventsByUserId(user.attributes.sub);
-        // Sort events by date, newest first
-        fetchedEvents.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-        setEvents(fetchedEvents);
-      } catch (error) {
-        console.error("获取事件失败:", error);
-        // 在开发模式下不显示错误提示
-        if (isProductionReady()) {
-          alert("无法加载您的事件。请尝试重新加载页面。");
-        }
-      } finally {
-        setIsLoading(false);
-      }
-    }
-  }, [user?.attributes?.sub]); // 只依赖于用户ID，避免循环
-
-  useEffect(() => {
-    fetchEvents();
-  }, [fetchEvents]);
+  const eventsAsync = useAsync(async () => {
+    if (!user?.attributes?.sub) return [];
+    const fetched = await getEventsByUserId(user.attributes.sub);
+    return fetched.sort((a,b)=> new Date(b.createdAt) - new Date(a.createdAt));
+  }, [user?.attributes?.sub]);
+  useEffect(()=>{ if(eventsAsync.value) setEvents(eventsAsync.value); },[eventsAsync.value]);
+  const isLoading = eventsAsync.loading;
+  const loadError = eventsAsync.error;
 
   /**
    * Callback function passed to EventForm.
@@ -71,7 +48,7 @@ const Profile = () => {
       <div>
         <h1 className="text-3xl font-bold text-gray-900">我的资料</h1>
         <p className="mt-1 text-sm text-gray-500">
-          欢迎，{user?.username}。在这里您可以添加新事件并查看您的时间线。
+          欢迎，{user?.username}。在这��您可以添加新事件并查看您的时间线。
         </p>
       </div>
 
@@ -79,7 +56,14 @@ const Profile = () => {
 
       <div className="bg-white p-6 rounded-xl shadow-md border border-gray-200">
         <h2 className="text-xl font-semibold text-gray-900 mb-4">我的时间线</h2>
-        {isLoading ? <p>正在加载事件...</p> : <EventList events={events} />}
+        {loadError && (
+          <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+            <p className="font-semibold mb-2">加载事件失败</p>
+            <p className="mb-3">{loadError.message || '未知错误'}</p>
+            <button onClick={eventsAsync.execute} className="px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white rounded-md text-xs">重试</button>
+          </div>
+        )}
+        {isLoading ? <p>正在加载事件...</p> : (!events.length ? <p className="text-gray-500">暂无事件</p> : <EventList events={events} />)}
       </div>
     </div>
   );
