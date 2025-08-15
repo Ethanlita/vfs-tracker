@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getEventsByUserId } from '../api';
+import { useAsync } from '../utils/useAsync.js';
 
 // --- SVG Icon Components (replacing lucide-react) ---
 const Lightbulb = ({ className, ...props }) => (
@@ -34,7 +35,7 @@ const CheckCircle = ({ className, ...props }) => (
 const extractVoiceDataFromEvents = (events, metric) => {
   const data = [];
 
-  // 筛选包含声音参数的事件类型
+  // 筛��包含声音参数的事件类型
   const eventsWithVoiceData = events.filter(event =>
       (event.type === 'self_test' || event.type === 'hospital_test') &&
       event.details &&
@@ -245,90 +246,52 @@ const VoiceFrequencyChart = ({ userId, isProductionReady, compact = false }) => 
     hnr: { label: '谐噪比 (HNR)', unit: 'dB', color: '#f59e0b', target: { min: 20 } }
   };
 
-  // Fetch data when component mounts or when dependencies change
-  useEffect(() => {
-    const fetchData = async () => {
-      if (!userId) {
-        console.log('❌ VoiceFrequencyChart: 没有用户ID，跳过数据获取');
-        setIsLoading(false);
-        return;
-      }
-
-      console.log('🔍 VoiceFrequencyChart: 开始获取数据', {
-        userId,
-        selectedMetric,
-        isProductionReady: isUsingProductionData
-      });
-
-      setIsLoading(true);
-
-      try {
-        let data;
-
-        if (isUsingProductionData) {
-          // 生产环境：从API获取真实数据
-          console.log('🌐 VoiceFrequencyChart: 使用生产数据源');
-          data = await fetchVoiceDataFromAPI(userId, selectedMetric);
-          setIsDemoData(false);
-
-          // 如果没有真实数据，回退到演示数据
-          if (!data || data.length === 0) {
-            console.log('⚠️ VoiceFrequencyChart: 没有真实数据，回退到演示数据');
-            data = generateMockData(30, selectedMetric);
-            setIsDemoData(true);
-          }
-        } else {
-          // 开发环境：优先尝试从 mock API 获取数据
-          console.log('🔧 VoiceFrequencyChart: 开发模式 - 尝试获取 mock 数据');
-          data = await fetchVoiceDataFromAPI(userId, selectedMetric);
-
-          if (data && data.length > 0) {
-            console.log('✅ VoiceFrequencyChart: 使用真实 mock 数据', { dataCount: data.length });
-
-            // 检查mock数据的日期范围，如果数据较老，自动调整时间范围为"全部"
-            const now = new Date();
-            const hasRecentData = data.some(item => {
-              const itemDate = new Date(item.date);
-              const oneMonthAgo = new Date(now);
-              oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
-              return itemDate > oneMonthAgo;
-            });
-
-            if (!hasRecentData) {
-              console.log('⚠️ VoiceFrequencyChart: mock数据较老，自动切换到"全部"时间范围');
-              setActiveRange('all');
-            }
-
-            setIsDemoData(false); // 这是真实的 mock 数据，不是生成的
-          } else {
-            console.log('⚠️ VoiceFrequencyChart: mock 数据不足，使用生成的演示数据');
-            data = generateMockData(30, selectedMetric);
-            setIsDemoData(true); // 这是生成的演示数据
-          }
+  // 使用 useAsync 统一获取事件并抽取指标数据
+  const forceReal = !!import.meta.env.VITE_FORCE_REAL; // 新增：强制真实模式
+  const dataAsync = useAsync(async () => {
+    if (!userId) return { data: [], demo: true };
+    let data = [];
+    let demo = false;
+    if (isUsingProductionData) {
+      data = await fetchVoiceDataFromAPI(userId, selectedMetric);
+      if (!data.length) {
+        if (forceReal) {
+          // 强制真实：不生成 mock，直接返回空
+          return { data: [], demo: false };
         }
-
-        console.log('✅ VoiceFrequencyChart: 数据获取完成', {
-          dataCount: data?.length || 0,
-          isDemoData: !isUsingProductionData && (!data || data.length === 0),
-          dataSource: data && data.length > 0 ? 'mock_api' : 'generated',
-          firstDataPoint: data?.[0],
-          lastDataPoint: data?.[data.length - 1]
-        });
-
-        setChartData(data || []);
-      } catch (error) {
-        console.error('❌ VoiceFrequencyChart: 数据获取失败:', error);
-        // 错误时使用演示数据作为后备
-        const fallbackData = generateMockData(30, selectedMetric);
-        setChartData(fallbackData);
-        setIsDemoData(true);
-      } finally {
-        setIsLoading(false);
+        data = generateMockData(30, selectedMetric);
+        demo = true;
       }
-    };
+    } else {
+      data = await fetchVoiceDataFromAPI(userId, selectedMetric);
+      if (!data.length) {
+        if (forceReal) {
+          // 环境未就绪但强制真实：不造假数据
+          return { data: [], demo: false };
+        }
+        data = generateMockData(30, selectedMetric);
+        demo = true;
+      } else {
+        const now = new Date();
+        const oneMonthAgo = new Date(now); oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
+        const hasRecent = data.some(d => new Date(d.date) > oneMonthAgo);
+        if (!hasRecent) setActiveRange('all');
+      }
+    }
+    return { data, demo };
+  }, [userId, selectedMetric, isUsingProductionData, forceReal]);
 
-    fetchData();
-  }, [userId, selectedMetric, isUsingProductionData]);
+  useEffect(() => {
+    setIsLoading(dataAsync.loading);
+    if (dataAsync.error) {
+      const fallback = generateMockData(30, selectedMetric);
+      setChartData(fallback);
+      setIsDemoData(true);
+    } else if (dataAsync.value) {
+      setChartData(dataAsync.value.data);
+      setIsDemoData(dataAsync.value.demo);
+    }
+  }, [dataAsync.loading, dataAsync.error, dataAsync.value, selectedMetric]);
 
   const filteredData = useMemo(() => {
     if (!chartData) return [];
@@ -365,12 +328,19 @@ const VoiceFrequencyChart = ({ userId, isProductionReady, compact = false }) => 
   const activeClasses = "bg-pink-500 text-white shadow-md";
   const inactiveClasses = "hover:bg-gray-200 hover:text-gray-800";
 
-  // 紧凑模式参数
+  // 紧凑模式参���
   const chartHeight = isCompact ? 300 : 350;
   const tickFontSize = isCompact ? 10 : 12;
 
   return (
       <ChartCard title="">
+        {/* 添加错误提示 */}
+        {dataAsync.error && (
+          <div className="mb-4 p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm flex items-center justify-between">
+            <span>数据加载失败��{dataAsync.error.message || '未知错误'} (已使用演示数据)</span>
+            <button onClick={dataAsync.execute} className="ml-4 px-3 py-1 bg-red-600 hover:bg-red-500 text-white rounded-md text-xs">重试</button>
+          </div>
+        )}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 space-y-4 md:space-y-0">
           {/* Metric Selection */}
           <div className="flex flex-wrap items-center gap-1 bg-gray-100 p-1.5 rounded-full">

@@ -1,15 +1,14 @@
-import React from 'react';
+﻿import React from 'react';
 import { useAuthenticator } from '@aws-amplify/ui-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { isProductionReady as globalIsProductionReady } from '../env.js';
 
 const Auth = () => {
     const navigate = useNavigate();
     const { user, login, logout } = useAuth();
 
-    const isProductionReady = import.meta.env.VITE_COGNITO_USER_POOL_ID &&
-        import.meta.env.VITE_COGNITO_USER_POOL_WEB_CLIENT_ID &&
-        import.meta.env.VITE_AWS_REGION;
+    const ready = globalIsProductionReady();
 
     const handleDevLogin = () => {
         login({
@@ -38,7 +37,7 @@ const Auth = () => {
                 <span className="font-semibold text-gray-700 hidden sm:block">
           {user.attributes.name}
         </span>
-                <span className="text-xs text-orange-600 hidden sm:block">(开发模式)</span>
+                {ready ? null : <span className="text-xs text-orange-600 hidden sm:block">(开发模式)</span>}
                 <button
                     onClick={() => navigate('/mypage')}
                     className="btn-pink mx-1.5 text-sm px-3 py-2 sm:text-base sm:px-6 sm:py-3"
@@ -57,13 +56,20 @@ const Auth = () => {
 
     return (
         <div className="flex items-center gap-2">
-            <button
-                onClick={handleDevLogin}
-                className="btn-pink mx-1.5 text-sm px-3 py-2 sm:text-base sm:px-6 sm:py-3"
-            >
-                开发登录
-            </button>
-            <span className="text-xs text-orange-600 mx-1.5">(开发模式)</span>
+            {!ready && (
+              <>
+                <button
+                    onClick={handleDevLogin}
+                    className="btn-pink mx-1.5 text-sm px-3 py-2 sm:text-base sm:px-6 sm:py-3"
+                >
+                    开发登录
+                </button>
+                <span className="text-xs text-orange-600 mx-1.5">(开发模式)</span>
+              </>
+            )}
+            {ready && (
+              <span className="text-xs text-gray-500">已连接后端</span>
+            )}
         </div>
     );
 };

@@ -2,6 +2,7 @@ import { useAuthenticator } from '@aws-amplify/ui-react';
 import '@aws-amplify/ui-react/styles.css';
 import { Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
+import { isProductionReady as globalIsProductionReady } from './env.js';
 
 import Layout from './components/Layout';
 import Auth from './components/Auth';
@@ -40,18 +41,9 @@ const ProductionProtectedRoute = () => {
  * @returns {JSX.Element} The child component if authenticated, or a redirect.
  */
 const ProtectedRoute = () => {
-  // 检查是否有AWS配置
-  const isProductionReady = import.meta.env.VITE_COGNITO_USER_POOL_ID && 
-                           import.meta.env.VITE_COGNITO_USER_POOL_WEB_CLIENT_ID && 
-                           import.meta.env.VITE_AWS_REGION;
-
-  // 开发模式：总是允许访问
-  if (!isProductionReady) {
-    return <Outlet />;
-  }
-
-  // 生产模式：使用AWS认证组件
-  return <ProductionProtectedRoute />;
+  const ready = globalIsProductionReady();
+  if (!ready) return <Outlet />; // 未就绪使用开放访问 + mock
+  return <ProductionProtectedRoute />; // 就绪使用真实认证
 };
 
 

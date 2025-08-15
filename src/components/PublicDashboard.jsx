@@ -12,6 +12,8 @@ import {
 } from 'chart.js';
 import { Bar, Line } from 'react-chartjs-2';
 import { getAllEvents } from '../api';
+import { useAsync } from '../utils/useAsync.js';
+import { isProductionReady as globalIsProductionReady } from '../env.js';
 
 // @en Register the necessary components for Chart.js.
 // @zh 为 Chart.js 注册必要的组件。
@@ -29,7 +31,6 @@ const PublicDashboard = () => {
   // --- STATE MANAGEMENT ---
   const [barChartData, setBarChartData] = useState(null);
   const [lineChartData, setLineChartData] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
   const [totalEvents, setTotalEvents] = useState(0);
   const [totalUsers, setTotalUsers] = useState(0);
   const [usersList, setUsersList] = useState([]); // [{userId, userName}]
@@ -41,11 +42,9 @@ const PublicDashboard = () => {
     usedUsers: 0,
   });
 
-  // 检查是否为生产环境（与其他页面一致）
-  const isProductionReady =
-    import.meta.env.VITE_COGNITO_USER_POOL_ID &&
-    import.meta.env.VITE_COGNITO_USER_POOL_WEB_CLIENT_ID &&
-    import.meta.env.VITE_AWS_REGION;
+  // 替换局部 isProductionReady 逻辑
+  const ready = globalIsProductionReady();
+  const forceReal = !!import.meta.env.VITE_FORCE_REAL;
 
   // User profile drawer
   const [selectedUserId, setSelectedUserId] = useState(null);
@@ -92,17 +91,19 @@ const PublicDashboard = () => {
       relDays.forEach((d) => {
         const dt = new Date(anchor);
         dt.setDate(anchor.getDate() + d);
-        const type =
-          d === 0 ? 'hospital_test' : d > 0 ? pick(['self_test', 'training']) : pick(['self_test', 'training']);
+        const type = d === 0
+          ? 'hospital_test'
+          : d > 0
+            ? pick(['self_test', 'voice_training', 'self_practice'])
+            : pick(['self_test', 'voice_training', 'self_practice']);
         const f0 = d < 0 ? base + noise() : base + postGain + noise();
-
         events.push({
           id: `${userId}_${d}`,
           userId,
           userName,
           type,
           date: dt.toISOString(),
-          pitch: Math.round(f0 * 10) / 10, // keep one decimal
+          pitch: Math.round(f0 * 10) / 10,
         });
       });
 
@@ -122,157 +123,156 @@ const PublicDashboard = () => {
     return events;
   };
 
-  const colorForIndex = (i) => `hsl(${(i * 53) % 360} 70% 50%)`;
+  // 使用 useAsync 加载事件数据
+  const eventsAsync = useAsync(async () => {
+    let allEvents = await getAllEvents();
 
-  // --- DATA FETCHING AND PROCESSING ---
-  useEffect(() => {
-    /**
-     * @en Fetches all public events, processes the data for display, and updates the component's state.
-     * @zh 获取所有公共事件，必要时补充测试数据，处理用于显示的数据，并更新组件的状态。
-     */
-    const fetchAndProcessData = async () => {
-      try {
-        setIsLoading(true);
-        // 从 API 获取所有事件
-        let allEvents = await getAllEvents();
+    // 计算当前的唯一用户数
+    const uniqueUsers = new Set(
+      (Array.isArray(allEvents) ? allEvents : []).map(e => e.userId).filter(Boolean)
+    ).size;
 
-        // 当数据不足以支撑新界面时，自动补充 20+ 用户的测试数据
-        if (!Array.isArray(allEvents) || allEvents.length < 100) {
-          const extra = generateMockEvents(25);
-          allEvents = [...(Array.isArray(allEvents) ? allEvents : []), ...extra];
-        }
-
-        setAllEventsState(allEvents);
-        setTotalEvents(allEvents.length);
-
-        // 计算唯一用户
-        const usersMap = new Map();
-        allEvents.forEach((e) => {
-          const userId = e.userId;
-          if (!userId) return;
-          if (!usersMap.has(userId)) {
-            usersMap.set(userId, {
-              userId,
-              userName: e.userName || `用户${String(userId).slice(-4)}`,
-            });
-          } else {
-            // Prefer a non-empty userName if found later
-            const cur = usersMap.get(userId);
-            if (!cur.userName && e.userName) {
-              usersMap.set(userId, { ...cur, userName: e.userName });
-            }
-          }
-        });
-        const usersArr = Array.from(usersMap.values());
-        setUsersList(usersArr);
-        setTotalUsers(usersArr.length);
-
-        // 构建事件分布柱状图数据
-        const eventTypes = ['hospital_test', 'self_test', 'training', 'surgery'];
-        const counts = eventTypes.reduce((acc, type) => {
-          acc[type] = allEvents.filter((event) => event.type === type).length;
-          return acc;
-        }, {});
-        setBarChartData({
-          labels: ['医院检测', '自我测试', '训练', '手术'],
-          datasets: [
-            {
-              label: '事件数量',
-              data: eventTypes.map((type) => counts[type]),
-              backgroundColor: 'rgba(236, 72, 153, 0.6)',
-              borderColor: 'rgba(236, 72, 153, 1)',
-              borderWidth: 1,
-            },
-          ],
-        });
-
-        // 构建 VFS 对齐的基频折线图数据
-        const byUser = Array.from(usersMap.keys()).map((uid) => ({
-          userId: uid,
-          userName: usersMap.get(uid)?.userName || `用户${String(uid).slice(-4)}`,
-          events: allEvents
-            .filter((e) => e.userId === uid)
-            .sort((a, b) => new Date(a.date) - new Date(b.date)),
-        }));
-
-        const datasets = [];
-        const improvements = [];
-
-        byUser.forEach((u, idx) => {
-          // 以首个医院检测作为 VFS 锚点（若后端另有明确标识可替换）
-          const anchor = u.events.find((e) => e.type === 'hospital_test')?.date;
-          if (!anchor) return;
-
-          // 只使用包含 pitch 的测量点
-          const points = u.events
-            .filter((e) => typeof e.pitch === 'number' && !Number.isNaN(e.pitch))
-            .map((e) => ({
-              x: diffInDays(e.date, anchor), // 相对天数
-              y: e.pitch,
-            }))
-            // 保留有限且有序的点，避免重复 x
-            .sort((a, b) => a.x - b.x)
-            .filter((pt, i, arr) => i === 0 || pt.x !== arr[i - 1].x);
-
-          // 要求至少两个点，且包含 anchor 前后两侧数据才能计算改善
-          if (points.length < 2) return;
-
-          // 计算统计：前后均值与提升
-          const before = points.filter((p) => p.x < 0).map((p) => p.y);
-          const after = points.filter((p) => p.x > 0).map((p) => p.y);
-          if (before.length === 0 || after.length === 0) {
-            // 无法计算改善则仅用于图表
-          } else {
-            const mean = (arr) => arr.reduce((s, v) => s + v, 0) / arr.length;
-            const improvement = mean(after) - mean(before);
-            improvements.push(improvement);
-          }
-
-          datasets.push({
-            label: u.userName,
-            data: points,
-            borderColor: colorForIndex(idx),
-            backgroundColor: colorForIndex(idx),
-            pointRadius: 2,
-            pointHoverRadius: 4,
-            tension: 0.2,
-          });
-        });
-
-        setLineChartData({
-          datasets,
-        });
-
-        // 统计指标：平均提升、方差、二倍方差（以总体方差为准）
-        if (improvements.length > 0) {
-          const n = improvements.length;
-          const mean =
-            improvements.reduce((s, v) => s + v, 0) / n;
-          const variance =
-            improvements.reduce((s, v) => s + (v - mean) * (v - mean), 0) / n;
-          setStats({
-            avgImprovement: mean,
-            variance,
-            doubleVariance: variance * 2,
-            usedUsers: n,
-          });
-        } else {
-          setStats({
-            avgImprovement: 0,
-            variance: 0,
-            doubleVariance: 0,
-            usedUsers: 0,
-          });
-        }
-      } catch (error) {
-        console.error('Failed to fetch public data:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchAndProcessData();
+    // 仅在事件数少于20且用户数少于5时补充模拟数据
+    if (!forceReal &&
+        (!Array.isArray(allEvents) || allEvents.length < 20) &&
+        uniqueUsers < 5) {
+      const extra = generateMockEvents(25);
+      allEvents = [...(Array.isArray(allEvents) ? allEvents : []), ...extra];
+    }
+    return allEvents;
   }, []);
+
+  // 根据加载结果构建派生状态
+  useEffect(() => {
+    if (!eventsAsync.value) return;
+    const allEvents = eventsAsync.value;
+    setAllEventsState(allEvents);
+    setTotalEvents(allEvents.length);
+
+    // 计算唯一用户
+    const usersMap = new Map();
+    allEvents.forEach((e) => {
+      const userId = e.userId;
+      if (!userId) return;
+      if (!usersMap.has(userId)) {
+        usersMap.set(userId, {
+          userId,
+          userName: e.userName || `用户${String(userId).slice(-4)}`,
+        });
+      } else {
+        // Prefer a non-empty userName if found later
+        const cur = usersMap.get(userId);
+        if (!cur.userName && e.userName) {
+          usersMap.set(userId, { ...cur, userName: e.userName });
+        }
+      }
+    });
+    const usersArr = Array.from(usersMap.values());
+    setUsersList(usersArr);
+    setTotalUsers(usersArr.length);
+
+    // 构建事件分布柱状图数据
+    const eventTypes = ['hospital_test', 'self_test', 'voice_training', 'self_practice', 'surgery'];
+    const counts = eventTypes.reduce((acc, type) => {
+      acc[type] = allEvents.filter((event) => event.type === type).length;
+      return acc;
+    }, {});
+    setBarChartData({
+      labels: ['医院检测', '自我测试', '嗓音训练', '自我练习', '手术'],
+      datasets: [
+        {
+          label: '事件数量',
+          data: eventTypes.map((type) => counts[type]),
+          backgroundColor: 'rgba(236, 72, 153, 0.6)',
+          borderColor: 'rgba(236, 72, 153, 1)',
+          borderWidth: 1,
+        },
+      ],
+    });
+
+    // 构建 VFS 对齐的基频折线图数据
+    const diffInDaysLocal = (a,b)=>{const A=new Date(a).setHours(0,0,0,0);const B=new Date(b).setHours(0,0,0,0);return Math.round((A-B)/(1000*60*60*24));};
+    const byUser = Array.from(usersMap.keys()).map((uid) => ({
+      userId: uid,
+      userName: usersMap.get(uid)?.userName || `用户${String(uid).slice(-4)}`,
+      events: allEvents
+        .filter((e) => e.userId === uid)
+        .sort((a, b) => new Date(a.date) - new Date(b.date)),
+    }));
+
+    const datasets = [];
+    const improvements = [];
+
+    byUser.forEach((u, idx) => {
+      // 以首个医院检测作为 VFS 锚点（若后端另有明确标识可替换）
+      const anchor = u.events.find((e) => e.type === 'hospital_test')?.date;
+      if (!anchor) return;
+
+      // 只使用包含 pitch 的测量点
+      const points = u.events
+        .filter((e) => typeof e.pitch === 'number' && !Number.isNaN(e.pitch))
+        .map((e) => ({
+          x: diffInDaysLocal(e.date, anchor), // 相对天数
+          y: e.pitch,
+        }))
+        // 保留有限且有序的点，���免重复 x
+        .sort((a, b) => a.x - b.x)
+        .filter((pt, i, arr) => i === 0 || pt.x !== arr[i - 1].x);
+
+      // 要求至少两个点，且包含 anchor 前后两侧数据才能计算改善
+      if (points.length < 2) return;
+
+      // 计算统计：��后均值与提升
+      const before = points.filter((p) => p.x < 0).map((p) => p.y);
+      const after = points.filter((p) => p.x > 0).map((p) => p.y);
+      if (before.length === 0 || after.length === 0) {
+        // 无法计算改善则仅用于图表
+      } else {
+        const mean = (arr) => arr.reduce((s, v) => s + v, 0) / arr.length;
+        const improvement = mean(after) - mean(before);
+        improvements.push(improvement);
+      }
+
+      datasets.push({
+        label: u.userName,
+        data: points,
+        borderColor: `hsl(${(idx * 53) % 360} 70% 50%)`,
+        backgroundColor: `hsl(${(idx * 53) % 360} 70% 50%)`,
+        pointRadius: 2,
+        pointHoverRadius: 4,
+        tension: 0.2,
+      });
+    });
+
+    setLineChartData({
+      datasets,
+    });
+
+    // 统计指标：平均提升、方差、二倍方差（以总体方差为准）
+    if (improvements.length > 0) {
+      const n = improvements.length;
+      const mean =
+        improvements.reduce((s, v) => s + v, 0) / n;
+      const variance =
+        improvements.reduce((s, v) => s + (v - mean) * (v - mean), 0) / n;
+      setStats({
+        avgImprovement: mean,
+        variance,
+        doubleVariance: variance * 2,
+        usedUsers: n,
+      });
+    } else {
+      setStats({
+        avgImprovement: 0,
+        variance: 0,
+        doubleVariance: 0,
+        usedUsers: 0,
+      });
+    }
+  }, [eventsAsync.value]);
+
+  const isLoading = eventsAsync.loading;
+  const error = eventsAsync.error;
 
   // --- RENDER HELPERS ---
   const formatNumber = (v, digits = 2) =>
@@ -320,7 +320,30 @@ const PublicDashboard = () => {
 
   // --- RENDER ---
   if (isLoading) {
-    return <div className="text-center p-8">正在加载仪表板...</div>;
+    return (
+      <div className="space-y-6 p-8 animate-pulse">
+        <div className="h-8 w-48 bg-gray-200 rounded" />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="h-28 bg-gray-200 rounded" />
+          <div className="h-28 bg-gray-200 rounded" />
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="h-32 bg-gray-200 rounded" />
+          <div className="h-32 bg-gray-200 rounded" />
+          <div className="h-32 bg-gray-200 rounded" />
+        </div>
+        <div className="h-80 bg-gray-200 rounded" />
+        <div className="h-96 bg-gray-200 rounded" />
+      </div>
+    );
+  }
+  if (error) {
+    return (
+      <div className="p-10 text-center">
+        <p className="text-red-500 mb-4">加载公开仪表板失败：{error.message || '未知错误'}</p>
+        <button onClick={eventsAsync.execute} className="px-4 py-2 rounded-lg bg-pink-600 text-white hover:bg-pink-500">重试</button>
+      </div>
+    );
   }
 
   return (
@@ -423,7 +446,7 @@ const PublicDashboard = () => {
       <div className="bg-white p-6 rounded-xl shadow-md border border-gray-200">
         <h2 className="text-xl font-semibold text-gray-900 mb-4">VFS 对齐的基频变化</h2>
         <p className="text-sm text-gray-500 mb-4">
-          横轴为相对日期（天），VFS 记为第 0 天；仅展示含有 VFS 且包含基频数据的用户。
+          横轴为相对日期（天），VFS 记为第 0 ��；仅展示含有 VFS 且包含基频数据的用户。
         </p>
         {lineChartData && lineChartData.datasets?.length ? (
           <Line
@@ -539,8 +562,10 @@ const PublicDashboard = () => {
                               ? '医院检测'
                               : e.type === 'self_test'
                               ? '自我测试'
-                              : e.type === 'training'
-                              ? '训练'
+                              : e.type === 'voice_training'
+                              ? '嗓音训练'
+                              : e.type === 'self_practice'
+                              ? '自我练习'
                               : e.type === 'surgery'
                               ? '手术'
                               : e.type}

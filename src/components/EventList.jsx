@@ -1,7 +1,7 @@
-import React from 'react';
-// @en v6 Change: Import getUrl from the 'aws-amplify/storage' sub-package
-// @zh v6 变更：从 'aws-amplify/storage' 子包导入 getUrl
-import { getUrl } from 'aws-amplify/storage';
+import React, { useState } from 'react';
+// 移除 aws-amplify/storage 的直接导入，使用统一封装
+// import { getUrl } from 'aws-amplify/storage';
+import { resolveAttachmentUrl } from '../utils/attachments.js';
 
 /**
  * @en Renders a list of events in a vertical timeline format.
@@ -11,6 +11,8 @@ import { getUrl } from 'aws-amplify/storage';
  * @returns {JSX.Element} The rendered list of events.
  */
 const EventList = ({ events }) => {
+  const [downloadingKey, setDownloadingKey] = useState(null);
+
   // @en If there are no events, display a message.
   // @zh 如果没有事件，则显示一条消息。
   if (!events || events.length === 0) {
@@ -24,20 +26,14 @@ const EventList = ({ events }) => {
    */
   const handleDownload = async (attachmentKey) => {
     try {
-      // @en v6 Change: Use the getUrl function with a key and options.
-      // @zh v6 变更：使用带有 key 和 options 的 getUrl 函数。
-      const getUrlResult = await getUrl({
-        key: attachmentKey,
-        options: {
-          download: true, // @en This option forces the browser to download the file. @zh 此选项强制浏览器下载文件。
-        },
-      });
-      // @en The result contains a URL object which needs to be converted to a string.
-      // @zh 结果包含一个需要转换为字符串的 URL 对象。
-      window.open(getUrlResult.url.toString(), '_blank');
+      setDownloadingKey(attachmentKey);
+      const url = await resolveAttachmentUrl(attachmentKey, { download: true });
+      window.open(url, '_blank');
     } catch (error) {
       console.error('Error getting download URL from S3:', error);
       alert('无法获取文件的下载链接。');
+    } finally {
+      setDownloadingKey(k => (k === attachmentKey ? null : k));
     }
   };
 
@@ -71,8 +67,10 @@ const EventList = ({ events }) => {
                             const typeMap = {
                               'hospital_test': '医院检测',
                               'self_test': '自我测试',
-                              'training': '训练',
-                              'surgery': '手术'
+                              'voice_training': '嗓音训练',
+                              'self_practice': '自我练习',
+                              'surgery': '手术',
+                              'feeling_log': '感受记录'
                             };
                             return typeMap[event.type] || event.type.replace('_', ' ').toUpperCase();
                           })()}
@@ -80,12 +78,13 @@ const EventList = ({ events }) => {
                         <p className="text-sm text-gray-800 mt-1">{event.notes || '未提供备注。'}</p>
                         {/* @en If there is an attachment, show a download button. */}
                         {/* @zh 如果有附件，则显示下载按钮。 */}
-                        {event.attachment && (
+                        { (event.attachment || event.details?.attachmentUrl) && (
                             <button
-                                onClick={() => handleDownload(event.attachment)}
-                                className="mt-2 text-sm font-medium text-indigo-600 hover:text-indigo-500"
+                                onClick={() => handleDownload(event.attachment || event.details.attachmentUrl)}
+                                className="mt-2 text-sm font-medium text-indigo-600 hover:text-indigo-500 disabled:opacity-50"
+                                disabled={downloadingKey === (event.attachment || event.details.attachmentUrl)}
                             >
-                              下载附件
+                              {downloadingKey === (event.attachment || event.details.attachmentUrl) ? '获取链接中...' : '下载附件'}
                             </button>
                         )}
                       </div>

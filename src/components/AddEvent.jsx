@@ -2,14 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthenticator } from '@aws-amplify/ui-react';
 import EventForm from './EventForm';
-
-// @en Check if the environment is production-ready.
-// @zh 检查是否为生产环境。
-const isProductionReady = () => {
-  return !!(import.meta.env.VITE_COGNITO_USER_POOL_ID &&
-      import.meta.env.VITE_COGNITO_USER_POOL_WEB_CLIENT_ID &&
-      import.meta.env.VITE_AWS_REGION);
-};
+import { isProductionReady as globalIsProductionReady } from '../env.js';
 
 /**
  * @en AddEvent component for adding new voice events
@@ -17,7 +10,7 @@ const isProductionReady = () => {
  */
 const AddEvent = () => {
   const navigate = useNavigate();
-  const productionReady = isProductionReady();
+  const productionReady = globalIsProductionReady();
 
   // @en Create a safe wrapper for useAuthenticator that doesn't throw
   // @zh 为 useAuthenticator 创建一个安全的包装器，避免抛出错误

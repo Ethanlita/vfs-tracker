@@ -1,17 +1,11 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuthenticator } from '@aws-amplify/ui-react';
 import { useNavigate } from 'react-router-dom';
 import { getEventsByUserId } from '../api';
 import VoiceFrequencyChart from './VoiceFrequencyChart';
 import InteractiveTimeline from './InteractiveTimeline';
-
-// @en Check if the environment is production-ready.
-// @zh 检查是否为生产环境。
-const isProductionReady = () => {
-  return !!(import.meta.env.VITE_COGNITO_USER_POOL_ID &&
-      import.meta.env.VITE_COGNITO_USER_POOL_WEB_CLIENT_ID &&
-      import.meta.env.VITE_AWS_REGION);
-};
+import { useAsync } from '../utils/useAsync.js';
+import { isProductionReady as globalIsProductionReady } from '../env.js';
 
 /**
  * @en The MyPage component serves as the user's personal dashboard. It fetches,
@@ -25,7 +19,7 @@ const MyPage = () => {
   // --- STATE MANAGEMENT ---
   // @en Check if the environment is production-ready.
   // @zh 检查是否为生产环境。
-  const productionReady = isProductionReady();
+  const productionReady = globalIsProductionReady();
   const navigate = useNavigate();
 
   // @en Create a safe wrapper for useAuthenticator that doesn't throw
@@ -55,62 +49,20 @@ const MyPage = () => {
   // @en State for storing the list of user events.
   // @zh 用于存储用户事件列表的状态。
   const [events, setEvents] = useState([]);
-  // @en State to manage the loading status while fetching data.
-  // @zh 用于在获取数据时管理加载状态的状态。
-  const [isLoading, setIsLoading] = useState(true);
+  // 移除单独 isLoading state，改为 useAsync 管理
+  const eventsAsync = useAsync(async () => {
+    if (!user?.attributes?.sub) return [];
+    const userEvents = await getEventsByUserId(user.attributes.sub);
+    return userEvents.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  }, [user?.attributes?.sub]);
 
-  // --- DATA FETCHING ---
-  /**
-   * @en Fetches events for the current user from the API. It sorts the events
-   * by creation date in descending order.
-   * @zh 从 API 中为当前用户获取事件。它按创建日期降序对事件进行排序。
-   */
-  const fetchEvents = useCallback(async () => {
-    if (!user?.attributes?.sub) {
-      console.log('❌ MyPage: 没有用户ID，跳过数据获取');
-      return;
-    }
-
-    console.log('🔍 MyPage: 开始获取事件数据', {
-      userId: user.attributes.sub,
-      isProduction: isProductionReady()
-    });
-
-    try {
-      setIsLoading(true);
-      const userEvents = await getEventsByUserId(user.attributes.sub);
-
-      console.log('✅ MyPage: 成功获取事件数据', {
-        eventCount: userEvents?.length || 0,
-        events: userEvents
-      });
-
-      // @en Sort events by creation date, newest first.
-      // @zh 按创建日期对事件进行排序，最新的在前。
-      const sortedEvents = userEvents.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-      setEvents(sortedEvents);
-
-      console.log('📊 MyPage: 排序后的事件数据', {
-        sortedCount: sortedEvents.length,
-        firstEvent: sortedEvents[0]
-      });
-    } catch (error) {
-      console.error("❌ MyPage: 获取用户事件失败:", error);
-      // 在开发模式下不显示错误提示
-      if (isProductionReady()) {
-        alert("无法加载您的事件。请尝试重新加载页面。");
-      }
-    } finally {
-      setIsLoading(false);
-    }
-  }, [user?.attributes?.sub]); // @en Only depend on user ID to avoid loops. @zh 只依赖用户ID以避免循环。
-
-  // --- EFFECTS ---
-  // @en Effect to trigger fetching events when the component mounts or fetchEvents changes.
-  // @zh 在组件挂载或 fetchEvents 变化时触发获取事件的 Effect。
   useEffect(() => {
-    fetchEvents();
-  }, [fetchEvents]);
+    if (eventsAsync.value) setEvents(eventsAsync.value);
+  }, [eventsAsync.value]);
+
+  const isLoading = eventsAsync.loading;
+  const loadError = eventsAsync.error;
+  const handleRetryFetch = () => eventsAsync.execute();
 
   // --- HANDLERS ---
   // @en Navigation handlers for the action buttons
@@ -154,7 +106,7 @@ const MyPage = () => {
           </div>
           <VoiceFrequencyChart
               userId={user?.attributes?.sub}
-              isProductionReady={isProductionReady}
+              isProductionReady={globalIsProductionReady}
               compact={true} // 在手机屏幕上启用紧凑模式
           />
         </div>
@@ -169,10 +121,17 @@ const MyPage = () => {
             <p className="dashboard-card-description">点击事件卡片查看详细信息</p>
           </div>
 
-          {/* 使用新的时间轴组件替换旧的交互式时间轴。 */}
+          {loadError && (
+            <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700">
+              <p className="font-semibold mb-2">加载事件失败</p>
+              <p className="text-sm mb-3">{loadError.message || '未知错误'}</p>
+              <button onClick={handleRetryFetch} className="px-4 py-2 text-sm bg-red-600 hover:bg-red-500 text-white rounded-lg">重试</button>
+            </div>
+          )}
+
           <InteractiveTimeline
               events={events}
-              isProductionReady={isProductionReady}
+              isProductionReady={globalIsProductionReady}
               isLoading={isLoading}
           />
 

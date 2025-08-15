@@ -3,14 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { useAuthenticator } from '@aws-amplify/ui-react';
 import { getEventsByUserId } from '../api';
 import EventManager from './EventManager';
-
-// @en Check if the environment is production-ready.
-// @zh 检查是否为生产环境。
-const isProductionReady = () => {
-  return !!(import.meta.env.VITE_COGNITO_USER_POOL_ID &&
-      import.meta.env.VITE_COGNITO_USER_POOL_WEB_CLIENT_ID &&
-      import.meta.env.VITE_AWS_REGION);
-};
+import { useAsync } from '../utils/useAsync.js';
+import { isProductionReady as globalIsProductionReady } from '../env.js';
 
 /**
  * @en EventManagerPage component for managing voice events
@@ -18,7 +12,7 @@ const isProductionReady = () => {
  */
 const EventManagerPage = () => {
   const navigate = useNavigate();
-  const productionReady = isProductionReady();
+  const productionReady = globalIsProductionReady();
 
   // @en Create a safe wrapper for useAuthenticator that doesn't throw
   // @zh 为 useAuthenticator 创建一个安全的包装器，避免抛出错误
@@ -40,38 +34,17 @@ const EventManagerPage = () => {
   };
 
   const [events, setEvents] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
-
-  // 获取事件数据
-  const fetchEvents = useCallback(async () => {
-    if (!user?.attributes?.sub) {
-      console.log('❌ EventManagerPage: 没有用户ID，跳过数据获取');
-      return;
-    }
-
-    console.log('🔍 EventManagerPage: 开始获取事件数据', {
-      userId: user.attributes.sub,
-      isProduction: isProductionReady()
-    });
-
-    try {
-      setIsLoading(true);
-      const userEvents = await getEventsByUserId(user.attributes.sub);
-      const sortedEvents = userEvents.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-      setEvents(sortedEvents);
-    } catch (error) {
-      console.error("❌ EventManagerPage: 获取用户事件失败:", error);
-      if (isProductionReady()) {
-        alert("无法加载您的事件。请尝试重新加载页面。");
-      }
-    } finally {
-      setIsLoading(false);
-    }
+  // 移除独立 isLoading，使用 useAsync
+  const eventsAsync = useAsync(async () => {
+    if (!user?.attributes?.sub) return [];
+    const userEvents = await getEventsByUserId(user.attributes.sub);
+    return userEvents.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   }, [user?.attributes?.sub]);
 
-  useEffect(() => {
-    fetchEvents();
-  }, [fetchEvents]);
+  useEffect(() => { if (eventsAsync.value) setEvents(eventsAsync.value); }, [eventsAsync.value]);
+  const isLoading = eventsAsync.loading;
+  const loadError = eventsAsync.error;
+  const handleRetry = () => eventsAsync.execute();
 
   const handleEventUpdated = (updatedEvent) => {
     setEvents(prevEvents =>
@@ -135,12 +108,17 @@ const EventManagerPage = () => {
             <div className="animate-spin rounded-full h-12 w-12 border-b-4 border-purple-500"></div>
             <span className="text-xl text-gray-600 font-medium">正在加载事件...</span>
           </div>
+        ) : loadError ? (
+          <div className="p-6 text-center">
+            <p className="text-red-600 mb-4">加载事件失败：{loadError.message || '未知错误'}</p>
+            <button onClick={handleRetry} className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-sm">重试</button>
+          </div>
         ) : (
           <EventManager
             events={events}
             onEventUpdated={handleEventUpdated}
             onEventDeleted={handleEventDeleted}
-            isProductionReady={isProductionReady}
+            isProductionReady={globalIsProductionReady}
           />
         )}
       </div>

@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { getUrl } from 'aws-amplify/storage';
 import { createPortal } from 'react-dom';
+import { useAsync } from '../utils/useAsync.js';
+import { resolveAttachmentUrl } from '../utils/attachments.js';
 
 const StatusIndicator = ({ isDemo, isLoading }) => {
   const CheckCircle = () => (
@@ -183,6 +185,11 @@ const EventDetails = ({ event }) => {
 
 const InteractiveTimeline = ({ events = [], isProductionReady, isLoading = false }) => {
   const [selectedEvent, setSelectedEvent] = useState(null);
+  // 新增：附件签名 URL 异步获取（仅在用户请求时执行）
+  const attachmentAsync = useAsync(async () => {
+    if (!selectedEvent?.details?.attachmentUrl) return '';
+    return await resolveAttachmentUrl(selectedEvent.details.attachmentUrl);
+  }, [selectedEvent?.details?.attachmentUrl], { immediate: false, preserveValue: false });
 
   // 确保对 motion 的引用��某些构建下不会被误判为未使用
   // eslint-disable-next-line no-unused-expressions
@@ -359,10 +366,10 @@ const InteractiveTimeline = ({ events = [], isProductionReady, isLoading = false
       {/* 详情弹窗（两种布局共用） */}
       {selectedEvent && createPortal(
         <div className="fixed inset-0 z-[9999] flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setSelectedEvent(null)} />
+          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => { setSelectedEvent(null); attachmentAsync.reset(); }} />
           <div className="relative z-10 w-full max-w-xl bg-white rounded-2xl shadow-2xl p-6 m-4 overflow-y-auto max-h-[80vh] overscroll-contain">
             <button
-              onClick={() => setSelectedEvent(null)}
+              onClick={() => { setSelectedEvent(null); attachmentAsync.reset(); }}
               className="absolute top-3 right-3 text-gray-400 hover:text-gray-600"
               aria-label="关闭"
             >
@@ -386,21 +393,48 @@ const InteractiveTimeline = ({ events = [], isProductionReady, isLoading = false
             <EventDetails event={selectedEvent} />
 
             {selectedEvent.details?.attachmentUrl && (
-              <div className="mt-5">
-                <button
-                  onClick={async () => {
-                    try {
-                      const res = await getUrl({ path: selectedEvent.details.attachmentUrl });
-                      const url = res?.url || selectedEvent.details.attachmentUrl;
-                      window.open(url, '_blank', 'noopener,noreferrer');
-                    } catch {
-                      window.open(selectedEvent.details.attachmentUrl, '_blank', 'noopener,noreferrer');
-                    }
-                  }}
-                  className="btn-pink"
-                >
-                  下载附件
-                </button>
+              <div className="mt-5 space-y-2">
+                {/* 下载 / 打开附件按钮 */}
+                {!attachmentAsync.loading && !attachmentAsync.error && !attachmentAsync.value && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      attachmentAsync.execute().then(url => { if (url) window.open(url, '_blank', 'noopener,noreferrer'); });
+                    }}
+                    className="btn-pink"
+                  >
+                    获取并打开附件
+                  </button>
+                )}
+                {attachmentAsync.loading && (
+                  <button type="button" disabled className="btn-pink opacity-70 cursor-default inline-flex items-center gap-2">
+                    <span className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full" /> 正在获取附件...
+                  </button>
+                )}
+                {attachmentAsync.error && (
+                  <div className="text-sm text-red-600 flex items-center gap-2">
+                    附件加载失败：{attachmentAsync.error.message || '未知错误'}
+                    <button
+                      type="button"
+                      onClick={() => attachmentAsync.execute().then(url => { if (url) window.open(url, '_blank', 'noopener,noreferrer'); })}
+                      className="px-2 py-0.5 text-xs rounded bg-red-600 text-white hover:bg-red-500"
+                    >重试</button>
+                  </div>
+                )}
+                {attachmentAsync.value && !attachmentAsync.loading && (
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => window.open(attachmentAsync.value, '_blank', 'noopener,noreferrer')}
+                      className="btn-pink"
+                    >打开附件</button>
+                    <a
+                      href={attachmentAsync.value}
+                      target="_blank" rel="noreferrer"
+                      className="text-xs text-indigo-600 hover:underline"
+                    >直接下载</a>
+                  </div>
+                )}
               </div>
             )}
           </div>
