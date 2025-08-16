@@ -121,17 +121,17 @@ const Auth = () => {
             {/* Cognito 登录界面模态窗口 */}
             {showCognitoAuth && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-                    <div className="bg-white rounded-lg shadow-lg max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto">
-                        <div className="p-4 border-b border-gray-200 flex justify-between items-center">
-                            <h2 className="text-lg font-semibold">用户登录</h2>
+                    <div className="bg-white rounded-lg shadow-lg max-w-lg w-full mx-4 max-h-[85vh] overflow-y-auto">
+                        <div className="p-6 border-b border-gray-200 flex justify-between items-center">
+                            <h2 className="text-xl font-semibold">用户登录</h2>
                             <button
                                 onClick={() => setShowCognitoAuth(false)}
-                                className="text-gray-400 hover:text-gray-600 text-xl"
+                                className="text-gray-400 hover:text-gray-600 text-2xl leading-none"
                             >
                                 ×
                             </button>
                         </div>
-                        <div className="p-4">
+                        <div className="p-6">
                             <Authenticator
                                 socialProviders={[]}
                                 signUpAttributes={['email']}
