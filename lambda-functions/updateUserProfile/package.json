@@ -1,0 +1,15 @@
+{
+  "name": "update-user-profile-lambda",
+  "version": "1.0.0",
+  "description": "更新用户资料Lambda函数",
+  "type": "module",
+  "main": "index.mjs",
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.0.0",
+    "@aws-sdk/lib-dynamodb": "^3.0.0"
+  },
+  "keywords": ["aws", "lambda", "dynamodb", "update-profile"],
+  "author": "VFS Tracker Team",
+  "license": "MIT"
+}
+

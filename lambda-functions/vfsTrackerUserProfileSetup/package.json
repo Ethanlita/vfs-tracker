@@ -1,0 +1,25 @@
+{
+  "name": "vfs-tracker-user-profile-lambda",
+  "version": "1.0.0",
+  "description": "VFS Tracker用户资料管理Lambda函数",
+  "type": "module",
+  "main": "index.mjs",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.0.0",
+    "@aws-sdk/lib-dynamodb": "^3.0.0",
+    "uuid": "^9.0.0"
+  },
+  "keywords": [
+    "aws",
+    "lambda",
+    "dynamodb",
+    "user-profile",
+    "vfs-tracker"
+  ],
+  "author": "VFS Tracker Team",
+  "license": "MIT"
+}
+

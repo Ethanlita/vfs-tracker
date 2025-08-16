@@ -1,10 +1,10 @@
 /**
- * 用户资料设置 Lambda函数
- * POST /user/profile-setup
+ * 更新用户资料 Lambda函数
+ * PUT /user/{userId}
  */
 
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, GetCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 
 // 初始化DynamoDB客户端
 const client = new DynamoDBClient({});
@@ -16,7 +16,7 @@ const USERS_TABLE = process.env.USERS_TABLE || 'VoiceFemUsers';
 // CORS头部
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Methods': 'PUT, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Amz-Date, X-Api-Key',
 };
 
@@ -60,12 +60,7 @@ function extractUserFromEvent(event) {
     }
 
     if (!claims) {
-      console.error('❌ 未找到认证claims，事件详情:', {
-        hasAuthorizer: !!event.requestContext?.authorizer,
-        hasAuthHeader: !!(event.headers?.Authorization || event.headers?.authorization),
-        headers: Object.keys(event.headers || {}),
-        authHeaderPreview: (event.headers?.Authorization || event.headers?.authorization)?.substring(0, 30) + '...'
-      });
+      console.error('❌ 未找到认证claims');
       throw new Error('No ID token found in request');
     }
 
@@ -80,7 +75,6 @@ function extractUserFromEvent(event) {
     console.log('✅ 成功提取用户信息:', {
       userId: userInfo.userId,
       email: userInfo.email,
-      username: userInfo.username,
       tokenType: claims.token_use
     });
 
@@ -109,82 +103,102 @@ function createResponse(statusCode, body) {
 export const handler = async (event) => {
   console.log('Event:', JSON.stringify(event, null, 2));
 
+  // 添加详细的调试信息
+  console.log('🔍 详细事件分析:', {
+    httpMethod: event.httpMethod,
+    pathParameters: event.pathParameters,
+    pathParametersType: typeof event.pathParameters,
+    requestContext: {
+      resourcePath: event.requestContext?.resourcePath,
+      httpMethod: event.requestContext?.httpMethod,
+      path: event.requestContext?.path
+    },
+    headers: Object.keys(event.headers || {}),
+    hasBody: !!event.body
+  });
+
   try {
     // 处理OPTIONS预检请求
     if (event.httpMethod === 'OPTIONS') {
       return createResponse(200, { message: 'OK' });
     }
 
+    // 安全地获取路径参数
+    const pathUserId = event.pathParameters?.userId;
+    if (!pathUserId) {
+      console.error('❌ pathParameters 问题详情:', {
+        pathParameters: event.pathParameters,
+        requestContext: event.requestContext,
+        rawPath: event.path,
+        resource: event.resource
+      });
+      return createResponse(400, {
+        message: 'Bad Request: userId path parameter is required',
+        debug: {
+          pathParameters: event.pathParameters,
+          resource: event.resource,
+          path: event.path
+        }
+      });
+    }
+
     const authenticatedUser = extractUserFromEvent(event);
     const requestBody = JSON.parse(event.body);
 
+    // 验证用户只能修改自己的资料
+    if (pathUserId !== authenticatedUser.userId) {
+      return createResponse(403, {
+        message: 'Forbidden: You can only update your own profile'
+      });
+    }
+
+    // 验证请求体
+    if (!requestBody.profile) {
+      return createResponse(400, {
+        message: 'Bad Request: profile data is required'
+      });
+    }
+
+    // 过滤掉nickname字段，因为它由Cognito管理
+    const { nickname, ...profileData } = requestBody.profile;
+    if (nickname) {
+      console.log('Warning: nickname field ignored, managed by Cognito');
+    }
+
     const now = new Date().toISOString();
 
-    // 过滤掉nickname字段，使用Cognito的nickname
-    const { nickname, ...profileData } = requestBody.profile || {};
-    if (nickname) {
-      console.log('Warning: nickname field ignored, using Cognito nickname');
-    }
-
-    const profile = {
-      name: profileData.name || '',
-      bio: profileData.bio || '',
-      isNamePublic: profileData.isNamePublic || false,
-      socials: profileData.socials || [],
-      areSocialsPublic: profileData.areSocialsPublic || false
-    };
-
-    // 首先检查用户是否已存在
-    const getCommand = new GetCommand({
+    // 构建更新表达式
+    const command = new UpdateCommand({
       TableName: USERS_TABLE,
-      Key: { userId: authenticatedUser.userId }
+      Key: { userId: pathUserId },
+      UpdateExpression: 'SET profile = :profile, updatedAt = :updatedAt',
+      ExpressionAttributeValues: {
+        ':profile': profileData,
+        ':updatedAt': now
+      },
+      ReturnValues: 'ALL_NEW'
     });
 
-    const existingUser = await dynamodb.send(getCommand);
-    const isNewUser = !existingUser.Item;
+    const result = await dynamodb.send(command);
 
-    // 准备用户数据
-    const userData = {
-      userId: authenticatedUser.userId,
-      email: authenticatedUser.email,
-      profile: profile,
-      updatedAt: now
-    };
-
-    if (isNewUser) {
-      userData.createdAt = now;
-    } else {
-      userData.createdAt = existingUser.Item.createdAt;
-    }
-
-    // 使用PUT操作创建或更新用户记录
-    const putCommand = new PutCommand({
-      TableName: USERS_TABLE,
-      Item: userData
-    });
-
-    await dynamodb.send(putCommand);
-
-    // 在返回结果中添加nickname
-    const responseUser = {
-      ...userData,
+    // 返回更新后的用户资料，但保持nickname来自Cognito
+    const responseProfile = {
+      ...result.Attributes,
       profile: {
-        nickname: authenticatedUser.nickname,
-        ...userData.profile
+        ...result.Attributes.profile,
+        nickname: authenticatedUser.nickname // 从ID Token获取
       }
     };
 
-    const statusCode = isNewUser ? 201 : 200;
-    return createResponse(statusCode, {
-      message: 'User profile setup completed successfully',
-      user: responseUser,
-      isNewUser: isNewUser
+    return createResponse(200, {
+      message: 'Profile updated successfully',
+      user: responseProfile
     });
 
   } catch (error) {
-    console.error('Error setting up user profile:', error);
+    console.error('Error updating user profile:', error);
     return createResponse(500, {
-      message: 'Error setting up user profile',
+      message: 'Error updating user profile',
       error: error.message
     });
   }

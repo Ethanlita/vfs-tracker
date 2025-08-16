@@ -49,7 +49,7 @@ if (isProductionReady) {
           email: true,
           phone: false
         },
-        signUpAttributes: ['email', 'nickname'], // 添加注册时需要的属性
+        signUpAttributes: ['email', 'nickname'], // 恢复nickname要求
         userAttributes: {
           nickname: {
             required: true

@@ -1,8 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Line } from 'react-chartjs-2';
-import { getEncouragingMessage, getEventsByUserId } from '../api';
-import { resolveAttachmentUrl } from '../utils/attachments.js'; // 预留若后续时间轴事件需要附件访问
-import { useAsync } from '../utils/useAsync.js';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -13,6 +10,11 @@ import {
   Tooltip,
   Legend,
 } from 'chart.js';
+import { getEncouragingMessage, getEventsByUserId } from '../api';
+import { useAsync } from '../utils/useAsync.js';
+import { useAuth } from '../contexts/AuthContext.jsx';
+import { isProductionReady } from '../env.js';
+import DevModeTest from './DevModeTest.jsx';
 
 ChartJS.register(
   CategoryScale,
@@ -26,27 +28,42 @@ ChartJS.register(
 
 const Timeline = () => {
   const DEFAULT_MESSAGE = "持续跟踪，持续进步 ✨";
+  const { user } = useAuth();
+  const isProdReady = isProductionReady();
 
-  // 图表数据状态
+  // 状态管理
   const [chartData, setChartData] = useState(null);
-  const [isLoadingChart, setIsLoadingChart] = useState(true);
-
-  // 从 API 获取的事件数据状态 - 移到前面声明
   const [timelineEvents, setTimelineEvents] = useState([]);
+  const [isLoadingChart, setIsLoadingChart] = useState(true);
   const [isLoadingTimeline, setIsLoadingTimeline] = useState(true);
 
-  // 模拟用户ID - ��实际应用中应该从认证上下文获取
-  const mockUserId = 'mock-user-1';
+  // 获取用户ID - 开发模式强制使用mock用户ID
+  const getUserId = () => {
+    console.log('🔍 Timeline: 环境检查', {
+      isProdReady,
+      hasUser: !!user,
+      forceUseMockData: !isProdReady
+    });
 
-  // 模拟用户数据 - 在实际应用中这些数据应该从props或context获取
-  const mockUserData = {
-    events: [
-      { type: 'voice_training', createdAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString() },
-      { type: 'self_practice', createdAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString() },
-      { type: 'self_test', createdAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString() }
-    ],
-    voiceParameters: { fundamental: 125.5, jitter: 1.2, shimmer: 3.1, hnr: 18.7 }
+    if (!isProdReady) {
+      // 开发模式：强制使用mock数据
+      console.log('🔧 Timeline: 开发模式 - 使用mock用户ID');
+      return 'mock-user-1';
+    }
+
+    if (user) {
+      // 生产模式且有用户：使用真实用户ID
+      const realUserId = user.userId || user.username || user.sub;
+      console.log('✅ Timeline: 生产模式 - 使用真实用户ID', realUserId);
+      return realUserId;
+    }
+
+    // 生产模式但无用户：回退到mock
+    console.log('⚠️ Timeline: 生产模式但无用户 - 回退到mock用户ID');
+    return 'mock-user-1';
   };
+
+  const currentUserId = getUserId();
 
   // 图表配置选项
   const chartOptions = {
@@ -56,10 +73,6 @@ const Timeline = () => {
       legend: {
         position: 'top',
         labels: {
-          font: {
-            size: 14,
-            family: 'Inter, sans-serif'
-          },
           color: '#374151',
           usePointStyle: true,
           padding: 20
@@ -128,13 +141,13 @@ const Timeline = () => {
     );
 
     if (eventsWithFrequency.length === 0) {
-      // 如果没有真实数据，返回模拟数据
+      // 如果没有基频数据，返回空图表
       return {
-        labels: ['1s', '2s', '3s', '4s', '5s', '6s', '7s'],
+        labels: [],
         datasets: [
           {
-            label: '声音频率 (Hz)',
-            data: [120, 122, 118, 125, 123, 128, 126],
+            label: '声音基频 (Hz)',
+            data: [],
             fill: false,
             backgroundColor: 'rgb(219, 39, 119)',
             borderColor: 'rgba(219, 39, 119, 0.5)',
@@ -169,178 +182,89 @@ const Timeline = () => {
     };
   };
 
-  // 使�� useAsync 统一管理：获取事件
+  // 使用 useAsync 管理事件数据获取
   const eventsAsync = useAsync(async () => {
-    const events = await getEventsByUserId(mockUserId);
+    console.log('🔍 Timeline: 开始获取事件数据', { currentUserId, user });
+    const events = await getEventsByUserId(currentUserId);
+    console.log('📡 Timeline: 获取到的事件数据', { eventCount: events?.length || 0 });
     return events;
-  }, [mockUserId]);
+  }, [currentUserId]);
 
-  // AI 消息获取：改为依赖 timelineEvents（而非原 eventsAsync.value + 额外函数）
+  // AI 消息获取
   const aiAsync = useAsync(async () => {
     if (!timelineEvents.length) return DEFAULT_MESSAGE;
-    const realUserData = { events: timelineEvents, voiceParameters: mockUserData.voiceParameters };
+
+    // 构造用户数据用于AI分析
+    const userData = {
+      events: timelineEvents,
+      voiceParameters: {} // 可以根据需要添加更多参数
+    };
+
     try {
-      return await getEncouragingMessage(realUserData);
-    } catch {
+      return await getEncouragingMessage(userData);
+    } catch (error) {
+      console.error('获取AI消息失败:', error);
       return DEFAULT_MESSAGE;
     }
   }, [timelineEvents]);
 
-  // 从事件生成图表与最近事件列表
+  // 处理事件数据变化
   useEffect(() => {
     if (!eventsAsync.value) return;
+
     const events = eventsAsync.value;
-    // 图表
+
+    // 生成图表数据
     try {
       const chartConfig = generateChartDataFromEvents(events);
       setChartData(chartConfig);
-    } catch (e) {
-      console.error('生成图表失败', e);
+    } catch (error) {
+      console.error('生成图表失败:', error);
     }
-    // 时间轴筛选
-    let recentEvents = events
-      .filter(ev => {
-        const eventDate = new Date(ev.date || ev.createdAt);
-        const thirtyDaysAgo = new Date();
-        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-        return eventDate >= thirtyDaysAgo;
-      });
-    if (recentEvents.length === 0) recentEvents = events;
+
+    // 筛选最近的时间轴事件
+    let recentEvents = events.filter(event => {
+      const eventDate = new Date(event.date || event.createdAt);
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      return eventDate >= thirtyDaysAgo;
+    });
+
+    // 如果30天内没有事件，则显示所有事件
+    if (recentEvents.length === 0) {
+      console.log('⚠️ Timeline: 30天内无事件，显示所有可用事件');
+      recentEvents = events;
+    }
+
+    // 按时间排序并限制数量
     recentEvents = recentEvents
       .sort((a, b) => new Date(b.date || b.createdAt) - new Date(a.date || a.createdAt))
       .slice(0, 10);
+
     setTimelineEvents(recentEvents);
-    setIsLoadingTimeline(false);
     setIsLoadingChart(false);
+    setIsLoadingTimeline(false);
   }, [eventsAsync.value]);
 
+  // 处理加载状态
   useEffect(() => {
     if (eventsAsync.loading) {
-      setIsLoadingChart(true); setIsLoadingTimeline(true);
+      setIsLoadingChart(true);
+      setIsLoadingTimeline(true);
     }
     if (eventsAsync.error) {
-      setIsLoadingChart(false); setIsLoadingTimeline(false);
+      setIsLoadingChart(false);
+      setIsLoadingTimeline(false);
     }
   }, [eventsAsync.loading, eventsAsync.error]);
 
-  const anyError = eventsAsync.error || aiAsync.error;
-
-  // 重试函数
-  const handleRetry = () => {
-    eventsAsync.execute();
-    aiAsync.reset();
-  };
-
-  // 获取图表数据
-  const fetchChartData = useCallback(async () => {
-    console.log('🔍 Timeline: 开始获取图表数据', { mockUserId });
-    setIsLoadingChart(true);
-    try {
-      const events = await getEventsByUserId(mockUserId);
-      console.log('📡 Timeline: 获取到的原始事件数据', {
-        eventCount: events?.length || 0,
-        events: events
-      });
-
-      const chartConfig = generateChartDataFromEvents(events);
-      console.log('📊 Timeline: 生成的图表配置', chartConfig);
-      setChartData(chartConfig);
-    } catch (error) {
-      console.error('❌ Timeline: 获取图表数据失败:', error);
-      // 使用默认模拟数据
-      const fallbackChart = {
-        labels: ['1s', '2s', '3s', '4s', '5s', '6s', '7s'],
-        datasets: [
-          {
-            label: '声音频率 (Hz)',
-            data: [120, 122, 118, 125, 123, 128, 126],
-            fill: false,
-            backgroundColor: 'rgb(219, 39, 119)',
-            borderColor: 'rgba(219, 39, 119, 0.5)',
-          },
-        ],
-      };
-      console.log('🔧 Timeline: 使用回退图表数据', fallbackChart);
-      setChartData(fallbackChart);
-    } finally {
-      setIsLoadingChart(false);
-    }
-  }, [mockUserId]);
-
-  // 获取时间轴事件数据
-  const fetchTimelineEvents = useCallback(async () => {
-    console.log('🔍 Timeline: 开始获取时间轴事件数据', { mockUserId });
-    setIsLoadingTimeline(true);
-    try {
-      const events = await getEventsByUserId(mockUserId);
-      console.log('📡 Timeline: 获取到的时间轴原始事件', {
-        totalEvents: events?.length || 0,
-        events: events
-      });
-
-      // 修复：扩大时间范围到最近30天，如果还是没有数据，则显示所有事件
-      let recentEvents = events
-        .filter(event => {
-          const eventDate = new Date(event.date || event.createdAt);
-          const thirtyDaysAgo = new Date();
-          thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-          return eventDate >= thirtyDaysAgo;
-        });
-
-      // 如果30天内没有事件，则显示所有事件（开发模式下显示 mock 数据）
-      if (recentEvents.length === 0) {
-        console.log('⚠️ Timeline: 30天内无事件，显示所有可用事件');
-        recentEvents = events;
-      }
-
-      recentEvents = recentEvents
-        .sort((a, b) => new Date(b.date || b.createdAt) - new Date(a.date || a.createdAt)) // 最新的在前
-        .slice(0, 10); // 最多显示10��事件
-
-      console.log('⏰ Timeline: 筛选出的显示事件', {
-        recentCount: recentEvents.length,
-        recentEvents: recentEvents
-      });
-
-      setTimelineEvents(recentEvents);
-    } catch (error) {
-      console.error('❌ Timeline: 获取时间轴事件数据失败:', error);
-      setTimelineEvents([]); // 设置为空数组，将使用默认数据
-    } finally {
-      setIsLoadingTimeline(false);
-    }
-  }, [mockUserId]);
-
-  // 组件挂载时获取数据
-  useEffect(() => {
-    fetchChartData();
-    fetchTimelineEvents(); // 获取时间轴数据
-  }, [fetchChartData, fetchTimelineEvents]);
-
-  // 从事件数据生成动态时间轴数据
+  // 从事件数据生成时间轴显示数据
   const generateTimelineActions = (events) => {
     if (!events || events.length === 0) {
-      // 如果没有事件数据，返回默认的模拟数据
-      return {
-        '今天': [
-          { time: '14:30', description: '完成了一次声音训练' },
-          { time: '10:15', description: '更新了个人资料' },
-        ],
-        '昨天': [
-          { time: '16:45', description: '进行了 15 分钟的发声练习' },
-          { time: '09:00', description: '创建了账户' },
-        ],
-      };
+      return {};
     }
 
-    // 按日期分组事件
-    const groupedEvents = {};
-    const now = new Date();
-    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const yesterday = new Date(today);
-    yesterday.setDate(yesterday.getDate() - 1);
-
-    // 事件类型到中文描述的映射
+    // 事件类型描述映射
     const eventTypeDescriptions = {
       'self_test': '进行了自我测试',
       'hospital_test': '完成了医院检测',
@@ -350,7 +274,13 @@ const Timeline = () => {
       'feeling_log': '记录了感受'
     };
 
-    // 处理每个事件
+    // 按日期分组事件
+    const groupedEvents = {};
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+
     events.forEach(event => {
       const eventDate = new Date(event.date || event.createdAt);
       const eventDay = new Date(eventDate.getFullYear(), eventDate.getMonth(), eventDate.getDate());
@@ -361,7 +291,6 @@ const Timeline = () => {
       } else if (eventDay.getTime() === yesterday.getTime()) {
         dayKey = '昨天';
       } else {
-        // 对于更早的日期，使用具体日期
         dayKey = eventDate.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
       }
 
@@ -384,20 +313,27 @@ const Timeline = () => {
       });
     });
 
-    // 按时间排序每组中的事件（最新的在前）
+    // 按时间排序每组中的事件
     Object.keys(groupedEvents).forEach(dayKey => {
       groupedEvents[dayKey].sort((a, b) => {
-        // 解析时间进行比较
         const timeA = new Date(`1970-01-01 ${a.time}`);
         const timeB = new Date(`1970-01-01 ${b.time}`);
-        return timeB - timeA; // 降序排列（最新的在前）
+        return timeB - timeA; // 最新的在前
       });
     });
 
     return groupedEvents;
   };
 
-  // 生成动态数据
+  // 错误处理
+  const anyError = eventsAsync.error || aiAsync.error;
+
+  const handleRetry = () => {
+    eventsAsync.execute();
+    aiAsync.reset();
+  };
+
+  // 生成时间轴数据
   const actions = generateTimelineActions(timelineEvents);
 
   return (
@@ -419,11 +355,17 @@ const Timeline = () => {
         </p>
       </div>
 
+      {/* 错误提示 */}
       {anyError && (
         <div className="mb-8 p-4 rounded-xl border border-red-200 bg-red-50 text-red-700">
           <p className="font-semibold mb-2">数据加载失败</p>
-          <p className="text-sm mb-3">{(eventsAsync.error || aiAsync.error)?.message || '未知错误'}</p>
-          <button onClick={handleRetry} className="px-4 py-2 rounded-lg bg-red-600 text-white text-sm hover:bg-red-500">重试</button>
+          <p className="text-sm mb-3">{anyError?.message || '未知错误'}</p>
+          <button
+            onClick={handleRetry}
+            className="px-4 py-2 rounded-lg bg-red-600 text-white text-sm hover:bg-red-500"
+          >
+            重试
+          </button>
         </div>
       )}
 
@@ -497,12 +439,11 @@ const Timeline = () => {
         )}
       </div>
 
-      {/* AI鼓励消息 - 聊天对话框样式 */}
+      {/* AI鼓励消息 */}
       <div className="relative z-10 mb-8">
         <div className="flex justify-center">
           <div className="max-w-md sm:max-w-lg md:max-w-xl lg:max-w-2xl">
             <div className="relative">
-              {/* AI头像 */}
               <div className="flex items-start space-x-3">
                 <div className="flex-shrink-0 w-10 h-10 rounded-full overflow-hidden border-2 border-gray-300 shadow-sm">
                   <img
@@ -512,12 +453,9 @@ const Timeline = () => {
                   />
                 </div>
 
-                {/* 消��气泡 */}
                 <div className="relative bg-white rounded-2xl rounded-tl-sm px-4 py-3 shadow-md border border-gray-200 max-w-full">
-                  {/* 小尾巴 */}
                   <div className="absolute -left-2 top-3 w-0 h-0 border-r-8 border-r-white border-t-4 border-t-transparent border-b-4 border-b-transparent"></div>
 
-                  {/* 消息内容 */}
                   <div className="text-gray-800 leading-relaxed">
                     {aiAsync.loading ? (
                       <div className="flex items-center space-x-2">
@@ -538,6 +476,9 @@ const Timeline = () => {
           </div>
         </div>
       </div>
+
+      {/* 开发模式测试组件 - 仅在开发环境中显示 */}
+      {!isProdReady && <DevModeTest />}
     </div>
   );
 };
