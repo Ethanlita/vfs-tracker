@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import PostsDropdown from './PostsDropdown';
+import { isProductionReady as globalIsProductionReady } from '../env.js';
 
 const Layout = ({ children, auth }) => {
     const navigate = useNavigate();
     const [isHoveringLogo, setIsHoveringLogo] = useState(false);
+    const ready = globalIsProductionReady();
 
     const handleLogoClick = () => {
         navigate('/');
@@ -62,7 +64,23 @@ const Layout = ({ children, auth }) => {
 
             <footer className="bg-white shadow-lg mt-12">
                 <div className="container mx-auto py-6 px-4 sm:px-6 lg:px-8 vfs-footer-text">
-                    <p>&copy; 2025 VFS Tracker. 一个开源项目。我们真诚的建议您暂时使用电脑访问以获得更好体验</p>
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                        <div className="flex flex-col gap-1">
+                            <p>&copy; 2025 VFS Tracker. 一个开源项目。</p>
+                            <p className="text-sm text-gray-600">我们建议您暂时使用电脑访问以获得更好体验</p>
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                            {ready ? (
+                                <span className="text-xs text-gray-500 px-2 py-1 bg-green-50 rounded-full border border-green-200">
+                                    🟢 生产模式
+                                </span>
+                            ) : (
+                                <span className="text-xs text-orange-600 px-2 py-1 bg-orange-50 rounded-full border border-orange-200">
+                                    🟡 开发模式
+                                </span>
+                            )}
+                        </div>
+                    </div>
                 </div>
             </footer>
         </div>
