@@ -1,0 +1,206 @@
+{
+  "info": {
+    "name": "VFS Tracker API Tests",
+    "description": "API testing collection for VFS Tracker application",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "https://2rzxc2x5l8.execute-api.us-east-1.amazonaws.com/dev",
+      "type": "string"
+    },
+    {
+      "key": "cognito_user_pool_id",
+      "value": "us-east-1_Bz6JC9ko9",
+      "type": "string"
+    },
+    {
+      "key": "cognito_client_id",
+      "value": "fb5fjoh3k5djvmbl9qq3pdl4q",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Test CORS - Get All Events (No Auth)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Origin",
+            "value": "http://localhost:4173"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/all-events",
+          "host": ["{{base_url}}"],
+          "path": ["all-events"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "// 检查是否是认证错误",
+              "if (pm.response.json().message === 'Missing Authentication Token') {",
+              "    console.log('❌ API需要认证令牌');",
+              "    pm.test('API需要认证', function () {",
+              "        pm.expect(pm.response.json().message).to.include('Authentication');",
+              "    });",
+              "} else {",
+              "    pm.test('状态码为200', function () {",
+              "        pm.response.to.have.status(200);",
+              "    });",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Test CORS - OPTIONS Preflight",
+      "request": {
+        "method": "OPTIONS",
+        "header": [
+          {
+            "key": "Origin",
+            "value": "http://localhost:4173"
+          },
+          {
+            "key": "Access-Control-Request-Method",
+            "value": "GET"
+          },
+          {
+            "key": "Access-Control-Request-Headers",
+            "value": "Content-Type,Authorization"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/all-events",
+          "host": ["{{base_url}}"],
+          "path": ["all-events"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "// 检查CORS响应头",
+              "pm.test('检查CORS响应头', function () {",
+              "    const allowOrigin = pm.response.headers.get('Access-Control-Allow-Origin');",
+              "    const allowMethods = pm.response.headers.get('Access-Control-Allow-Methods');",
+              "    const allowHeaders = pm.response.headers.get('Access-Control-Allow-Headers');",
+              "    ",
+              "    console.log('Allow-Origin:', allowOrigin);",
+              "    console.log('Allow-Methods:', allowMethods);",
+              "    console.log('Allow-Headers:', allowHeaders);",
+              "    ",
+              "    if (!allowOrigin) {",
+              "        console.log('❌ 缺少 Access-Control-Allow-Origin');",
+              "    }",
+              "    if (!allowMethods) {",
+              "        console.log('❌ 缺少 Access-Control-Allow-Methods');",
+              "    }",
+              "    if (!allowHeaders) {",
+              "        console.log('❌ 缺少 Access-Control-Allow-Headers');",
+              "    }",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Test with Mock Auth Header",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer mock-token-for-testing",
+            "description": "模拟认证令牌测试"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Origin",
+            "value": "http://localhost:4173"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/all-events",
+          "host": ["{{base_url}}"],
+          "path": ["all-events"]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "// 检查认证相关的响应",
+              "const response = pm.response.json();",
+              "console.log('Response:', JSON.stringify(response, null, 2));",
+              "",
+              "if (response.message && response.message.includes('Authentication')) {",
+              "    console.log('✅ 确认：API需要有效的认证令牌');",
+              "} else if (response.message && response.message.includes('Unauthorized')) {",
+              "    console.log('✅ 确认：需要有效的JWT令牌');",
+              "} else {",
+              "    console.log('🎉 成功获取响应！');",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Check API Gateway Info",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/",
+          "host": ["{{base_url}}"],
+          "path": [""]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "// 检查根路径响应",
+              "console.log('Status:', pm.response.status);",
+              "console.log('Response:', pm.response.text());",
+              "",
+              "// 检查是否有CORS头",
+              "const corsHeaders = {};",
+              "pm.response.headers.each(header => {",
+              "    if (header.key.toLowerCase().startsWith('access-control')) {",
+              "        corsHeaders[header.key] = header.value;",
+              "    }",
+              "});",
+              "",
+              "console.log('CORS Headers:', JSON.stringify(corsHeaders, null, 2));"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

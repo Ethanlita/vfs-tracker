@@ -40,11 +40,26 @@ if (isProductionReady) {
 
   const amplifyConfig = {
     Auth: {
-      // v6 Change: Auth configuration is now nested under a `Cognito` object
       Cognito: {
-        region: import.meta.env.VITE_AWS_REGION,
         userPoolId: import.meta.env.VITE_COGNITO_USER_POOL_ID,
-        userPoolWebClientId: import.meta.env.VITE_COGNITO_USER_POOL_WEB_CLIENT_ID,
+        userPoolClientId: import.meta.env.VITE_COGNITO_USER_POOL_WEB_CLIENT_ID,
+        region: import.meta.env.VITE_AWS_REGION,
+        loginWith: {
+          username: true,
+          email: true,
+          phone: false
+        },
+        signUpAttributes: ['email', 'nickname'], // 添加注册时需要的属性
+        userAttributes: {
+          nickname: {
+            required: true
+          },
+          email: {
+            required: true
+          }
+        }
+        // 注意：如果您的客户端配置了密钥，需要在AWS控制台中将其改为公共客户端
+        // 前端应用不应该使用客户端密钥
       }
     },
     API: {
@@ -56,7 +71,6 @@ if (isProductionReady) {
       }
     },
     Storage: {
-      // v6 Change: Storage configuration is now nested under an `S3` object
       S3: {
         bucket,
         region: import.meta.env.VITE_AWS_REGION,
@@ -79,20 +93,13 @@ if (isProductionReady) {
   console.warn('[startup] isProductionReady = false，未调用 Amplify.configure');
 }
 
-// 在 Amplify 配置完成后再导入 App 和相关组件
+// 导入App组件（在Amplify配置完成后）
 import App from './App.jsx'
-import { Authenticator } from '@aws-amplify/ui-react';
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <BrowserRouter>
-      {isProductionReady ? (
-        <Authenticator.Provider>
-          <App />
-        </Authenticator.Provider>
-      ) : (
-        <App />
-      )}
+      <App />
     </BrowserRouter>
   </StrictMode>,
 )

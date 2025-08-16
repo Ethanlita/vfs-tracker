@@ -1,0 +1,122 @@
+{
+  "info": {
+    "name": "VFS Tracker User Management APIs",
+    "description": "测试新增的4个用户管理API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. 查询用户信息API（私有）",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{jwt_token}}",
+            "description": "JWT认证令牌"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/user/{{user_id}}",
+          "host": ["{{base_url}}"],
+          "path": ["user", "{{user_id}}"]
+        },
+        "description": "获取当前认证用户的完整资料信息"
+      }
+    },
+    {
+      "name": "2. 查询用户信息API（公用）",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{base_url}}/user/{{user_id}}/public",
+          "host": ["{{base_url}}"],
+          "path": ["user", "{{user_id}}", "public"]
+        },
+        "description": "获取用户的公开资料信息，无需认证"
+      }
+    },
+    {
+      "name": "3. 编辑用户信息API（私有）",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{jwt_token}}",
+            "description": "JWT认证令牌"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"profile\": {\n    \"name\": \"测试用户\",\n    \"isNamePublic\": true,\n    \"socials\": [\n      {\n        \"platform\": \"Twitter\",\n        \"handle\": \"@testuser\"\n      }\n    ],\n    \"areSocialsPublic\": false\n  }\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/user/{{user_id}}",
+          "host": ["{{base_url}}"],
+          "path": ["user", "{{user_id}}"]
+        },
+        "description": "更新当前认证用户的资料信息"
+      }
+    },
+    {
+      "name": "4. 新用户资料完善API（私有）",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{jwt_token}}",
+            "description": "JWT认证令牌"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"profile\": {\n    \"name\": \"新用户\",\n    \"isNamePublic\": false,\n    \"socials\": [],\n    \"areSocialsPublic\": false\n  }\n}"
+        },
+        "url": {
+          "raw": "{{base_url}}/user/profile-setup",
+          "host": ["{{base_url}}"],
+          "path": ["user", "profile-setup"]
+        },
+        "description": "为新用户创建或完善资料信息"
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "https://2rzxc2x5l8.execute-api.us-east-1.amazonaws.com/dev",
+      "description": "API Gateway基础URL"
+    },
+    {
+      "key": "user_id",
+      "value": "your-cognito-user-id",
+      "description": "Cognito用户ID"
+    },
+    {
+      "key": "jwt_token",
+      "value": "your-jwt-token",
+      "description": "Cognito JWT认证令牌"
+    }
+  ]
+}
+

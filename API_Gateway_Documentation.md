@@ -182,98 +182,221 @@ Content-Type: application/json
 
 ---
 
-## Event Types and Details Structure
+### GET /user/{userId}
 
-### voice_training
+**Description**: Retrieves user profile information for the authenticated user.
+
+**Authentication**: Required (Cognito JWT)
+
+**Security**: Users can only access their own profile. The userId in the path must match the authenticated user's ID from the JWT token.
+
+**Headers**:
+```
+Authorization: Bearer {jwt-token}
+Content-Type: application/json
+```
+
+**Parameters**:
+- `userId` (path): Cognito user sub ID (must match authenticated user)
+
+**Response Format**:
 ```json
 {
-  "trainingContent": "string (required)",
-  "selfPracticeContent": "string (optional)",
-  "voiceStatus": "string (required)",
-  "references": "string (optional)",
-  "voicing": "string (required)",
-  "feelings": "string (optional)",
-  "instructor": "string (optional)"
+  "userId": "string",
+  "email": "string",
+  "profile": {
+    "name": "string (optional)",
+    "isNamePublic": "boolean (optional, defaults to false)",
+    "socials": [
+      {
+        "platform": "string",
+        "handle": "string"
+      }
+    ],
+    "areSocialsPublic": "boolean (optional, defaults to false)"
+  },
+  "createdAt": "string (ISO 8601)",
+  "updatedAt": "string (ISO 8601, optional)"
 }
 ```
 
-### self_test
-```json
-{
-  "appUsed": "string (optional)",
-  "sound": ["array of strings (required)"],
-  "customSoundDetail": "string (optional)",
-  "voicing": ["array of strings (required)"],
-  "customVoicingDetail": "string (optional)",
-  "fundamentalFrequency": "number (optional)",
-  "formants": {"f1": "number", "f2": "number"},
-  "pitch": {"max": "number", "min": "number"},
-  "jitter": "number (optional)",
-  "shimmer": "number (optional)",
-  "hnr": "number (optional)",
-  "attachmentUrl": "string (optional)",
-  "notes": "string (optional)"
-}
-```
-
-### hospital_test
-Same as `self_test` with additional fields:
-```json
-{
-  "location": "string (required)",
-  "equipmentUsed": "string (optional)"
-}
-```
-
-### self_practice
-```json
-{
-  "practiceContent": "string (required)",
-  "hasInstructor": "boolean (required)",
-  "instructor": "string (optional)",
-  "references": "string (optional)",
-  "voiceStatus": "string (required)",
-  "voicing": "string (required)",
-  "feelings": "string (optional)"
-}
-```
-
-### surgery
-```json
-{
-  "doctor": "string (required) - enum or '自定义'",
-  "customDoctor": "string (optional)",
-  "location": "string (required) - enum or '自定义'",
-  "customLocation": "string (optional)",
-  "notes": "string (optional)"
-}
-```
-
-### feeling_log
-```json
-{
-  "content": "string (required)"
-}
-```
+**HTTP Status Codes**:
+- `200 OK`: Success
+- `401 Unauthorized`: Missing or invalid JWT token
+- `403 Forbidden`: Attempting to access another user's data
+- `404 Not Found`: User profile not found
+- `500 Internal Server Error`: Server error
 
 ---
 
-## Error Handling
+### PUT /user/{userId}
 
-All endpoints return errors in the following format:
+**Description**: Updates user profile information for the authenticated user.
 
+**Authentication**: Required (Cognito JWT)
+
+**Security**: Users can only update their own profile. The userId in the path must match the authenticated user's ID from the JWT token.
+
+**Headers**:
+```
+Authorization: Bearer {jwt-token}
+Content-Type: application/json
+```
+
+**Parameters**:
+- `userId` (path): Cognito user sub ID (must match authenticated user)
+
+**Request Body**:
 ```json
 {
-  "message": "Error description",
-  "error": "Detailed error information"
+  "profile": {
+    "name": "string (optional)",
+    "isNamePublic": "boolean (optional)",
+    "socials": [
+      {
+        "platform": "string",
+        "handle": "string"
+      }
+    ],
+    "areSocialsPublic": "boolean (optional)"
+  }
 }
 ```
 
-**Common Error Codes**:
-- `400 Bad Request`: Invalid request format
-- `401 Unauthorized`: Missing or invalid authentication
-- `403 Forbidden`: Insufficient permissions
-- `404 Not Found`: Resource not found
+**Server-Generated Fields**: The following fields are automatically updated:
+- `updatedAt`: Current timestamp
+
+**Response** (200 OK):
+```json
+{
+  "message": "User profile updated successfully",
+  "user": {
+    "userId": "us-east-1:12345678-1234-1234-1234-123456789012",
+    "email": "user@example.com",
+    "profile": {
+      "name": "张三",
+      "isNamePublic": true,
+      "socials": [
+        {
+          "platform": "Twitter",
+          "handle": "@username"
+        }
+      ],
+      "areSocialsPublic": false
+    },
+    "createdAt": "2025-08-15T10:00:00.000Z",
+    "updatedAt": "2025-08-16T10:30:00.000Z"
+  }
+}
+```
+
+**HTTP Status Codes**:
+- `200 OK`: Profile updated successfully
+- `400 Bad Request`: Invalid request format or data
+- `401 Unauthorized`: Missing or invalid JWT token
+- `403 Forbidden`: Attempting to update another user's profile
+- `404 Not Found`: User profile not found
+- `500 Internal Server Error`: Server error
+
+---
+
+### POST /user/profile-setup
+
+**Description**: Creates or completes user profile setup for new users. This endpoint is designed for the onboarding flow where new users need to complete their profile information.
+
+**Authentication**: Required (Cognito JWT)
+
+**Headers**:
+```
+Authorization: Bearer {jwt-token}
+Content-Type: application/json
+```
+
+**Request Body**:
+```json
+{
+  "profile": {
+    "name": "string (optional)",
+    "isNamePublic": "boolean (optional, defaults to false)",
+    "socials": [
+      {
+        "platform": "string",
+        "handle": "string"
+      }
+    ],
+    "areSocialsPublic": "boolean (optional, defaults to false)"
+  }
+}
+```
+
+**Server-Generated Fields**: The following fields are automatically generated/updated:
+- `userId`: Extracted from JWT token
+- `email`: Extracted from JWT token (if not already exists)
+- `createdAt`: Current timestamp (for new users)
+- `updatedAt`: Current timestamp
+
+**Response** (201 Created for new users, 200 OK for existing users):
+```json
+{
+  "message": "User profile setup completed successfully",
+  "user": {
+    "userId": "us-east-1:12345678-1234-1234-1234-123456789012",
+    "email": "newuser@example.com",
+    "profile": {
+      "name": "新用户",
+      "isNamePublic": false,
+      "socials": [],
+      "areSocialsPublic": false
+    },
+    "createdAt": "2025-08-16T10:30:00.000Z",
+    "updatedAt": "2025-08-16T10:30:00.000Z"
+  },
+  "isNewUser": true
+}
+```
+
+**HTTP Status Codes**:
+- `201 Created`: New user profile created successfully
+- `200 OK`: Existing user profile updated successfully
+- `400 Bad Request`: Invalid request format or data
+- `401 Unauthorized`: Missing or invalid JWT token
+- `500 Internal Server Error`: Server error
+
+---
+
+### GET /user/{userId}/public
+
+**Description**: Retrieves public profile information for any user. Only returns information that the user has marked as public.
+
+**Authentication**: None required
+
+**Parameters**:
+- `userId` (path): User ID to retrieve public information for
+
+**Response Format**:
+```json
+{
+  "userId": "string",
+  "profile": {
+    "name": "string (only if isNamePublic is true, otherwise returns '（非公开）')",
+    "socials": [
+      {
+        "platform": "string",
+        "handle": "string"
+      }
+    ]
+  }
+}
+```
+
+**Note**: 
+- If `isNamePublic` is false, the `name` field will return "（非公开）"
+- If `areSocialsPublic` is false, the `socials` array will be empty
+- Non-public users may return minimal information
+
+**HTTP Status Codes**:
+- `200 OK`: Success
+- `404 Not Found`: User not found
 - `500 Internal Server Error`: Server error
 
 ---
