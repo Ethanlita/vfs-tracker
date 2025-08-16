@@ -1,7 +1,7 @@
 import { useAuthenticator, Authenticator } from '@aws-amplify/ui-react';
 import '@aws-amplify/ui-react/styles.css';
-import { Routes, Route, Navigate, Outlet } from 'react-router-dom';
-import { useState } from 'react';
+import { Routes, Route, Navigate, Outlet, useNavigate, useLocation } from 'react-router-dom';
+import { useState, useEffect } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { isProductionReady as globalIsProductionReady } from './env.js';
 
@@ -17,6 +17,10 @@ import PostViewer from './components/PostViewer';
 import TimelineTest from './components/TimelineTest';
 import ProfileSetup from './components/ProfileSetup';
 import APITestPage from './components/APITestPage';
+import ProfileSetupWizard from './components/ProfileSetupWizard';
+import UserProfileManager from './components/UserProfileManager';
+import EnhancedDataCharts from './components/EnhancedDataCharts';
+import DevModeTest from './components/DevModeTest';
 
 /**
  * @en A component to protect routes that require authentication in production mode.
@@ -24,12 +28,29 @@ import APITestPage from './components/APITestPage';
  */
 const ProductionProtectedRoute = () => {
   const { authStatus } = useAuthenticator(context => [context.authStatus]);
+  const navigate = useNavigate();
+  const location = useLocation();
 
   // @en While Amplify is figuring out the auth status, show a loading indicator.
   // @zh 在 Amplify 确定身份验证状态时，显示加载指示器。
   if (authStatus === 'configuring') {
-    return <div>正在加载...</div>;
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500 mx-auto mb-4"></div>
+          <p className="text-gray-600">正在验证身份认证状态...</p>
+        </div>
+      </div>
+    );
   }
+
+  // @en If the user is authenticated, redirect to their profile page on first login
+  // @zh 如果用户已认证，在首次登录时重定向到他们的个人页面
+  useEffect(() => {
+    if (authStatus === 'authenticated' && location.pathname === '/') {
+      navigate('/mypage', { replace: true });
+    }
+  }, [authStatus, location.pathname, navigate]);
 
   // @en If the user is not authenticated, redirect them to the home page.
   // @zh 如果用户未通过身份验证，则将他们重定向到主页。
@@ -79,6 +100,8 @@ const ProfileSetupModal = ({ isOpen, onClose }) => {
 const AppContent = () => {
   const { isAuthenticated, needsProfileSetup, profileLoading } = useAuth();
   const [showProfileSetup, setShowProfileSetup] = useState(false);
+  const navigate = useNavigate();
+  const location = useLocation();
 
   // 处理资料设置按钮点击
   const handleProfileSetupClick = () => {
@@ -89,6 +112,14 @@ const AppContent = () => {
   const handleProfileSetupClose = () => {
     setShowProfileSetup(false);
   };
+
+  // 自动跳转到ProfileSetupWizard的逻辑
+  useEffect(() => {
+    if (isAuthenticated && needsProfileSetup && !profileLoading && location.pathname !== '/profile-setup-wizard') {
+      console.log('🚀 检测到用户需要完善资料，自动跳转到引导页面');
+      navigate('/profile-setup-wizard', { replace: true });
+    }
+  }, [isAuthenticated, needsProfileSetup, profileLoading, location.pathname, navigate]);
 
   // 如果是认证用户且正在加载资料，显示加载状态
   if (isAuthenticated && profileLoading) {
@@ -115,11 +146,15 @@ const AppContent = () => {
           <Route path="/docs" element={<PostViewer />} />
           {/* Route for testing the new timeline component independently */}
           <Route path="/timeline-test" element={<TimelineTest />} />
+          {/* Development mode testing route */}
+          <Route path="/dev-test" element={<DevModeTest />} />
           <Route element={<ProtectedRoute />}>
             <Route path="/mypage" element={<MyPage />} />
             <Route path="/add-event" element={<AddEvent />} />
             <Route path="/event-manager" element={<EventManagerPage />} />
             <Route path="/api-test" element={<APITestPage />} /> {/* 新增的API测试页面路由 */}
+            <Route path="/profile-manager" element={<UserProfileManager />} /> {/* 用户资料管理 */}
+            <Route path="/profile-setup-wizard" element={<ProfileSetupWizard />} /> {/* 用户引导设置 */}
           </Route>
           {/* @en A catch-all route to redirect any unknown paths to the homepage. @zh 一个包罗万象的路由，可将任何未知路径重定向到主页。 */}
           <Route path="*" element={<Navigate to="/" replace />} />

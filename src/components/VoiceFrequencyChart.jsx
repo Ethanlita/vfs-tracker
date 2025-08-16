@@ -32,15 +32,28 @@ const CheckCircle = ({ className, ...props }) => (
 // --- Helper Functions ---
 
 // 从事件数据中提取声音参数数据
-const extractVoiceDataFromEvents = (events, metric) => {
+const extractVoiceDataFromEvents = (events, metric, filters = {}) => {
   const data = [];
 
-  // 筛��包含声音参数的事件类型
-  const eventsWithVoiceData = events.filter(event =>
+  // 筛选包含声音参数的事件类型
+  let eventsWithVoiceData = events.filter(event =>
       (event.type === 'self_test' || event.type === 'hospital_test') &&
       event.details &&
       event.details.fundamentalFrequency !== undefined
   );
+
+  // 应用过滤器
+  if (filters.doctor && filters.doctor !== 'all') {
+    eventsWithVoiceData = eventsWithVoiceData.filter(event =>
+      event.details.doctor === filters.doctor
+    );
+  }
+
+  if (filters.surgeryMethod && filters.surgeryMethod !== 'all') {
+    eventsWithVoiceData = eventsWithVoiceData.filter(event =>
+      event.details.surgeryMethod === filters.surgeryMethod
+    );
+  }
 
   eventsWithVoiceData.forEach(event => {
     const date = event.date || event.createdAt;
@@ -54,28 +67,54 @@ const extractVoiceDataFromEvents = (events, metric) => {
       case 'jitter': // Jitter (%)
         value = event.details.jitter;
         break;
-      case 'shimmer': // Shimmer (dB)
+      case 'shimmer': // Shimmer (%)
         value = event.details.shimmer;
         break;
       case 'hnr': // Harmonics-to-Noise Ratio (dB)
         value = event.details.hnr;
         break;
       default:
-        return;
+        value = event.details.fundamentalFrequency;
     }
 
     if (value !== undefined && value !== null) {
       data.push({
-        date: new Date(date).toISOString().split('T')[0],
+        date: new Date(date).toLocaleDateString('zh-CN'),
         value: parseFloat(value),
-        eventId: event.eventId,
-        eventType: event.type
+        rawDate: new Date(date),
+        eventType: event.type,
+        doctor: event.details.doctor || '未指定',
+        surgeryMethod: event.details.surgeryMethod || '未指定'
       });
     }
   });
 
   // 按日期排序
-  return data.sort((a, b) => new Date(a.date) - new Date(b.date));
+  return data.sort((a, b) => a.rawDate - b.rawDate);
+};
+
+// 获取可用的医生列表
+const getDoctorOptions = (events) => {
+  const doctors = new Set();
+  events.forEach(event => {
+    if ((event.type === 'self_test' || event.type === 'hospital_test') &&
+        event.details && event.details.doctor) {
+      doctors.add(event.details.doctor);
+    }
+  });
+  return Array.from(doctors);
+};
+
+// 获取可用的手术方法列表
+const getSurgeryMethodOptions = (events) => {
+  const methods = new Set();
+  events.forEach(event => {
+    if ((event.type === 'self_test' || event.type === 'hospital_test') &&
+        event.details && event.details.surgeryMethod) {
+      methods.add(event.details.surgeryMethod);
+    }
+  });
+  return Array.from(methods);
 };
 
 // Generates realistic mock data for demonstration purposes
@@ -195,12 +234,17 @@ const StatusIndicator = ({ isDemo, isLoading }) => (
 
 // --- Main Component ---
 
-const VoiceFrequencyChart = ({ userId, isProductionReady, compact = false }) => {
+const VoiceFrequencyChart = ({ userId, isProductionReady, compact = false, events }) => {
   const [chartData, setChartData] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isDemoData, setIsDemoData] = useState(false);
   const [selectedMetric, setSelectedMetric] = useState('f0');
   const [activeRange, setActiveRange] = useState('1m');
+  const [showInsights, setShowInsights] = useState(false);
+  const [filters, setFilters] = useState({
+    doctor: 'all',
+    surgeryMethod: 'all'
+  });
 
   // 紧凑模式：结合父组件传入的compact属性和屏幕尺寸检测
   const [isCompact, setIsCompact] = useState(compact);
@@ -328,16 +372,32 @@ const VoiceFrequencyChart = ({ userId, isProductionReady, compact = false }) => 
   const activeClasses = "bg-pink-500 text-white shadow-md";
   const inactiveClasses = "hover:bg-gray-200 hover:text-gray-800";
 
-  // 紧凑模式参���
+  // 紧凑模式参数
   const chartHeight = isCompact ? 300 : 350;
   const tickFontSize = isCompact ? 10 : 12;
+
+  // 获取过滤选项
+  const doctorOptions = useMemo(() => getDoctorOptions(events), [events]);
+  const surgeryMethodOptions = useMemo(() => getSurgeryMethodOptions(events), [events]);
+
+  // 应用过滤器提取数据
+  const filteredChartData = useMemo(() => {
+    return extractVoiceDataFromEvents(events, selectedMetric, filters);
+  }, [events, selectedMetric, filters]);
+
+  const handleFilterChange = (filterType, value) => {
+    setFilters(prev => ({
+      ...prev,
+      [filterType]: value
+    }));
+  };
 
   return (
       <ChartCard title="">
         {/* 添加错误提示 */}
         {dataAsync.error && (
           <div className="mb-4 p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm flex items-center justify-between">
-            <span>数据加载失败��{dataAsync.error.message || '未知错误'} (已使用演示数据)</span>
+            <span>数据加载失败：{dataAsync.error.message || '未知错误'} (已使用演示数据)</span>
             <button onClick={dataAsync.execute} className="ml-4 px-3 py-1 bg-red-600 hover:bg-red-500 text-white rounded-md text-xs">重试</button>
           </div>
         )}
@@ -368,6 +428,33 @@ const VoiceFrequencyChart = ({ userId, isProductionReady, compact = false }) => 
             ))}
           </div>
         </div>
+
+        {/* 过滤器状态显示 */}
+        {(filters.doctor !== 'all' || filters.surgeryMethod !== 'all') && (
+          <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-4 text-sm">
+                <span className="font-medium text-blue-900">当前过滤:</span>
+                {filters.doctor !== 'all' && (
+                  <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded">
+                    医生: {filters.doctor}
+                  </span>
+                )}
+                {filters.surgeryMethod !== 'all' && (
+                  <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded">
+                    手术方法: {filters.surgeryMethod}
+                  </span>
+                )}
+              </div>
+              <button
+                onClick={() => setFilters({ doctor: 'all', surgeryMethod: 'all' })}
+                className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+              >
+                清除过滤
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* 图表容器 - 将毛玻璃效果限制在这个容器内 */}
         <div className="relative" style={{ width: '100%', height: chartHeight }}>
@@ -437,6 +524,79 @@ const VoiceFrequencyChart = ({ userId, isProductionReady, compact = false }) => 
             </div>
           </div>
         </div>
+
+        {/* 控制面板 */}
+        <div className="flex flex-col sm:flex-row gap-4 mt-4">
+          {/* 医生过滤 */}
+          {doctorOptions.length > 0 && (
+            <div className="flex items-center space-x-2">
+              <label className="text-sm font-medium text-gray-700">医生:</label>
+              <select
+                value={filters.doctor}
+                onChange={(e) => handleFilterChange('doctor', e.target.value)}
+                className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500 text-sm"
+              >
+                <option value="all">全部</option>
+                {doctorOptions.map(doctor => (
+                  <option key={doctor} value={doctor}>{doctor}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* 手术方法过滤 */}
+          {surgeryMethodOptions.length > 0 && (
+            <div className="flex items-center space-x-2">
+              <label className="text-sm font-medium text-gray-700">手术方法:</label>
+              <select
+                value={filters.surgeryMethod}
+                onChange={(e) => handleFilterChange('surgeryMethod', e.target.value)}
+                className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500 text-sm"
+              >
+                <option value="all">全部</option>
+                {surgeryMethodOptions.map(method => (
+                  <option key={method} value={method}>{method}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* 洞察按钮 */}
+          <button
+            onClick={() => setShowInsights(!showInsights)}
+            className="flex items-center px-3 py-2 bg-pink-100 text-pink-700 rounded-lg hover:bg-pink-200 transition-colors text-sm font-medium"
+          >
+            <Lightbulb className="w-4 h-4 mr-2" />
+            {showInsights ? '隐藏洞察' : '显示洞察'}
+          </button>
+        </div>
+
+        {/* 洞察面板 */}
+        <AnimatePresence>
+          {showInsights && chartData.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.3 }}
+              className="border-t border-gray-200 pt-6"
+            >
+              {/* 洞察内容会在这里添加 */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                  <div className="flex items-center">
+                    <CheckCircle className="w-5 h-5 text-green-600 mr-2" />
+                    <h4 className="font-medium text-green-900">数据统计</h4>
+                  </div>
+                  <p className="text-sm text-green-700 mt-1">
+                    共有 {chartData.length} 个数据点
+                  </p>
+                </div>
+                {/* 可以添加更多洞察卡片 */}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </ChartCard>
   );
 };

@@ -4,6 +4,7 @@ import { Amplify } from 'aws-amplify';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { isProductionReady as globalIsProductionReady } from '../env.js';
+import { getUserAvatarUrl, getUserDisplayName } from '../utils/avatar.js';
 
 const Auth = () => {
     const navigate = useNavigate();
@@ -36,9 +37,9 @@ const Auth = () => {
             userId: 'demo-user-123',
             attributes: {
                 name: '开发用户',
+                nickname: '开发用户', // 确保开发模式也有nickname
                 email: 'dev@example.com',
-                sub: 'demo-user-123',
-                picture: 'https://placehold.co/40x40/E9D5FF/3730A3?text=D'
+                sub: 'demo-user-123'
             }
         });
     };
@@ -55,12 +56,12 @@ const Auth = () => {
             return (
                 <div className="flex items-center gap-2 sm:gap-3">
                     <img
-                        src={user.attributes.picture}
-                        alt={user.attributes.name}
+                        src={getUserAvatarUrl(user, 40)}
+                        alt={getUserDisplayName(user)}
                         className="w-9 h-9 sm:w-10 sm:h-10 rounded-full border-2 border-pink-500"
                     />
                     <span className="font-semibold text-gray-700 hidden sm:block">
-                        {user.attributes.name}
+                        {getUserDisplayName(user)}
                     </span>
                     <button
                         onClick={() => navigate('/mypage')}
@@ -148,12 +149,12 @@ const ProductionAuthStatus = ({ onShowLogin, navigate }) => {
         return (
             <div className="flex items-center gap-2 sm:gap-3">
                 <img
-                    src={user?.attributes?.picture || 'https://placehold.co/40x40/E9D5FF/3730A3?text=U'}
-                    alt={user?.attributes?.name || user?.attributes?.email || '用户'}
+                    src={getUserAvatarUrl(user, 40)}
+                    alt={getUserDisplayName(user)}
                     className="w-9 h-9 sm:w-10 sm:h-10 rounded-full border-2 border-pink-500"
                 />
                 <span className="font-semibold text-gray-700 hidden sm:block">
-                    {user?.attributes?.name || user?.attributes?.email || '用户'}
+                    {getUserDisplayName(user)}
                 </span>
                 <button
                     onClick={() => navigate('/mypage')}
@@ -218,7 +219,7 @@ const AuthenticatorWrapper = ({ onAuthSuccess }) => {
                                     email: true,
                                     phone: false
                                 },
-                                signUpAttributes: ['email', 'nickname'],
+                                signUpAttributes: ['email', 'nickname'], // 恢复nickname要求
                                 userAttributes: {
                                     nickname: {
                                         required: true

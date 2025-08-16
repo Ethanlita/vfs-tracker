@@ -6,6 +6,7 @@ import VoiceFrequencyChart from './VoiceFrequencyChart';
 import InteractiveTimeline from './InteractiveTimeline';
 import { useAsync } from '../utils/useAsync.js';
 import { isProductionReady as globalIsProductionReady } from '../env.js';
+import { getUserDisplayName } from '../utils/avatar.js';
 
 /**
  * @en The MyPage component serves as the user's personal dashboard. It fetches,
@@ -84,7 +85,7 @@ const MyPage = () => {
           我的个人仪表板
         </h1>
         <p className="text-lg text-gray-700 max-w-3xl mx-auto leading-relaxed font-medium">
-          欢迎，{user?.attributes?.email || '用户'}！在这里您可以记录和分析您的嗓音数据。
+          欢迎，{getUserDisplayName(user)}！在这里您可以记录和分析您的嗓音数据。
         </p>
       </div>
 
@@ -101,6 +102,12 @@ const MyPage = () => {
           className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-6 py-3 rounded-lg font-semibold shadow-lg hover:from-blue-600 hover:to-indigo-700 transition-all duration-300 transform hover:scale-105"
         >
           📊 管理事件
+        </button>
+        <button
+          onClick={() => navigate('/profile-manager')}
+          className="bg-gradient-to-r from-purple-500 to-pink-600 text-white px-6 py-3 rounded-lg font-semibold shadow-lg hover:from-purple-600 hover:to-pink-700 transition-all duration-300 transform hover:scale-105"
+        >
+          👤 管理资料
         </button>
       </div>
 

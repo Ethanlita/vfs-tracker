@@ -1,10 +1,10 @@
 /**
- * 用户资料设置 Lambda函数
- * POST /user/profile-setup
+ * 获取用户资料 Lambda函数
+ * GET /user/{userId}
  */
 
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, GetCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, GetCommand } from '@aws-sdk/lib-dynamodb';
 
 // 初始化DynamoDB客户端
 const client = new DynamoDBClient({});
@@ -16,7 +16,7 @@ const USERS_TABLE = process.env.USERS_TABLE || 'VoiceFemUsers';
 // CORS头部
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Methods': 'GET, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Amz-Date, X-Api-Key',
 };
 
@@ -115,76 +115,84 @@ export const handler = async (event) => {
       return createResponse(200, { message: 'OK' });
     }
 
+    // 从JWT Token获取认证用户信息
     const authenticatedUser = extractUserFromEvent(event);
-    const requestBody = JSON.parse(event.body);
 
-    const now = new Date().toISOString();
+    // 安全地获取路径参数
+    const pathUserId = event.pathParameters?.userId;
 
-    // 过滤掉nickname字段，使用Cognito的nickname
-    const { nickname, ...profileData } = requestBody.profile || {};
-    if (nickname) {
-      console.log('Warning: nickname field ignored, using Cognito nickname');
+    // 如果路径参数不存在，使用JWT中的用户ID（临时解决方案）
+    const targetUserId = pathUserId || authenticatedUser.userId;
+
+    if (!targetUserId) {
+      console.error('❌ 无法获取用户ID，详情:', {
+        pathParameters: event.pathParameters,
+        authenticatedUserId: authenticatedUser.userId,
+        requestContext: event.requestContext,
+        rawPath: event.path,
+        resource: event.resource
+      });
+      return createResponse(400, {
+        message: 'Bad Request: Unable to determine user ID',
+        debug: {
+          pathParameters: event.pathParameters,
+          hasAuthenticatedUser: !!authenticatedUser.userId,
+          resource: event.resource,
+          path: event.path
+        }
+      });
     }
 
-    const profile = {
-      name: profileData.name || '',
-      bio: profileData.bio || '',
-      isNamePublic: profileData.isNamePublic || false,
-      socials: profileData.socials || [],
-      areSocialsPublic: profileData.areSocialsPublic || false
-    };
-
-    // 首先检查用户是否已存在
-    const getCommand = new GetCommand({
-      TableName: USERS_TABLE,
-      Key: { userId: authenticatedUser.userId }
-    });
-
-    const existingUser = await dynamodb.send(getCommand);
-    const isNewUser = !existingUser.Item;
-
-    // 准备用户数据
-    const userData = {
-      userId: authenticatedUser.userId,
-      email: authenticatedUser.email,
-      profile: profile,
-      updatedAt: now
-    };
-
-    if (isNewUser) {
-      userData.createdAt = now;
-    } else {
-      userData.createdAt = existingUser.Item.createdAt;
+    // 安全验证：确保用户只能访问自己的资料
+    if (pathUserId && pathUserId !== authenticatedUser.userId) {
+      return createResponse(403, {
+        message: 'Forbidden: You can only access your own profile'
+      });
     }
 
-    // 使用PUT操作创建或更新用户记录
-    const putCommand = new PutCommand({
+    // 使用目标用户ID进行查询
+    const command = new GetCommand({
       TableName: USERS_TABLE,
-      Item: userData
+      Key: { userId: targetUserId }
     });
 
-    await dynamodb.send(putCommand);
+    const result = await dynamodb.send(command);
 
-    // 在返回结果中添加nickname
-    const responseUser = {
-      ...userData,
+    if (!result.Item) {
+      // 如果用户不存在，返回基本信息
+      const basicProfile = {
+        userId: authenticatedUser.userId,
+        email: authenticatedUser.email,
+        profile: {
+          nickname: authenticatedUser.nickname,
+          name: '',
+          bio: '',
+          isNamePublic: false,
+          socials: [],
+          areSocialsPublic: false
+        },
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+
+      return createResponse(200, basicProfile);
+    }
+
+    // 确保返回的数据包含nickname信息
+    const userProfile = {
+      ...result.Item,
       profile: {
         nickname: authenticatedUser.nickname,
-        ...userData.profile
+        ...result.Item.profile
       }
     };
 
-    const statusCode = isNewUser ? 201 : 200;
-    return createResponse(statusCode, {
-      message: 'User profile setup completed successfully',
-      user: responseUser,
-      isNewUser: isNewUser
-    });
+    return createResponse(200, userProfile);
 
   } catch (error) {
-    console.error('Error setting up user profile:', error);
+    console.error('Error getting user profile:', error);
     return createResponse(500, {
-      message: 'Error setting up user profile',
+      message: 'Error fetching user profile',
       error: error.message
     });
   }
