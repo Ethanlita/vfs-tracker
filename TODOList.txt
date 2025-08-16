@@ -17,7 +17,7 @@
     3. PublicDashboard，用户卡片显示公开事件完整信息
     4. PublicDashboard，用户卡片显示公开资料
     5. 个人页面中增加用户信息查看和修改（内置信息，cognito登录信息）
-6. 实现AWS Lambda自动部署
+6. 实现AWS Lambda和API Gateway自动部署，通过Github Actions，Action Secret已经设置了AWS_ACCESS_KEY和AWS_SECRET_KEY，可以使用IAM角色部署
 7. 修复PublicDashboard的间距问题（左右上方均没有间距）
 8. 修复Mypage的间距问题（屏幕在640px-1200px宽度下左右无边距，上方无边距）
 9. 登录后上方头像不是用户头像（用户没有头像时则根据用户名首字母生成一个）
