@@ -1,11 +1,14 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import PostsDropdown from './PostsDropdown';
+import ProfileCompletionBanner from './ProfileCompletionBanner';
+import { useAuth } from '../contexts/AuthContext';
 import { isProductionReady as globalIsProductionReady } from '../env.js';
 
-const Layout = ({ children, auth }) => {
+const Layout = ({ children, auth, onProfileSetupClick }) => {
     const navigate = useNavigate();
     const [isHoveringLogo, setIsHoveringLogo] = useState(false);
+    const { isAuthenticated, needsProfileSetup } = useAuth();
     const ready = globalIsProductionReady();
 
     const handleLogoClick = () => {
@@ -16,6 +19,11 @@ const Layout = ({ children, auth }) => {
         <div className="relative min-h-screen text-gray-800 flex flex-col">
             {/* 全屏背景（唯一背景来源） */}
             <div aria-hidden className="app-bg" />
+
+            {/* 用户资料完善提醒横幅 */}
+            {isAuthenticated && needsProfileSetup && (
+                <ProfileCompletionBanner onSetupClick={onProfileSetupClick} />
+            )}
 
             <header className="bg-white shadow-lg sticky top-0 z-30 w-full">
                 <nav
@@ -49,16 +57,25 @@ const Layout = ({ children, auth }) => {
                             <div className="ml-6 mr-3">
                                 <PostsDropdown />
                             </div>
+
+                            {/* 环境状态指示器 */}
+                            {!ready && (
+                                <div className="bg-orange-100 text-orange-800 px-2 py-1 rounded text-xs font-medium">
+                                    开发模式
+                                </div>
+                            )}
                         </div>
-                        <div id="auth-container" className="mx-3 flex items-center gap-2 sm:gap-3 whitespace-nowrap overflow-hidden">
+
+                        {/* 认证组件 */}
+                        <div className="flex items-center">
                             {auth}
                         </div>
                     </div>
                 </nav>
             </header>
 
-            {/* 增加顶部留白：原 pt-8 sm:pt-12 lg:pt-16 -> 现在 pt-12 sm:pt-16 lg:pt-20 */}
-            <main id="main-content" className="container mx-auto px-4 sm:px-6 lg:px-8 flex-grow pt-12 sm:pt-16 lg:pt-20">
+            {/* 主内容区域 */}
+            <main className="flex-1">
                 {children}
             </main>
 
@@ -67,7 +84,7 @@ const Layout = ({ children, auth }) => {
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                         <div className="flex flex-col gap-1">
                             <p>&copy; 2025 VFS Tracker. 一个开源项目。</p>
-                            <p className="text-sm text-gray-600">我们建议您暂时使用电脑访问以获得更好体验</p>
+                            <p>我们建议您暂时使用电脑访问以获得更好体验</p>
                         </div>
                         <div className="flex items-center gap-2 flex-shrink-0">
                             {ready ? (

@@ -333,3 +333,63 @@ Content-Type: application/json
 2. Get specific event: Get item by `userId` + `eventId`
 3. Get all approved events: Query `StatusDateIndex` by `status = "approved"`
 4. Get approved events in date range: Query `StatusDateIndex` by `status` + date range
+
+---
+
+### VoiceFemUsers Table
+
+**Table Name**: `VoiceFemUsers`
+
+**Partition Key**: `userId` (String)
+
+**Attributes**:
+
+| Attribute Name | Type | Description | Required |
+| :--- | :--- | :--- | :--- |
+| `userId` | String | Cognito user sub ID (Partition Key) | Yes |
+| `email` | String | User's email address from Cognito | Yes |
+| `profile` | Map | User's profile information object | No |
+| `createdAt` | String | ISO 8601 creation timestamp | Yes |
+| `updatedAt` | String | ISO 8601 last modification timestamp | No |
+
+**Profile Object Structure** (nested within `profile` attribute):
+- `name` (String, optional): User's display name
+- `isNamePublic` (Boolean, optional): Whether name is shown on public dashboard
+- `socials` (List, optional): Array of social media accounts
+- `areSocialsPublic` (Boolean, optional): Whether social accounts are shown publicly
+
+**Social Account Object Structure** (within `profile.socials`):
+- `platform` (String, required): Social media platform name
+- `handle` (String, required): Username/handle on that platform
+
+**Sample Item**:
+```json
+{
+  "userId": "us-east-1:12345678-1234-1234-1234-123456789012",
+  "email": "user@example.com",
+  "profile": {
+    "name": "张三",
+    "isNamePublic": true,
+    "socials": [
+      {
+        "platform": "Twitter",
+        "handle": "@username"
+      },
+      {
+        "platform": "Discord", 
+        "handle": "username#1234"
+      }
+    ],
+    "areSocialsPublic": false
+  },
+  "createdAt": "2025-08-16T10:00:00.000Z",
+  "updatedAt": "2025-08-16T10:30:00.000Z"
+}
+```
+
+**Access Patterns**:
+1. Get user profile: Get item by `userId`
+2. Check if user exists: Get item by `userId` (returns empty if not found)
+3. Update user profile: Update item by `userId`
+
+---

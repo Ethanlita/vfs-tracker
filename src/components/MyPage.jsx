@@ -77,94 +77,107 @@ const MyPage = () => {
 
   // --- RENDER ---
   return (
-      <div className="dashboard-container relative px-3 sm:px-0">
-        {/* 装饰性背景元素 */}
-        <div className="fixed inset-0 overflow-hidden pointer-events-none">
-          <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-pink-300 rounded-full mix-blend-multiply filter blur-xl opacity-30 animate-blob"></div>
-          <div className="absolute top-1/3 right-1/4 w-96 h-96 bg-purple-300 rounded-full mix-blend-multiply filter blur-xl opacity-30 animate-blob animation-delay-2000"></div>
-          <div className="absolute bottom-1/4 left-1/3 w-96 h-96 bg-blue-300 rounded-full mix-blend-multiply filter blur-xl opacity-30 animate-blob animation-delay-4000"></div>
-        </div>
+    <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-6 max-w-7xl">
+      {/* 页面标题 */}
+      <div className="text-center mb-8">
+        <h1 className="text-4xl font-bold text-pink-600 mb-4">
+          我的个人仪表板
+        </h1>
+        <p className="text-lg text-gray-700 max-w-3xl mx-auto leading-relaxed font-medium">
+          欢迎，{user?.attributes?.email || '用户'}！在这里您可以记录和分析您的嗓音数据。
+        </p>
+      </div>
 
-        {/* 页面标题 */}
-        <div className="dashboard-title-section relative z-10">
-          <h1 className="text-4xl font-bold text-pink-600 mb-4">
-            我的个人仪表板
-          </h1>
-          <p className="text-lg text-gray-700 max-w-3xl mx-auto leading-relaxed font-medium">
-            欢迎，{user?.attributes?.email || '用户'}！在这里您可以记录和分析您的嗓音数据。
-          </p>
-        </div>
+      {/* 操作按钮组 */}
+      <div className="flex flex-col sm:flex-row gap-4 mb-8 justify-center">
+        <button
+          onClick={handleNavigateToAddEvent}
+          className="bg-gradient-to-r from-pink-500 to-purple-600 text-white px-6 py-3 rounded-lg font-semibold shadow-lg hover:from-pink-600 hover:to-purple-700 transition-all duration-300 transform hover:scale-105"
+        >
+          ➕ 添加新事件
+        </button>
+        <button
+          onClick={handleNavigateToEventManager}
+          className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-6 py-3 rounded-lg font-semibold shadow-lg hover:from-blue-600 hover:to-indigo-700 transition-all duration-300 transform hover:scale-105"
+        >
+          📊 管理事件
+        </button>
+      </div>
 
-        {/* 声音频率图表 */}
-        <div className="dashboard-card">
-          <div className="dashboard-card-header">
-            <h2 className="dashboard-card-title">
-              <span className="dashboard-card-emoji">📊</span>
-              声音频率图表
-            </h2>
-            <p className="dashboard-card-description">查看您的声音基频随时间的变化</p>
-          </div>
-          <VoiceFrequencyChart
-              userId={user?.attributes?.sub}
-              isProductionReady={globalIsProductionReady}
-              compact={true} // 在手机屏幕上启用紧凑模式
-          />
-        </div>
-
-        {/* 交互式时间轴 */}
-        <div className="dashboard-card">
-          <div className="dashboard-card-header">
-            <h2 className="dashboard-card-title">
-              <span className="dashboard-card-emoji">📈</span>
-              我的动态时间轴
-            </h2>
-            <p className="dashboard-card-description">点击事件卡片查看详细信息</p>
-          </div>
-
-          {loadError && (
-            <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700">
-              <p className="font-semibold mb-2">加载事件失败</p>
-              <p className="text-sm mb-3">{loadError.message || '未知错误'}</p>
-              <button onClick={handleRetryFetch} className="px-4 py-2 text-sm bg-red-600 hover:bg-red-500 text-white rounded-lg">重试</button>
+      {/* 错误处理 */}
+      {loadError && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-6 mb-8">
+          <div className="flex items-center">
+            <div className="flex-shrink-0">
+              <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+              </svg>
             </div>
+            <div className="ml-3">
+              <h3 className="text-sm font-medium text-red-800">
+                加载数据时发生错误
+              </h3>
+              <div className="mt-2 text-sm text-red-700">
+                <p>{loadError.message || '未知错误'}</p>
+              </div>
+              <div className="mt-4">
+                <button
+                  onClick={handleRetryFetch}
+                  className="bg-red-100 hover:bg-red-200 text-red-800 px-4 py-2 rounded-md text-sm font-medium"
+                >
+                  重试
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 声音频率图表 */}
+      <div className="bg-white rounded-xl shadow-md border border-gray-200 p-6 mb-8">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-semibold text-gray-900">声音频率分析</h2>
+          {isLoading && (
+            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-pink-500"></div>
           )}
+        </div>
+        <VoiceFrequencyChart userId={user?.attributes?.sub} events={events} />
+      </div>
 
-          <InteractiveTimeline
-              events={events}
-              isProductionReady={globalIsProductionReady}
-              isLoading={isLoading}
-          />
-
-          {/* 操作按钮区域 */}
-          <div className="pt-6 border-t border-gray-200">
-            <div className="flex flex-col sm:flex-row gap-4 sm:gap-6">
+      {/* 交互式时间轴 */}
+      <div className="bg-white rounded-xl shadow-md border border-gray-200 p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-semibold text-gray-900">事件时间轴</h2>
+          {events.length > 0 && (
+            <span className="text-sm text-gray-500">共 {events.length} 个事件</span>
+          )}
+        </div>
+        {isLoading ? (
+          <div className="flex items-center justify-center py-12">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-pink-500"></div>
+            <span className="ml-3 text-gray-600">正在加载事件...</span>
+          </div>
+        ) : events.length === 0 ? (
+          <div className="text-center py-12">
+            <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+            </svg>
+            <h3 className="mt-4 text-sm font-medium text-gray-900">暂无事件</h3>
+            <p className="mt-2 text-sm text-gray-500">开始记录您的第一个嗓音事件吧！</p>
+            <div className="mt-6">
               <button
                 onClick={handleNavigateToAddEvent}
-                className="group relative flex items-center justify-center sm:justify-start px-6 py-4 bg-gradient-to-r from-pink-500 to-rose-500 hover:from-pink-600 hover:to-rose-600 text-white rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-pink-300"
+                className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-pink-600 hover:bg-pink-700"
               >
-                <span className="text-2xl mr-3">✨</span>
-                <div className="text-left">
-                  <div className="font-semibold text-lg">添加新事件</div>
-                  <div className="text-sm text-pink-100 opacity-90">记录您的嗓音数据</div>
-                </div>
-                <div className="absolute inset-0 bg-white/10 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-              </button>
-
-              <button
-                onClick={handleNavigateToEventManager}
-                className="group relative flex items-center justify-center sm:justify-start px-6 py-4 bg-gradient-to-r from-purple-500 to-indigo-500 hover:from-purple-600 hover:to-indigo-600 text-white rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-purple-300"
-              >
-                <span className="text-2xl mr-3">🗂️</span>
-                <div className="text-left">
-                  <div className="font-semibold text-lg">事件管理</div>
-                  <div className="text-sm text-purple-100 opacity-90">查看和编辑记录</div>
-                </div>
-                <div className="absolute inset-0 bg-white/10 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                添加事件
               </button>
             </div>
           </div>
-        </div>
+        ) : (
+          <InteractiveTimeline events={events} />
+        )}
       </div>
+    </div>
   );
 };
 

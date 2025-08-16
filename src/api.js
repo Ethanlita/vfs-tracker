@@ -1,4 +1,4 @@
-import { get, post } from 'aws-amplify/api';
+import { get, post, put } from 'aws-amplify/api';
 import { Amplify } from 'aws-amplify';
 import { uploadData } from 'aws-amplify/storage';
 import { fetchAuthSession } from 'aws-amplify/auth';  // 新增：用于获取认证token
@@ -93,6 +93,34 @@ async function authenticatedPost(path, bodyData) {
 }
 
 /**
+ * 认证API调用 - PUT请求
+ */
+async function authenticatedPut(path, bodyData) {
+  console.log('[authenticatedPut] making authenticated request to:', path);
+
+  const session = await fetchAuthSession();
+  if (!session.tokens?.accessToken) {
+    throw new Error('User not authenticated');
+  }
+
+  const op = put({
+    apiName: 'api',
+    path,
+    options: {
+      body: bodyData,
+      headers: {
+        Authorization: `Bearer ${session.tokens.accessToken}`
+      }
+    }
+  });
+
+  const { body } = await op.response;
+  return body.json();
+}
+
+// ========== 核心API函数 ==========
+
+/**
  * Uploads a file to S3.
  * The file is stored in a user-specific "folder" to ensure separation of data.
  * @param {File} file The file object to upload.
@@ -136,7 +164,7 @@ export const uploadFile = async (file, userId) => {
  */
 export const getAllEvents = async () => {
   if (!isProductionReady() && !import.meta.env.VITE_FORCE_REAL) {
-    console.log('🔧 开发/未就���：返回 mock 所有事件');
+    console.log('🔧 开发/未就绪：返回 mock 所有事件');
     return Promise.resolve(mockData.events);
   }
   console.log('[getAllEvents] attempting fetch, config=', Amplify.getConfig?.().API);
@@ -156,7 +184,7 @@ export const getAllEvents = async () => {
  * @throws Will throw an error if the API call fails.
  */
 export const getEventsByUserId = async (userId) => {
-  console.log('🔍 API: getEventsByUserId 被调用', { userId, isProdReady: isProductionReady(), cfg: Amplify.getConfig?.().API });
+  console.log('🔍 API: getEventsByUserId ���调用', { userId, isProdReady: isProductionReady(), cfg: Amplify.getConfig?.().API });
   // 在开发模式下返回模拟数据
   if (!isProductionReady() && !import.meta.env.VITE_FORCE_REAL) {
     console.log(`🔧 开发/未就绪：mock 用户事件 userId=${userId}`);
@@ -200,7 +228,7 @@ export const addEvent = async (eventData) => {
 
   console.log('[addEvent] posting with authentication, cfg=', Amplify.getConfig?.().API);
   try {
-    // 只发送客户端数据，���务端会添加userId等字段
+    // 只发送客户端数据，服务端会添加userId等字段
     const requestBody = {
       type: eventData.type,
       date: eventData.date,
@@ -239,7 +267,7 @@ export const getEncouragingMessage = async (userData) => {
     const userProgressSummary = `
 用户声音训练进度分析：
 - 总事件数: ${userData.events?.length || 0}
-- 近期训练次数（7天内��: ${userData.events?.filter(e =>
+- 近期训练次数（7天内）: ${userData.events?.filter(e =>
   (e.type === 'voice_training' || e.type === 'self_practice') &&
   new Date(e.createdAt || e.date) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
 ).length || 0}
@@ -277,9 +305,9 @@ ${userData.events?.map((event, index) => {
 ${userData.voiceParameters ? `最新声音参数分析:\n- 基频: ${userData.voiceParameters.fundamental}Hz\n- 抖动率: ${userData.voiceParameters.jitter}%\n- 微颤: ${userData.voiceParameters.shimmer}%\n- 谐噪比: ${userData.voiceParameters.hnr}dB` : ''}
 `;
 
-    const prompt = `作为一名专业且富有同理心的声音训练助手，请根据用户的训练数据给出个性化的鼓励性评价（25-35字）：\n\n${userProgressSummary}\n请分析用户的训练模式、进步趋势和当前状态，用温暖、专业且具有激励性的语气回复。可以：\n- 赞扬用户的坚��和努力\n- 针对具体的训练类型给出认可\n- 根据数据趋势提供正面的展望\n- 用温馨的话语给予情感支持\n\n回复应该简洁但充满正能量，让用户感受到被理解和鼓励。`;
+    const prompt = `作为一名专业且富有同理心的声音训练助手，请根据用户的训练数据给出个性化的鼓励性评价（25-35字）：\n\n${userProgressSummary}\n请分析用户的训练模式、进步趋势和当前状态，用温暖、专业且具有激励性的语气回复。可以：\n- 赞扬用户的坚持和努力\n- 针对具体的训练类型给出认可\n- 根据数据趋势提供正面的展望\n- 用温馨的话语给予情感支持\n\n回复应该简洁但充满正能量，让用户感受到被理解和鼓励。`;
 
-    console.log('🤖 ��送Gemini请求:', {
+    console.log('🤖 发送Gemini请求:', {
       prompt: prompt.substring(0, 100) + '...',
       userDataSummary: {
         totalEvents: userData.events?.length || 0,
@@ -297,7 +325,7 @@ ${userData.voiceParameters ? `最新声音参数分析:\n- 基频: ${userData.vo
       body: JSON.stringify({
         system_instruction: {
           parts: [{
-            text: "你是一个专业的声音训练助手，负责为用户��供鼓励和建议。请用温暖、专业的语气回复，保持简洁但充满正能量。"
+            text: "你是一个专业的声音训练助手，负责为用户提供鼓励和建议。请用温暖、专业的语气回复，保持简洁但充满正能量。"
           }]
         },
         contents: [{
@@ -308,7 +336,7 @@ ${userData.voiceParameters ? `最新声音参数分析:\n- 基频: ${userData.vo
         generationConfig: {
           temperature: 1.2,        // 大幅提高创意度，使回复更多样化
           topK: 40,               // 增加词汇选择范围
-          topP: 0.95,             // 提高累积概率，允许更多创意表达
+          topP: 0.95,             // 提高累积概率，允许更多创��表达
           maxOutputTokens: 200,   // 增加最大token数以允许更丰富的回复
         },
       })
@@ -331,7 +359,7 @@ ${userData.voiceParameters ? `最新声音参数分析:\n- 基频: ${userData.vo
     const candidates = result.candidates;
     if (!candidates || candidates.length === 0) {
       console.warn('🤖 Gemini响应中没有候选内容');
-      throw new Error('Gemini响应中没有��选内容');
+      throw new Error('Gemini响应中没有候选内容');
     }
 
     const content = candidates[0]?.content?.parts?.[0]?.text;
@@ -371,8 +399,200 @@ const calculateConsistencyScore = (events) => {
   return Math.round(Math.max(0, Math.min(100, 100 - variance * 2)));
 };
 
+// ========== 用户资料管理 API ==========
+
+/**
+ * 查询用户信息API（私有） - 获取当前认证用户的完整资料信息
+ * @param {string} userId - 用户ID，必须与JWT token中的用户ID匹配
+ * @returns {Promise<object>} 包含用户资料的对象
+ */
+export const getUserProfile = async (userId) => {
+  console.log('🔍 API: getUserProfile 被调用', { userId, isProdReady: isProductionReady() });
+
+  // 开发模式返回模拟用户数据
+  if (!isProductionReady() && !import.meta.env.VITE_FORCE_REAL) {
+    console.log(`🔧 开发/未就绪：mock 用户资料 userId=${userId}`);
+    const mockUserProfile = {
+      userId: userId,
+      email: 'mock-user@example.com',
+      profile: {
+        name: '模拟用户',
+        isNamePublic: false,
+        socials: [
+          {
+            platform: 'Twitter',
+            handle: '@mockuser'
+          }
+        ],
+        areSocialsPublic: false
+      },
+      createdAt: '2025-08-01T10:00:00.000Z',
+      updatedAt: '2025-08-16T10:30:00.000Z'
+    };
+    return Promise.resolve(mockUserProfile);
+  }
+
+  try {
+    const data = await authenticatedGet(`/user/${userId}`);
+    console.log('✅ API: user profile fetched', data);
+    return data;
+  } catch (error) {
+    console.error('❌ API: 获取用户资料失败:', error);
+    throw error;
+  }
+};
+
+/**
+ * 查询用户信息API（公用） - 获取用户的公开资料信息
+ * @param {string} userId - 要查询的用户ID
+ * @returns {Promise<object>} 包含用户公开资料的对象
+ */
+export const getUserPublicProfile = async (userId) => {
+  console.log('🔍 API: getUserPublicProfile 被调用', { userId, isProdReady: isProductionReady() });
+
+  // 开发模式返回模拟公开用户数据
+  if (!isProductionReady() && !import.meta.env.VITE_FORCE_REAL) {
+    console.log(`🔧 开发/未就绪：mock 公开用户资料 userId=${userId}`);
+    const mockPublicProfile = {
+      userId: userId,
+      profile: {
+        name: '（非公开）', // 模拟非公开姓名
+        socials: [] // 模拟非公开社交账户
+      }
+    };
+    return Promise.resolve(mockPublicProfile);
+  }
+
+  try {
+    const data = await simpleGet(`/user/${userId}/public`);
+    console.log('✅ API: public user profile fetched', data);
+    return data;
+  } catch (error) {
+    console.error('❌ API: 获取用户公开资料失败:', error);
+    throw error;
+  }
+};
+
+/**
+ * 编辑用户信息API（私有） - 更新当前认证用户的资料信息
+ * @param {string} userId - 用户ID，必须与JWT token中的用户ID匹配
+ * @param {object} profileData - 要更新的资料数据
+ * @returns {Promise<object>} 包含更新后用户资料的对象
+ */
+export const updateUserProfile = async (userId, profileData) => {
+  console.log('🔍 API: updateUserProfile 被调用', { userId, profileData, isProdReady: isProductionReady() });
+
+  // 开发模式返回模拟更新响应
+  if (!isProductionReady() && !import.meta.env.VITE_FORCE_REAL) {
+    console.log(`🔧 开发/未就绪：mock 更新用户资料 userId=${userId}`);
+    const mockUpdatedProfile = {
+      message: 'User profile updated successfully',
+      user: {
+        userId: userId,
+        email: 'mock-user@example.com',
+        profile: profileData.profile,
+        createdAt: '2025-08-01T10:00:00.000Z',
+        updatedAt: new Date().toISOString()
+      }
+    };
+    return Promise.resolve(mockUpdatedProfile);
+  }
+
+  try {
+    const requestBody = {
+      profile: profileData.profile
+    };
+
+    const data = await authenticatedPut(`/user/${userId}`, requestBody);
+    console.log('✅ API: user profile updated', data);
+    return data;
+  } catch (error) {
+    console.error('❌ API: 更新用户资料失败:', error);
+    throw error;
+  }
+};
+
+/**
+ * 新用户资料完善API（私有） - 为新用户创建或完善资料信息
+ * @param {object} profileData - 用户资料数据
+ * @returns {Promise<object>} 包含创建/更新结果的对象
+ */
+export const setupUserProfile = async (profileData) => {
+  console.log('🔍 API: setupUserProfile 被调用', { profileData, isProdReady: isProductionReady() });
+
+  // 开发模式返回模拟设置响应
+  if (!isProductionReady() && !import.meta.env.VITE_FORCE_REAL) {
+    console.log('🔧 开发/未就绪：mock 用户资料设置');
+    const mockSetupResponse = {
+      message: 'User profile setup completed successfully',
+      user: {
+        userId: 'mock-new-user-id',
+        email: 'newuser@example.com',
+        profile: profileData.profile || {
+          name: '',
+          isNamePublic: false,
+          socials: [],
+          areSocialsPublic: false
+        },
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      },
+      isNewUser: true
+    };
+    return Promise.resolve(mockSetupResponse);
+  }
+
+  try {
+    const requestBody = {
+      profile: profileData.profile || {
+        name: '',
+        isNamePublic: false,
+        socials: [],
+        areSocialsPublic: false
+      }
+    };
+
+    const data = await authenticatedPost('/user/profile-setup', requestBody);
+    console.log('✅ API: user profile setup completed', data);
+    return data;
+  } catch (error) {
+    console.error('❌ API: 用户资料设置失败:', error);
+    throw error;
+  }
+};
+
+/**
+ * 检查用户资料完整性 - 判断用户是否需要完善资料
+ * @param {object} userProfile - 用户资料对象
+ * @returns {boolean} true表示资料完整，false表示需要完善
+ */
+export const isUserProfileComplete = (userProfile) => {
+  if (!userProfile || !userProfile.profile) {
+    return false;
+  }
+
+  const profile = userProfile.profile;
+
+  // 检查基本信息是否存在（至少需要设置姓名或明确选择不公开）
+  const hasBasicInfo = profile.name !== undefined && profile.name !== null;
+
+  // 检查隐私设置是否已配置
+  const hasPrivacySettings =
+    typeof profile.isNamePublic === 'boolean' &&
+    typeof profile.areSocialsPublic === 'boolean';
+
+  console.log('🔍 检查用户资料完整性:', {
+    hasBasicInfo,
+    hasPrivacySettings,
+    profile
+  });
+
+  return hasBasicInfo && hasPrivacySettings;
+};
+
 /**
  * 安全提示：
  * 1. 切勿在前端暴露长期 AWS Access Key / Secret；当前项目不再使用它们（如 .env.local 中仍存在应删除）。
  * 2. Gemini Key 仅临时用于前端演示，生产应通过后端代理（TODO: /ai/encouragement 端点）。
+ * 3. 用户资料相关API需要JWT认证，确保只有认证用户才能访问和修改自己的资料。
  */

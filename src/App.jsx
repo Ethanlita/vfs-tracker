@@ -1,7 +1,8 @@
-import { useAuthenticator } from '@aws-amplify/ui-react';
+import { useAuthenticator, Authenticator } from '@aws-amplify/ui-react';
 import '@aws-amplify/ui-react/styles.css';
 import { Routes, Route, Navigate, Outlet } from 'react-router-dom';
-import { AuthProvider } from './contexts/AuthContext';
+import { useState } from 'react';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { isProductionReady as globalIsProductionReady } from './env.js';
 
 import Layout from './components/Layout';
@@ -14,6 +15,8 @@ import Home from './components/Home';
 import PostList from './components/PostList';
 import PostViewer from './components/PostViewer';
 import TimelineTest from './components/TimelineTest';
+import ProfileSetup from './components/ProfileSetup';
+import APITestPage from './components/APITestPage';
 
 /**
  * @en A component to protect routes that require authentication in production mode.
@@ -46,6 +49,26 @@ const ProtectedRoute = () => {
   return <ProductionProtectedRoute />; // 就绪使用真实认证
 };
 
+/**
+ * 资料设置模态窗口组件
+ */
+const ProfileSetupModal = ({ isOpen, onClose }) => {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 overflow-y-auto">
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="fixed inset-0 bg-black opacity-50" onClick={onClose}></div>
+        <div className="relative z-10 w-full">
+          <ProfileSetup
+            onComplete={onClose}
+            onSkip={onClose}
+          />
+        </div>
+      </div>
+    </div>
+  );
+};
 
 /**
  * @en The main content container of the application. It wraps the router
@@ -54,24 +77,61 @@ const ProtectedRoute = () => {
  * @returns {JSX.Element} The rendered application content with layout.
  */
 const AppContent = () => {
+  const { isAuthenticated, needsProfileSetup, profileLoading } = useAuth();
+  const [showProfileSetup, setShowProfileSetup] = useState(false);
+
+  // 处理资料设置按钮点击
+  const handleProfileSetupClick = () => {
+    setShowProfileSetup(true);
+  };
+
+  // 处理资料设置完成
+  const handleProfileSetupClose = () => {
+    setShowProfileSetup(false);
+  };
+
+  // 如果是认证用户且正在加载资料，显示加载状态
+  if (isAuthenticated && profileLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500 mx-auto mb-4"></div>
+          <p className="text-gray-600">正在加载用户资料...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <Layout auth={<Auth />}>
-      <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/dashboard" element={<PublicDashboard />} />
-        <Route path="/posts" element={<PostList />} />
-        <Route path="/docs" element={<PostViewer />} />
-        {/* Route for testing the new timeline component independently */}
-        <Route path="/timeline-test" element={<TimelineTest />} />
-        <Route element={<ProtectedRoute />}>
-          <Route path="/mypage" element={<MyPage />} />
-          <Route path="/add-event" element={<AddEvent />} />
-          <Route path="/event-manager" element={<EventManagerPage />} />
-        </Route>
-        {/* @en A catch-all route to redirect any unknown paths to the homepage. @zh 一个包罗万象的路由，可将任何未知路径重定向到主页。 */}
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </Layout>
+    <>
+      <Layout
+        auth={<Auth />}
+        onProfileSetupClick={handleProfileSetupClick}
+      >
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/dashboard" element={<PublicDashboard />} />
+          <Route path="/posts" element={<PostList />} />
+          <Route path="/docs" element={<PostViewer />} />
+          {/* Route for testing the new timeline component independently */}
+          <Route path="/timeline-test" element={<TimelineTest />} />
+          <Route element={<ProtectedRoute />}>
+            <Route path="/mypage" element={<MyPage />} />
+            <Route path="/add-event" element={<AddEvent />} />
+            <Route path="/event-manager" element={<EventManagerPage />} />
+            <Route path="/api-test" element={<APITestPage />} /> {/* 新增的API测试页面路由 */}
+          </Route>
+          {/* @en A catch-all route to redirect any unknown paths to the homepage. @zh 一个包罗万象的路由，可将任何未知路径重定向到主页。 */}
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Layout>
+
+      {/* 资料设置模态窗口 */}
+      <ProfileSetupModal
+        isOpen={showProfileSetup}
+        onClose={handleProfileSetupClose}
+      />
+    </>
   );
 };
 
@@ -81,11 +141,25 @@ const AppContent = () => {
  * @returns {JSX.Element} The main application component.
  */
 function App() {
-  return (
-    <AuthProvider>
-      <AppContent />
-    </AuthProvider>
-  );
+  const ready = globalIsProductionReady();
+
+  if (ready) {
+    // 生产模式：需要 Authenticator.Provider 包装
+    return (
+      <Authenticator.Provider>
+        <AuthProvider>
+          <AppContent />
+        </AuthProvider>
+      </Authenticator.Provider>
+    );
+  } else {
+    // 开发模式：不需要 Authenticator.Provider
+    return (
+      <AuthProvider>
+        <AppContent />
+      </AuthProvider>
+    );
+  }
 }
 
 export default App;
