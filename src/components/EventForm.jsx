@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { useAuthenticator } from '@aws-amplify/ui-react';
 import { addEvent } from '../api';
 import { isProductionReady as globalIsProductionReady } from '../env.js';
 import { useAsync } from '../utils/useAsync.js';
 import SecureFileUpload from './SecureFileUpload';
+import { useAuth } from '../contexts/AuthContext.jsx';
 
 /**
  * @en A form for creating new voice events. It handles data input, file uploads, and submission to the backend.
@@ -17,8 +17,19 @@ const EventForm = ({ onEventAdded }) => {
   const isProductionReady = globalIsProductionReady;
 
   // --- STATE MANAGEMENT ---
-  const authenticatorContext = isProductionReady ? useAuthenticator((context) => [context.user]) : null;
-  const user = authenticatorContext?.user || {
+  // @en Use AuthContext exclusively - it already uses Amplify v6 standard APIs
+  // @zh 专门使用 AuthContext - 它已经使用了 Amplify v6 标准 API
+  const { user: authContextUser } = useAuth();
+
+  console.log('📍 [验证点20] EventForm组件用户信息来源验证:', {
+    source: 'AuthContext (使用Amplify v6标准API)',
+    authContextUser: !!authContextUser,
+    userIdFromContext: authContextUser?.userId,
+    emailFromContext: authContextUser?.attributes?.email,
+    混合来源检查: '无 - 仅使用AuthContext'
+  });
+
+  const user = authContextUser || {
     attributes: {
       email: 'demo@example.com',
       sub: 'demo-user-123'

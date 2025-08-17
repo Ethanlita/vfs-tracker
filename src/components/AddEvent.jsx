@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuthenticator } from '@aws-amplify/ui-react';
 import EventForm from './EventForm';
 import { isProductionReady as globalIsProductionReady } from '../env.js';
+import { useAuth } from '../contexts/AuthContext.jsx';
 
 /**
  * @en AddEvent component for adding new voice events
@@ -12,19 +12,19 @@ const AddEvent = () => {
   const navigate = useNavigate();
   const productionReady = globalIsProductionReady();
 
-  // @en Create a safe wrapper for useAuthenticator that doesn't throw
-  // @zh 为 useAuthenticator 创建一个安全的包装器，避免抛出错误
-  const useAuthenticatorSafe = () => {
-    try {
-      return useAuthenticator((context) => [context.user]);
-    } catch (error) {
-      console.log('🔧 useAuthenticator 不在 Authenticator.Provider 上下文中，使用模拟用户');
-      return { user: null };
-    }
-  };
+  // @en Use AuthContext exclusively - it already uses Amplify v6 standard APIs
+  // @zh 专门使用 AuthContext - 它已经使用了 Amplify v6 标准 API
+  const { user: authContextUser } = useAuth();
 
-  const { user: authenticatorUser } = useAuthenticatorSafe();
-  const user = (productionReady && authenticatorUser) ? authenticatorUser : {
+  console.log('📍 [验证点20] AddEvent组件用户信息来源验证:', {
+    source: 'AuthContext (使用Amplify v6标准API)',
+    authContextUser: !!authContextUser,
+    userIdFromContext: authContextUser?.userId,
+    emailFromContext: authContextUser?.attributes?.email,
+    混合来源检查: '无 - 仅使用AuthContext'
+  });
+
+  const user = (productionReady && authContextUser) ? authContextUser : {
     attributes: {
       email: 'public-user@example.com',
       sub: 'mock-user-1'

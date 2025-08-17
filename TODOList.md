@@ -32,3 +32,6 @@
 17. EventManager.jsx中无法正常管理事件
 18. ~~~EventManager.jsx和AddEvent.jsx左上角的返回按钮，增加一点间距（已解决）~~~
 19. ~~~Profile.jsx左上角加一个返回按钮，样式同EventManager.jsx和AddEvent.jsx（已解决）~~~
+20. ~~~确保现在所有的组件都会从AuthContext，以符合Amplify v6的标准方法获取用户数据，而不是从别的奇怪的地方获取用户数据（已解决）~~~
+21. （我有点忘记了是什么了）
+22. ~~~深层链接失效了（已解决）~~~

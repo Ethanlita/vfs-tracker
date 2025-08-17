@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuthenticator } from '@aws-amplify/ui-react';
 import { getEventsByUserId } from '../api';
 import EventManager from './EventManager';
 import { useAsync } from '../utils/useAsync.js';
 import { isProductionReady as globalIsProductionReady } from '../env.js';
+import { useAuth } from '../contexts/AuthContext'; // 使用AuthContext而不是直接使用useAuthenticator
 
 /**
  * @en EventManagerPage component for managing voice events
@@ -14,37 +14,81 @@ const EventManagerPage = () => {
   const navigate = useNavigate();
   const productionReady = globalIsProductionReady();
 
-  // @en Create a safe wrapper for useAuthenticator that doesn't throw
-  // @zh 为 useAuthenticator 创建一个安全的包装器，避免抛出错误
-  const useAuthenticatorSafe = () => {
-    try {
-      return useAuthenticator((context) => [context.user]);
-    } catch (error) {
-      console.log('🔧 useAuthenticator 不在 Authenticator.Provider 上下文中，使用模拟用户');
-      return { user: null };
-    }
-  };
+  // 使用AuthContext提供的用户信息，而不是直接使用useAuthenticator
+  const { user, isAuthenticated } = useAuth();
 
-  const { user: authenticatorUser } = useAuthenticatorSafe();
-  const user = (productionReady && authenticatorUser) ? authenticatorUser : {
-    attributes: {
-      email: 'public-user@example.com',
-      sub: 'mock-user-1'
-    }
-  };
+  console.log('🔍 EventManagerPage - 用户状态分析 (使用AuthContext):', {
+    productionReady,
+    user,
+    isAuthenticated,
+    hasUser: !!user,
+    userId: user?.userId || user?.attributes?.sub,
+    username: user?.username,
+    userAttributes: user?.attributes
+  });
+
+  // 直接使用AuthContext提供的用户对象
+  console.log('🔍 EventManagerPage - 最终用户对象 (来自AuthContext):', {
+    user,
+    userId: user?.userId || user?.attributes?.sub,
+    willCallAPI: !!(user?.userId || user?.attributes?.sub)
+  });
 
   const [events, setEvents] = useState([]);
-  // 移除独立 isLoading，使用 useAsync
+  // 使用AuthContext提供的用户ID
   const eventsAsync = useAsync(async () => {
-    if (!user?.attributes?.sub) return [];
-    const userEvents = await getEventsByUserId(user.attributes.sub);
-    return userEvents.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-  }, [user?.attributes?.sub]);
+    const userId = user?.userId || user?.attributes?.sub;
+    console.log('🔍 EventManagerPage - useAsync 开始执行 (使用AuthContext用户):', {
+      userId,
+      hasUserId: !!userId,
+      userUserId: user?.userId,
+      userAttributesSub: user?.attributes?.sub,
+      userObject: user
+    });
 
-  useEffect(() => { if (eventsAsync.value) setEvents(eventsAsync.value); }, [eventsAsync.value]);
+    if (!userId) {
+      console.log('❌ EventManagerPage - 没有用户ID，返回空数组');
+      return [];
+    }
+
+    console.log('🚀 EventManagerPage - 调用 getEventsByUserId:', userId);
+    const userEvents = await getEventsByUserId(userId);
+    console.log('✅ EventManagerPage - getEventsByUserId 返回结果:', {
+      userEvents,
+      isArray: Array.isArray(userEvents),
+      length: userEvents?.length,
+      firstEvent: userEvents?.[0]
+    });
+
+    const sortedEvents = userEvents.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    console.log('✅ EventManagerPage - 排序后的事件:', {
+      sortedEvents,
+      length: sortedEvents?.length
+    });
+
+    return sortedEvents;
+  }, [user?.userId, user?.attributes?.sub]); // 依赖AuthContext提供的用户ID
+
+  useEffect(() => {
+    console.log('🔍 EventManagerPage - useEffect eventsAsync.value 变化:', {
+      value: eventsAsync.value,
+      hasValue: !!eventsAsync.value,
+      isArray: Array.isArray(eventsAsync.value),
+      length: eventsAsync.value?.length
+    });
+    if (eventsAsync.value) setEvents(eventsAsync.value);
+  }, [eventsAsync.value]);
+
   const isLoading = eventsAsync.loading;
   const loadError = eventsAsync.error;
   const handleRetry = () => eventsAsync.execute();
+
+  console.log('🔍 EventManagerPage - 渲染状态:', {
+    isLoading,
+    loadError,
+    eventsCount: events?.length,
+    events: events
+  });
 
   const handleEventUpdated = (updatedEvent) => {
     setEvents(prevEvents =>

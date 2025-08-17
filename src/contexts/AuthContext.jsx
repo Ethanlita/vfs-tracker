@@ -22,6 +22,8 @@ export const useAuth = () => {
 };
 
 export const AuthProvider = ({ children }) => {
+  console.log('🔍 AuthContext: AuthProvider 组件初始化');
+
   const [user, setUser] = useState(null);
   const [userProfile, setUserProfile] = useState(null);
   const [cognitoUserInfo, setCognitoUserInfo] = useState(null); // 新增：Cognito用户详细信息
@@ -31,11 +33,24 @@ export const AuthProvider = ({ children }) => {
   const [authInitialized, setAuthInitialized] = useState(false);
   const ready = globalIsProductionReady();
 
+  console.log('🔍 AuthContext: 初始状态', {
+    ready,
+    user,
+    authInitialized
+  });
+
   // 生产模式下监听Amplify认证状态
   const amplifyAuthHook = ready ? useAuthenticator(context => [
     context.authStatus,
     context.user
   ]) : { authStatus: 'unauthenticated', user: null };
+
+  console.log('🔍 AuthContext: amplifyAuthHook 状态', {
+    ready,
+    authStatus: amplifyAuthHook.authStatus,
+    hasUser: !!amplifyAuthHook.user,
+    amplifyUser: amplifyAuthHook.user
+  });
 
   // 检查现有的认证会话
   useEffect(() => {
@@ -62,11 +77,13 @@ export const AuthProvider = ({ children }) => {
         const currentUser = await getCurrentUser();
         if (currentUser) {
           console.log('🔄 检测到现有认证会话:', currentUser);
-          handleAuthSuccess(currentUser);
+          // 关键修复1: 必须等待整个认证和用户资料加载流程完成
+          await handleAuthSuccess(currentUser);
         }
       } catch (error) {
         console.log('🔍 未检测到现有认证会话:', error.message);
       } finally {
+        // 现在，这只会在所有异步操作完成后执行
         setAuthInitialized(true);
       }
     };
@@ -76,6 +93,14 @@ export const AuthProvider = ({ children }) => {
 
   // 监听生产模式下Amplify的认证状态变化
   useEffect(() => {
+    console.log('🔍 AuthContext: useEffect 监听认证状态变化', {
+      ready,
+      authInitialized,
+      amplifyAuthStatus: amplifyAuthHook.authStatus,
+      amplifyUser: amplifyAuthHook.user,
+      currentUser: user
+    });
+
     if (!ready || !authInitialized) return;
 
     const { authStatus, user: amplifyUser } = amplifyAuthHook;
@@ -89,6 +114,15 @@ export const AuthProvider = ({ children }) => {
     } else if (authStatus === 'unauthenticated' && user) {
       console.log('🔄 Amplify认证状态变化 - 用户已登出');
       logout();
+    } else {
+      console.log('🔍 AuthContext: useEffect 跳过处理', {
+        authStatus,
+        hasAmplifyUser: !!amplifyUser,
+        hasCurrentUser: !!user,
+        reason: authStatus !== 'authenticated' ? 'not authenticated' :
+                !amplifyUser ? 'no amplify user' :
+                !!user ? 'user already exists' : 'unknown'
+      });
     }
   }, [amplifyAuthHook.authStatus, amplifyAuthHook.user, authInitialized, ready, user]);
 
@@ -158,86 +192,89 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // 注册后的回调处理
-  const handleAuthSuccess = (amplifyUser) => {
+  // 注册后的回调处理 - 使用Amplify v6标准API
+  const handleAuthSuccess = async (amplifyUser) => {
     console.log('🔍 AuthContext: handleAuthSuccess 接收到的用户对象:', amplifyUser);
-    console.log('🔍 AuthContext: 用户对象的属性:', {
-      username: amplifyUser.username,
-      userId: amplifyUser.userId,
-      attributes: amplifyUser.attributes,
-      signInDetails: amplifyUser.signInDetails,
-      // 检查所有可能的字段
-      ...Object.keys(amplifyUser).reduce((acc, key) => {
-        acc[key] = typeof amplifyUser[key];
-        return acc;
-      }, {})
-    });
+    console.log('📍 [验证点20] 开始使用Amplify v6标准API获取用户信息');
 
-    // 尝试从多个可能的位置获取用户信息
-    const extractUserInfo = (user) => {
-      // 可能的用户ID位置
-      const possibleUserIds = [
-        user.attributes?.sub,
-        user.userId,
-        user.username,
-        user.signInDetails?.loginId,
-        user.sub
-      ];
+    try {
+      // 使用Amplify v6标准API获取完整用户信息
+      console.log('📍 [验证点20] 调用 getCurrentUser()...');
+      const currentUser = await getCurrentUser();
+      console.log('📍 [验证点20] 调用 fetchUserAttributes()...');
+      const userAttributes = await fetchUserAttributes();
 
-      // 可能的用户名位置
-      const possibleUsernames = [
-        user.attributes?.nickname,
-        user.attributes?.preferred_username,
-        user.username,
-        user.attributes?.email?.split('@')[0], // 从邮箱提取用户名
-        user.signInDetails?.loginId
-      ];
-
-      // 可能的属性位置
-      const possibleAttributes = [
-        user.attributes,
-        user.signInDetails,
-        user
-      ];
-
-      const userId = possibleUserIds.find(id => id && id !== '');
-      const username = possibleUsernames.find(name => name && name !== '');
-      const attributes = possibleAttributes.find(attr => attr && typeof attr === 'object');
-
-      console.log('🔍 AuthContext: 提取的用户信息:', {
-        userId,
-        username,
-        attributes,
-        possibleUserIds,
-        possibleUsernames
+      console.log('🔍 AuthContext: Amplify v6 API获取的数据:', {
+        currentUser,
+        userAttributes
       });
 
-      return { userId, username, attributes };
-    };
+      console.log('✅ [验证点20] 成功使用Amplify v6标准API获取用户信息:', {
+        source: 'Amplify v6 getCurrentUser + fetchUserAttributes',
+        currentUserKeys: Object.keys(currentUser || {}),
+        userAttributesKeys: Object.keys(userAttributes || {}),
+        userId: currentUser?.userId,
+        email: userAttributes?.email,
+        nickname: userAttributes?.nickname
+      });
 
-    const { userId, username, attributes } = extractUserInfo(amplifyUser);
+      // 构建标准用户对象
+      const userData = {
+        userId: currentUser.userId,
+        username: currentUser.username,
+        attributes: {
+          sub: currentUser.userId, // v6中userId就是sub
+          email: userAttributes.email,
+          nickname: userAttributes.nickname,
+          preferred_username: userAttributes.preferred_username,
+          email_verified: userAttributes.email_verified,
+          picture: userAttributes.picture,
+          ...userAttributes // 包含所有其他属性
+        }
+      };
 
-    const userData = {
-      userId: userId,
-      username: username,
-      attributes: attributes
-    };
+      console.log('🎉 AuthContext: 构建的标准用户数据:', userData);
+      console.log('✅ [验证点20] 用户数据完全来自Amplify v6标准API，无混合来源');
 
-    console.log('🎉 AuthContext: 最终用户数据:', userData);
+      // 设置用户状态
+      setUser(userData);
 
-    // 设置用户状态
-    setUser(userData);
+      // 加载用户资料
+      if (userData.userId) {
+        // 关键修复2: 等待用户资料加载完成
+        await loadUserProfile(userData.userId);
+      } else {
+        setNeedsProfileSetup(true);
+        setUserProfile(null);
+      }
 
-    // 加载用户资料而不是直接标记需要设置
-    if (userId) {
-      loadUserProfile(userId);
-    } else {
-      // 只有在没有用户ID时才标记需要完善资料
-      setNeedsProfileSetup(true);
-      setUserProfile(null);
+      console.log('🎉 认证成功，正在加载用户资料:', userData);
+
+    } catch (error) {
+      console.error('❌ 获取用户信息失败:', error);
+      console.log('⚠️ [验证点20] Amplify v6 API调用失败，使用基本信息作为兜底');
+
+      // 如果API调用失败，使用基本信息
+      const basicUserData = {
+        userId: amplifyUser.userId || amplifyUser.user?.userId,
+        username: amplifyUser.username || amplifyUser.user?.username,
+        attributes: {
+          sub: amplifyUser.userId || amplifyUser.user?.userId,
+          email: null,
+          nickname: null,
+          preferred_username: null,
+          email_verified: 'false',
+          picture: null
+        }
+      };
+
+      console.log('⚠️ 使用基本用户信息:', basicUserData);
+      setUser(basicUserData);
+
+      if (basicUserData.userId) {
+        await loadUserProfile(basicUserData.userId);
+      }
     }
-
-    console.log('🎉 认证成功，正在加载用户资料:', userData);
   };
 
   // 加载Cognito用户详细信息
@@ -481,6 +518,19 @@ export const AuthProvider = ({ children }) => {
   const refreshCognitoUserInfo = async () => {
     await loadCognitoUserInfo();
   };
+
+  // 关键修复3: 在认证状态完全确定前，显示加载指示器
+  // 这可以防止应用在不完整的状态下渲染，从而避免Hooks调用不一致的错误
+  if (!authInitialized) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500 mx-auto mb-4"></div>
+          <p className="text-gray-600">正在加载用户资料...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <AuthContext.Provider value={{
