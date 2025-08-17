@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { updateUserProfile } from '../api';
 import { generateAvatar } from '../utils/avatar';
@@ -15,6 +16,8 @@ const UserProfileManager = () => {
     refreshCognitoUserInfo,
     resendEmailVerification // 新增
   } = useAuth();
+
+  const navigate = useNavigate();
 
   const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -240,6 +243,10 @@ const UserProfileManager = () => {
     }
   };
 
+  const handleBack = () => {
+    navigate('/mypage');
+  };
+
   if (!user) {
     return (
       <div className="text-center py-8">
@@ -250,8 +257,19 @@ const UserProfileManager = () => {
 
   return (
     <div className="max-w-4xl mx-auto pt-6 space-y-6">
+      {/* 返回按钮 */}
+      <button
+        onClick={handleBack}
+        className="ml-4 mt-4 mb-6 flex items-center text-purple-600 hover:text-purple-700 transition-colors duration-200"
+      >
+        <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+        </svg>
+        返回仪表板
+      </button>
+
       {/* 页面标题 */}
-      <div className="bg-white rounded-lg border p-6">
+      <div className="bg-white rounded-lg p-6 shadow-md">
         <h2 className="text-2xl font-bold text-gray-900 mb-2">个人资料管理</h2>
         <p className="text-gray-600">管理您的个人信息和隐私设置</p>
       </div>
@@ -270,7 +288,7 @@ const UserProfileManager = () => {
       )}
 
       {/* Cognito账户信息 */}
-      <div className="bg-white rounded-lg border">
+      <div className="bg-white rounded-lg shadow-md">
         <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
           <div>
             <h3 className="text-lg font-semibold text-gray-900">账户信息</h3>
@@ -450,7 +468,7 @@ const UserProfileManager = () => {
       </div>
 
       {/* 个人资料（Lambda管理的部分） */}
-      <div className="bg-white rounded-lg border">
+      <div className="bg-white rounded-lg shadow-md">
         <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
           <div>
             <h3 className="text-lg font-semibold text-gray-900">个人资料</h3>
@@ -596,7 +614,7 @@ const UserProfileManager = () => {
       </div>
 
       {/* 隐私说明 */}
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+      <div className="bg-blue-50 rounded-lg p-4 shadow-md">
         <h4 className="text-sm font-semibold text-blue-900 mb-2">隐私说明</h4>
         <ul className="text-sm text-blue-800 space-y-1">
           <li>• <strong>账户信息</strong>：邮箱、昵称、密码由Cognito管理，用于登录和验证</li>

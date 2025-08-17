@@ -3,7 +3,7 @@
     2. ~~~查询用户信息API（公用，仅返回公开数据）（已解决）~~~
     3. ~~~编辑用户信息API（私有）（已解决）~~
     4. ~~~新用户资料完善API（私有）（已解决）~~
-    5. Gemini代理API（私有）
+    5. Gemini代理API（私有）：前端尽量请求逻辑不变，API只是转发带个Key，用来保护Key不泄露
 2. 更改以下后端API：
     1. ~~~用于PublicDashboard的all-events API不返回姓名不公开的用户的名字（以“（非公开）”替代）（已解决）~~~
 3. 做好online praat
@@ -28,7 +28,7 @@
 13. ~~~Timeline.jsx里面还是会出现示例数据 查找来源 （已解决）~~
 14. ~~~Timeline.jsx上方的间距不足（已解决）~~
 15. 实现一个Lambda函数，自动Approve事件（规则：非医院测试事件一律自动Approve，医院测试事件调用Gemini，审查附件的内容-应该是嗓音测试报告-是否和用户的输入相符）
-16. 实现一个管理员页面，允许管理员Approve事件，或者将事件改回Pending，或者其他管理功能
+16. 实现一个管理员页面，允许管理员Approve事件，或者将事件改回Pending，以及其他管理功能
 17. EventManager.jsx中无法正常管理事件
-18. EventManager.jsx和AddEvent.jsx左上角的返回按钮，增加一点间距
-19. Profile.jsx左上角加一个返回按钮，样式同EventManager.jsx和AddEvent.jsx
+18. ~~~EventManager.jsx和AddEvent.jsx左上角的返回按钮，增加一点间距（已解决）~~~
+19. ~~~Profile.jsx左上角加一个返回按钮，样式同EventManager.jsx和AddEvent.jsx（已解决）~~~

@@ -117,8 +117,19 @@ const EventManager = ({ events, onEventUpdated, onEventDeleted, isProductionRead
       // 在生产环境中调用删除API
       if (typeof isProductionReady === 'function' ? isProductionReady() : isProductionReady) {
         // TODO: 实现删除API调用
-        console.log('生产环境：删除事件', eventId);
-        alert('删除功能需要后端API支持');
+        // 这里需要实现实际的删除API调用
+        try {
+          // 暂时使用模拟删除，直到删除API实现
+          console.log('生产环境：删除事件', eventId);
+          if (onEventDeleted) {
+            onEventDeleted(eventId);
+          }
+          alert('事件删除功能正在开发中，目前已从本地列表移除');
+        } catch (apiError) {
+          console.error('API删除失败:', apiError);
+          alert('删除事件失败，请重试');
+          return;
+        }
       } else {
         // 开发环境：模拟删除
         console.log('开发环境：模拟删除事件', eventId);
@@ -132,6 +143,12 @@ const EventManager = ({ events, onEventUpdated, onEventDeleted, isProductionRead
       console.error('删除事件失败:', error);
       alert('删除事件失败，请重试');
     }
+  };
+
+  const handleEditEvent = (event) => {
+    // 编辑功能 - 可以扩展为完整的编辑表单
+    console.log('编辑事件:', event);
+    alert('编辑功能正在开发中。当前可以删除事件并重新添加。');
   };
 
   const formatDate = (dateString) => {

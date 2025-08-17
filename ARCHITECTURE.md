@@ -27,8 +27,6 @@
       - 个人时间轴与图表（Chart.js）；可结合 getEventsByUserId
     - PostList.jsx / PostViewer.jsx / PostsDropdown.jsx
       - 帖子列表与查看，依赖构建阶段生成的 public/posts.json 与复制到 dist/posts 的静态内容
-    - Profile.jsx
-      - 个人页面整合录入与展示
 - scripts/generate-posts-list.js
   - 在 dev/prebuild 阶段扫描 posts 目录，生成 public/posts.json
 - vite.config.js

@@ -28,7 +28,6 @@
   - EventForm.jsx：事件录入表单，支持文件上传与动态字段
   - Timeline.jsx：个人时间轴与图表展示
   - PostList.jsx / PostViewer.jsx / PostsDropdown.jsx：帖子列表与阅读
-  - Profile.jsx：个人页，集成表单与列表
 - src/api.js：对接 AWS Amplify（API/Storage），提供开发环境回退逻辑
 - scripts/generate-posts-list.js：生成 public/posts.json
 - docs/data_structures.md：数据结构契约（禁止修改）
