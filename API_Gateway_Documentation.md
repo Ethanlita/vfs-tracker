@@ -401,30 +401,141 @@ Content-Type: application/json
 
 ---
 
-## Data Storage
+## 文件管理端点 (S3预签名URL)
 
-**Database**: Amazon DynamoDB  
-**Table Name**: `VoiceFemEvents`
+### POST /upload-url
 
-**Key Structure**:
-- Partition Key: `userId` (String)
-- Sort Key: `eventId` (String)
+**描述**: 获取文件上传的预签名URL，用于安全上传文件到S3
 
-**Event Status Values**:
-- `pending`: Newly created events awaiting approval
-- `approved`: Events approved for public dashboard display
-- `rejected`: Events that won't appear on public dashboard
+**认证**: 需要JWT token
 
-**Indexes**:
-- `StatusDateIndex`: Enables efficient querying of approved events by date
+**请求体**:
+```json
+{
+  "fileKey": "string",     // S3文件key，格式：{type}/{userId}/{timestamp}_{filename}
+  "contentType": "string"  // 文件MIME类型，如 "image/jpeg", "application/pdf"
+}
+```
+
+**响应**:
+```json
+{
+  "uploadUrl": "string",   // 预签名上传URL
+  "fileKey": "string",     // 确认的文件key
+  "expiresIn": 900         // URL有效期（秒）
+}
+```
+
+**安全规则**:
+- 用户只能上传到自己的目录下
+- 支持的路径格式：`avatars/{userId}/`, `attachments/{userId}/`, `uploads/{userId}/`
+- 上传URL有效期15分钟
 
 ---
 
-## Rate Limiting
+### POST /file-url
 
-- **Public endpoints**: No rate limiting currently applied
-- **Authenticated endpoints**: Subject to AWS API Gateway default limits
+**描述**: 获取私有文件访问的预签名URL（仅限文件所有者）
 
-## Support
+**认证**: 需要JWT token
 
-For technical support or API questions, please refer to the project documentation or contact the development team.
+**请求体**:
+```json
+{
+  "fileKey": "string"  // 要访问的S3文件key
+}
+```
+
+**响应**:
+```json
+{
+  "url": "string",      // 预签名访问URL
+  "expiresIn": 3600     // URL有效期（秒）
+}
+```
+
+**安全规则**:
+- 只有文件所有者可以访问自己的文件
+- 访问URL有效期1小时
+- 主要用于附件和私有文件访问
+
+---
+
+### GET /avatar/{userId}
+
+**描述**: 获取用户头像的预签名URL（公开访问）
+
+**认证**: 无需认证
+
+**路径参数**:
+- `userId`: 用户ID
+
+**响应**:
+```json
+{
+  "url": "string",      // 预签名访问URL
+  "expiresIn": 86400    // URL有效期（秒）
+}
+```
+
+**安全规则**:
+- 任何用户都可以访问其他用户的头像
+- 头像URL有效期24小时
+- 如果头像不存在，返回默认头像
+
+---
+
+## 文件上传安全架构
+
+### 概述
+VFS Tracker已迁移到安全的S3预签名URL架构，不再使用公开S3访问。这确保了：
+1. **头像公开访问**: 允许所有用户查看头像
+2. **附件私有访问**: 仅文件所有者可以访问自己的附件
+3. **安全上传**: 用户只能上传到自己的目录
+
+### 文件路径规范
+```
+avatars/{userId}/           # 用户头像
+attachments/{userId}/       # 嗓音事件附件
+uploads/{userId}/           # 通用上传文件
+```
+
+### 前端集成
+- 使用`SecureFileUpload`组件进行文件上传
+- 自动处理预签名URL获取和文件上传流程
+- 支持头像、附件等不同文件类型
+
+### 错误处理
+所有文件管理端点返回标准错误格式：
+```json
+{
+  "error": "string",        // 错误描述
+  "details": "string"       // 详细错误信息（可选）
+}
+```
+
+常见错误代码：
+- `400`: 请求参数错误
+- `401`: 认证失败或缺少token
+- `403`: 权限不足，无法访问指定文件
+- `500`: 服务器内部错误
+
+---
+
+## 部署状态
+
+### 已完成 ✅
+- Lambda函数实现（getUploadUrl, getFileUrl, getAvatarUrl）
+- 前端SecureFileUpload组件
+- API模块预签名URL函数
+- 安全架构设计
+
+### 待完成 ⏳
+- API Gateway端点配置
+- Lambda函数部署到AWS
+- 环境变量配置
+- 端到端测试
+
+---
+
+**注意**: 这些端点目前处于开发阶段，实际部署需要先完成API Gateway配置。详细配置说明请参考 `docs/api-gateway-s3-presigned-config.md`。

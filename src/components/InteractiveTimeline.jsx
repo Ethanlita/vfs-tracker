@@ -5,41 +5,6 @@ import { createPortal } from 'react-dom';
 import { useAsync } from '../utils/useAsync.js';
 import { resolveAttachmentUrl } from '../utils/attachments.js';
 
-const StatusIndicator = ({ isDemo, isLoading }) => {
-  const CheckCircle = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-      <polyline points="22 4 12 14.01 9 11.01" />
-    </svg>
-  );
-  const AlertTriangle = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-      <line x1="12" y1="9" x2="12" y2="13" />
-      <line x1="12" y1="17" x2="12.01" y2="17" />
-    </svg>
-  );
-  const Lightbulb = () => (
-    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M9 18h6" />
-      <path d="M10 22h4" />
-      <path d="M2 12a10 10 0 1 1 20 0c0 4.19-2.49 7.79-6 9.21V22H8v-.79C4.49 19.79 2 16.19 2 12Z" />
-    </svg>
-  );
-  return (
-    <div className="flex items-center space-x-2 text-sm text-gray-600 bg-white/80 backdrop-blur-sm px-3 py-1.5 rounded-full shadow-md border border-gray-200">
-      {isLoading ? (
-        <span className="animate-spin text-yellow-500"><Lightbulb /></span>
-      ) : isDemo ? (
-        <span className="text-orange-500"><AlertTriangle /></span>
-      ) : (
-        <span className="text-green-500"><CheckCircle /></span>
-      )}
-      <span>{isLoading ? '加载中...' : isDemo ? '演示数据' : '实时数据'}</span>
-    </div>
-  );
-};
-
 const EventDetails = ({ event }) => {
   const d = event?.details || {};
   const rows = [];
@@ -183,15 +148,21 @@ const EventDetails = ({ event }) => {
   );
 };
 
-const InteractiveTimeline = ({ events = [], isProductionReady, isLoading = false }) => {
+const InteractiveTimeline = ({ events = [] }) => {
   const [selectedEvent, setSelectedEvent] = useState(null);
+
+  console.log('🎯 InteractiveTimeline: 渲染开始', {
+    eventsCount: events.length,
+    events: events
+  });
+
   // 新增：附件签名 URL 异步获取（仅在用户请求时执行）
   const attachmentAsync = useAsync(async () => {
     if (!selectedEvent?.details?.attachmentUrl) return '';
     return await resolveAttachmentUrl(selectedEvent.details.attachmentUrl);
   }, [selectedEvent?.details?.attachmentUrl], { immediate: false, preserveValue: false });
 
-  // 确保对 motion 的引用��某些构建下不会被误判为未使用
+  // 确保对 motion 的引用在某些构建下不会被误判为未使用
   // eslint-disable-next-line no-unused-expressions
   motion && null;
 
@@ -217,20 +188,19 @@ const InteractiveTimeline = ({ events = [], isProductionReady, isLoading = false
     return (
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center py-12">
         <div className="text-6xl mb-4">📝</div>
-        <h3 className="text-lg font-medium text-gray-900 mb-2">还没有事件记��</h3>
+        <h3 className="text-lg font-medium text-gray-900 mb-2">还没有事件记录</h3>
         <p className="text-gray-500">使用上面的表单添加您的第一个嗓音事件！</p>
       </motion.div>
     );
   }
 
-  const isDemo = !(typeof isProductionReady === 'function' ? isProductionReady() : !!isProductionReady);
   const ordered = [...events].sort((a, b) => new Date(a.date || a.createdAt) - new Date(b.date || b.createdAt));
 
   // 尺寸与对齐参数 （仅用于横向模式）
   const AXIS_THICKNESS = 1;       // 轴线 1px
   const DOT = 10;                 // 圆点直径
   const AXIS_GAP = 28;            // 轴线与卡片/日期距离
-  const ALIGN_NUDGE = 8.5;        // 对齐微调：将圆点整体向下 0.5px，避免“略高”的视觉
+  const ALIGN_NUDGE = 8.5;        // 对齐微调：将圆点整体向下 0.5px，避免"略高"的视觉
 
   return (
     <div className="relative isolate pt-4 pb-4">
@@ -328,7 +298,7 @@ const InteractiveTimeline = ({ events = [], isProductionReady, isLoading = false
                         width: '1px'
                       }}
                     />
-                    {/* 圆点（与轴线精��对齐） */}
+                    {/* 圆点（与轴线精确对齐） */}
                     <div
                       className={`absolute left-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full ${cfg.bg} z-20`}
                       style={{ top: `calc(50% + ${ALIGN_NUDGE}px)`, width: `${DOT}px`, height: `${DOT}px`, boxShadow: '0 1px 2px rgba(0,0,0,0.12)' }}
@@ -358,85 +328,38 @@ const InteractiveTimeline = ({ events = [], isProductionReady, isLoading = false
         </div>
       </div>
 
-      {/* 状态指示器：小屏居中，桌面端靠右 */}
-      <div className="px-4 sm:px-8 flex justify-center md:justify-end">
-        <StatusIndicator isDemo={isDemo} isLoading={isLoading} />
-      </div>
-
-      {/* 详情弹窗（两种布局共用） */}
+      {/* 事件详情弹窗 */}
       {selectedEvent && createPortal(
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => { setSelectedEvent(null); attachmentAsync.reset(); }} />
-          <div className="relative z-10 w-full max-w-xl bg-white rounded-2xl shadow-2xl p-6 m-4 overflow-y-auto max-h-[80vh] overscroll-contain">
-            <button
-              onClick={() => { setSelectedEvent(null); attachmentAsync.reset(); }}
-              className="absolute top-3 right-3 text-gray-400 hover:text-gray-600"
-              aria-label="关闭"
-            >
-              ×
-            </button>
-
-            <div className="flex items-center space-x-3 mb-4">
-              <span className="text-3xl">{(typeConfig[selectedEvent.type] || {}).icon || '📌'}</span>
-              <div>
-                <h3 className="text-xl font-bold text-gray-800">
-                  {(typeConfig[selectedEvent.type] || {}).label || selectedEvent.type}
-                </h3>
-                <p className="text-xs text-gray-500">
-                  {new Date(selectedEvent.date || selectedEvent.createdAt).toLocaleString('zh-CN', {
-                    year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit'
-                  })}
-                </p>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[80vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white border-b border-gray-200 p-6 rounded-t-2xl">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <span className="text-2xl">
+                    {(typeConfig[selectedEvent.type] || { icon: '📌' }).icon}
+                  </span>
+                  <div>
+                    <h2 className="text-xl font-bold text-gray-900">
+                      {(typeConfig[selectedEvent.type] || { label: selectedEvent.type }).label}
+                    </h2>
+                    <p className="text-sm text-gray-500">
+                      {formatDate(selectedEvent.date || selectedEvent.createdAt).full}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setSelectedEvent(null)}
+                  className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+                >
+                  <svg className="w-6 h-6 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
               </div>
             </div>
-
-            <EventDetails event={selectedEvent} />
-
-            {selectedEvent.details?.attachmentUrl && (
-              <div className="mt-5 space-y-2">
-                {/* 下载 / 打开附件按钮 */}
-                {!attachmentAsync.loading && !attachmentAsync.error && !attachmentAsync.value && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      attachmentAsync.execute().then(url => { if (url) window.open(url, '_blank', 'noopener,noreferrer'); });
-                    }}
-                    className="btn-pink"
-                  >
-                    获取并打开附件
-                  </button>
-                )}
-                {attachmentAsync.loading && (
-                  <button type="button" disabled className="btn-pink opacity-70 cursor-default inline-flex items-center gap-2">
-                    <span className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full" /> 正在获取附件...
-                  </button>
-                )}
-                {attachmentAsync.error && (
-                  <div className="text-sm text-red-600 flex items-center gap-2">
-                    附件加载失败：{attachmentAsync.error.message || '未知错误'}
-                    <button
-                      type="button"
-                      onClick={() => attachmentAsync.execute().then(url => { if (url) window.open(url, '_blank', 'noopener,noreferrer'); })}
-                      className="px-2 py-0.5 text-xs rounded bg-red-600 text-white hover:bg-red-500"
-                    >重试</button>
-                  </div>
-                )}
-                {attachmentAsync.value && !attachmentAsync.loading && (
-                  <div className="flex items-center gap-3">
-                    <button
-                      type="button"
-                      onClick={() => window.open(attachmentAsync.value, '_blank', 'noopener,noreferrer')}
-                      className="btn-pink"
-                    >打开附件</button>
-                    <a
-                      href={attachmentAsync.value}
-                      target="_blank" rel="noreferrer"
-                      className="text-xs text-indigo-600 hover:underline"
-                    >直接下载</a>
-                  </div>
-                )}
-              </div>
-            )}
+            <div className="p-6">
+              <EventDetails event={selectedEvent} />
+            </div>
           </div>
         </div>,
         document.body

@@ -72,10 +72,23 @@ export const getUserAvatarUrl = (user, size = 40) => {
  * @returns {string} 用户显示名称
  */
 export const getUserDisplayName = (user) => {
+  console.log('🔍 getUserDisplayName: 检查用户对象', {
+    user,
+    attributes: user?.attributes,
+    nickname: user?.attributes?.nickname,
+    name: user?.attributes?.name,
+    preferred_username: user?.attributes?.preferred_username,
+    username: user?.username,
+    email: user?.attributes?.email
+  });
+
   // 优先级：nickname > name > preferred_username > username > email用户名部分
-  return user?.attributes?.nickname ||
+  const displayName = user?.attributes?.nickname ||
     user?.attributes?.name ||
     user?.attributes?.preferred_username ||
     user?.username ||
     (user?.attributes?.email ? user.attributes.email.split('@')[0] : '未知用户');
+
+  console.log('✅ getUserDisplayName: 最终显示名称', displayName);
+  return displayName;
 };

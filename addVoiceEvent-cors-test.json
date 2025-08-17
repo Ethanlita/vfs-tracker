@@ -1,0 +1,92 @@
+{
+  "info": {
+    "name": "VFS Tracker - addVoiceEvent CORS测试",
+    "description": "专门测试addVoiceEvent端点的CORS和功能",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. OPTIONS预检请求 - /events",
+      "request": {
+        "method": "OPTIONS",
+        "header": [
+          {
+            "key": "Origin",
+            "value": "http://localhost:4173",
+            "type": "text"
+          },
+          {
+            "key": "Access-Control-Request-Method",
+            "value": "POST",
+            "type": "text"
+          },
+          {
+            "key": "Access-Control-Request-Headers",
+            "value": "Content-Type,Authorization",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "https://2rzxc2x5l8.execute-api.us-east-1.amazonaws.com/dev/events",
+          "protocol": "https",
+          "host": [
+            "2rzxc2x5l8",
+            "execute-api",
+            "us-east-1",
+            "amazonaws",
+            "com"
+          ],
+          "path": [
+            "dev",
+            "events"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "2. POST请求测试 - 无认证（应该失败）",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Origin",
+            "value": "http://localhost:4173",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"type\": \"self_test\",\n  \"date\": \"2025-08-17\",\n  \"details\": {\n    \"fundamentalFrequency\": 180,\n    \"notes\": \"测试请求\"\n  }\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "https://2rzxc2x5l8.execute-api.us-east-1.amazonaws.com/dev/events",
+          "protocol": "https",
+          "host": [
+            "2rzxc2x5l8",
+            "execute-api",
+            "us-east-1",
+            "amazonaws",
+            "com"
+          ],
+          "path": [
+            "dev",
+            "events"
+          ]
+        }
+      },
+      "response": []
+    }
+  ]
+}
+

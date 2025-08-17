@@ -1,0 +1,122 @@
+{
+  "info": {
+    "name": "VFS Tracker - CORS测试",
+    "description": "专门用于测试API Gateway CORS配置的Postman集合",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. OPTIONS预检请求测试",
+      "request": {
+        "method": "OPTIONS",
+        "header": [
+          {
+            "key": "Origin",
+            "value": "http://localhost:4173",
+            "type": "text"
+          },
+          {
+            "key": "Access-Control-Request-Method",
+            "value": "GET",
+            "type": "text"
+          },
+          {
+            "key": "Access-Control-Request-Headers",
+            "value": "Content-Type",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "https://2rzxc2x5l8.execute-api.us-east-1.amazonaws.com/dev/all-events",
+          "protocol": "https",
+          "host": [
+            "2rzxc2x5l8",
+            "execute-api",
+            "us-east-1",
+            "amazonaws",
+            "com"
+          ],
+          "path": [
+            "dev",
+            "all-events"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "2. 实际GET请求测试",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Origin",
+            "value": "http://localhost:4173",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "https://2rzxc2x5l8.execute-api.us-east-1.amazonaws.com/dev/all-events",
+          "protocol": "https",
+          "host": [
+            "2rzxc2x5l8",
+            "execute-api",
+            "us-east-1",
+            "amazonaws",
+            "com"
+          ],
+          "path": [
+            "dev",
+            "all-events"
+          ]
+        }
+      },
+      "response": []
+    },
+    {
+      "name": "3. POST请求CORS测试 (addEvent)",
+      "request": {
+        "method": "OPTIONS",
+        "header": [
+          {
+            "key": "Origin",
+            "value": "http://localhost:4173",
+            "type": "text"
+          },
+          {
+            "key": "Access-Control-Request-Method",
+            "value": "POST",
+            "type": "text"
+          },
+          {
+            "key": "Access-Control-Request-Headers",
+            "value": "Content-Type,Authorization",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "https://2rzxc2x5l8.execute-api.us-east-1.amazonaws.com/dev/events",
+          "protocol": "https",
+          "host": [
+            "2rzxc2x5l8",
+            "execute-api",
+            "us-east-1",
+            "amazonaws",
+            "com"
+          ],
+          "path": [
+            "dev",
+            "events"
+          ]
+        }
+      },
+      "response": []
+    }
+  ]
+}
+

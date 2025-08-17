@@ -15,11 +15,6 @@ import { getAllEvents } from '../api';
 import { useAsync } from '../utils/useAsync.js';
 import { isProductionReady as globalIsProductionReady } from '../env.js';
 import EnhancedDataCharts from './EnhancedDataCharts.jsx';
-
-// @en Register the necessary components for Chart.js.
-// @zh 为 Chart.js 注册必要的组件。
-ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, Title, Tooltip, Legend);
-
 /**
  * @en The PublicDashboard component displays aggregated and anonymized data from all users.
  * It includes summary statistics, a user list with profile view, an event distribution bar chart,
@@ -28,14 +23,19 @@ ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointEleme
  * 以及基于 VFS 对齐的多用户基频变化折线图与统计指标。
  * @returns {JSX.Element} The rendered public dashboard component.
  */
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  LineElement,
+  PointElement,
+  Title,
+  Tooltip,
+  Legend
+);
+
 const PublicDashboard = () => {
-  // --- STATE MANAGEMENT ---
-  const [barChartData, setBarChartData] = useState(null);
-  const [lineChartData, setLineChartData] = useState(null);
-  const [totalEvents, setTotalEvents] = useState(0);
-  const [totalUsers, setTotalUsers] = useState(0);
-  const [usersList, setUsersList] = useState([]); // [{userId, userName}]
-  const [allEventsState, setAllEventsState] = useState([]);
+  const [selectedUserId, setSelectedUserId] = useState(null);
   const [stats, setStats] = useState({
     avgImprovement: 0,
     variance: 0,
@@ -43,224 +43,147 @@ const PublicDashboard = () => {
     usedUsers: 0,
   });
 
-  // 替换局部 isProductionReady 逻辑
-  const ready = globalIsProductionReady();
-  const forceReal = !!import.meta.env.VITE_FORCE_REAL;
+  console.log('🎯 PublicDashboard: 组件渲染开始');
 
-  // User profile drawer
-  const [selectedUserId, setSelectedUserId] = useState(null);
-  const selectedUser = useMemo(
-    () => usersList.find((u) => u.userId === selectedUserId) || null,
-    [selectedUserId, usersList]
-  );
+  const eventsAsync = useAsync(getAllEvents);
+  const allEventsState = eventsAsync.value || [];
 
-  // --- UTILITIES ---
-  const parseDate = (d) => (d instanceof Date ? d : new Date(d));
-  const diffInDays = (a, b) => {
-    const A = parseDate(a).setHours(0, 0, 0, 0);
-    const B = parseDate(b).setHours(0, 0, 0, 0);
-    return Math.round((A - B) / (1000 * 60 * 60 * 24));
-  };
+  console.log('📊 PublicDashboard: 事件数据状态', {
+    loading: eventsAsync.loading,
+    error: eventsAsync.error,
+    eventsCount: allEventsState.length,
+    events: allEventsState.slice(0, 2) // 只显示前两个事件作为预览
+  });
 
-  // Generate additional mock events when data is insufficient
-  const generateMockEvents = (userCount = 25) => {
-    const events = [];
-    const now = new Date();
-    const rand = (min, max) => Math.random() * (max - min) + min;
-    const randInt = (min, max) => Math.floor(rand(min, max));
-    const pick = (arr) => arr[randInt(0, arr.length)];
-    const names = [
-      'Alex','Sam','Taylor','Jordan','Casey','Morgan','Jamie','Riley','Avery','Quinn',
-      'Logan','Parker','Drew','Reese','Rowan','Emerson','Kai','Cameron','Blake','Eden',
-      'Hayden','Skyler','Shawn','Noel','Robin','Kendall','Shawn','Corey','Jessie','Sage'
-    ];
-
-    for (let i = 0; i < userCount; i++) {
-      const userId = `user_${Date.now()}_${i}_${randInt(1000, 9999)}`;
-      const userName = `${pick(names)} ${String.fromCharCode(65 + (i % 26))}.`;
-      // Anchor VFS at day 0 relative to a random date within last 120 days
-      const anchor = new Date(now);
-      anchor.setDate(now.getDate() - randInt(15, 120));
-
-      // Base f0 and trend
-      const base = rand(105, 190);
-      const postGain = rand(8, 28); // average improvement after VFS
-      const noise = () => rand(-5, 5);
-
-      // Create measurement schedule around anchor
-      const relDays = [-21, -14, -7, 0, 7, 14, 21, 28];
-      relDays.forEach((d) => {
-        const dt = new Date(anchor);
-        dt.setDate(anchor.getDate() + d);
-        const type = d === 0
-          ? 'hospital_test'
-          : d > 0
-            ? pick(['self_test', 'voice_training', 'self_practice'])
-            : pick(['self_test', 'voice_training', 'self_practice']);
-        const f0 = d < 0 ? base + noise() : base + postGain + noise();
-        events.push({
-          id: `${userId}_${d}`,
-          userId,
-          userName,
-          type,
-          date: dt.toISOString(),
-          pitch: Math.round(f0 * 10) / 10,
-        });
-      });
-
-      // Add a surgery event randomly for some users
-      if (Math.random() < 0.25) {
-        const dt = new Date(anchor);
-        dt.setDate(anchor.getDate() - randInt(40, 90));
-        events.push({
-          id: `${userId}_sx`,
-          userId,
-          userName,
-          type: 'surgery',
-          date: dt.toISOString(),
-        });
-      }
-    }
-    return events;
-  };
-
-  // 使用 useAsync 加载事件数据
-  const eventsAsync = useAsync(async () => {
-    let allEvents = await getAllEvents();
-
-    // 计算当前的唯一用户数
-    const uniqueUsers = new Set(
-      (Array.isArray(allEvents) ? allEvents : []).map(e => e.userId).filter(Boolean)
-    ).size;
-
-    // 仅在事件数少于20且用户数少于5时补充模拟数据
-    if (!forceReal &&
-        (!Array.isArray(allEvents) || allEvents.length < 20) &&
-        uniqueUsers < 5) {
-      const extra = generateMockEvents(25);
-      allEvents = [...(Array.isArray(allEvents) ? allEvents : []), ...extra];
-    }
-    return allEvents;
+  useEffect(() => {
+    console.log('🔄 PublicDashboard: 开始获取所有事件');
+    eventsAsync.execute();
   }, []);
 
-  // 根据加载结果构建派生状态
-  useEffect(() => {
-    if (!eventsAsync.value) return;
-    const allEvents = eventsAsync.value;
-    setAllEventsState(allEvents);
-    setTotalEvents(allEvents.length);
+  // Calculate date difference in days
+  const diffInDays = (date1, date2) => {
+    const d1 = new Date(date1);
+    const d2 = new Date(date2);
+    return Math.floor((d1 - d2) / (1000 * 60 * 60 * 24));
+  };
 
-    // 计算唯一用户
-    const usersMap = new Map();
-    allEvents.forEach((e) => {
-      const userId = e.userId;
-      if (!userId) return;
-      if (!usersMap.has(userId)) {
-        usersMap.set(userId, {
-          userId,
-          userName: e.userName || `用户${String(userId).slice(-4)}`,
+  // Get summary statistics
+  const totalEvents = allEventsState.length;
+  const totalUsers = new Set(allEventsState.map(e => e.userId)).size;
+
+  // Get users list
+  const usersList = useMemo(() => {
+    const userMap = new Map();
+    allEventsState.forEach(e => {
+      if (!userMap.has(e.userId)) {
+        userMap.set(e.userId, {
+          userId: e.userId,
+          userName: e.userName || 'Unknown User'
         });
-      } else {
-        // Prefer a non-empty userName if found later
-        const cur = usersMap.get(userId);
-        if (!cur.userName && e.userName) {
-          usersMap.set(userId, { ...cur, userName: e.userName });
-        }
       }
     });
-    const usersArr = Array.from(usersMap.values());
-    setUsersList(usersArr);
-    setTotalUsers(usersArr.length);
+    return Array.from(userMap.values());
+  }, [allEventsState]);
 
-    // 构建事件分布柱状图数据
-    const eventTypes = ['hospital_test', 'self_test', 'voice_training', 'self_practice', 'surgery'];
-    const counts = eventTypes.reduce((acc, type) => {
-      acc[type] = allEvents.filter((event) => event.type === type).length;
-      return acc;
-    }, {});
-    setBarChartData({
-      labels: ['医院检测', '自我测试', '嗓音训练', '自我练习', '手术'],
-      datasets: [
-        {
-          label: '事件数量',
-          data: eventTypes.map((type) => counts[type]),
-          backgroundColor: 'rgba(236, 72, 153, 0.6)',
-          borderColor: 'rgba(236, 72, 153, 1)',
-          borderWidth: 1,
-        },
-      ],
+  // Selected user data
+  const selectedUser = selectedUserId ? usersList.find(u => u.userId === selectedUserId) : null;
+
+  // Bar chart data
+  const barChartData = useMemo(() => {
+    if (!allEventsState.length) return null;
+
+    const typeCount = {};
+    allEventsState.forEach(e => {
+      typeCount[e.type] = (typeCount[e.type] || 0) + 1;
     });
 
-    // 构建 VFS 对齐的基频折线图数据
-    const diffInDaysLocal = (a,b)=>{const A=new Date(a).setHours(0,0,0,0);const B=new Date(b).setHours(0,0,0,0);return Math.round((A-B)/(1000*60*60*24));};
-    const byUser = Array.from(usersMap.keys()).map((uid) => ({
-      userId: uid,
-      userName: usersMap.get(uid)?.userName || `用户${String(uid).slice(-4)}`,
-      events: allEvents
-        .filter((e) => e.userId === uid)
-        .sort((a, b) => new Date(a.date) - new Date(b.date)),
-    }));
+    return {
+      labels: Object.keys(typeCount),
+      datasets: [{
+        data: Object.values(typeCount),
+        backgroundColor: [
+          'rgba(99, 102, 241, 0.8)',
+          'rgba(236, 72, 153, 0.8)',
+          'rgba(16, 185, 129, 0.8)',
+          'rgba(245, 158, 11, 0.8)',
+          'rgba(239, 68, 68, 0.8)',
+        ],
+      }],
+    };
+  }, [allEventsState]);
+
+  // Line chart data for VFS-aligned frequency changes
+  const lineChartData = useMemo(() => {
+    if (!allEventsState.length) return null;
+
+    const userGroups = {};
+    allEventsState.forEach(e => {
+      if (!userGroups[e.userId]) userGroups[e.userId] = [];
+      userGroups[e.userId].push(e);
+    });
 
     const datasets = [];
-    const improvements = [];
+    Object.entries(userGroups).forEach(([userId, events], index) => {
+      const vfsEvent = events.find(e => e.type === 'hospital_test');
+      if (!vfsEvent) return;
 
-    byUser.forEach((u, idx) => {
-      // 以首个医院检测作为 VFS 锚点（若后端另有明确标识可替换）
-      const anchor = u.events.find((e) => e.type === 'hospital_test')?.date;
-      if (!anchor) return;
-
-      // 只使用包含 pitch 的测量点
-      const points = u.events
-        .filter((e) => typeof e.pitch === 'number' && !Number.isNaN(e.pitch))
-        .map((e) => ({
-          x: diffInDaysLocal(e.date, anchor), // 相对天数
-          y: e.pitch,
+      const pitchEvents = events
+        .filter(e => typeof e.pitch === 'number')
+        .map(e => ({
+          x: diffInDays(e.date, vfsEvent.date),
+          y: e.pitch
         }))
-        // 保留有限且有序的点，避免重复 x
-        .sort((a, b) => a.x - b.x)
-        .filter((pt, i, arr) => i === 0 || pt.x !== arr[i - 1].x);
+        .sort((a, b) => a.x - b.x);
 
-      // 要求至少两个点，且包含 anchor 前后两侧数据才能计算改善
-      if (points.length < 2) return;
-
-      // 计算统计：改善幅度与方差
-      const before = points.filter((p) => p.x < 0).map((p) => p.y);
-      const after = points.filter((p) => p.x > 0).map((p) => p.y);
-      if (before.length === 0 || after.length === 0) {
-        // 无法计算改善则仅用于图表
-      } else {
-        const mean = (arr) => arr.reduce((s, v) => s + v, 0) / arr.length;
-        const improvement = mean(after) - mean(before);
-        improvements.push(improvement);
+      if (pitchEvents.length > 0) {
+        datasets.push({
+          label: `User ${index + 1}`,
+          data: pitchEvents,
+          borderColor: `hsl(${(index * 137.5) % 360}, 70%, 50%)`,
+          backgroundColor: `hsla(${(index * 137.5) % 360}, 70%, 50%, 0.1)`,
+          tension: 0.1,
+        });
       }
-
-      datasets.push({
-        label: u.userName,
-        data: points,
-        borderColor: `hsl(${(idx * 53) % 360} 70% 50%)`,
-        backgroundColor: `hsl(${(idx * 53) % 360} 70% 50%)`,
-        pointRadius: 2,
-        pointHoverRadius: 4,
-        tension: 0.2,
-      });
     });
 
-    setLineChartData({
-      datasets,
+    return datasets.length > 0 ? { datasets } : null;
+  }, [allEventsState]);
+
+  // Calculate improvement statistics
+  useEffect(() => {
+    if (!allEventsState.length) return;
+
+    const userGroups = {};
+    allEventsState.forEach(e => {
+      if (!userGroups[e.userId]) userGroups[e.userId] = [];
+      userGroups[e.userId].push(e);
     });
 
-    // 统计指标：平均提升、方差、二倍方差（以总体方差为准）
-    if (improvements.length > 0) {
-      const n = improvements.length;
-      const mean =
-        improvements.reduce((s, v) => s + v, 0) / n;
-      const variance =
-        improvements.reduce((s, v) => s + (v - mean) * (v - mean), 0) / n;
+    const improvements = [];
+    Object.values(userGroups).forEach(events => {
+      const vfsEvent = events.find(e => e.type === 'hospital_test');
+      if (!vfsEvent) return;
+
+      const pitchEvents = events.filter(e => typeof e.pitch === 'number');
+      const before = pitchEvents.filter(e => diffInDays(e.date, vfsEvent.date) < 0).map(e => e.pitch);
+      const after = pitchEvents.filter(e => diffInDays(e.date, vfsEvent.date) > 0).map(e => e.pitch);
+
+      if (before.length && after.length) {
+        const avgBefore = before.reduce((s, v) => s + v, 0) / before.length;
+        const avgAfter = after.reduce((s, v) => s + v, 0) / after.length;
+        improvements.push(avgAfter - avgBefore);
+      }
+    });
+
+    if (improvements.length) {
+      const mean = improvements.reduce((s, v) => s + v, 0) / improvements.length;
+      const variance = improvements.reduce((s, v) => s + Math.pow(v - mean, 2), 0) / improvements.length;
+
       setStats({
         avgImprovement: mean,
         variance,
         doubleVariance: variance * 2,
-        usedUsers: n,
+        usedUsers: improvements.length,
       });
     } else {
       setStats({
@@ -270,12 +193,12 @@ const PublicDashboard = () => {
         usedUsers: 0,
       });
     }
-  }, [eventsAsync.value]);
+  }, [allEventsState]);
 
   const isLoading = eventsAsync.loading;
   const error = eventsAsync.error;
 
-  // --- RENDER HELPERS ---
+  // Helper functions
   const formatNumber = (v, digits = 2) =>
     Number.isFinite(v) ? Number(v).toFixed(digits) : '-';
   const formatDate = (d) => {
@@ -338,6 +261,8 @@ const PublicDashboard = () => {
       </div>
     );
   }
+
+  // Error state
   if (error) {
     return (
       <div className="p-10 text-center">
@@ -478,7 +403,7 @@ const PublicDashboard = () => {
                     },
                   },
                 },
-                parsing: false, // using {x,y} pairs
+                parsing: false,
                 scales: {
                   x: {
                     type: 'linear',

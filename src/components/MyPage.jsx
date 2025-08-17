@@ -7,6 +7,7 @@ import InteractiveTimeline from './InteractiveTimeline';
 import { useAsync } from '../utils/useAsync.js';
 import { isProductionReady as globalIsProductionReady } from '../env.js';
 import { getUserDisplayName } from '../utils/avatar.js';
+import { useAuth } from '../contexts/AuthContext.jsx'; // 新增：使用 AuthContext
 
 /**
  * @en The MyPage component serves as the user's personal dashboard. It fetches,
@@ -23,8 +24,12 @@ const MyPage = () => {
   const productionReady = globalIsProductionReady();
   const navigate = useNavigate();
 
-  // @en Create a safe wrapper for useAuthenticator that doesn't throw
-  // @zh 为 useAuthenticator 创建一个安全的包装器，避免抛出错误
+  // @en Use AuthContext to get processed user information with nickname
+  // @zh 使用 AuthContext 获取已处理的包含 nickname 的用户信息
+  const { user: authContextUser, cognitoUserInfo } = useAuth();
+
+  // @en Fallback to useAuthenticator for compatibility
+  // @zh 兜底使用 useAuthenticator 以保持兼容性
   const useAuthenticatorSafe = () => {
     try {
       return useAuthenticator((context) => [context.user]);
@@ -34,18 +39,43 @@ const MyPage = () => {
     }
   };
 
-  // @en Always call the hook, but handle the result safely
-  // @zh 始终调用 hook，但安全处理结果
   const { user: authenticatorUser } = useAuthenticatorSafe();
 
-  // @en Use authenticated user in production, or fallback to mock user
-  // @zh 在生产环境中使用已认证用户，或回退到模拟用户
-  const user = (productionReady && authenticatorUser) ? authenticatorUser : {
+  console.log('🔍 MyPage: 多源用户对象检查', {
+    productionReady,
+    authContextUser,
+    cognitoUserInfo,
+    authenticatorUser,
+    authContextUserSub: authContextUser?.userId,
+    cognitoNickname: cognitoUserInfo?.nickname
+  });
+
+  // @en Create user object with proper nickname from AuthContext
+  // @zh 从 AuthContext 创建包含正确 nickname 的用户对象
+  const user = productionReady && authContextUser ? {
+    attributes: {
+      email: cognitoUserInfo?.email || authContextUser.attributes?.email || authenticatorUser?.attributes?.email,
+      sub: authContextUser.userId || authenticatorUser?.attributes?.sub || authenticatorUser?.userId,
+      nickname: cognitoUserInfo?.nickname, // 优先使用 AuthContext 中的 nickname
+      name: cognitoUserInfo?.name || authContextUser.attributes?.name,
+      preferred_username: authContextUser.attributes?.preferred_username,
+      picture: authContextUser.attributes?.picture
+    },
+    username: authContextUser.username || authenticatorUser?.username
+  } : {
     attributes: {
       email: 'public-user@example.com',
-      sub: 'mock-user-1'
+      sub: 'mock-user-1',
+      nickname: '开发用户',
+      name: '开发用户'
     }
   };
+
+  console.log('🔍 MyPage: 最终用户对象', {
+    user,
+    displayName: getUserDisplayName(user),
+    hasNickname: !!user.attributes?.nickname
+  });
 
   // @en State for storing the list of user events.
   // @zh 用于存储用户事件列表的状态。
@@ -53,7 +83,16 @@ const MyPage = () => {
   // 移除单独 isLoading state，改为 useAsync 管理
   const eventsAsync = useAsync(async () => {
     if (!user?.attributes?.sub) return [];
+    console.log('🔍 MyPage: 开始获取用户事件', { userId: user.attributes.sub });
     const userEvents = await getEventsByUserId(user.attributes.sub);
+    console.log('📊 MyPage: 获取到的事件数据', {
+      count: userEvents?.length || 0,
+      events: userEvents,
+      hasVoiceData: userEvents?.filter(e =>
+        (e.type === 'self_test' || e.type === 'hospital_test') &&
+        e.details?.fundamentalFrequency
+      ).length || 0
+    });
     return userEvents.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   }, [user?.attributes?.sub]);
 

@@ -1,8 +1,9 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import { useAuthenticator } from '@aws-amplify/ui-react';
-import { addEvent, uploadFile } from '../api';
+import { addEvent } from '../api';
 import { isProductionReady as globalIsProductionReady } from '../env.js';
 import { useAsync } from '../utils/useAsync.js';
+import SecureFileUpload from './SecureFileUpload';
 
 /**
  * @en A form for creating new voice events. It handles data input, file uploads, and submission to the backend.
@@ -26,7 +27,8 @@ const EventForm = ({ onEventAdded }) => {
 
   const [eventType, setEventType] = useState('self_test');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
-  const [file, setFile] = useState(null);
+  const [attachmentUrl, setAttachmentUrl] = useState(''); // 改为存储附件URL而不是文件对象
+  const [attachmentKey, setAttachmentKey] = useState(''); // 存储文件key
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
@@ -34,8 +36,12 @@ const EventForm = ({ onEventAdded }) => {
   // 动态表单数据状态
   const [formData, setFormData] = useState({});
 
-  // 用于记录最后上传的文件（避免重复上传）
-  const lastUploadedFileRef = useRef(null);
+  // 处理文件上传完成
+  const handleFileUploaded = (fileUrl, fileKey) => {
+    setAttachmentUrl(fileUrl);
+    setAttachmentKey(fileKey);
+    console.log('文件上传完成:', { fileUrl, fileKey });
+  };
 
   // --- FORM FIELD DEFINITIONS ---
   const eventTypeOptions = [
@@ -53,10 +59,6 @@ const EventForm = ({ onEventAdded }) => {
   const locationOptions = ['友谊医院', '南京同仁医院', 'Yeson', 'Kamol', '京都耳鼻咽喉科医院', '自定义'];
 
   // --- HANDLERS ---
-  const handleFileChange = (e) => {
-    setFile(e.target.files[0]);
-  };
-
   const handleFormDataChange = (field, value) => {
     setFormData(prev => ({
       ...prev,
@@ -310,16 +312,7 @@ const EventForm = ({ onEventAdded }) => {
     return fields;
   };
 
-  // 新增：独立附件上传 useAsync（惰性执行，点击提交或手动重试才触发）
-  const uploadAsync = useAsync(async () => {
-    if (!file) return '';
-    if (!user) throw new Error('未登录用户');
-    const key = await uploadFile(file, user.attributes.sub);
-    lastUploadedFileRef.current = file; // 记录已上传文件对象引用
-    return key;
-  }, [file, user?.attributes?.sub], { immediate: false });
-
-  // useAsync 提交逻辑（依赖上传结果）
+  // 简化的提交逻辑，移除复杂的useAsync文件上传
   const submitAsync = useAsync(async () => {
     setErrorMsg('');
     setSubmitSuccess(false);
@@ -343,17 +336,10 @@ const EventForm = ({ onEventAdded }) => {
       delete details.f1; delete details.f2; delete details.f3; delete details.pitchMax; delete details.pitchMin;
     }
 
-    // 如果选择了文件且尚未上传（或文件已更换），执行上传
-    if (file) {
-      try {
-        if (lastUploadedFileRef.current !== file || !uploadAsync.value) {
-          await uploadAsync.execute();
-        }
-        if (uploadAsync.error) throw uploadAsync.error;
-        if (uploadAsync.value) details.attachmentUrl = uploadAsync.value;
-      } catch (e) {
-        throw new Error('文件上传失败: ' + (e?.message || '未知错误'));
-      }
+    // 如果有附件，添加到details中
+    if (attachmentUrl) {
+      details.attachmentUrl = attachmentUrl;
+      details.attachmentKey = attachmentKey;
     }
 
     const eventData = {
@@ -373,13 +359,13 @@ const EventForm = ({ onEventAdded }) => {
       };
     }
 
-    const apiResp = await addEvent(eventData, user.attributes.sub);
+    const apiResp = await addEvent(eventData);
     return apiResp.item || apiResp;
-  }, [eventType, date, formData, file, user, isProductionReady, uploadAsync.value, uploadAsync.error]);
+  }, [user, isProductionReady], { immediate: false }); // 禁用自动执行
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (uploadAsync.loading || submitAsync.loading) return; // 防抖
+    if (submitAsync.loading) return; // 防抖
     submitAsync.execute()
       .then(newEvent => {
         if (newEvent) {
@@ -396,10 +382,8 @@ const EventForm = ({ onEventAdded }) => {
     setFormData({});
     setEventType('self_test');
     setDate(new Date().toISOString().split('T')[0]);
-    setFile(null);
-    if (document.getElementById('file-input')) {
-      document.getElementById('file-input').value = null;
-    }
+    setAttachmentUrl('');
+    setAttachmentKey('');
   };
 
   // --- RENDER ---
@@ -472,45 +456,25 @@ const EventForm = ({ onEventAdded }) => {
               <label htmlFor="file-input" className="text-sm font-medium text-gray-700">
                 附件 <span className="text-xs text-gray-500 font-normal">（可选）</span>
               </label>
-              <input
-                  id="file-input"
-                  type="file"
-                  onChange={(e)=>{ setFile(e.target.files[0]); uploadAsync.reset(); lastUploadedFileRef.current = null; }}
-                  className="block w-full text-gray-700 file:mr-4 file:py-2.5 file:px-4 file:rounded-lg file:border-0 file:font-medium file:bg-gradient-to-r file:from-pink-100 file:to-purple-100 file:text-pink-700 hover:file:from-pink-200 hover:file:to-purple-200"
+              <SecureFileUpload
+                  fileType="attachment"
+                  currentFileUrl=""
+                  onFileUpdate={handleFileUploaded}
+                  allowedTypes={['*/*']} // 允许所有文件类型
+                  maxSize={10 * 1024 * 1024} // 10MB
+                  className="w-full"
               />
-              {/* 上传状态指示 */}
-              {file && (
-                <div className="mt-2 text-xs">
-                  {uploadAsync.loading && (
-                    <span className="inline-flex items-center text-pink-600 gap-1">
-                      <span className="animate-spin h-3 w-3 border-2 border-pink-400 border-t-transparent rounded-full" /> 正在上传...
-                    </span>
-                  )}
-                  {!uploadAsync.loading && uploadAsync.error && (
-                    <span className="inline-flex items-center text-red-600 gap-2">
-                      上传失败：{uploadAsync.error.message}
-                      <button type="button" onClick={uploadAsync.execute} className="px-2 py-0.5 rounded bg-red-600 text-white">重试</button>
-                    </span>
-                  )}
-                  {!uploadAsync.loading && !uploadAsync.error && uploadAsync.value && (
-                    <span className="inline-flex items-center text-emerald-600 gap-1">
-                      <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-                      已上传
-                    </span>
-                  )}
-                </div>
-              )}
             </div>
 
             {/* 提交按钮 */}
             <div className="pt-2">
               <button
                   type="submit"
-                  disabled={submitAsync.loading || uploadAsync.loading}
+                  disabled={submitAsync.loading}
                   className="w-full group relative inline-flex justify-center py-3 px-6 border-0 shadow-lg text-base font-bold rounded-xl text-white bg-gradient-to-r from-pink-600 via-purple-600 to-indigo-600 hover:from-pink-500 hover:via-purple-500 hover:to-indigo-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-pink-500 active:scale-[0.99] transition disabled:opacity-60"
               >
                 <span className="absolute left-0 inset-y-0 flex items-center pl-4">
-                  {(submitAsync.loading || uploadAsync.loading) ? (
+                  {submitAsync.loading ? (
                       <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
                   ) : (
                       <svg className="h-5 w-5 text-white/90 group-hover:text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -518,7 +482,7 @@ const EventForm = ({ onEventAdded }) => {
                       </svg>
                   )}
                 </span>
-                {(submitAsync.loading || uploadAsync.loading) ? '处理中...' : '✨ 添加新事件'}
+                {submitAsync.loading ? '处理中...' : '✨ 添加新事件'}
               </button>
             </div>
           </div>
