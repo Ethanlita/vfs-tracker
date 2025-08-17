@@ -3,7 +3,7 @@
     2. ~~~查询用户信息API（公用，仅返回公开数据）（已解决）~~~
     3. ~~~编辑用户信息API（私有）（已解决）~~
     4. ~~~新用户资料完善API（私有）（已解决）~~
-    5. Gemini代理API（私有）：前端尽量请求逻辑不变，API只是转发带个Key，用来保护Key不泄露
+    5. ~~~Gemini代理API（私有）：前端尽量请求逻辑不变，API只是转发带个Key，用来保护Key不泄露（已解决）~~~
 2. 更改以下后端API：
     1. ~~~用于PublicDashboard的all-events API不返回姓名不公开的用户的名字（以“（非公开）”替代）（已解决）~~~
 3. 做好online praat
@@ -18,7 +18,7 @@
     4. ~~~PublicDashboard，用户卡片显示公开资料（已解决）~~~
     5. ~~~个人页面中增加用户信息查看和修改（内置信息（已解决），cognito登录信息（已解决））~~
     6. ~~~PublicDashboard，用户列表里正常显示用户的展示名字（这里不判断是否公开，因为Lambda函数会解决这个问题）（已解决）~~~
-6. 实现AWS Lambda和API Gateway自动部署，通过Github Actions，Action Secret已经设置了AWS_ACCESS_KEY和AWS_SECRET_KEY，可以使用IAM角色部署
+6. （远期）实现AWS Lambda和API Gateway自动部署，通过Github Actions，Action Secret已经设置了AWS_ACCESS_KEY和AWS_SECRET_KEY，可以使用IAM角色部署
 7. ~~~修复PublicDashboard的间距问题（左右上方均没有间距）（已解决）~~
 8. ~~~修复Mypage的间距问题（屏幕在640px-1200px宽度下左右无边距，上方无边距）（已解决）~~
 9. ~~~登录后上方头像不是用户头像（用户没有头像时则根据用户名首字母生成一个）（已解决）~~
@@ -29,9 +29,10 @@
 14. ~~~Timeline.jsx上方的间距不足（已解决）~~
 15. 实现一个Lambda函数，自动Approve事件（规则：非医院测试事件一律自动Approve，医院测试事件调用Gemini，审查附件的内容-应该是嗓音测试报告-是否和用户的输入相符）
 16. 实现一个管理员页面，允许管理员Approve事件，或者将事件改回Pending，以及其他管理功能
-17. EventManager.jsx中无法正常管理事件
+17. EventManager.jsx中无法正常管理事件，事件的删除没有真的实现
 18. ~~~EventManager.jsx和AddEvent.jsx左上角的返回按钮，增加一点间距（已解决）~~~
 19. ~~~Profile.jsx左上角加一个返回按钮，样式同EventManager.jsx和AddEvent.jsx（已解决）~~~
 20. ~~~确保现在所有的组件都会从AuthContext，以符合Amplify v6的标准方法获取用户数据，而不是从别的奇怪的地方获取用户数据（已解决）~~~
 21. （我有点忘记了是什么了）
 22. ~~~深层链接失效了（已解决）~~~
+23. （远期）优化加载体验，将阻塞式的长加载拆分为非阻塞的渐进式加载，尽快展示UI骨架屏。
