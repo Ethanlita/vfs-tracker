@@ -1,6 +1,13 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useAuthenticator } from '@aws-amplify/ui-react';
-import { getCurrentUser } from 'aws-amplify/auth';
+import {
+  getCurrentUser,
+  fetchUserAttributes,
+  updateUserAttributes,
+  updatePassword,
+  confirmUserAttribute,
+  resendSignUpCode
+} from 'aws-amplify/auth';
 import { getUserProfile, isUserProfileComplete, setupUserProfile } from '../api.js';
 import { isProductionReady as globalIsProductionReady } from '../env.js';
 
@@ -17,7 +24,9 @@ export const useAuth = () => {
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [userProfile, setUserProfile] = useState(null);
+  const [cognitoUserInfo, setCognitoUserInfo] = useState(null); // 新增：Cognito用户详细信息
   const [profileLoading, setProfileLoading] = useState(false);
+  const [cognitoLoading, setCognitoLoading] = useState(false); // 新增：Cognito操作加载状态
   const [needsProfileSetup, setNeedsProfileSetup] = useState(false);
   const [authInitialized, setAuthInitialized] = useState(false);
   const ready = globalIsProductionReady();
@@ -89,10 +98,13 @@ export const AuthProvider = ({ children }) => {
 
     setProfileLoading(true);
     try {
+      console.log('🔍 正在检查用户是否存在于数据库中:', userId);
       const profile = await getUserProfile(userId);
+
+      console.log('✅ 用户存在于数据库中，加载用户资料:', profile);
       setUserProfile(profile);
 
-      // 检查资料是否完整
+      // 检查资料是否完整 - 只根据资料内容判断，不考虑时间因素
       const isComplete = isUserProfileComplete(profile);
       setNeedsProfileSetup(!isComplete);
 
@@ -102,10 +114,16 @@ export const AuthProvider = ({ children }) => {
         needsSetup: !isComplete
       });
     } catch (error) {
-      console.error('❌ 加载用户资料失败:', error);
-      // 如果获取资料失败（如用户不存在），标记需要设置资料
+      console.error('❌ 用户不存在于数据库中或加载失败:', error);
+
+      // 用户不在 VoiceFemUsers 表中，需要强制跳转到用户信息完善页面
+      console.log('🚨 用户未在数据库中找到，强制跳转到用户信息完善页面');
       setNeedsProfileSetup(true);
       setUserProfile(null);
+
+      // 注意：不在这里直接跳转，而是依赖 App.jsx 中的 useEffect 来处理跳转
+      // 这样可以避免跳转逻辑冲突
+      console.log('📍 设置 needsProfileSetup=true，等待 App.jsx 处理跳转');
     } finally {
       setProfileLoading(false);
     }
@@ -222,6 +240,134 @@ export const AuthProvider = ({ children }) => {
     console.log('🎉 认证成功，正在加载用户资料:', userData);
   };
 
+  // 加载Cognito用户详细信息
+  const loadCognitoUserInfo = async () => {
+    if (!ready) {
+      // 开发模式下的模拟数据
+      setCognitoUserInfo({
+        username: 'dev_user',
+        userId: 'dev_user_id',
+        email: 'dev@example.com',
+        nickname: 'Dev User',
+        email_verified: true,
+        avatarUrl: null, // 开发模式下没有头像
+        attributes: {
+          email: 'dev@example.com',
+          nickname: 'Dev User',
+          email_verified: 'true'
+        }
+      });
+      return;
+    }
+
+    setCognitoLoading(true);
+    try {
+      const currentUser = await getCurrentUser();
+      const attributes = await fetchUserAttributes();
+
+      const cognitoUserData = {
+        username: currentUser.username,
+        userId: currentUser.userId,
+        email: attributes.email,
+        nickname: attributes.nickname || attributes.preferred_username || '',
+        email_verified: attributes.email_verified === 'true',
+        avatarUrl: attributes.picture || null, // 从Cognito picture属性获取头像URL
+        attributes: attributes
+      };
+
+      setCognitoUserInfo(cognitoUserData);
+      console.log('Cognito用户信息加载完成:', cognitoUserData);
+    } catch (error) {
+      console.error('获取Cognito用户信息失败:', error);
+      setCognitoUserInfo(null);
+    } finally {
+      setCognitoLoading(false);
+    }
+  };
+
+  // 更新Cognito用户属性 - 增强邮箱验证处理
+  const updateCognitoUserInfo = async (updates) => {
+    if (!ready) {
+      setCognitoUserInfo(prev => ({ ...prev, ...updates }));
+      return { success: true, message: '开发模式：模拟更新成功' };
+    }
+
+    setCognitoLoading(true);
+    try {
+      const attributesToUpdate = {};
+      let emailChanged = false;
+
+      if (updates.nickname !== undefined) {
+        attributesToUpdate.nickname = updates.nickname;
+      }
+
+      if (updates.email !== undefined && updates.email !== cognitoUserInfo?.email) {
+        attributesToUpdate.email = updates.email;
+        emailChanged = true;
+      }
+
+      // 支持头像URL更新
+      if (updates.avatarUrl !== undefined) {
+        attributesToUpdate.picture = updates.avatarUrl;
+      }
+
+      if (Object.keys(attributesToUpdate).length > 0) {
+        const result = await updateUserAttributes({
+          userAttributes: attributesToUpdate
+        });
+
+        // 检查是否有需要验证的属性
+        if (result && result.email && result.email.isDeliveryMedium) {
+          console.log('邮箱验证码已发送:', result.email);
+        }
+      }
+
+      // 处理密码更新
+      if (updates.password && updates.currentPassword) {
+        await updatePassword({
+          oldPassword: updates.currentPassword,
+          newPassword: updates.password
+        });
+      }
+
+      await loadCognitoUserInfo();
+
+      let message = updates.password ? '账户信息和密码更新成功！' : '账户信息更新成功！';
+      if (emailChanged) {
+        message += ' 请检查新邮箱收件箱，点击验证链接完成邮箱验证。';
+      }
+      if (updates.avatarUrl) {
+        message += ' 头像已更新！';
+      }
+
+      return {
+        success: true,
+        message,
+        needsEmailVerification: emailChanged
+      };
+    } catch (error) {
+      console.error('更新Cognito用户信息失败:', error);
+      throw error;
+    } finally {
+      setCognitoLoading(false);
+    }
+  };
+
+  // 重新发送邮箱验证码
+  const resendEmailVerification = async () => {
+    if (!ready) {
+      return { success: true, message: '开发模式：模拟发送验证码' };
+    }
+
+    try {
+      await resendSignUpCode({ username: cognitoUserInfo?.username });
+      return { success: true, message: '验证邮件已重新发送，请检查邮箱' };
+    } catch (error) {
+      console.error('重新发送验证邮件失败:', error);
+      throw error;
+    }
+  };
+
   const logout = () => {
     setUser(null);
     setUserProfile(null);
@@ -316,6 +462,26 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  // 当用户认证成功时，自动加载Cognito用户信息
+  useEffect(() => {
+    if (user && !cognitoUserInfo) {
+      loadCognitoUserInfo();
+    }
+  }, [user]);
+
+  // 刷新用户资料的方法
+  const refreshUserProfile = async () => {
+    if (user?.userId || user?.attributes?.sub) {
+      const userId = user.userId || user.attributes.sub;
+      await loadUserProfile(userId);
+    }
+  };
+
+  // 刷新Cognito用户信息的方法
+  const refreshCognitoUserInfo = async () => {
+    await loadCognitoUserInfo();
+  };
+
   return (
     <AuthContext.Provider value={{
       user,
@@ -327,8 +493,15 @@ export const AuthProvider = ({ children }) => {
       logout,
       isAuthenticated,
       loadUserProfile,
+      refreshUserProfile, // 确保暴露这个方法
       completeProfileSetup,
-      handleAuthSuccess
+      handleAuthSuccess,
+      cognitoUserInfo, // Cognito用户详细信息
+      cognitoLoading, // Cognito操作加载状态
+      loadCognitoUserInfo, // 加载Cognito用户信息
+      updateCognitoUserInfo, // 更新Cognito用户信息
+      resendEmailVerification, // 新增
+      refreshCognitoUserInfo // 刷新Cognito用户信息
     }}>
       {children}
     </AuthContext.Provider>

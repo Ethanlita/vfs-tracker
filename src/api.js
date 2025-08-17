@@ -333,16 +333,35 @@ export const uploadFile = async (file, userId) => {
  * @throws Will throw an error if the API call fails.
  */
 export const getAllEvents = async () => {
+  console.log('🔍 API: getAllEvents 被调用', { isProdReady: isProductionReady(), cfg: Amplify.getConfig?.().API });
+
   if (!isProductionReady() && !import.meta.env.VITE_FORCE_REAL) {
     console.log('🔧 开发/未就绪：返回 mock 所有事件');
     return Promise.resolve(mockData.events);
   }
+
   console.log('[getAllEvents] attempting fetch, config=', Amplify.getConfig?.().API);
   try {
-    return await simpleGet('/all-events');
+    console.log('📡 getAllEvents: 开始调用 /all-events API');
+    const data = await simpleGet('/all-events');
+    console.log('✅ getAllEvents: API 调用成功', {
+      eventsCount: data?.length || 0,
+      events: data?.slice(0, 2) // 只显示前两个事件作为预览
+    });
+
+    // 生产模式下即使返回空数组也是有效的响应，不要回退到模拟数据
+    return data || [];
   } catch (error) {
-    console.error('Error fetching all public events:', error);
-    throw error;
+    console.error('❌ getAllEvents: API 调用失败:', error);
+
+    // 只在开发模式下才使用模拟数据作为回退
+    if (!isProductionReady()) {
+      console.log('🔧 getAllEvents: 开发模式 - 使用 mock 数据作为回退');
+      return mockData.events;
+    } else {
+      console.log('🚫 getAllEvents: 生产模式 - 不使用模拟数据，抛出错误');
+      throw error;
+    }
   }
 };
 
@@ -795,8 +814,10 @@ export const isUserProfileComplete = (userProfile) => {
 
   const profile = userProfile.profile;
 
-  // 检查基本信息是否存在（至少需要设置姓名或明确选择不公开）
-  const hasBasicInfo = profile.name !== undefined && profile.name !== null;
+  // 检查基本信息是否存在且不为空（姓名必须有实际内容）
+  const hasBasicInfo = profile.name &&
+                      typeof profile.name === 'string' &&
+                      profile.name.trim().length > 0;
 
   // 检查隐私设置是否已配置
   const hasPrivacySettings =
@@ -806,6 +827,8 @@ export const isUserProfileComplete = (userProfile) => {
   console.log('🔍 检查用户资料完整性:', {
     hasBasicInfo,
     hasPrivacySettings,
+    nameValue: profile.name,
+    nameLength: profile.name?.length,
     profile
   });
 
@@ -813,35 +836,81 @@ export const isUserProfileComplete = (userProfile) => {
 };
 
 /**
- * 上传用户头像
- * @param {File} file - 头像文件
- * @param {string} userId - 用户ID
- * @returns {Promise<string>} 头像URL
+ * 获取上传预签名URL
+ * @param {string} fileKey - S3文件key
+ * @param {string} contentType - 文件类型
+ * @returns {Promise<string>} 上传预签名URL
  */
-export const uploadUserAvatar = async (file, userId) => {
+export const getUploadUrl = async (fileKey, contentType) => {
+  console.log('[getUploadUrl] 获取上传URL，fileKey:', fileKey);
+
   if (!isProductionReady()) {
-    console.log('🔧 [uploadUserAvatar] 开发模式 - 模拟上传头像');
-    // 返回一个模拟的头像URL
-    return `https://placehold.co/100x100/E9D5FF/3730A3?text=${encodeURIComponent(userId.slice(0, 2))}`;
+    console.log('[getUploadUrl] 开发环境 - 返回mock上传URL');
+    return `https://mock-upload-url.s3.amazonaws.com/${fileKey}?mock=true`;
   }
 
   try {
-    const fileExtension = file.name.split('.').pop();
-    const fileName = `avatars/${userId}/${uuidv4()}.${fileExtension}`;
+    const requestBody = {
+      fileKey,
+      contentType
+    };
 
-    const result = await uploadData({
-      key: fileName,
-      data: file,
-      options: {
-        contentType: file.type,
-        accessLevel: 'public'
-      }
-    }).result;
-
-    // 返回S3的公开URL
-    return `https://${import.meta.env.VITE_S3_BUCKET}.s3.${import.meta.env.VITE_AWS_REGION}.amazonaws.com/${result.key}`;
+    const data = await authenticatedPost('/upload-url', requestBody);
+    console.log('✅ 获取上传URL成功:', data);
+    return data.uploadUrl;
   } catch (error) {
-    console.error('❌ 上传头像失败:', error);
+    console.error('❌ 获取上传URL失败:', error);
+    throw error;
+  }
+};
+
+/**
+ * 获取文件访问预签名URL（仅限文件所有者）
+ * @param {string} fileKey - S3文件key
+ * @returns {Promise<string>} 文件访问预签名URL
+ */
+export const getFileUrl = async (fileKey) => {
+  console.log('[getFileUrl] 获取文件URL，fileKey:', fileKey);
+
+  if (!isProductionReady()) {
+    console.log('[getFileUrl] 开发环境 - 返回mock文件URL');
+    return `https://mock-file-url.s3.amazonaws.com/${fileKey}?mock=true`;
+  }
+
+  try {
+    const requestBody = {
+      fileKey
+    };
+
+    const data = await authenticatedPost('/file-url', requestBody);
+    console.log('✅ 获取文件URL成功:', data);
+    return data.url;
+  } catch (error) {
+    console.error('❌ 获取文件URL失败:', error);
+    throw error;
+  }
+};
+
+/**
+ * 获取头像访问预签名URL（公开访问）
+ * @param {string} userId - 用户ID
+ * @returns {Promise<string>} 头像访问预签名URL
+ */
+export const getAvatarUrl = async (userId) => {
+  console.log('[getAvatarUrl] 获取头像URL，userId:', userId);
+
+  if (!isProductionReady()) {
+    console.log('[getAvatarUrl] 开发环境 - 返回mock头像URL');
+    return `https://mock-avatar-url.s3.amazonaws.com/avatars/${userId}/avatar?mock=true`;
+  }
+
+  try {
+    // 头像是公开API，不需要认证
+    const data = await simpleGet(`/avatar/${userId}`);
+    console.log('✅ 获取头像URL成功:', data);
+    return data.url;
+  } catch (error) {
+    console.error('❌ 获取头像URL失败:', error);
     throw error;
   }
 };
@@ -851,4 +920,5 @@ export const uploadUserAvatar = async (file, userId) => {
  * 1. 切勿在前端暴露长期 AWS Access Key / Secret；当前项目不再使用它们（如 .env.local 中仍存在应删除）。
  * 2. Gemini Key 仅临时用于前端演示，生产应通过后端代理（TODO: /ai/encouragement 端点）。
  * 3. 用户资料相关API需要JWT认证，确保只有认证用户才能访问和修改自己的资料。
+ * 4. 预签名URL相关API确保了S3安全性：头像可公开访问，其他文件仅限所有者访问。
  */

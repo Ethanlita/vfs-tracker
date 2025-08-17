@@ -1,8 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { motion, AnimatePresence } from 'framer-motion';
-import { getEventsByUserId } from '../api';
-import { useAsync } from '../utils/useAsync.js';
 
 // --- SVG Icon Components (replacing lucide-react) ---
 const Lightbulb = ({ className, ...props }) => (
@@ -13,14 +11,6 @@ const Lightbulb = ({ className, ...props }) => (
     </svg>
 );
 
-const AlertTriangle = ({ className, ...props }) => (
-    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} {...props}>
-      <path d="m21.73 18-8-14a2 2 0 0 0-3.46 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
-      <path d="M12 9v4" />
-      <path d="M12 17h.01" />
-    </svg>
-);
-
 const CheckCircle = ({ className, ...props }) => (
     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} {...props}>
       <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
@@ -28,19 +18,41 @@ const CheckCircle = ({ className, ...props }) => (
     </svg>
 );
 
-
 // --- Helper Functions ---
 
 // 从事件数据中提取声音参数数据
 const extractVoiceDataFromEvents = (events, metric, filters = {}) => {
+  console.log('🔍 extractVoiceDataFromEvents: 开始处理', {
+    totalEvents: events.length,
+    metric,
+    filters,
+    eventsPreview: events.slice(0, 2)
+  });
+
   const data = [];
 
   // 筛选包含声音参数的事件类型
-  let eventsWithVoiceData = events.filter(event =>
-      (event.type === 'self_test' || event.type === 'hospital_test') &&
-      event.details &&
-      event.details.fundamentalFrequency !== undefined
-  );
+  let eventsWithVoiceData = events.filter(event => {
+    const hasVoiceType = event.type === 'self_test' || event.type === 'hospital_test';
+    const hasDetails = event.details;
+    const hasFrequency = event.details?.fundamentalFrequency !== undefined;
+
+    console.log('🔍 事件筛选检查', {
+      eventId: event.eventId,
+      type: event.type,
+      hasVoiceType,
+      hasDetails: !!hasDetails,
+      hasFrequency,
+      details: event.details
+    });
+
+    return hasVoiceType && hasDetails && hasFrequency;
+  });
+
+  console.log('🎯 筛选出的声音数据事件', {
+    count: eventsWithVoiceData.length,
+    events: eventsWithVoiceData
+  });
 
   // 应用过滤器
   if (filters.doctor && filters.doctor !== 'all') {
@@ -57,7 +69,10 @@ const extractVoiceDataFromEvents = (events, metric, filters = {}) => {
 
   eventsWithVoiceData.forEach(event => {
     const date = event.date || event.createdAt;
-    if (!date) return;
+    if (!date) {
+      console.warn('⚠️ 事件缺少日期', event);
+      return;
+    }
 
     let value;
     switch (metric) {
@@ -78,19 +93,30 @@ const extractVoiceDataFromEvents = (events, metric, filters = {}) => {
     }
 
     if (value !== undefined && value !== null) {
-      data.push({
+      const dataPoint = {
         date: new Date(date).toLocaleDateString('zh-CN'),
         value: parseFloat(value),
         rawDate: new Date(date),
         eventType: event.type,
         doctor: event.details.doctor || '未指定',
         surgeryMethod: event.details.surgeryMethod || '未指定'
-      });
+      };
+
+      console.log('📊 添加数据点', { metric, value, dataPoint });
+      data.push(dataPoint);
+    } else {
+      console.warn('⚠️ 指标值缺失', { metric, eventId: event.eventId, details: event.details });
     }
   });
 
   // 按日期排序
-  return data.sort((a, b) => a.rawDate - b.rawDate);
+  const sortedData = data.sort((a, b) => a.rawDate - b.rawDate);
+  console.log('✅ extractVoiceDataFromEvents 完成', {
+    finalCount: sortedData.length,
+    data: sortedData
+  });
+
+  return sortedData;
 };
 
 // 获取可用的医生列表
@@ -116,72 +142,6 @@ const getSurgeryMethodOptions = (events) => {
   });
   return Array.from(methods);
 };
-
-// Generates realistic mock data for demonstration purposes
-const generateMockData = (days, metric) => {
-  const data = [];
-  const today = new Date();
-  for (let i = days - 1; i >= 0; i--) {
-    const date = new Date(today);
-    date.setDate(today.getDate() - i);
-    let value;
-    switch (metric) {
-      case 'f0': // Fundamental Frequency (Hz)
-        value = 120 + Math.sin(i / 20) * 20 + Math.random() * 10 - 5;
-        break;
-      case 'jitter': // Jitter (%)
-        value = 0.5 + Math.sin(i / 15) * 0.2 + Math.random() * 0.1 - 0.05;
-        break;
-      case 'shimmer': // Shimmer (dB)
-        value = 0.2 + Math.sin(i / 10) * 0.08 + Math.random() * 0.05 - 0.025;
-        break;
-      case 'hnr': // Harmonics-to-Noise Ratio (dB)
-        value = 25 + Math.sin(i / 25) * 5 + Math.random() * 2 - 1;
-        break;
-      default:
-        value = 0;
-    }
-    data.push({
-      date: date.toISOString().split('T')[0],
-      value: Math.max(0, parseFloat(value.toFixed(2))), // Ensure non-negative values
-    });
-  }
-  return data;
-};
-
-// A placeholder for a real API call
-const fetchRealData = async (userId, metric, timeRange) => {
-  console.log(`Fetching real data for ${userId}, metric: ${metric}, range: ${timeRange}`);
-  // In a real application, you would make an API call here.
-  // await new Promise(resolve => setTimeout(resolve, 1000));
-  return []; // Returning empty for now
-};
-
-// 获取用户事件数据并提取声音参数
-const fetchVoiceDataFromAPI = async (userId, metric) => {
-  console.log('🔍 fetchVoiceDataFromAPI: 开始获取数据', { userId, metric });
-
-  try {
-    const events = await getEventsByUserId(userId);
-    console.log('📡 fetchVoiceDataFromAPI: API 返回的原始事件', {
-      eventCount: events?.length || 0,
-      events: events
-    });
-
-    const extractedData = extractVoiceDataFromEvents(events, metric);
-    console.log('🎯 fetchVoiceDataFromAPI: 提取的声音数据', {
-      extractedCount: extractedData.length,
-      metric,
-      data: extractedData
-    });
-
-    return extractedData;
-  } catch (error) {
-    console.error('❌ fetchVoiceDataFromAPI: 获取用户事件数据失败:', error);
-    return [];
-  }
-};
-
 
 // --- Sub-components ---
 
@@ -213,31 +173,9 @@ const ChartCard = ({ title, children }) => (
     </div>
 );
 
-const StatusIndicator = ({ isDemo, isLoading }) => (
-    <div className="flex items-center space-x-2 px-3 py-1 rounded-full text-sm text-gray-600">
-      {isLoading ? (
-          <motion.div
-              animate={{ rotate: 360 }}
-              transition={{ repeat: Infinity, duration: 1, ease: "linear" }}
-          >
-            <Lightbulb className="w-4 h-4 text-yellow-500" />
-          </motion.div>
-      ) : isDemo ? (
-          <AlertTriangle className="w-4 h-4 text-orange-500" />
-      ) : (
-          <CheckCircle className="w-4 h-4 text-green-500" />
-      )}
-      <span>{isLoading ? "加载中..." : isDemo ? "演示数据源" : "实时数据源"}</span>
-    </div>
-);
-
-
 // --- Main Component ---
 
-const VoiceFrequencyChart = ({ userId, isProductionReady, compact = false, events }) => {
-  const [chartData, setChartData] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isDemoData, setIsDemoData] = useState(false);
+const VoiceFrequencyChart = ({ userId, events = [], compact = false }) => {
   const [selectedMetric, setSelectedMetric] = useState('f0');
   const [activeRange, setActiveRange] = useState('1m');
   const [showInsights, setShowInsights] = useState(false);
@@ -278,71 +216,27 @@ const VoiceFrequencyChart = ({ userId, isProductionReady, compact = false, event
     { key: 'all', label: '全部' }
   ];
 
-  // 修复：统一数据来源判断逻辑
-  const isUsingProductionData = useMemo(() => {
-    return typeof isProductionReady === 'function' ? isProductionReady() : isProductionReady;
-  }, [isProductionReady]);
-
-  const metricConfig = {
-    f0: { label: '基频 (F0)', unit: 'Hz', color: '#8b5cf6', target: { min: 165, max: 265 } },
-    jitter: { label: '频率微变 (Jitter)', unit: '%', color: '#06b6d4', target: { max: 1.04 } },
-    shimmer: { label: '振幅微变 (Shimmer)', unit: 'dB', color: '#10b981', target: { max: 0.35 } },
-    hnr: { label: '谐噪比 (HNR)', unit: 'dB', color: '#f59e0b', target: { min: 20 } }
-  };
-
-  // 使用 useAsync 统一获取事件并抽取指标数据
-  const forceReal = !!import.meta.env.VITE_FORCE_REAL; // 新增：强制真实模式
-  const dataAsync = useAsync(async () => {
-    if (!userId) return { data: [], demo: true };
-    let data = [];
-    let demo = false;
-    if (isUsingProductionData) {
-      data = await fetchVoiceDataFromAPI(userId, selectedMetric);
-      if (!data.length) {
-        if (forceReal) {
-          // 强制真实：不生成 mock，直接返回空
-          return { data: [], demo: false };
-        }
-        data = generateMockData(30, selectedMetric);
-        demo = true;
-      }
-    } else {
-      data = await fetchVoiceDataFromAPI(userId, selectedMetric);
-      if (!data.length) {
-        if (forceReal) {
-          // 环境未就绪但强制真实：不造假数据
-          return { data: [], demo: false };
-        }
-        data = generateMockData(30, selectedMetric);
-        demo = true;
-      } else {
-        const now = new Date();
-        const oneMonthAgo = new Date(now); oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
-        const hasRecent = data.some(d => new Date(d.date) > oneMonthAgo);
-        if (!hasRecent) setActiveRange('all');
-      }
-    }
-    return { data, demo };
-  }, [userId, selectedMetric, isUsingProductionData, forceReal]);
-
-  useEffect(() => {
-    setIsLoading(dataAsync.loading);
-    if (dataAsync.error) {
-      const fallback = generateMockData(30, selectedMetric);
-      setChartData(fallback);
-      setIsDemoData(true);
-    } else if (dataAsync.value) {
-      setChartData(dataAsync.value.data);
-      setIsDemoData(dataAsync.value.demo);
-    }
-  }, [dataAsync.loading, dataAsync.error, dataAsync.value, selectedMetric]);
+  // 从传入的events提取图表数据
+  const chartData = useMemo(() => {
+    console.log('🎯 VoiceFrequencyChart: 处理事件数据', {
+      totalEvents: events.length,
+      selectedMetric,
+      filters,
+      events: events
+    });
+    const data = extractVoiceDataFromEvents(events, selectedMetric, filters);
+    console.log('📊 VoiceFrequencyChart: 提取的图表数据', {
+      extractedCount: data.length,
+      data: data
+    });
+    return data;
+  }, [events, selectedMetric, filters]);
 
   const filteredData = useMemo(() => {
-    if (!chartData) return [];
-    const now = new Date(); // Stable reference for this calculation
+    if (!chartData.length) return [];
+    const now = new Date();
     return chartData.filter(item => {
-      const itemDate = new Date(item.date);
-      // FIX: The date mutation bug is fixed here by creating a new date for each comparison.
+      const itemDate = new Date(item.rawDate);
       switch (activeRange) {
         case "1w":
           const oneWeekAgo = new Date(now);
@@ -380,11 +274,6 @@ const VoiceFrequencyChart = ({ userId, isProductionReady, compact = false, event
   const doctorOptions = useMemo(() => getDoctorOptions(events), [events]);
   const surgeryMethodOptions = useMemo(() => getSurgeryMethodOptions(events), [events]);
 
-  // 应用过滤器提取数据
-  const filteredChartData = useMemo(() => {
-    return extractVoiceDataFromEvents(events, selectedMetric, filters);
-  }, [events, selectedMetric, filters]);
-
   const handleFilterChange = (filterType, value) => {
     setFilters(prev => ({
       ...prev,
@@ -394,13 +283,6 @@ const VoiceFrequencyChart = ({ userId, isProductionReady, compact = false, event
 
   return (
       <ChartCard title="">
-        {/* 添加错误提示 */}
-        {dataAsync.error && (
-          <div className="mb-4 p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm flex items-center justify-between">
-            <span>数据加载失败：{dataAsync.error.message || '未知错误'} (已使用演示数据)</span>
-            <button onClick={dataAsync.execute} className="ml-4 px-3 py-1 bg-red-600 hover:bg-red-500 text-white rounded-md text-xs">重试</button>
-          </div>
-        )}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 space-y-4 md:space-y-0">
           {/* Metric Selection */}
           <div className="flex flex-wrap items-center gap-1 bg-gray-100 p-1.5 rounded-full">
@@ -456,26 +338,21 @@ const VoiceFrequencyChart = ({ userId, isProductionReady, compact = false, event
           </div>
         )}
 
-        {/* 图表容器 - 将毛玻璃效果限制在这个容器内 */}
+        {/* 图表容器 */}
         <div className="relative" style={{ width: '100%', height: chartHeight }}>
           <AnimatePresence>
-            {isLoading ? (
+            {filteredData.length === 0 ? (
                 <motion.div
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
                   className="absolute inset-0 flex items-center justify-center bg-white/70 backdrop-blur-sm z-10 rounded-lg"
                 >
-                  <p className="text-lg text-gray-500">加载数据中...</p>
-                </motion.div>
-            ) : filteredData.length === 0 ? (
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className="absolute inset-0 flex items-center justify-center bg-white/70 backdrop-blur-sm z-10 rounded-lg"
-                >
-                  <p className="text-lg text-gray-500">该时间范围内无数据</p>
+                  <div className="text-center">
+                    <div className="text-4xl mb-4">📊</div>
+                    <p className="text-lg text-gray-500 mb-2">暂无声音参数数据</p>
+                    <p className="text-sm text-gray-400">请添加包含声音参数的测试事件</p>
+                  </div>
                 </motion.div>
             ) : null}
           </AnimatePresence>
@@ -497,7 +374,6 @@ const VoiceFrequencyChart = ({ userId, isProductionReady, compact = false, event
         </div>
 
         <div className="mt-8 flex justify-between items-center pt-6">
-          <StatusIndicator isDemo={isDemoData} isLoading={isLoading} />
           <div className="flex items-start space-x-8">
             {/* Latest Value */}
             <div>
@@ -581,7 +457,6 @@ const VoiceFrequencyChart = ({ userId, isProductionReady, compact = false, event
               transition={{ duration: 0.3 }}
               className="border-t border-gray-200 pt-6"
             >
-              {/* 洞察内容会在这里添加 */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="bg-green-50 border border-green-200 rounded-lg p-4">
                   <div className="flex items-center">
@@ -592,7 +467,6 @@ const VoiceFrequencyChart = ({ userId, isProductionReady, compact = false, event
                     共有 {chartData.length} 个数据点
                   </p>
                 </div>
-                {/* 可以添加更多洞察卡片 */}
               </div>
             </motion.div>
           )}

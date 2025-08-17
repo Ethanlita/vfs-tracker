@@ -6,6 +6,23 @@ const docClient = DynamoDBDocumentClient.from(client);
 const tableName = "VoiceFemEvents";
 
 export const handler = async (event) => {
+    // 添加CORS头部配置 - 确保在Lambda代理集成下CORS正常工作
+    const corsHeaders = {
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token"
+    };
+
+    // 处理OPTIONS预检请求
+    if (event.httpMethod === 'OPTIONS') {
+        return {
+            statusCode: 200,
+            headers: corsHeaders,
+            body: JSON.stringify({ message: 'OK' })
+        };
+    }
+
     const command = new ScanCommand({
         TableName: tableName,
         // 只返回已批准的事件供公共仪表板显示
@@ -30,22 +47,14 @@ export const handler = async (event) => {
 
         return {
             statusCode: 200,
-            headers: {
-                "Content-Type": "application/json",
-                "Access-Control-Allow-Origin": "*",
-                "Access-Control-Allow-Headers": "Content-Type,Authorization,X-Amz-Date,X-Api-Key",
-                "Access-Control-Allow-Methods": "GET,OPTIONS"
-            },
+            headers: corsHeaders,
             body: JSON.stringify(sortedItems),
         };
     } catch (error) {
         console.error("Error fetching approved events:", error);
         return {
             statusCode: 500,
-            headers: {
-                "Content-Type": "application/json",
-                "Access-Control-Allow-Origin": "*"
-            },
+            headers: corsHeaders,
             body: JSON.stringify({
                 message: "Error fetching all events",
                 error: error.message

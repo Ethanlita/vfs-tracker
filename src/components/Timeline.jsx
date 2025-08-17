@@ -346,7 +346,7 @@ const Timeline = () => {
       </div>
 
       {/* 页面标题 */}
-      <div className="dashboard-title-section relative z-10">
+      <div className="dashboard-title-section relative z-10 pt-8 mb-8">
         <h1 className="text-4xl font-bold text-pink-600 mb-4">
           欢迎来到VFS Tracker！
         </h1>

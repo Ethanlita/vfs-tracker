@@ -1,15 +1,25 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient, PutCommand } from "@aws-sdk/lib-dynamodb";
-import { v4 as uuidv4 } from 'uuid';
 
 const client = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(client);
 
-// CORS头部
+// 使用环境变量或默认表名
+const tableName = process.env.EVENTS_TABLE || "VoiceFemEvents";
+
+// 原生UUID生成函数（无需外部依赖）
+function generateEventId() {
+    const timestamp = Date.now().toString(36);
+    const randomPart = Math.random().toString(36).substr(2, 9);
+    return `event_${timestamp}_${randomPart}`;
+}
+
+// 完整的CORS头部配置
 const corsHeaders = {
+  'Content-Type': 'application/json',
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Amz-Date, X-Api-Key',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Amz-Date, X-Api-Key, X-Amz-Security-Token',
 };
 
 /**
@@ -108,7 +118,7 @@ export const handler = async (event) => {
         }
 
         // 生成完整的事件项，符合数据结构规范
-        const eventId = uuidv4();
+        const eventId = generateEventId(); // 使用原生方法代替uuid
         const timestamp = new Date().toISOString();
 
         const item = {
@@ -123,7 +133,7 @@ export const handler = async (event) => {
         };
 
         const command = new PutCommand({
-            TableName: "VoiceFemEvents",
+            TableName: tableName, // 使用环境变量
             Item: item,
         });
 

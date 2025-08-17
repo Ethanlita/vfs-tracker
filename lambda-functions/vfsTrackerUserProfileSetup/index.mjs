@@ -26,6 +26,13 @@ const corsHeaders = {
 function extractUserFromEvent(event) {
   try {
     console.log('🔍 开始提取用户信息，优先处理ID Token');
+    console.log('🔍 事件详情:', {
+      hasRequestContext: !!event.requestContext,
+      hasAuthorizer: !!event.requestContext?.authorizer,
+      authorizerKeys: event.requestContext?.authorizer ? Object.keys(event.requestContext.authorizer) : [],
+      hasHeaders: !!event.headers,
+      headerKeys: event.headers ? Object.keys(event.headers) : []
+    });
 
     // 尝试多种方式获取用户信息
     let claims = null;
@@ -34,6 +41,15 @@ function extractUserFromEvent(event) {
     if (event.requestContext?.authorizer?.claims) {
       claims = event.requestContext.authorizer.claims;
       console.log('✅ 使用API Gateway授权器提供的claims');
+    }
+    // 方法1.5：检查authorizer的其他可能位置
+    else if (event.requestContext?.authorizer && typeof event.requestContext.authorizer === 'object') {
+      // 有时claims直接在authorizer对象中
+      const authorizer = event.requestContext.authorizer;
+      if (authorizer.sub || authorizer.email) {
+        claims = authorizer;
+        console.log('✅ 使用API Gateway授权器对象作为claims');
+      }
     }
 
     // 方法2：手动解析Authorization头中的ID Token
@@ -62,11 +78,12 @@ function extractUserFromEvent(event) {
     if (!claims) {
       console.error('❌ 未找到认证claims，事件详情:', {
         hasAuthorizer: !!event.requestContext?.authorizer,
+        authorizerContent: event.requestContext?.authorizer,
         hasAuthHeader: !!(event.headers?.Authorization || event.headers?.authorization),
         headers: Object.keys(event.headers || {}),
         authHeaderPreview: (event.headers?.Authorization || event.headers?.authorization)?.substring(0, 30) + '...'
       });
-      throw new Error('No ID token found in request');
+      throw new Error('Invalid authentication token');
     }
 
     // 从ID Token中提取用户信息
@@ -81,14 +98,14 @@ function extractUserFromEvent(event) {
       userId: userInfo.userId,
       email: userInfo.email,
       username: userInfo.username,
-      tokenType: claims.token_use
+      tokenType: claims.token_use || 'unknown'
     });
 
     return userInfo;
 
   } catch (error) {
     console.error('❌ 从事件中提取用户信息失败:', error);
-    throw new Error(`Invalid ID token: ${error.message}`);
+    throw new Error(`Invalid authentication token`);
   }
 }
 
@@ -118,21 +135,31 @@ export const handler = async (event) => {
     const authenticatedUser = extractUserFromEvent(event);
     const requestBody = JSON.parse(event.body);
 
+    console.log('📋 请求体内容:', JSON.stringify(requestBody, null, 2));
+    console.log('📋 请求体中的profile字段:', requestBody.profile);
+
     const now = new Date().toISOString();
 
+    // 确保有profile数据，如果没有则使用默认值
+    const profileData = requestBody.profile || {};
+    console.log('📋 处理后的profileData:', profileData);
+
     // 过滤掉nickname字段，使用Cognito的nickname
-    const { nickname, ...profileData } = requestBody.profile || {};
+    const { nickname, ...cleanProfileData } = profileData;
     if (nickname) {
       console.log('Warning: nickname field ignored, using Cognito nickname');
     }
 
     const profile = {
-      name: profileData.name || '',
-      bio: profileData.bio || '',
-      isNamePublic: profileData.isNamePublic || false,
-      socials: profileData.socials || [],
-      areSocialsPublic: profileData.areSocialsPublic || false
+      nickname: authenticatedUser.nickname, // 添加Cognito的nickname到profile中
+      name: cleanProfileData.name || '',
+      bio: cleanProfileData.bio || '',
+      isNamePublic: cleanProfileData.isNamePublic !== undefined ? cleanProfileData.isNamePublic : false,
+      socials: cleanProfileData.socials || [],
+      areSocialsPublic: cleanProfileData.areSocialsPublic !== undefined ? cleanProfileData.areSocialsPublic : false
     };
+
+    console.log('📋 最终的profile对象:', JSON.stringify(profile, null, 2));
 
     // 首先检查用户是否已存在
     const getCommand = new GetCommand({
@@ -142,6 +169,12 @@ export const handler = async (event) => {
 
     const existingUser = await dynamodb.send(getCommand);
     const isNewUser = !existingUser.Item;
+
+    console.log('🔍 用户状态检查:', {
+      isNewUser,
+      hasExistingUser: !!existingUser.Item,
+      existingUserProfile: existingUser.Item?.profile
+    });
 
     // 准备用户数据
     const userData = {
@@ -157,6 +190,8 @@ export const handler = async (event) => {
       userData.createdAt = existingUser.Item.createdAt;
     }
 
+    console.log('💾 准备写入的用户数据:', JSON.stringify(userData, null, 2));
+
     // 使用PUT操作创建或更新用户记录
     const putCommand = new PutCommand({
       TableName: USERS_TABLE,
@@ -165,21 +200,23 @@ export const handler = async (event) => {
 
     await dynamodb.send(putCommand);
 
-    // 在返回结果中添加nickname
+    console.log('✅ 数据已成功写入DynamoDB');
+
+    // 返回结果中的用户数据
     const responseUser = {
-      ...userData,
-      profile: {
-        nickname: authenticatedUser.nickname,
-        ...userData.profile
-      }
+      ...userData
     };
 
     const statusCode = isNewUser ? 201 : 200;
-    return createResponse(statusCode, {
+    const response = createResponse(statusCode, {
       message: 'User profile setup completed successfully',
       user: responseUser,
       isNewUser: isNewUser
     });
+
+    console.log('📤 返回响应:', JSON.stringify(response, null, 2));
+
+    return response;
 
   } catch (error) {
     console.error('Error setting up user profile:', error);

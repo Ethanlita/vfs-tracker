@@ -35,11 +35,26 @@ const ProfileSetupWizard = ({ onComplete, canSkip = false }) => {
 
   const addSocialAccount = () => {
     if (currentSocial.platform && currentSocial.handle.trim()) {
-      setFormData(prev => ({
-        ...prev,
-        socials: [...prev.socials, { ...currentSocial, handle: currentSocial.handle.trim() }]
-      }));
+      console.log('🔍 添加社交账号:', {
+        platform: currentSocial.platform,
+        handle: currentSocial.handle.trim(),
+        currentSocials: formData.socials
+      });
+
+      setFormData(prev => {
+        const newSocials = [...prev.socials, { ...currentSocial, handle: currentSocial.handle.trim() }];
+        console.log('✅ 社交账号已添加，新的socials数组:', newSocials);
+        return {
+          ...prev,
+          socials: newSocials
+        };
+      });
       setCurrentSocial({ platform: '', handle: '' });
+    } else {
+      console.log('❌ 无法添加社交账号，缺少必要信息:', {
+        platform: currentSocial.platform,
+        handle: currentSocial.handle.trim()
+      });
     }
   };
 
@@ -55,6 +70,27 @@ const ProfileSetupWizard = ({ onComplete, canSkip = false }) => {
       if (!formData.name.trim()) {
         setError('请输入您的昵称');
         return;
+      }
+    }
+
+    // 在第2步，如果用户填写了社交账号信息但没有点击添加，自动添加
+    if (currentStep === 2) {
+      if (currentSocial.platform && currentSocial.handle.trim()) {
+        console.log('🔍 用户没有点击添加按钮，自动添加社交账号:', {
+          platform: currentSocial.platform,
+          handle: currentSocial.handle.trim()
+        });
+
+        // 自动添加当前填写的社交账号
+        setFormData(prev => {
+          const newSocials = [...prev.socials, { ...currentSocial, handle: currentSocial.handle.trim() }];
+          console.log('✅ 自动添加社交账号，新的socials数组:', newSocials);
+          return {
+            ...prev,
+            socials: newSocials
+          };
+        });
+        setCurrentSocial({ platform: '', handle: '' });
       }
     }
 
@@ -81,11 +117,15 @@ const ProfileSetupWizard = ({ onComplete, canSkip = false }) => {
     setError('');
 
     try {
+      // 修复：正确包装profile数据结构
       await setupUserProfile({
-        name: formData.name.trim(),
-        isNamePublic: formData.isNamePublic,
-        socials: formData.socials,
-        areSocialsPublic: formData.areSocialsPublic
+        profile: {
+          name: formData.name.trim(),
+          bio: '', // 添加bio字段的默认值
+          isNamePublic: formData.isNamePublic,
+          socials: formData.socials,
+          areSocialsPublic: formData.areSocialsPublic
+        }
       });
 
       await refreshUserProfile();
@@ -201,7 +241,10 @@ const ProfileSetupWizard = ({ onComplete, canSkip = false }) => {
               <div className="flex space-x-2">
                 <select
                   value={currentSocial.platform}
-                  onChange={(e) => setCurrentSocial(prev => ({ ...prev, platform: e.target.value }))}
+                  onChange={(e) => {
+                    console.log('🔍 选择平台:', e.target.value);
+                    setCurrentSocial(prev => ({ ...prev, platform: e.target.value }));
+                  }}
                   className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
                 >
                   <option value="">选择平台</option>
@@ -212,17 +255,37 @@ const ProfileSetupWizard = ({ onComplete, canSkip = false }) => {
                 <input
                   type="text"
                   value={currentSocial.handle}
-                  onChange={(e) => setCurrentSocial(prev => ({ ...prev, handle: e.target.value }))}
+                  onChange={(e) => {
+                    console.log('🔍 输入账号:', e.target.value);
+                    setCurrentSocial(prev => ({ ...prev, handle: e.target.value }));
+                  }}
                   placeholder="账号名/ID"
                   className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
                 />
                 <button
-                  onClick={addSocialAccount}
+                  onClick={() => {
+                    console.log('🔍 点击添加按钮，当前状态:', {
+                      platform: currentSocial.platform,
+                      handle: currentSocial.handle,
+                      hasPlatform: !!currentSocial.platform,
+                      hasTrimmedHandle: !!currentSocial.handle.trim(),
+                      isDisabled: !currentSocial.platform || !currentSocial.handle.trim()
+                    });
+                    addSocialAccount();
+                  }}
                   disabled={!currentSocial.platform || !currentSocial.handle.trim()}
                   className="px-4 py-2 bg-pink-600 text-white rounded-lg hover:bg-pink-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   添加
                 </button>
+              </div>
+
+              {/* 调试信息显示 */}
+              <div className="text-xs text-gray-500 bg-gray-100 p-2 rounded">
+                调试信息 - 当前社交账号输入状态:<br/>
+                平台: "{currentSocial.platform}" (是否有效: {currentSocial.platform ? '✅' : '❌'})<br/>
+                账号: "{currentSocial.handle}" (trim后: "{currentSocial.handle.trim()}", 是否有效: {currentSocial.handle.trim() ? '✅' : '❌'})<br/>
+                按钮状态: {(!currentSocial.platform || !currentSocial.handle.trim()) ? '禁用' : '启用'}
               </div>
             </div>
 
@@ -245,6 +308,10 @@ const ProfileSetupWizard = ({ onComplete, canSkip = false }) => {
         );
 
       case 3:
+        console.log('🔍 确认页面 - 当前formData:', formData);
+        console.log('🔍 确认页面 - socials数组长度:', formData.socials.length);
+        console.log('🔍 确认页面 - socials内容:', formData.socials);
+
         return (
           <div className="space-y-6">
             <div className="text-center">
@@ -267,7 +334,7 @@ const ProfileSetupWizard = ({ onComplete, canSkip = false }) => {
               </div>
 
               <div>
-                <h3 className="text-sm font-medium text-gray-500">社交账号</h3>
+                <h3 className="text-sm font-medium text-gray-500">社交账号 (调试: 数组长度={formData.socials.length})</h3>
                 {formData.socials.length > 0 ? (
                   <div className="space-y-1">
                     {formData.socials.map((social, index) => (
@@ -280,7 +347,7 @@ const ProfileSetupWizard = ({ onComplete, canSkip = false }) => {
                     </p>
                   </div>
                 ) : (
-                  <p className="text-gray-900">未添加社交账号</p>
+                  <p className="text-gray-900">未添加社交账号 (调试: socials = {JSON.stringify(formData.socials)})</p>
                 )}
               </div>
             </div>
