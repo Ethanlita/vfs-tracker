@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { deleteEvent } from '../api'; // 引入真实的删除API函数
 
 /**
  * @en Event management component for filtering, viewing, editing, and deleting events
@@ -114,34 +115,23 @@ const EventManager = ({ events, onEventUpdated, onEventDeleted, isProductionRead
     }
 
     try {
-      // 在生产环境中调用删除API
-      if (typeof isProductionReady === 'function' ? isProductionReady() : isProductionReady) {
-        // TODO: 实现删除API调用
-        // 这里需要实现实际的删除API调用
-        try {
-          // 暂时使用模拟删除，直到删除API实现
-          console.log('生产环境：删除事件', eventId);
-          if (onEventDeleted) {
-            onEventDeleted(eventId);
-          }
-          alert('事件删除功能正在开发中，目前已从本地列表移除');
-        } catch (apiError) {
-          console.error('API删除失败:', apiError);
-          alert('删除事件失败，请重试');
-          return;
-        }
-      } else {
-        // 开发环境：模拟删除
-        console.log('开发环境：模拟删除事件', eventId);
-        if (onEventDeleted) {
-          onEventDeleted(eventId);
-        }
-        alert('事件已删除（演示模式）');
+      // 调用真实的删除API，该函数已处理生产/开发模式
+      await deleteEvent(eventId);
+
+      // 通知父组件更新UI，从列表中移除事件
+      if (onEventDeleted) {
+        onEventDeleted(eventId);
       }
+
+      // 关闭详情弹窗
       setShowDetails(false);
+
+      // 提示用户成功
+      alert('事件已成功删除。');
+
     } catch (error) {
       console.error('删除事件失败:', error);
-      alert('删除事件失败，请重试');
+      alert(`删除事件失败: ${error.message}`);
     }
   };
 
