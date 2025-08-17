@@ -327,62 +327,43 @@ export const uploadFile = async (file, userId) => {
 };
 
 /**
- * Fetches all public, approved events for the main dashboard.
+ * Fetches all approved events from the DynamoDB table for the public dashboard.
  * This calls the `/all-events` endpoint of our API Gateway.
  * @returns {Promise<Array<object>>} A promise that resolves with an array of event objects.
  * @throws Will throw an error if the API call fails.
  */
 export const getAllEvents = async () => {
-  console.log('🔍 API: getAllEvents 被调用', { isProdReady: isProductionReady(), cfg: Amplify.getConfig?.().API });
-
+  // 在开发模式下返回模拟数据
   if (!isProductionReady() && !import.meta.env.VITE_FORCE_REAL) {
-    console.log('🔧 开发/未就绪：返回 mock 所有事件');
+    console.log('🔧 开发/未就绪：mock 所有事件');
     return Promise.resolve(mockData.events);
   }
 
   console.log('[getAllEvents] attempting fetch, config=', Amplify.getConfig?.().API);
   try {
-    console.log('📡 getAllEvents: 开始调用 /all-events API');
     const data = await simpleGet('/all-events');
-    console.log('✅ getAllEvents: API 调用成功', {
-      eventsCount: data?.length || 0,
-      events: data?.slice(0, 2) // 只显示前两个事件作为预览
-    });
-
-    // 生产模式下即使返回空数组也是有效的响应，不要回退到模拟数据
-    return data || [];
+    console.log('✅ API: all events fetched (count)', data?.length);
+    return data;
   } catch (error) {
-    console.error('❌ getAllEvents: API 调用失败:', error);
-
-    // 只在开发模式下才使用模拟数据作为回退
-    if (!isProductionReady()) {
-      console.log('🔧 getAllEvents: 开发模式 - 使用 mock 数据作为回退');
-      return mockData.events;
-    } else {
-      console.log('🚫 getAllEvents: 生产模式 - 不使用模拟数据，抛出错误');
-      throw error;
-    }
+    console.error('Error fetching all public events:', error);
+    throw error;
   }
 };
 
 /**
- * Fetches all events for a specific authenticated user.
- * This calls the `/events/{userId}` endpoint of our API Gateway with authentication.
- * @param {string} userId The unique ID of the user whose events are to be fetched.
- * @returns {Promise<Array<object>>} A promise that resolves with an array of the user's event objects.
+ * Fetches events for a specific user by calling the authenticated API.
+ * This calls the `/events/{userId}` endpoint with authentication.
+ * @param {string} userId The ID of the user whose events to fetch.
+ * @returns {Promise<Array<object>>} A promise that resolves with an array of event objects.
  * @throws Will throw an error if the API call fails.
  */
 export const getEventsByUserId = async (userId) => {
-  console.log('🔍 API: getEventsByUserId 被调用', { userId, isProdReady: isProductionReady(), cfg: Amplify.getConfig?.().API });
-
   // 在开发模式下返回模拟数据
   if (!isProductionReady() && !import.meta.env.VITE_FORCE_REAL) {
-    console.log(`🔧 开发/未就绪：mock 用户事件 userId=${userId}`);
-    const userEvents = mockData.events.filter(event => event.userId === userId);
-    return Promise.resolve(userEvents);
+    console.log('🔧 开发/未就绪：mock 用户事件');
+    return Promise.resolve(mockData.events.filter(e => e.userId === userId));
   }
 
-  // 临时解决方案：如果API返回401，使用模拟数据
   try {
     // 使用认证的API调用
     const data = await authenticatedGet(`/events/${userId}`);
@@ -814,10 +795,8 @@ export const isUserProfileComplete = (userProfile) => {
 
   const profile = userProfile.profile;
 
-  // 检查基本信息是否存在且不为空（姓名必须有实际内容）
-  const hasBasicInfo = profile.name &&
-                      typeof profile.name === 'string' &&
-                      profile.name.trim().length > 0;
+  // 检查基本信息是否存在（至少需要设置姓名或明确选择不公开）
+  const hasBasicInfo = profile.name !== undefined && profile.name !== null;
 
   // 检查隐私设置是否已配置
   const hasPrivacySettings =
@@ -827,8 +806,6 @@ export const isUserProfileComplete = (userProfile) => {
   console.log('🔍 检查用户资料完整性:', {
     hasBasicInfo,
     hasPrivacySettings,
-    nameValue: profile.name,
-    nameLength: profile.name?.length,
     profile
   });
 
