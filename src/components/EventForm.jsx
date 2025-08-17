@@ -247,8 +247,27 @@ const EventForm = ({ onEventAdded }) => {
 
       case 'hospital_test':
         fields.push(<div key="hospital-header" className="form-field col-span-full"><h3 className="text-base font-semibold text-gray-900">医院检测</h3></div>);
+        fields.push(
+          <div key="gemini-tip" className="md:col-span-2 bg-indigo-50 border-l-4 border-indigo-400 p-4 rounded-r-lg my-2">
+            <div className="flex items-start">
+              <div className="flex-shrink-0">
+                <svg className="h-6 w-6 text-indigo-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <p className="font-semibold text-indigo-800">请上传您的医院报告（附件）</p>
+                  <p className="text-sm text-indigo-700 mt-1">
+                      为确保数据准确性，<span className="font-bold">Gemini AI</span> 将会自动审核您上传的报告内容。请确保报告清晰可读，包含所有相关页面（如正反面）。全过程没有人工干预，不会有人看到您的报告。
+                      <br />
+                      <span className="font-semibold">提示：</span>出于隐私保护的考虑，您可以选择遮挡住您的个人识别信息，这不会影响判断。
+                  </p>
+              </div>
+            </div>
+          </div>
+        );
         fields.push(renderInput('location', '医院/诊所名称', true));
-        fields.push(renderInput('equipmentUsed', '使用的设���', false));
+        fields.push(renderInput('equipmentUsed', '使用的设备', false));
         fields.push(renderMultiSelect('sound', '声音状态', soundOptions, true));
         if ((formData.sound || []).includes('其他')) {
           fields.push(renderInput('customSoundDetail', '其他声音状态详情', false));
@@ -268,7 +287,7 @@ const EventForm = ({ onEventAdded }) => {
         fields.push(renderNumberInput('f3', 'F3', 'Hz'));
 
         fields.push(<div key="pitch-header" className="form-field col-span-full"><h3 className="text-base font-semibold text-gray-900">音域范围</h3></div>);
-        fields.push(renderNumberInput('pitchMax', '最高��', 'Hz'));
+        fields.push(renderNumberInput('pitchMax', '最高音', 'Hz'));
         fields.push(renderNumberInput('pitchMin', '最低音', 'Hz'));
 
         fields.push(renderTextArea('notes', '备注'));
@@ -290,7 +309,7 @@ const EventForm = ({ onEventAdded }) => {
         fields.push(renderTextArea('practiceContent', '练习内容', true, '描述本次练习的具体内容...'));
         fields.push(renderBooleanSelect('hasInstructor', '是否有指导', true));
         if (formData.hasInstructor) {
-          fields.push(renderInput('instructor', '指���者姓名', false));
+          fields.push(renderInput('instructor', '指导者姓名', false));
         }
         fields.push(renderInput('references', '参考资料', false));
         fields.push(renderInput('voiceStatus', '嗓音状态评估', true));

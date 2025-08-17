@@ -182,6 +182,38 @@ Content-Type: application/json
 
 ---
 
+### DELETE /event/{eventId}
+
+**Description**: Deletes a specific event for the authenticated user. This follows the RESTful convention of using a singular resource name (`/event`) for operations on a specific item.
+
+**Authentication**: Required (Cognito JWT)
+
+**Security**: Users can only delete their own events. The Lambda function will verify that the `userId` associated with the `eventId` matches the authenticated user's ID from the JWT token.
+
+**Headers**:
+```
+Authorization: Bearer {jwt-token}
+```
+
+**Parameters**:
+- `eventId` (path): The unique ID of the event to be deleted.
+
+**Response (200 OK)**:
+```json
+{
+  "message": "Event deleted successfully"
+}
+```
+
+**HTTP Status Codes**:
+- `200 OK`: Event deleted successfully.
+- `401 Unauthorized`: Missing or invalid JWT token.
+- `403 Forbidden`: Attempting to delete another user's event (handled by Lambda logic, may result in 404).
+- `404 Not Found`: Event with the given `eventId` does not exist for the authenticated user.
+- `500 Internal Server Error`: Server error.
+
+---
+
 ### GET /user/{userId}
 
 **Description**: Retrieves user profile information for the authenticated user.

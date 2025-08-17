@@ -121,7 +121,7 @@ const MyPage = () => {
           onClick={handleNavigateToAddEvent}
           className="bg-gradient-to-r from-pink-500 to-purple-600 text-white px-6 py-3 rounded-lg font-semibold shadow-lg hover:from-pink-600 hover:to-purple-700 transition-all duration-300 transform hover:scale-105"
         >
-          ➕ 添加新事件
+          ✨ 添加新事件
         </button>
         <button
           onClick={handleNavigateToEventManager}
