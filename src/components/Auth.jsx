@@ -137,24 +137,43 @@ const Auth = () => {
 
 // 生产模式下的认证状态组件
 const ProductionAuthStatus = ({ onShowLogin, navigate }) => {
-    // 使用 useAuthenticator 检查认证状态
-    const { authStatus, user, signOut } = useAuthenticator((context) => [
-        context.authStatus,
-        context.user,
-        context.signOut
-    ]);
+    // @en Use AuthContext exclusively - it already uses Amplify v6 standard APIs
+    // @zh 专门使用 AuthContext - 它已经使用了 Amplify v6 标准 API
+    const { user, cognitoUserInfo } = useAuth();
+    const { signOut } = useAuthenticator((context) => [context.signOut]);
 
-    if (authStatus === 'authenticated' && user) {
+    console.log('📍 [验证点20] Auth组件用户信息来源验证:', {
+        source: 'AuthContext (使用Amplify v6标准API)',
+        authContextUser: !!user,
+        cognitoUserInfo: !!cognitoUserInfo,
+        userIdFromContext: user?.userId,
+        emailFromCognito: cognitoUserInfo?.email,
+        nicknameFromCognito: cognitoUserInfo?.nickname,
+        混合来源检查: '仅signOut函数来自useAuthenticator，其余均来自AuthContext'
+    });
+
+    // 构建完整的用户对象，优先使用AuthContext提供的数据
+    const completeUser = user ? {
+        ...user,
+        attributes: {
+            ...user.attributes,
+            nickname: cognitoUserInfo?.nickname || user.attributes?.nickname,
+            email: cognitoUserInfo?.email || user.attributes?.email,
+            picture: cognitoUserInfo?.avatarUrl || user.attributes?.picture
+        }
+    } : null;
+
+    if (completeUser) {
         // 生产模式 - 已认证用户
         return (
             <div className="flex items-center gap-2 sm:gap-3">
                 <img
-                    src={getUserAvatarUrl(user, 40)}
-                    alt={getUserDisplayName(user)}
+                    src={getUserAvatarUrl(completeUser, 40)}
+                    alt={getUserDisplayName(completeUser)}
                     className="w-9 h-9 sm:w-10 sm:h-10 rounded-full border-2 border-pink-500"
                 />
                 <span className="font-semibold text-gray-700 hidden sm:block">
-                    {getUserDisplayName(user)}
+                    {getUserDisplayName(completeUser)}
                 </span>
                 <button
                     onClick={() => navigate('/mypage')}

@@ -358,16 +358,21 @@ export const getAllEvents = async () => {
  * @throws Will throw an error if the API call fails.
  */
 export const getEventsByUserId = async (userId) => {
+  console.log('🔍 getEventsByUserId 开始执行:', { userId, isProductionReady: isProductionReady(), forceReal: import.meta.env.VITE_FORCE_REAL });
+
   // 在开发模式下返回模拟数据
   if (!isProductionReady() && !import.meta.env.VITE_FORCE_REAL) {
     console.log('🔧 开发/未就绪：mock 用户事件');
-    return Promise.resolve(mockData.events.filter(e => e.userId === userId));
+    const mockEvents = mockData.events.filter(e => e.userId === userId);
+    console.log('🔧 开发模式返回的模拟事件:', { userId, mockEvents, count: mockEvents.length });
+    return Promise.resolve(mockEvents);
   }
 
   try {
+    console.log('🚀 生产模式：调用 authenticatedGet API');
     // 使用认证的API调用
     const data = await authenticatedGet(`/events/${userId}`);
-    console.log('✅ API: user events fetched (count)', data?.length);
+    console.log('✅ API: user events fetched', { data, count: data?.length, isArray: Array.isArray(data) });
     return data;
   } catch (error) {
     console.error('❌ API: 获取用户事件失败:', error);
@@ -417,9 +422,11 @@ export const getEventsByUserId = async (userId) => {
         }
       ];
 
+      console.log('🔧 返回临时模拟事件:', { mockUserEvents, count: mockUserEvents.length });
       return mockUserEvents;
     }
 
+    // 对于其他错误，重新抛出
     throw error;
   }
 };

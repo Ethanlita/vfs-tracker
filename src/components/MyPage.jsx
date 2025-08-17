@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { useAuthenticator } from '@aws-amplify/ui-react';
 import { useNavigate } from 'react-router-dom';
 import { getEventsByUserId } from '../api';
 import VoiceFrequencyChart from './VoiceFrequencyChart';
@@ -7,7 +6,7 @@ import InteractiveTimeline from './InteractiveTimeline';
 import { useAsync } from '../utils/useAsync.js';
 import { isProductionReady as globalIsProductionReady } from '../env.js';
 import { getUserDisplayName } from '../utils/avatar.js';
-import { useAuth } from '../contexts/AuthContext.jsx'; // 新增：使用 AuthContext
+import { useAuth } from '../contexts/AuthContext.jsx';
 
 /**
  * @en The MyPage component serves as the user's personal dashboard. It fetches,
@@ -24,44 +23,32 @@ const MyPage = () => {
   const productionReady = globalIsProductionReady();
   const navigate = useNavigate();
 
-  // @en Use AuthContext to get processed user information with nickname
-  // @zh 使用 AuthContext 获取已处理的包含 nickname 的用户信息
+  // @en Use AuthContext exclusively - it already uses Amplify v6 standard APIs
+  // @zh 专门使用 AuthContext - 它已经使用了 Amplify v6 标准 API
   const { user: authContextUser, cognitoUserInfo } = useAuth();
 
-  // @en Fallback to useAuthenticator for compatibility
-  // @zh 兜底使用 useAuthenticator 以保持兼容性
-  const useAuthenticatorSafe = () => {
-    try {
-      return useAuthenticator((context) => [context.user]);
-    } catch (error) {
-      console.log('🔧 useAuthenticator 不在 Authenticator.Provider 上下文中，使用模拟用户');
-      return { user: null };
-    }
-  };
-
-  const { user: authenticatorUser } = useAuthenticatorSafe();
-
-  console.log('🔍 MyPage: 多源用户对象检查', {
-    productionReady,
-    authContextUser,
-    cognitoUserInfo,
-    authenticatorUser,
-    authContextUserSub: authContextUser?.userId,
-    cognitoNickname: cognitoUserInfo?.nickname
+  console.log('📍 [验证点20] MyPage组件用户信息来源验证:', {
+    source: 'AuthContext (使用Amplify v6标准API)',
+    authContextUser: !!authContextUser,
+    cognitoUserInfo: !!cognitoUserInfo,
+    userIdFromContext: authContextUser?.userId,
+    emailFromCognito: cognitoUserInfo?.email,
+    nicknameFromCognito: cognitoUserInfo?.nickname,
+    混合来源检查: '无 - 仅使用AuthContext'
   });
 
-  // @en Create user object with proper nickname from AuthContext
-  // @zh 从 AuthContext 创建包含正确 nickname 的用户对象
+  // @en Create user object with proper data from AuthContext (which uses Amplify v6 APIs)
+  // @zh 从 AuthContext 创建用户对象（AuthContext 使用 Amplify v6 API）
   const user = productionReady && authContextUser ? {
     attributes: {
-      email: cognitoUserInfo?.email || authContextUser.attributes?.email || authenticatorUser?.attributes?.email,
-      sub: authContextUser.userId || authenticatorUser?.attributes?.sub || authenticatorUser?.userId,
-      nickname: cognitoUserInfo?.nickname, // 优先使用 AuthContext 中的 nickname
+      email: cognitoUserInfo?.email || authContextUser.attributes?.email,
+      sub: authContextUser.userId,
+      nickname: cognitoUserInfo?.nickname,
       name: cognitoUserInfo?.name || authContextUser.attributes?.name,
       preferred_username: authContextUser.attributes?.preferred_username,
       picture: authContextUser.attributes?.picture
     },
-    username: authContextUser.username || authenticatorUser?.username
+    username: authContextUser.username
   } : {
     attributes: {
       email: 'public-user@example.com',
@@ -71,7 +58,7 @@ const MyPage = () => {
     }
   };
 
-  console.log('🔍 MyPage: 最终用户对象', {
+  console.log('🔍 MyPage: 最终用户对象 (仅来自AuthContext)', {
     user,
     displayName: getUserDisplayName(user),
     hasNickname: !!user.attributes?.nickname
