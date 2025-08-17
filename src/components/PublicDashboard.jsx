@@ -11,10 +11,11 @@ import {
   Legend,
 } from 'chart.js';
 import { Bar, Line } from 'react-chartjs-2';
-import { getAllEvents } from '../api';
+import { getAllEvents, getUserPublicProfile } from '../api';
 import { useAsync } from '../utils/useAsync.js';
 import { isProductionReady as globalIsProductionReady } from '../env.js';
 import EnhancedDataCharts from './EnhancedDataCharts.jsx';
+
 /**
  * @en The PublicDashboard component displays aggregated and anonymized data from all users.
  * It includes summary statistics, a user list with profile view, an event distribution bar chart,
@@ -36,6 +37,7 @@ ChartJS.register(
 
 const PublicDashboard = () => {
   const [selectedUserId, setSelectedUserId] = useState(null);
+  const [selectedUserProfile, setSelectedUserProfile] = useState(null);
   const [stats, setStats] = useState({
     avgImprovement: 0,
     variance: 0,
@@ -43,58 +45,74 @@ const PublicDashboard = () => {
     usedUsers: 0,
   });
 
-  console.log('🎯 PublicDashboard: 组件渲染开始');
-
+  // 使用useAsync钩子获取所有公开事件
   const eventsAsync = useAsync(getAllEvents);
   const allEventsState = eventsAsync.value || [];
 
-  console.log('📊 PublicDashboard: 事件数据状态', {
-    loading: eventsAsync.loading,
-    error: eventsAsync.error,
-    eventsCount: allEventsState.length,
-    events: allEventsState.slice(0, 2) // 只显示前两个事件作为预览
-  });
+  // 计算用户列表和统计数据
+  const { usersList, totalEvents, totalUsers } = useMemo(() => {
+    if (!allEventsState.length) return { usersList: [], totalEvents: 0, totalUsers: 0 };
 
-  useEffect(() => {
-    console.log('🔄 PublicDashboard: 开始获取所有事件');
-    eventsAsync.execute();
-  }, []);
-
-  // Calculate date difference in days
-  const diffInDays = (date1, date2) => {
-    const d1 = new Date(date1);
-    const d2 = new Date(date2);
-    return Math.floor((d1 - d2) / (1000 * 60 * 60 * 24));
-  };
-
-  // Get summary statistics
-  const totalEvents = allEventsState.length;
-  const totalUsers = new Set(allEventsState.map(e => e.userId)).size;
-
-  // Get users list
-  const usersList = useMemo(() => {
     const userMap = new Map();
+
     allEventsState.forEach(e => {
       if (!userMap.has(e.userId)) {
         userMap.set(e.userId, {
           userId: e.userId,
-          userName: e.userName || 'Unknown User'
+          userName: e.userName || '（非公开）', // 使用API返回的用户名
+          eventCount: 0
         });
       }
+      const user = userMap.get(e.userId);
+      user.eventCount += 1;
     });
-    return Array.from(userMap.values());
+
+    return {
+      usersList: Array.from(userMap.values()).sort((a, b) => b.eventCount - a.eventCount),
+      totalEvents: allEventsState.length,
+      totalUsers: userMap.size
+    };
   }, [allEventsState]);
 
-  // Selected user data
-  const selectedUser = selectedUserId ? usersList.find(u => u.userId === selectedUserId) : null;
+  // 选中用户的数据
+  const selectedUser = useMemo(() => {
+    if (!selectedUserId) return null;
+    return usersList.find(u => u.userId === selectedUserId);
+  }, [selectedUserId, usersList]);
+
+  // 当选择用户时，获取用户的公开资料
+  useEffect(() => {
+    if (selectedUserId) {
+      getUserPublicProfile(selectedUserId)
+        .then(profile => {
+          setSelectedUserProfile(profile);
+        })
+        .catch(error => {
+          console.error('获取用户公开资料失败:', error);
+          setSelectedUserProfile(null);
+        });
+    } else {
+      setSelectedUserProfile(null);
+    }
+  }, [selectedUserId]);
 
   // Bar chart data
   const barChartData = useMemo(() => {
     if (!allEventsState.length) return null;
 
     const typeCount = {};
+    const typeNameMap = {
+      'self_test': '自我测试',
+      'hospital_test': '医院检测',
+      'voice_training': '嗓音训练',
+      'self_practice': '自我练习',
+      'surgery': 'VFS手术',
+      'feeling_log': '感受记录'
+    };
+
     allEventsState.forEach(e => {
-      typeCount[e.type] = (typeCount[e.type] || 0) + 1;
+      const typeName = typeNameMap[e.type] || e.type;
+      typeCount[typeName] = (typeCount[typeName] || 0) + 1;
     });
 
     return {
@@ -107,6 +125,7 @@ const PublicDashboard = () => {
           'rgba(16, 185, 129, 0.8)',
           'rgba(245, 158, 11, 0.8)',
           'rgba(239, 68, 68, 0.8)',
+          'rgba(168, 85, 247, 0.8)',
         ],
       }],
     };
@@ -124,21 +143,22 @@ const PublicDashboard = () => {
 
     const datasets = [];
     Object.entries(userGroups).forEach(([userId, events], index) => {
-      const vfsEvent = events.find(e => e.type === 'hospital_test');
+      const vfsEvent = events.find(e => e.type === 'surgery');
       if (!vfsEvent) return;
 
-      const pitchEvents = events
-        .filter(e => typeof e.pitch === 'number')
+      const frequencyEvents = events
+        .filter(e => e.details?.fundamentalFrequency && typeof e.details.fundamentalFrequency === 'number')
         .map(e => ({
           x: diffInDays(e.date, vfsEvent.date),
-          y: e.pitch
+          y: e.details.fundamentalFrequency
         }))
         .sort((a, b) => a.x - b.x);
 
-      if (pitchEvents.length > 0) {
+      if (frequencyEvents.length > 0) {
+        const userName = events[0]?.userName || `用户 ${index + 1}`;
         datasets.push({
-          label: `User ${index + 1}`,
-          data: pitchEvents,
+          label: userName,
+          data: frequencyEvents,
           borderColor: `hsl(${(index * 137.5) % 360}, 70%, 50%)`,
           backgroundColor: `hsla(${(index * 137.5) % 360}, 70%, 50%, 0.1)`,
           tension: 0.1,
@@ -161,12 +181,12 @@ const PublicDashboard = () => {
 
     const improvements = [];
     Object.values(userGroups).forEach(events => {
-      const vfsEvent = events.find(e => e.type === 'hospital_test');
+      const vfsEvent = events.find(e => e.type === 'surgery');
       if (!vfsEvent) return;
 
-      const pitchEvents = events.filter(e => typeof e.pitch === 'number');
-      const before = pitchEvents.filter(e => diffInDays(e.date, vfsEvent.date) < 0).map(e => e.pitch);
-      const after = pitchEvents.filter(e => diffInDays(e.date, vfsEvent.date) > 0).map(e => e.pitch);
+      const frequencyEvents = events.filter(e => e.details?.fundamentalFrequency && typeof e.details.fundamentalFrequency === 'number');
+      const before = frequencyEvents.filter(e => diffInDays(e.date, vfsEvent.date) < 0).map(e => e.details.fundamentalFrequency);
+      const after = frequencyEvents.filter(e => diffInDays(e.date, vfsEvent.date) > 0).map(e => e.details.fundamentalFrequency);
 
       if (before.length && after.length) {
         const avgBefore = before.reduce((s, v) => s + v, 0) / before.length;
@@ -195,6 +215,43 @@ const PublicDashboard = () => {
     }
   }, [allEventsState]);
 
+  // 选中用户的事件数据
+  const userEvents = useMemo(() => {
+    if (!selectedUserId) return [];
+    return allEventsState
+      .filter((e) => e.userId === selectedUserId)
+      .sort((a, b) => new Date(a.date) - new Date(b.date));
+  }, [selectedUserId, allEventsState]);
+
+  // 选中用户的资料信息
+  const userProfileInfo = useMemo(() => {
+    if (!selectedUserId || !userEvents.length) return null;
+
+    const firstDate = userEvents[0]?.date;
+    const lastDate = userEvents[userEvents.length - 1]?.date;
+    const vfsAnchor = userEvents.find((e) => e.type === 'surgery')?.date || null;
+    const frequencyEvents = userEvents.filter((e) => e.details?.fundamentalFrequency && typeof e.details.fundamentalFrequency === 'number');
+
+    let avgBefore = null;
+    let avgAfter = null;
+    if (vfsAnchor && frequencyEvents.length) {
+      const before = frequencyEvents.filter((e) => diffInDays(e.date, vfsAnchor) < 0).map((e) => e.details.fundamentalFrequency);
+      const after = frequencyEvents.filter((e) => diffInDays(e.date, vfsAnchor) > 0).map((e) => e.details.fundamentalFrequency);
+      const mean = (arr) => (arr.length ? arr.reduce((s, v) => s + v, 0) / arr.length : null);
+      avgBefore = mean(before);
+      avgAfter = mean(after);
+    }
+
+    return {
+      eventsCount: userEvents.length,
+      firstDate,
+      lastDate,
+      hasVFS: Boolean(vfsAnchor),
+      avgBefore,
+      avgAfter,
+    };
+  }, [selectedUserId, userEvents]);
+
   const isLoading = eventsAsync.loading;
   const error = eventsAsync.error;
 
@@ -208,39 +265,13 @@ const PublicDashboard = () => {
       return String(d);
     }
   };
-  const userEvents = useMemo(() => {
-    if (!selectedUserId) return [];
-    return allEventsState
-      .filter((e) => e.userId === selectedUserId)
-      .sort((a, b) => new Date(a.date) - new Date(b.date));
-  }, [selectedUserId, allEventsState]);
 
-  const userProfileInfo = useMemo(() => {
-    if (!selectedUserId) return null;
-    const events = userEvents;
-    if (!events.length) return null;
-    const firstDate = events[0]?.date;
-    const lastDate = events[events.length - 1]?.date;
-    const vfsAnchor = events.find((e) => e.type === 'hospital_test')?.date || null;
-    const pitchEvents = events.filter((e) => typeof e.pitch === 'number');
-    let avgBefore = null;
-    let avgAfter = null;
-    if (vfsAnchor && pitchEvents.length) {
-      const before = pitchEvents.filter((e) => diffInDays(e.date, vfsAnchor) < 0).map((e) => e.pitch);
-      const after = pitchEvents.filter((e) => diffInDays(e.date, vfsAnchor) > 0).map((e) => e.pitch);
-      const mean = (arr) => (arr.length ? arr.reduce((s, v) => s + v, 0) / arr.length : null);
-      avgBefore = mean(before);
-      avgAfter = mean(after);
-    }
-    return {
-      eventsCount: events.length,
-      firstDate,
-      lastDate,
-      hasVFS: Boolean(vfsAnchor),
-      avgBefore,
-      avgAfter,
-    };
-  }, [selectedUserId, userEvents]);
+  // Helper function to calculate date difference
+  const diffInDays = (date1, date2) => {
+    const d1 = new Date(date1);
+    const d2 = new Date(date2);
+    return Math.floor((d1 - d2) / (1000 * 60 * 60 * 24));
+  };
 
   // --- RENDER ---
   if (isLoading) {
@@ -435,7 +466,7 @@ const PublicDashboard = () => {
               onClick={() => setSelectedUserId(null)}
             />
             {/* 抽屉面板 */}
-            <div className="absolute inset-y-0 right-0 w-full max-w-xl bg-white shadow-2xl border-l border-gray-200 flex flex-col">
+            <div className="absolute inset-y-0 right-0 w-full max-w-2xl bg-white shadow-2xl border-l border-gray-200 flex flex-col">
               <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
                 <div>
                   <h3 className="text-lg font-semibold text-gray-900">{selectedUser.userName}</h3>
@@ -450,8 +481,41 @@ const PublicDashboard = () => {
                 </button>
               </div>
 
-              <div className="px-6 py-4 overflow-y-auto">
-                {/* 公开信息 */}
+              <div className="px-6 py-4 overflow-y-auto flex-1">
+                {/* 公开资料信息 */}
+                {selectedUserProfile && (
+                  <div className="mb-6">
+                    <h4 className="text-base font-semibold text-gray-900 mb-3">公开资料</h4>
+                    <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                      <div className="grid grid-cols-1 gap-3">
+                        <div>
+                          <span className="text-sm text-gray-500">姓名：</span>
+                          <span className="text-sm text-gray-900">{selectedUserProfile.profile?.name || '（非公开）'}</span>
+                        </div>
+                        {selectedUserProfile.profile?.bio && (
+                          <div>
+                            <span className="text-sm text-gray-500">个人简介：</span>
+                            <span className="text-sm text-gray-900">{selectedUserProfile.profile.bio}</span>
+                          </div>
+                        )}
+                        {selectedUserProfile.profile?.socials && selectedUserProfile.profile.socials.length > 0 && (
+                          <div>
+                            <span className="text-sm text-gray-500">社交媒体：</span>
+                            <div className="mt-1 space-y-1">
+                              {selectedUserProfile.profile.socials.map((social, index) => (
+                                <div key={index} className="text-sm text-gray-900">
+                                  <span className="font-medium">{social.platform}:</span> {social.handle}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* 统计信息 */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
                   <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
                     <p className="text-sm text-gray-500">事件总数</p>
@@ -484,37 +548,196 @@ const PublicDashboard = () => {
                   </div>
                 </div>
 
-                {/* 时间轴 */}
+                {/* 详细事件列表 */}
                 <div>
-                  <h4 className="text-base font-semibold text-gray-900 mb-3">时间轴</h4>
-                  <ul className="space-y-3">
-                    {userEvents.map((e) => (
-                      <li key={e.id} className="flex items-start gap-3">
-                        <div className="mt-1 h-2 w-2 rounded-full bg-gray-400 flex-shrink-0" />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm text-gray-900">
-                            <span className="font-medium">
-                              {e.type === 'hospital_test'
+                  <h4 className="text-base font-semibold text-gray-900 mb-3">事件详情</h4>
+                  <div className="space-y-4">
+                    {userEvents.map((event, index) => (
+                      <div key={event.eventId || index} className="bg-white border border-gray-200 rounded-lg p-4">
+                        <div className="flex items-start justify-between mb-2">
+                          <div>
+                            <h5 className="text-sm font-medium text-gray-900">
+                              {event.type === 'hospital_test'
                                 ? '医院检测'
-                                : e.type === 'self_test'
+                                : event.type === 'self_test'
                                 ? '自我测试'
-                                : e.type === 'voice_training'
+                                : event.type === 'voice_training'
                                 ? '嗓音训练'
-                                : e.type === 'self_practice'
+                                : event.type === 'self_practice'
                                 ? '自我练习'
-                                : e.type === 'surgery'
-                                ? '手术'
-                                : e.type}
-                            </span>{' '}
-                            <span className="text-gray-500">· {formatDate(e.date)}</span>
-                          </p>
-                          {typeof e.pitch === 'number' && (
-                            <p className="text-xs text-gray-600 mt-0.5">基频：{e.pitch} Hz</p>
-                          )}
+                                : event.type === 'surgery'
+                                ? 'VFS手术'
+                                : event.type === 'feeling_log'
+                                ? '感受记录'
+                                : event.type}
+                            </h5>
+                            <p className="text-xs text-gray-500">{formatDate(event.date)}</p>
+                          </div>
+                          <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                            已审核
+                          </span>
                         </div>
-                      </li>
+
+                        {/* 事件详细信息 */}
+                        {event.details && (
+                          <div className="mt-3 space-y-2">
+                            {/* 基频信息 */}
+                            {event.details.fundamentalFrequency && (
+                              <div className="text-sm">
+                                <span className="text-gray-500">基频：</span>
+                                <span className="text-gray-900 font-medium">{event.details.fundamentalFrequency} Hz</span>
+                              </div>
+                            )}
+
+                            {/* 声音质量 */}
+                            {event.details.sound && (
+                              <div className="text-sm">
+                                <span className="text-gray-500">声音质量：</span>
+                                <span className="text-gray-900">{Array.isArray(event.details.sound) ? event.details.sound.join(', ') : event.details.sound}</span>
+                                {event.details.customSoundDetail && (
+                                  <span className="text-gray-700"> ({event.details.customSoundDetail})</span>
+                                )}
+                              </div>
+                            )}
+
+                            {/* 发音方式 */}
+                            {event.details.voicing && (
+                              <div className="text-sm">
+                                <span className="text-gray-500">发音方式：</span>
+                                <span className="text-gray-900">{Array.isArray(event.details.voicing) ? event.details.voicing.join(', ') : event.details.voicing}</span>
+                                {event.details.customVoicingDetail && (
+                                  <span className="text-gray-700"> ({event.details.customVoicingDetail})</span>
+                                )}
+                              </div>
+                            )}
+
+                            {/* 训练内容 */}
+                            {event.details.trainingContent && (
+                              <div className="text-sm">
+                                <span className="text-gray-500">训练内容：</span>
+                                <span className="text-gray-900">{event.details.trainingContent}</span>
+                              </div>
+                            )}
+
+                            {/* 练习内容 */}
+                            {event.details.practiceContent && (
+                              <div className="text-sm">
+                                <span className="text-gray-500">练习内容：</span>
+                                <span className="text-gray-900">{event.details.practiceContent}</span>
+                              </div>
+                            )}
+
+                            {/* 医生信息 */}
+                            {event.details.doctor && (
+                              <div className="text-sm">
+                                <span className="text-gray-500">医生：</span>
+                                <span className="text-gray-900">{event.details.doctor}</span>
+                                {event.details.customDoctor && (
+                                  <span className="text-gray-700"> ({event.details.customDoctor})</span>
+                                )}
+                              </div>
+                            )}
+
+                            {/* 地点信息 */}
+                            {event.details.location && (
+                              <div className="text-sm">
+                                <span className="text-gray-500">地点：</span>
+                                <span className="text-gray-900">{event.details.location}</span>
+                                {event.details.customLocation && (
+                                  <span className="text-gray-700"> ({event.details.customLocation})</span>
+                                )}
+                              </div>
+                            )}
+
+                            {/* 指导老师 */}
+                            {event.details.instructor && (
+                              <div className="text-sm">
+                                <span className="text-gray-500">指导老师：</span>
+                                <span className="text-gray-900">{event.details.instructor}</span>
+                              </div>
+                            )}
+
+                            {/* 声音状态 */}
+                            {event.details.voiceStatus && (
+                              <div className="text-sm">
+                                <span className="text-gray-500">声音状态：</span>
+                                <span className="text-gray-900">{event.details.voiceStatus}</span>
+                              </div>
+                            )}
+
+                            {/* 感受记录 */}
+                            {event.details.feelings && (
+                              <div className="text-sm">
+                                <span className="text-gray-500">感受：</span>
+                                <span className="text-gray-900">{event.details.feelings}</span>
+                              </div>
+                            )}
+
+                            {/* 感受日志内容 */}
+                            {event.details.content && (
+                              <div className="text-sm">
+                                <span className="text-gray-500">内容：</span>
+                                <span className="text-gray-900">{event.details.content}</span>
+                              </div>
+                            )}
+
+                            {/* 备注 */}
+                            {event.details.notes && (
+                              <div className="text-sm">
+                                <span className="text-gray-500">备注：</span>
+                                <span className="text-gray-900">{event.details.notes}</span>
+                              </div>
+                            )}
+
+                            {/* 其他音频参数 */}
+                            <div className="grid grid-cols-2 gap-4 mt-3">
+                              {event.details.formants && (
+                                <div className="text-xs">
+                                  <span className="text-gray-500">共振峰：</span>
+                                  <div className="text-gray-900">
+                                    {Object.entries(event.details.formants).map(([key, value]) => (
+                                      <div key={key}>{key.toUpperCase()}: {value} Hz</div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              {event.details.pitch && (
+                                <div className="text-xs">
+                                  <span className="text-gray-500">音调范围：</span>
+                                  <div className="text-gray-900">
+                                    最高: {event.details.pitch.max} Hz<br/>
+                                    最低: {event.details.pitch.min} Hz
+                                  </div>
+                                </div>
+                              )}
+
+                              {event.details.jitter !== undefined && (
+                                <div className="text-xs">
+                                  <span className="text-gray-500">频率变异：</span>
+                                  <span className="text-gray-900">{event.details.jitter}</span>
+                                </div>
+                              )}
+
+                              {event.details.shimmer !== undefined && (
+                                <div className="text-xs">
+                                  <span className="text-gray-500">振幅变异：</span>
+                                  <span className="text-gray-900">{event.details.shimmer}</span>
+                                </div>
+                              )}
+
+                              {event.details.hnr !== undefined && (
+                                <div className="text-xs">
+                                  <span className="text-gray-500">谐波噪音比：</span>
+                                  <span className="text-gray-900">{event.details.hnr}</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     ))}
-                  </ul>
+                  </div>
                 </div>
               </div>
             </div>
