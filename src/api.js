@@ -474,25 +474,52 @@ export const addEvent = async (eventData) => {
 };
 
 /**
+ * Calls the secure Gemini proxy API on the backend.
+ * @param {string} prompt The prompt to send to the Gemini model.
+ * @returns {Promise<string>} A promise that resolves with the text response from Gemini.
+ * @throws Will throw an error if the API call fails or the proxy returns an error.
+ */
+export const callGeminiProxy = async (prompt) => {
+  console.log('🤖 Calling secure Gemini proxy...');
+  if (!isProductionReady() && !import.meta.env.VITE_FORCE_REAL) {
+    console.log('🔧 开发/未就绪：mock Gemini proxy call');
+    return Promise.resolve("这是一个来自模拟代理的温暖鼓励！");
+  }
+
+  try {
+    const result = await authenticatedPost('/gemini-proxy', { prompt });
+    if (result.success) {
+      console.log('✅ Gemini proxy call successful.');
+      return result.response;
+    } else {
+      console.error('❌ Gemini proxy returned an error:', result.error);
+      throw new Error(result.error || 'The Gemini proxy failed to process the request.');
+    }
+  } catch (error) {
+    console.error('❌ Failed to call Gemini proxy API:', error);
+    throw error;
+  }
+};
+
+/**
  * 获取Gemini AI的鼓励性评价
- * 仅在生产环境下生效，开发环境返回默认消息
+ * REFACTORED: This function now uses the secure backend proxy instead of calling Google's API directly.
  * @param {Object} userData - 用户数据对象
- * @param {Array} userData.events - 用户事件列表
- * @param {Object} userData.voiceParameters - 最新的声音参数
  * @returns {Promise<string>} 鼓励性评价文本
  */
 export const getEncouragingMessage = async (userData) => {
-  const isProduction = import.meta.env.PROD;
-  const enableAiInDev = !!import.meta.env.VITE_ENABLE_AI_IN_DEV;
-  const geminiApiKey = import.meta.env.VITE_GOOGLE_GEMINI_API;
-  console.log('🔍 AI 环境:', { isProduction, enableAiInDev, hasKey: !!geminiApiKey, forceReal: !!import.meta.env.VITE_FORCE_REAL });
-  if ((!isProduction && !enableAiInDev) || !geminiApiKey) {
-    console.log('🤖 AI 未启用（环境未生产或未打开开发开关，或缺少 key）返回默认消息');
+  // The check is now simpler: is AI enabled for this environment?
+  const isAiEnabled = (isProductionReady() || !!import.meta.env.VITE_ENABLE_AI_IN_DEV);
+  
+  console.log('🔍 AI 环境:', { isProduction: isProductionReady(), enableAiInDev: !!import.meta.env.VITE_ENABLE_AI_IN_DEV });
+
+  if (!isAiEnabled) {
+    console.log('🤖 AI not enabled for this environment. Returning default message.');
     return "持续跟踪，持续进步 ✨";
   }
 
   try {
-    // 准备发送给Gemini的数据
+    // The complex prompt-building logic remains the same.
     const userProgressSummary = `
 用户声音训练进度分析：
 - 总事件数: ${userData.events?.length || 0}
@@ -536,77 +563,17 @@ ${userData.voiceParameters ? `最新声音参数分析:\n- 基频: ${userData.vo
 
     const prompt = `作为一名专业且富有同理心的声音训练助手，请根据用户的训练数据给出个性化的鼓励性评价（25-35字）：\n\n${userProgressSummary}\n请分析用户的训练模式、进步趋势和当前状态，用温暖、专业且具有激励性的语气回复。可以：\n- 赞扬用户的坚持和努力\n- 针对具体的训练类型给出认可\n- 根据数据趋势提供正面的展望\n- 用温馨的话语给予情感支持\n\n回复应该简洁但充满正能量，让用户感受到被理解和鼓励。`;
 
-    console.log('🤖 发送Gemini请求:', {
-      prompt: prompt.substring(0, 100) + '...',
-      userDataSummary: {
-        totalEvents: userData.events?.length || 0,
-        eventTypes: userData.events?.map(e => e.type) || [],
-        detailedEventCount: userData.events?.length || 0
-      }
-    });
+    console.log('🤖 Sending prompt to secure backend proxy...');
 
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-goog-api-key': geminiApiKey,
-      },
-      body: JSON.stringify({
-        system_instruction: {
-          parts: [{
-            text: "你是一个专业的声音训练助手，负责为用户提供鼓励和建议。请用温暖、专业的语气回复，保持简洁但充满正能量。"
-          }]
-        },
-        contents: [{
-          parts: [{
-            text: prompt
-          }]
-        }],
-        generationConfig: {
-          temperature: 1.2,        // 大幅提高创意度，使回复更多样化
-          topK: 40,               // 增加词汇选择范围
-          topP: 0.95,             // 提高累积概率，允许更多创��表达
-          maxOutputTokens: 200,   // 增加最大token数以允许更丰富的回复
-        },
-      })
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('🤖 Gemini API响应错误:', {
-        status: response.status,
-        statusText: response.statusText,
-        error: errorText
-      });
-      throw new Error(`Gemini API响应错误: ${response.status} - ${errorText}`);
-    }
-
-    const result = await response.json();
-    console.log('🤖 Gemini API原始响应:', result);
-
-    // 解析Gemini的响应
-    const candidates = result.candidates;
-    if (!candidates || candidates.length === 0) {
-      console.warn('🤖 Gemini响应中没有候选内容');
-      throw new Error('Gemini响应中没有候选内容');
-    }
-
-    const content = candidates[0]?.content?.parts?.[0]?.text;
-    if (!content) {
-      console.warn('🤖 Gemini响应格式异常:', candidates[0]);
-      throw new Error('Gemini响应格式异常');
-    }
-
-    const message = content.trim();
-    console.log('🤖 Gemini AI响应成功:', message);
-    console.log('🎉 AI鼓励消息已生成并将显示在页面上');
-
+    // REPLACED: The direct fetch call is replaced with our new secure proxy function.
+    const message = await callGeminiProxy(prompt);
+    
+    console.log('🎉 AI encouragement message generated via proxy and will be displayed.');
     return message;
 
   } catch (error) {
-    console.error('🤖 Gemini AI服务调用失败:', error);
-    console.log('⚠️ 使用默认消息作为备选方案');
-    // 失败时返回默认鼓励消息
+    console.error('🤖 Failed to get encouragement message via proxy:', error);
+    // Return a default message on failure.
     return "持续跟踪，持续进步 ✨";
   }
 };
