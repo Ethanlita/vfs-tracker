@@ -2,14 +2,25 @@
 
 **API Base URL**: `https://2rzxc2x5l8.execute-api.us-east-1.amazonaws.com/dev`
 
-**Version**: 1.0  
-**Last Updated**: August 15, 2025
+**Version**: 1.1  
+**Last Updated**: August 18, 2025
 
 ---
 
 ## Overview
 
 VFS Tracker API provides endpoints for managing voice feminization training events and user data. The API supports both public access for community dashboard and authenticated access for personal event management.
+
+> 新增说明: 事件对象支持多附件字段 `attachments` (Array<Attachment>)，该字段为 **私有**，只在需要鉴权的用户事件接口 (`GET /events/{userId}`) 与创建事件接口 (`POST /events`) 的响应/请求中出现。公共接口 (`GET /all-events`) 将自动移除该字段。
+
+### Attachment Object (Private)
+```json
+{
+  "fileUrl": "attachments/<userId>/<generatedKey>.pdf",   // 存储key，不是直链
+  "fileType": "application/pdf",                         // MIME，可选
+  "fileName": "hospital_report_front.pdf"                // 原始文件名，可选
+}
+```
 
 ## Authentication
 
@@ -45,10 +56,9 @@ All endpoints support CORS with the following headers:
     "eventId": "string (UUID)",
     "type": "voice_training | self_test | hospital_test | self_practice | surgery | feeling_log",
     "date": "string (ISO 8601)",
-    "details": {
-      // Event-specific details based on type
-    },
+    "details": { /* type-specific */ },
     "createdAt": "string (ISO 8601)"
+    // NOTE: attachments 字段已被后台剥离，不会出现在公共响应中
   }
 ]
 ```
@@ -64,23 +74,19 @@ All endpoints support CORS with the following headers:
     "details": {
       "trainingContent": "发音练习和气息控制",
       "voiceStatus": "良好",
-      "instructor": "张老师",
-      "feelings": "今天的训练效果很好"
+      "instructor": "张老师"
     },
     "createdAt": "2025-08-15T10:30:00.000Z"
   }
 ]
 ```
-
-**HTTP Status Codes**:
-- `200 OK`: Success
-- `500 Internal Server Error`: Server error
+> Public endpoint does NOT expose attachments for privacy.
 
 ---
 
 ### GET /events/{userId}
 
-**Description**: Retrieves all events for a specific authenticated user.
+**Description**: Retrieves all events (any status) for the authenticated user, including private `attachments` array when present.
 
 **Authentication**: Required (Cognito JWT)
 
@@ -100,15 +106,17 @@ Content-Type: application/json
 [
   {
     "userId": "string",
-    "eventId": "string (UUID)",
-    "type": "voice_training | self_test | hospital_test | self_practice | surgery | feeling_log",
-    "date": "string (ISO 8601)",
-    "details": {
-      // Event-specific details based on type
-    },
-    "status": "pending | approved | rejected",
-    "createdAt": "string (ISO 8601)",
-    "updatedAt": "string (ISO 8601, optional)"
+    "eventId": "string",
+    "type": "self_test",
+    "date": "2025-08-14T15:30:00.000Z",
+    "details": { /* type-specific */ },
+    "attachments": [
+       { "fileUrl": "attachments/<userId>/a1.jpg", "fileType": "image/jpeg", "fileName": "front.jpg" },
+       { "fileUrl": "attachments/<userId>/a2.jpg", "fileType": "image/jpeg", "fileName": "back.jpg" }
+    ],
+    "status": "pending",
+    "createdAt": "2025-08-14T15:45:00.000Z",
+    "updatedAt": "2025-08-14T15:45:00.000Z"
   }
 ]
 ```
@@ -157,22 +165,11 @@ Content-Type: application/json
 ```json
 {
   "message": "Event added successfully",
-  "item": {
-    "userId": "us-east-1:12345678-1234-1234-1234-123456789012",
-    "eventId": "550e8400-e29b-41d4-a716-446655440000",
-    "type": "voice_training",
-    "date": "2025-08-15T10:00:00.000Z",
-    "details": {
-      "trainingContent": "发音练习",
-      "voiceStatus": "良好",
-      "instructor": "张老师"
-    },
-    "status": "pending",
-    "createdAt": "2025-08-15T10:30:00.000Z",
-    "updatedAt": "2025-08-15T10:30:00.000Z"
-  }
+  "eventId": "event_maa123_x9ab2cdef"
 }
 ```
+
+> The server persists the attachments array as-is (after basic validation). Clients must resolve actual download URLs separately.
 
 **HTTP Status Codes**:
 - `201 Created`: Event created successfully
@@ -616,4 +613,10 @@ uploads/{userId}/           # 通用上传文件
 
 ---
 
-**注意**: 这些端点目前处于开发阶段，实际部署需要先完成API Gateway配置。详细配置说明请参考 `docs/api-gateway-s3-presigned-config.md`。
+**注意**: 这些端点目前处于开发阶段，实际部署需要先完成API Gateway配置。详细配置说明请参考 `docs/api-gateway-s3-presigned-config.md`.
+
+---
+
+## Change Log
+- 1.1: Added multi-attachment support; documented private `attachments` field visibility rules.
+- 1.0: Initial version.

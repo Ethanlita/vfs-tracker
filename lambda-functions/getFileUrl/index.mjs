@@ -1,64 +1,57 @@
 import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import jwt from 'jsonwebtoken';
+import { decode } from 'jsonwebtoken';
 
 const s3Client = new S3Client({ region: process.env.AWS_REGION || 'us-east-1' });
 const BUCKET_NAME = process.env.BUCKET_NAME;
 
-// 验证JWT token并提取用户信息
+// 验证JWT token并提取用户信息（演示环境仅解码，不做签名验证）
 const verifyToken = (token) => {
+  if (!token) throw new Error('缺少token');
   try {
-    // 移除 "Bearer " 前缀
-    const cleanToken = token.replace('Bearer ', '');
-    // 这里需要根据实际的JWT secret或公钥来验证
-    // 暂时返回解码后的payload（生产环境需要proper验证）
-    const decoded = jwt.decode(cleanToken);
+    const clean = token.startsWith('Bearer ') ? token.slice(7) : token;
+    const decoded = decode(clean);
+    if (!decoded) throw new Error('无法解码token');
     return decoded;
-  } catch (error) {
-    throw new Error('无效的token');
+  } catch (e) {
+    throw new Error('无效的token: ' + e.message);
   }
 };
 
+const CORS_HEADERS = {
+  'Content-Type': 'application/json',
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token',
+  'Access-Control-Max-Age': '86400'
+};
+
+const errorResponse = (statusCode, message, extra = {}) => ({
+  statusCode,
+  headers: CORS_HEADERS,
+  body: JSON.stringify({ error: message, ...extra })
+});
+
 export const handler = async (event) => {
-  const headers = {
-    'Content-Type': 'application/json',
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type,Authorization',
-    'Access-Control-Allow-Methods': 'GET,POST,OPTIONS'
-  };
+  // 处理预检
+  if (event.httpMethod === 'OPTIONS') {
+    return { statusCode: 204, headers: CORS_HEADERS, body: '' };
+  }
 
   try {
-    // 处理OPTIONS请求
-    if (event.httpMethod === 'OPTIONS') {
-      return {
-        statusCode: 200,
-        headers,
-        body: ''
-      };
+    if (!BUCKET_NAME) {
+      return errorResponse(500, '服务未配置存储桶 BUCKET_NAME');
     }
 
-    // 验证授权
+    // 认证
     const authHeader = event.headers?.Authorization || event.headers?.authorization;
-    if (!authHeader) {
-      return {
-        statusCode: 401,
-        headers,
-        body: JSON.stringify({ error: '缺少授权头' })
-      };
-    }
-
-    const userInfo = verifyToken(authHeader);
+    if (!authHeader) return errorResponse(401, '缺少授权头');
+    let userInfo;
+    try { userInfo = verifyToken(authHeader); } catch (e) { return errorResponse(401, e.message); }
     const currentUserId = userInfo?.sub || userInfo?.userId;
+    if (!currentUserId) return errorResponse(401, 'token中缺少用户标识');
 
-    if (!currentUserId) {
-      return {
-        statusCode: 401,
-        headers,
-        body: JSON.stringify({ error: '无效的用户信息' })
-      };
-    }
-
-    // 获取请求的文件key
+    // 获取 fileKey
     let fileKey;
     if (event.httpMethod === 'GET') {
       fileKey = event.queryStringParameters?.fileKey;
@@ -66,56 +59,24 @@ export const handler = async (event) => {
       const body = JSON.parse(event.body || '{}');
       fileKey = body.fileKey;
     }
+    if (!fileKey) return errorResponse(400, '缺少fileKey');
 
-    if (!fileKey) {
-      return {
-        statusCode: 400,
-        headers,
-        body: JSON.stringify({ error: '缺少文件key' })
-      };
-    }
-
-    // 验证用户是否有权限访问该文件
-    // 文件路径格式：attachments/{userId}/{filename} 或 uploads/{userId}/{filename}
-    const pathParts = fileKey.split('/');
-    const fileOwnerUserId = pathParts[1];
-
-    if (fileOwnerUserId !== currentUserId) {
-      return {
-        statusCode: 403,
-        headers,
-        body: JSON.stringify({ error: '无权限访问此文件' })
-      };
-    }
+    // 权限验证
+    const ownerId = fileKey.split('/')?.[1];
+    if (ownerId !== currentUserId) return errorResponse(403, '无权限访问此文件');
 
     // 生成预签名URL
-    const command = new GetObjectCommand({
-      Bucket: BUCKET_NAME,
-      Key: fileKey
-    });
-
-    // 附件URL有效期设置为1小时
-    const signedUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
+    const command = new GetObjectCommand({ Bucket: BUCKET_NAME, Key: fileKey });
+    const url = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
 
     return {
       statusCode: 200,
-      headers,
-      body: JSON.stringify({
-        url: signedUrl,
-        expiresIn: 3600
-      })
+      headers: CORS_HEADERS,
+      body: JSON.stringify({ url, expiresIn: 3600 })
     };
 
   } catch (error) {
-    console.error('获取文件URL失败:', error);
-
-    return {
-      statusCode: 500,
-      headers,
-      body: JSON.stringify({
-        error: '获取文件URL失败',
-        details: error.message
-      })
-    };
+    console.error('[getFileUrl] 未捕获异常', error);
+    return errorResponse(500, '内部错误', { details: error.message });
   }
 };

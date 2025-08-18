@@ -4,6 +4,7 @@ import { isProductionReady as globalIsProductionReady } from '../env.js';
 import { useAsync } from '../utils/useAsync.js';
 import SecureFileUpload from './SecureFileUpload';
 import { useAuth } from '../contexts/AuthContext.jsx';
+import { resolveAttachmentLinks } from '../utils/attachments.js';
 
 /**
  * @en A form for creating new voice events. It handles data input, file uploads, and submission to the backend.
@@ -38,9 +39,8 @@ const EventForm = ({ onEventAdded }) => {
 
   const [eventType, setEventType] = useState('self_test');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
-  const [attachmentUrl, setAttachmentUrl] = useState(''); // 改为存储附件URL而不是文件对象
-  const [attachmentKey, setAttachmentKey] = useState(''); // 存储文件key
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [attachments, setAttachments] = useState([]); // 多附件集合
+  const [resolvedAttachments, setResolvedAttachments] = useState([]);
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
@@ -48,11 +48,31 @@ const EventForm = ({ onEventAdded }) => {
   const [formData, setFormData] = useState({});
 
   // 处理文件上传完成
-  const handleFileUploaded = (fileUrl, fileKey) => {
-    setAttachmentUrl(fileUrl);
-    setAttachmentKey(fileKey);
-    console.log('文件上传完成:', { fileUrl, fileKey });
+  const handleFileUploaded = (fileUrl, fileKey, meta = {}) => {
+    // fileUrl 是临时访问URL，fileKey 为内部存储key；我们仅存储 fileKey (作为 Attachment.fileUrl)
+    setAttachments(prev => [...prev, { fileUrl: fileKey, fileType: meta.fileType, fileName: meta.fileName }]);
   };
+
+  const handleRemoveAttachment = (index) => {
+    setAttachments(prev => prev.filter((_, i) => i !== index));
+  };
+
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (attachments.length === 0) {
+        setResolvedAttachments([]);
+        return;
+      }
+      const list = await resolveAttachmentLinks(attachments);
+      if (!cancelled) {
+        setResolvedAttachments(list);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [attachments]);
 
   // --- FORM FIELD DEFINITIONS ---
   const eventTypeOptions = [
@@ -366,17 +386,15 @@ const EventForm = ({ onEventAdded }) => {
       delete details.f1; delete details.f2; delete details.f3; delete details.pitchMax; delete details.pitchMin;
     }
 
-    // 如果有附件，添加到details中
-    if (attachmentUrl) {
-      details.attachmentUrl = attachmentUrl;
-      details.attachmentKey = attachmentKey;
-    }
+    // 移除旧单附件逻辑
+    // if (attachmentUrl) { details.attachmentUrl = attachmentUrl; details.attachmentKey = attachmentKey }
 
     const eventData = {
       type: eventType,
       date: new Date(date).toISOString(),
-      details
+      details,
     };
+    if (attachments.length) eventData.attachments = attachments;
 
     if (!isProductionReady) {
       // 模拟延迟
@@ -412,8 +430,7 @@ const EventForm = ({ onEventAdded }) => {
     setFormData({});
     setEventType('self_test');
     setDate(new Date().toISOString().split('T')[0]);
-    setAttachmentUrl('');
-    setAttachmentKey('');
+    setAttachments([]);
   };
 
   // --- RENDER ---
@@ -481,22 +498,41 @@ const EventForm = ({ onEventAdded }) => {
 
           {/* 附件与提交 */}
           <div className="border-t border-gray-100 pt-6 space-y-6">
-            {/* 文件上传 */}
             <div className="form-field">
-              <label htmlFor="file-input" className="text-sm font-medium text-gray-700">
-                附件 <span className="text-xs text-gray-500 font-normal">（可选）</span>
+              <label className="text-sm font-medium text-gray-700">
+                附件 <span className="text-xs text-gray-500 font-normal">（可选，多文件：报告正反面、图片或PDF等）</span>
               </label>
-              <SecureFileUpload
+              <div className="space-y-3">
+                <SecureFileUpload
                   fileType="attachment"
                   currentFileUrl=""
                   onFileUpdate={handleFileUploaded}
-                  allowedTypes={['*/*']} // 允许所有文件类型
-                  maxSize={10 * 1024 * 1024} // 10MB
+                  allowedTypes={['image/*','application/pdf','application/msword','application/vnd.openxmlformats-officedocument.wordprocessingml.document']}
+                  maxSize={15 * 1024 * 1024}
                   className="w-full"
-              />
+                />
+                {attachments.length > 0 && (
+                  <div className="bg-gray-50 rounded-md p-3 space-y-2">
+                    <p className="text-xs font-medium text-gray-600">已添加附件 ({attachments.length}):</p>
+                    <ul className="space-y-1 text-xs">
+                      {resolvedAttachments.map((att, idx) => (
+                        <li key={idx} className="flex items-center justify-between gap-2">
+                          <a
+                            href={att.downloadUrl || '#'}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="truncate flex-1 text-indigo-600 hover:text-indigo-800 hover:underline"
+                          >
+                            📎 {att.fileName || att.fileUrl}
+                          </a>
+                          <button type="button" onClick={() => handleRemoveAttachment(idx)} className="text-red-500 hover:text-red-600">移除</button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
             </div>
-
-            {/* 提交按钮 */}
             <div className="pt-2">
               <button
                   type="submit"

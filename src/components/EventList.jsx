@@ -1,6 +1,4 @@
 import React, { useState } from 'react';
-// 移除 aws-amplify/storage 的直接导入，使用统一封装
-// import { getUrl } from 'aws-amplify/storage';
 import { resolveAttachmentUrl } from '../utils/attachments.js';
 
 /**
@@ -22,18 +20,18 @@ const EventList = ({ events }) => {
   /**
    * @en Handles downloading an S3 attachment. It gets a temporary, pre-signed URL from S3 and opens it in a new tab.
    * @zh 处理下载 S3 附件。它从 S3 获取一个临时的、预签名的 URL，并在新标签页中打开它。
-   * @param {string} attachmentKey - The S3 key for the file to download.
+   * @param {string} fileKey - The S3 key for the file to download.
    */
-  const handleDownload = async (attachmentKey) => {
+  const handleDownload = async (fileKey) => {
     try {
-      setDownloadingKey(attachmentKey);
-      const url = await resolveAttachmentUrl(attachmentKey, { download: true });
+      setDownloadingKey(fileKey);
+      const url = await resolveAttachmentUrl(fileKey, { download: true });
       window.open(url, '_blank');
     } catch (error) {
       console.error('Error getting download URL from S3:', error);
       alert('无法获取文件的下载链接。');
     } finally {
-      setDownloadingKey(k => (k === attachmentKey ? null : k));
+      setDownloadingKey(k => (k === fileKey ? null : k));
     }
   };
 
@@ -75,17 +73,25 @@ const EventList = ({ events }) => {
                             return typeMap[event.type] || event.type.replace('_', ' ').toUpperCase();
                           })()}
                         </p>
-                        <p className="text-sm text-gray-800 mt-1">{event.notes || '未提供备注。'}</p>
-                        {/* @en If there is an attachment, show a download button. */}
-                        {/* @zh 如果有附件，则显示下载按钮。 */}
-                        { (event.attachment || event.details?.attachmentUrl) && (
-                            <button
-                                onClick={() => handleDownload(event.attachment || event.details.attachmentUrl)}
-                                className="mt-2 text-sm font-medium text-indigo-600 hover:text-indigo-500 disabled:opacity-50"
-                                disabled={downloadingKey === (event.attachment || event.details.attachmentUrl)}
-                            >
-                              {downloadingKey === (event.attachment || event.details.attachmentUrl) ? '获取链接中...' : '下载附件'}
-                            </button>
+                        <p className="text-sm text-gray-800 mt-1">{event.notes || event.details?.notes || '未提供备注。'}</p>
+                        {/* @en If there are attachments, show download buttons for each. */}
+                        {/* @zh 如果有附件，则为每个附件显示下载按钮。 */}
+                        {Array.isArray(event.attachments) && event.attachments.length > 0 && (
+                            <div className="mt-2 space-y-1">
+                              {event.attachments.map((att, idx) => {
+                                const key = att.fileUrl;
+                                return (
+                                    <button
+                                        key={idx}
+                                        onClick={() => handleDownload(key)}
+                                        className="block text-sm font-medium text-indigo-600 hover:text-indigo-500 disabled:opacity-50 text-left"
+                                        disabled={downloadingKey === key}
+                                    >
+                                      {downloadingKey === key ? `附件${idx+1} 获取链接中...` : `下载附件${idx+1}${att.fileName ? ' - '+att.fileName : ''}`}
+                                    </button>
+                                );
+                              })}
+                            </div>
                         )}
                       </div>
                       <div className="text-right text-sm whitespace-nowrap text-gray-500">

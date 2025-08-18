@@ -108,7 +108,7 @@ const SecureFileUpload = ({
         img.src = fileUrl;
       } else {
         // 其他文件类型直接返回
-        onFileUpdate(fileUrl, fileKey);
+        onFileUpdate(fileUrl, fileKey, { fileType: file.type, fileName: file.name });
       }
 
     } catch (error) {

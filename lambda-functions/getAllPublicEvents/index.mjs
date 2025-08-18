@@ -37,7 +37,7 @@ export const handler = async (event) => {
             ":status_approved": "approved",
         },
         // 返回公共仪表板需要的完整字段，符合数据结构文档规范
-        ProjectionExpression: "userId, eventId, #type, #date, details, createdAt",
+        ProjectionExpression: "userId, eventId, #type, #date, details, createdAt, attachments",
     });
 
     try {
@@ -50,10 +50,13 @@ export const handler = async (event) => {
         const userDisplayNames = await getUserDisplayNames(uniqueUserIds);
 
         // 为每个事件添加用户显示名称
-        const eventsWithUserNames = Items.map(event => ({
-            ...event,
-            userName: userDisplayNames[event.userId] || '（非公开）'
-        }));
+        const eventsWithUserNames = Items.map(event => {
+            const { attachments, ...rest } = event; // 从公共响应剥离附件
+            return {
+                ...rest,
+                userName: userDisplayNames[event.userId] || '（非公开）'
+            }
+        });
 
         // 按事件发生日期降序排序，最新事件在前
         const sortedItems = eventsWithUserNames.sort((a, b) => new Date(b.date) - new Date(a.date));

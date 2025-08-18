@@ -16,83 +16,55 @@
     - 对接 Amplify API/Storage；提供 isProductionReady() 检查
     - 核心能力：getAllEvents、getEventsByUserId、addEvent、uploadFile、getEncouragingMessage
     - 在未就绪时读取本地 mock_data.json、模拟上传、返回默认 AI 文案
+  - utils/attachments.js
+    - 现已提供 `resolveAttachmentLinks(attachments)`：批量解析私有存储 key -> 临时可下载 URL
   - components/
-    - PublicDashboard.jsx
-      - 汇总匿名数据、事件类型分布柱状图、VFS 对齐的多用户基频折线图
-      - 统计平均提升/方差/二倍方差；用户列表与抽屉式档案
     - EventForm.jsx
-      - 动态表单按事件类型渲染字段；遵循数据契约
-      - 调用 uploadFile（生产环境 S3）、addEvent（API）
-    - Timeline.jsx
-      - 个人时间轴与图表（Chart.js）；可结合 getEventsByUserId
-    - PostList.jsx / PostViewer.jsx / PostsDropdown.jsx
-      - 帖子列表与查看，依赖构建阶段生成的 public/posts.json 与复制到 dist/posts 的静态内容
-- scripts/generate-posts-list.js
-  - 在 dev/prebuild 阶段扫描 posts 目录，生成 public/posts.json
-- vite.config.js
-  - 自定义插件在构建后复制 posts 到 dist/posts；base 设置为 '/'
-- docs/data_structures.md
-  - 数据契约单一来源；前后端需严格遵循（禁止修改）
+      - 动态表单；支持多附件（`attachments` 数组），使用多个 SecureFileUpload 实例；表单提交时顶层携带 `attachments`
+    - InteractiveTimeline / EventList / EventManager 等
+      - 使用 `resolveAttachmentLinks` 将每个 attachment 的 `fileUrl`（内部key）转换为临时访问 URL（新增 `downloadUrl`）
 
-## 3. 组件关系与调用
+## 3. 组件关系与调用（更新后）
 
-- EventForm.jsx -> src/api.js
-  - addEvent(eventData,userId) 提交事件
-  - uploadFile(file,userId) 上传附件（生产）或返回模拟 key（开发）
-- Timeline.jsx -> src/api.js
-  - getEventsByUserId(userId) 拉取个人事件时间序列
-- PublicDashboard.jsx -> src/api.js
-  - getAllEvents() 拉取汇总事件
-  - 本地不足时会调用 generateMockEvents() 生成演示数据
-- AI 提示：Timeline 或页面逻辑 -> getEncouragingMessage(userData)
-  - 生产环境需 VITE_GOOGLE_GEMINI_API；否则回退默认文案
+- EventForm.jsx -> SecureFileUpload x N -> (获取 fileKey, presigned 访问URL) -> 组装 Attachment 对象：
+  ```json
+  { "fileUrl": "attachments/<userId>/<...>.png", "fileType": "image/png", "fileName": "original.png" }
+  ```
+  -> addEvent({ type, date, details, attachments })
+- 私有事件读取：getEventsByUserId -> 返回包含 attachments 数组
+- 公共事件读取：getAllEvents -> (Lambda 端剥离 attachments) -> 前端无该字段
 
-## 4. 数据流序列（简化）
+## 4. 数据流序列（多附件版本）
 
-- 事件创建（EventForm）
-  1) 用户在 EventForm 选择 type 并填写 details（契约见 docs/data_structures.md）
-  2) 可选上传文件：uploadFile -> S3（生产）/返回模拟 key（开发）
-  3) addEvent -> API Gateway -> Lambda -> DynamoDB 写入（生产）；开发模式直接返回拼装的 item
+### 事件创建（多附件）
+1. 用户在 EventForm 填写基础字段与 details。
+2. 每次选择文件：SecureFileUpload 执行：
+   - 调用 `/upload-url` 获取 PUT 预签名URL
+   - 上传文件到 S3 (key: `attachments/{userId}/{timestamp}_{originalName}`)
+   - 回调 onFileUpdate(fileUrl[临时访问], fileKey, meta)
+3. EventForm 将 meta 转换为 Attachment（以 fileKey 作为 attachment.fileUrl 内部存储引用）。
+4. 调用 addEvent -> POST /events -> Lambda addVoiceEvent 写入 DynamoDB (attachments list + details)。
+5. DynamoDB Stream 触发 auto-approve-event：
+   - 非 hospital_test -> 直接 Approved
+   - hospital_test -> 选取第一个附件(或符合规则的) 验证 -> 更新状态
 
-- 个人时间轴（Timeline）
-  1) getEventsByUserId(userId) 从 API（生产）或 mock_data.json（开发）获取事件
-  2) 前端按日期归并/排序，生成 Chart.js 数据集
+### 附件访问
+- 私有页面渲染时：调用 resolveAttachmentLinks(attachments)
+  - 为每个 attachment.fileUrl (S3 key) 获取临时访问 URL（或开发模式直接回传 key）
+  - 返回增强数组：[{...attachment, downloadUrl}]
 
-- 公共仪表板（PublicDashboard）
-  1) getAllEvents() 获取全体匿名事件（生产/开发）
-  2) 计算类型分布、按用户聚合，提取含 pitch 的点相对 hospital_test（VFS=0）对齐
-  3) 统计平均提升与方差，渲染柱状图/折线图/统计卡片/用户抽屉
+## 5. 数据契约（与 docs/data_structures.md 保持单一来源）
+- `attachments: Array<Attachment>` 顶级字段；公共接口不返回。
 
-## 5. 数据契约
-
-- 文件：docs/data_structures.md（禁止修改）
-- 含：User、Profile、SocialAccount、Event 基础结构；各 Event.type 的 details 规范（如 self_test、hospital_test、voice_training、self_practice、surgery、feeling_log）
-- 前后端必须兼容该契约。若演进：仅新增字段、保持向后兼容；避免删除/重命名现有字段
-
-## 6. 安全设计
-
-- 鉴权/授权（生产）
-  - Cognito User Pools 提供用户目录；Amplify 自动附带 JWT 到 API 请求
-  - S3 使用私有桶与临时权限（Amplify Storage），按用户“文件夹”分隔
-- API
-  - API Gateway + Lambda 层将前端与数据库解耦，限制直接访问
-  - 仅暴露必要端点：POST /events、GET /events/{userId}、GET /all-events
-- 数据
-  - 公开仪表板仅使用匿名化聚合数据；用户详情抽屉只显示最小必要信息
-  - 客户端在生产前端打包时不泄露私钥，仅注入必要 VITE_* 环境变量
+## 6. 安全设计（更新）
+- S3 Key 仅存储在 DynamoDB；公共接口剥离 attachments 避免泄露私密文件元信息。
+- 访问附件必须在私有上下文里通过 Storage / file-url 重新获取临时签名 URL。
 
 ## 7. 性能与可用性
+- 多附件解析批量化：`resolveAttachmentLinks` 并发 Promise.all。
+- 仅在需要展示时解析；避免加载列表时即批量请求所有预签名 URL（可后续懒加载）。
 
-- 构建优化
-  - Vite 生产模式按需打包；vite 插件复制 posts；public 目录自动拷贝
-- UI 性能
-  - Chart.js 注册子模块以减小体积；折线图 parsing:false 以使用 {x,y} 原生点
-  - useMemo/useEffect 控制计算与渲染
-- 数据回退
-  - isProductionReady() 控制真实调用/模拟数据，确保开发/演示可用
-  - PublicDashboard 在数据不足时生成额外演示用户，保障图表展示
-
-## 8. 部署拓扑
+## 8. 部署拓扑（未变）
 
 - 前端：静态站点（GitHub Pages/Netlify/Vercel/Cloudflare Pages）
 - 后端：AWS（可选）
@@ -104,8 +76,7 @@
   - VITE_COGNITO_USER_POOL_ID、VITE_COGNITO_USER_POOL_WEB_CLIENT_ID、VITE_AWS_REGION（必需）
   - VITE_GOOGLE_GEMINI_API（可选）
 
-## 9. 未来演进建议
-
-- 后端为事件字段新增 schema 验证与版本化策略（保持向后兼容）
-- 引入分页/增量加载，优化仪表板大数据集时的首次渲染
-- 增加 E2E 测试（Playwright）与可观测性（前端埋点、API 指标）
+## 9. 未来演进建议（新增）
+- 在 attachments 元素增加 `size`, `checksum` (完整性校验) 字段
+- 支持附件类型预分类（如 report / audio / raw-recording）
+- 提供批量删除事件时自动清理 S3 对象的后台任务
