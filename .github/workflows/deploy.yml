@@ -36,6 +36,18 @@ jobs:
         run: npm run build
         env:
           VITE_GOOGLE_GEMINI_API: ${{ secrets.GOOGLE_GEMINI_API }}
+          # AWS Cognito 配置
+          VITE_COGNITO_USER_POOL_ID: ${{secrets.COGNITO_USER_POOL_ID}}
+          VITE_COGNITO_USER_POOL_WEB_CLIENT_ID: ${{secrets.COGNITO_USER_POOL_WEB_CLIENT_ID}}
+          VITE_AWS_REGION: ${{secrets.AWS_REGION}}
+
+          # API Gateway 配置
+          VITE_API_ENDPOINT: ${{secrets.API_ENDPOINT}}
+          VITE_API_STAGE: ${{secrets.API_STAGE}}
+
+          # S3 存储配置
+          VITE_S3_BUCKET: ${{secrets.S3_BUCKET}}
+
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
