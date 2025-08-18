@@ -1,25 +1,37 @@
-// 附件处理封装：统一生成可访问 URL，并在开发模式或失败时优雅降级
-import { getUrl } from 'aws-amplify/storage';
-import { isProductionReady } from '../env.js';
+// 多附件解析工具：批量生成临时可访问 URL
+import { getFileUrl } from '../api.js';
 
 /**
- * 根据存储的对象 key 解析出可直接访问/下载的 URL。
- * - 生产：调用 Amplify Storage getUrl 获取临时签名 URL
- * - 开发：直接返回原始 key（假设为本地或 mock 路径）
- * - 失败：返回原始 key 作为回退
- * @param {string} key S3 对象 key 或本地 mock 路径
- * @param {object} options { download?:boolean, expiresIn?:number(seconds) }
- * @returns {Promise<string>} 可在 <a href> 或 window.open 使用的 URL 字符串
+ * 批量解析附件数组，返回附带 downloadUrl 的新数组
+ * @param {Array<{fileUrl:string,fileType?:string,fileName?:string}>} attachments
+ * @returns {Promise<Array<{fileUrl:string,fileType?:string,fileName?:string,downloadUrl:string}>>}
  */
-export async function resolveAttachmentUrl(key, options = {}) {
+export async function resolveAttachmentLinks(attachments) {
+  if (!Array.isArray(attachments) || attachments.length === 0) return [];
+
+  const results = await Promise.all(attachments.map(async (a) => {
+    if (!a?.fileUrl) return null;
+    try {
+      // 统一使用 api.js 中的函数获取文件URL
+      const downloadUrl = await getFileUrl(a.fileUrl);
+      // 如果获取失败，则回退到原始 fileUrl 以免链接完全断开
+      return { ...a, downloadUrl: downloadUrl || a.fileUrl };
+    } catch (e) {
+      console.warn(`[attachments] 获取签名URL失败 for ${a.fileUrl}，回退到原始key`, e);
+      return { ...a, downloadUrl: a.fileUrl }; // 发生错误时回退
+    }
+  }));
+
+  return results.filter(Boolean);
+}
+
+/**
+ * 兼容旧单文件函数（返回字符串 URL）
+ * @param {string} key
+ * @returns {Promise<string>}
+ */
+export async function resolveAttachmentUrl(key) {
   if (!key) return '';
-  const forceReal = !!import.meta.env.VITE_FORCE_REAL;
-  if (!isProductionReady() && !forceReal) return key; // 开发/未就绪 & 未强制，直接回传
-  try {
-    const res = await getUrl({ key, options: { ...options } });
-    return res?.url?.toString?.() || key;
-  } catch (e) {
-    console.warn('[attachments] 获取签名 URL 失败，使用原始 key 回退', e);
-    return key;
-  }
+  const arr = await resolveAttachmentLinks([{ fileUrl: key }]);
+  return arr[0]?.downloadUrl || '';
 }

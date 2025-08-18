@@ -1,9 +1,7 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { getUrl } from 'aws-amplify/storage';
 import { createPortal } from 'react-dom';
-import { useAsync } from '../utils/useAsync.js';
-import { resolveAttachmentUrl } from '../utils/attachments.js';
+import { resolveAttachmentLinks } from '../utils/attachments.js';
 
 const EventDetails = ({ event }) => {
   const d = event?.details || {};
@@ -95,10 +93,19 @@ const EventDetails = ({ event }) => {
       break;
   }
 
-  const attachments = d.attachmentUrl || d.attachments || d.files;
-  if (attachments) {
-    shownKeys.add('attachmentUrl'); shownKeys.add('attachments'); shownKeys.add('files');
-  }
+  // 新增解析附件的状态
+  const [resolvedAtts, setResolvedAtts] = React.useState([]);
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!event?.attachments || event.attachments.length === 0) { setResolvedAtts([]); return; }
+      const list = await resolveAttachmentLinks(event.attachments);
+      if (!cancelled) setResolvedAtts(list);
+    })();
+    return () => { cancelled = true; };
+  }, [event?.attachments]);
+
+  const attachments = resolvedAtts; // 统一使用解析后
 
   Object.entries(d).forEach(([k, v]) => {
     if (shownKeys.has(k)) return;
@@ -127,18 +134,18 @@ const EventDetails = ({ event }) => {
         {rows}
       </div>
 
-      {attachments && (
+      {attachments && attachments.length > 0 && (
         <div className="pt-3">
           <h4 className="font-medium text-gray-800 mb-2">附件</h4>
           <div className="flex flex-wrap gap-2">
-            {(Array.isArray(attachments) ? attachments : [attachments]).map((att, i) => (
+            {attachments.map((att, i) => (
               <a
                 key={i}
-                href={typeof att === 'string' ? att : att?.url || '#'}
+                href={att.downloadUrl || att.fileUrl}
                 target="_blank" rel="noreferrer"
                 className="inline-flex items-center px-3 py-1.5 rounded-md bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200"
               >
-                📎 附件 {i + 1}
+                📎 {att.fileName || `附件${i+1}`}
               </a>
             ))}
           </div>
@@ -156,15 +163,6 @@ const InteractiveTimeline = ({ events = [] }) => {
     events: events
   });
 
-  // 新增：附件签名 URL 异步获取（仅在用户请求时执行）
-  const attachmentAsync = useAsync(async () => {
-    if (!selectedEvent?.details?.attachmentUrl) return '';
-    return await resolveAttachmentUrl(selectedEvent.details.attachmentUrl);
-  }, [selectedEvent?.details?.attachmentUrl], { immediate: false, preserveValue: false });
-
-  // 确保对 motion 的引用在某些构建下不会被误判为未使用
-  // eslint-disable-next-line no-unused-expressions
-  motion && null;
 
   const typeConfig = {
     hospital_test:   { label: '医院检测',  icon: '🏥', bg: 'bg-blue-500' },

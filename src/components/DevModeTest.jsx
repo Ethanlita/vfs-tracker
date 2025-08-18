@@ -42,7 +42,9 @@ const DevModeTest = () => {
           success: true,
           eventCount: apiEvents?.length || 0,
           events: apiEvents,
-          hasFrequencyData: apiEvents?.some(e => e.details?.fundamentalFrequency) || false
+          hasFrequencyData: apiEvents?.some(e => e.details?.fundamentalFrequency) || false,
+          hasAttachmentsArray: apiEvents?.some(e => Array.isArray(e.attachments)) || false,
+          firstEventAttachmentsCount: apiEvents?.[0]?.attachments?.length || 0
         };
 
       } catch (error) {
@@ -109,6 +111,10 @@ const DevModeTest = () => {
             <p>包含基频数据: <span className={testResults.apiCallTest.hasFrequencyData ? 'text-green-600' : 'text-red-600'}>
               {testResults.apiCallTest.hasFrequencyData ? '是' : '否'}
             </span></p>
+            <p>包含附件数组: <span className={testResults.apiCallTest.hasAttachmentsArray ? 'text-green-600' : 'text-gray-600'}>
+              {testResults.apiCallTest.hasAttachmentsArray ? '是' : '否'}
+            </span></p>
+            <p>首事件附件数: {testResults.apiCallTest.firstEventAttachmentsCount}</p>
             {testResults.apiCallTest.events && testResults.apiCallTest.events.length > 0 && (
               <details className="mt-2">
                 <summary className="cursor-pointer text-blue-600">查看返回的事件数据</summary>

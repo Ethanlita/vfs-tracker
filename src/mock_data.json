@@ -35,6 +35,10 @@
       "type": "self_test",
       "date": "2024-05-01T09:00:00Z",
       "createdAt": "2024-05-01T09:05:00Z",
+      "attachments": [
+        { "fileUrl": "attachments/mock-user-1/20240501_report_front.jpg", "fileType": "image/jpeg", "fileName": "report_front.jpg" },
+        { "fileUrl": "attachments/mock-user-1/20240501_report_back.jpg",  "fileType": "image/jpeg", "fileName": "report_back.jpg" }
+      ],
       "details": {
         "appUsed": "Voice Tools",
         "sound": ["好"],
@@ -45,7 +49,6 @@
         "jitter": 0.34,
         "shimmer": 1.2,
         "hnr": 22.5,
-        "attachmentUrl": "mock-uploads/mock-user-1/selftest-rec-001.wav",
         "notes": "感觉今天状态不错，声音很稳定。"
       }
     },
@@ -55,6 +58,9 @@
       "type": "hospital_test",
       "date": "2024-04-15T14:30:00Z",
       "createdAt": "2024-04-15T15:00:00Z",
+      "attachments": [
+        { "fileUrl": "attachments/mock-user-1/20240415_hospital_report.pdf", "fileType": "application/pdf", "fileName": "hospital_report.pdf" }
+      ],
       "details": {
         "location": "市中心医院耳鼻喉科",
         "equipmentUsed": "KayPENTAX CSL",

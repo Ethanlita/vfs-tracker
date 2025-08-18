@@ -51,6 +51,16 @@ Stores the profile and preferences for each user. The `email` is used as the pri
 
 Events are actions or logs recorded by the user. All events share a common structure, with a `type` field and a `details` object that contains type-specific attributes.
 
+**Object: `Attachment` (Reusable, PRIVATE)**
+
+| Attribute | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| `fileUrl` | `String` | Yes | INTERNAL storage key (NOT a presigned URL). A temporary download URL must be resolved via backend/Storage when needed. |
+| `fileType` | `String` | No | MIME type reported by client upload (e.g. `image/png`, `application/pdf`). |
+| `fileName` | `String` | No | Original file name as provided by client. |
+
+> 隐私说明 / Privacy Notice: `attachments` 字段为 **私有字段**，不会出现在公共 API (`GET /all-events`) 的响应中。只能在已鉴权的用户私有事件查询中返回。
+
 **Object: `Event` (Base Structure)**
 
 | Attribute | Type | Required | Description |
@@ -60,6 +70,7 @@ Events are actions or logs recorded by the user. All events share a common struc
 | `type` | `String` | Yes | The type of event. Determines the structure of the `details` object. |
 | `date` | `String` | Yes | ISO 8601 timestamp for when the event occurred. |
 | `details` | `Object` | Yes | Contains attributes specific to the event type. |
+| `attachments` | `Array<Attachment>` | No | PRIVATE. Arbitrary number of uploaded files (images / documents). Not returned in public endpoints. |
 | `status` | `String` | Yes | Event approval status. Values: "pending", "approved", "rejected". Only "approved" events appear on public dashboard. |
 | `createdAt`| `String` | Yes | ISO 8601 timestamp of creation. |
 | `updatedAt`| `String` | No | ISO 8601 timestamp of last modification. |
@@ -85,7 +96,6 @@ A record of a voice test performed by the user on their own.
 | `jitter` | `Number` | No | Frequency variation. |
 | `shimmer` | `Number` | No | Amplitude variation. |
 | `hnr` | `Number` | No | Harmonics-to-Noise Ratio. |
-| `attachmentUrl` | `String` | No | URL to a stored file (e.g., audio recording on S3). |
 | `notes` | `String` | No | General notes or observations. |
 
 ### Hospital Test
@@ -171,9 +181,8 @@ A simple journal entry for the user to record their feelings.
 
 ## API Request/Response Formats
 
-### GET /all-events
-
-**Description**: Retrieves all approved events for the public dashboard.
+### GET /all-events (Public)
+返回的事件对象 **不包含** `attachments` 字段。
 
 **Request**:
 ```http
@@ -224,7 +233,8 @@ Content-Type: application/json
 }
 ```
 
-### GET /events/{userId}
+### GET /events/{userId} (Private)
+返回的事件对象包含其 `attachments` 数组（若存在）。
 
 **Description**: Retrieves all events for a specific authenticated user.
 
@@ -238,6 +248,7 @@ Content-Type: application/json
 **Response**: Similar to `/all-events` but includes events with all status values.
 
 ### POST /events
+允许在顶层提交可选 `attachments` 数组。
 
 **Description**: Creates a new event for the authenticated user.
 
@@ -298,6 +309,7 @@ Content-Type: application/json
 | `type` | String | Event type enum | Yes |
 | `date` | String | ISO 8601 event occurrence timestamp | Yes |
 | `details` | Map | Event-specific details object | Yes |
+| `attachments` | List | PRIVATE,存储Attachment对象数组 | No |
 | `status` | String | Approval status: "pending" \| "approved" \| "rejected" | Yes |
 | `createdAt` | String | ISO 8601 creation timestamp | Yes |
 | `updatedAt` | String | ISO 8601 last modification timestamp | No |
@@ -309,7 +321,7 @@ Content-Type: application/json
    - Sort Key: `date` (String)
    - Purpose: Efficiently query approved events by date for public dashboard
 
-**Sample Item**:
+**Sample Item (with attachments)**:
 ```json
 {
   "userId": "us-east-1:12345678-1234-1234-1234-123456789012",
@@ -319,9 +331,12 @@ Content-Type: application/json
   "details": {
     "trainingContent": "发音练习和气息控制",
     "voiceStatus": "良好",
-    "instructor": "张老师",
-    "feelings": "今天的训练效果很好"
+    "instructor": "张老师"
   },
+  "attachments": [
+    { "fileUrl": "attachments/us-east-1:123/.../report_front.jpg", "fileType": "image/jpeg", "fileName": "report_front.jpg" },
+    { "fileUrl": "attachments/us-east-1:123/.../report_back.jpg",  "fileType": "image/jpeg", "fileName": "report_back.jpg" }
+  ],
   "status": "approved",
   "createdAt": "2025-08-15T10:30:00.000Z",
   "updatedAt": "2025-08-15T11:00:00.000Z"

@@ -88,6 +88,23 @@ function extractUserFromEvent(event) {
   }
 }
 
+function sanitizeAttachments(raw) {
+  if (!raw) return undefined;
+  if (!Array.isArray(raw)) {
+    console.warn('attachments 字段不是数组，忽略');
+    return undefined;
+  }
+  // 仅保留允许字段并确保 fileUrl 存在
+  const sanitized = raw
+    .filter(a => a && typeof a === 'object' && typeof a.fileUrl === 'string' && a.fileUrl.trim())
+    .map(a => ({
+      fileUrl: a.fileUrl,
+      fileType: typeof a.fileType === 'string' ? a.fileType : undefined,
+      fileName: typeof a.fileName === 'string' ? a.fileName : undefined
+    }));
+  return sanitized.length ? sanitized : undefined;
+}
+
 export const handler = async (event) => {
     try {
         // 处理OPTIONS预检请求
@@ -100,7 +117,7 @@ export const handler = async (event) => {
         }
 
         // 解析请求体
-        const requestBody = JSON.parse(event.body);
+        const requestBody = JSON.parse(event.body || '{}');
 
         // 从ID Token中提取用户信息
         const userInfo = extractUserFromEvent(event);
@@ -117,7 +134,7 @@ export const handler = async (event) => {
             };
         }
 
-        // 生成完整的事件项，符合数据结构规范
+        const attachments = sanitizeAttachments(requestBody.attachments);
         const eventId = generateEventId(); // 使用原生方法代替uuid
         const timestamp = new Date().toISOString();
 
@@ -129,15 +146,14 @@ export const handler = async (event) => {
             details: requestBody.details,
             status: "pending", // 新事件默认为pending状态
             createdAt: timestamp,
-            updatedAt: timestamp
+            updatedAt: timestamp,
         };
+        if (attachments) item.attachments = attachments;
 
-        const command = new PutCommand({
+        await docClient.send(new PutCommand({
             TableName: tableName, // 使用环境变量
             Item: item,
-        });
-
-        await docClient.send(command);
+        }));
 
         return {
             statusCode: 200,

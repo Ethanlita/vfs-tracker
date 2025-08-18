@@ -1,18 +1,23 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { deleteEvent } from '../api'; // 引入真实的删除API函数
+import { deleteEvent } from '../api';
+import { resolveAttachmentLinks } from '../utils/attachments';
+
+// 防止某些构建下 motion 被判定未使用
+void motion;
 
 /**
  * @en Event management component for filtering, viewing, editing, and deleting events
  * @zh 事件管理组件，用于筛选、查看、编辑和删除事件
  */
-const EventManager = ({ events, onEventUpdated, onEventDeleted, isProductionReady }) => {
+const EventManager = ({ events, onEventDeleted }) => { // 移除未使用参数
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedType, setSelectedType] = useState('all');
   const [selectedDateRange, setSelectedDateRange] = useState('all');
   const [sortBy, setSortBy] = useState('newest');
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [showDetails, setShowDetails] = useState(false);
+  const [resolvedAtts, setResolvedAtts] = useState([]);
 
   // 事件类型配置
   const eventTypeConfig = {
@@ -90,7 +95,7 @@ const EventManager = ({ events, onEventUpdated, onEventDeleted, isProductionRead
     });
 
     return filtered;
-  }, [events, searchTerm, selectedType, selectedDateRange, sortBy]);
+  }, [events, searchTerm, selectedType, selectedDateRange, sortBy, eventTypeConfig]);
 
   // 事件统计
   const eventStats = useMemo(() => {
@@ -102,7 +107,24 @@ const EventManager = ({ events, onEventUpdated, onEventDeleted, isProductionRead
     });
 
     return stats;
-  }, [events]);
+  }, [events, eventTypeConfig]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (selectedEvent?.attachments?.length > 0) {
+      (async () => {
+        const list = await resolveAttachmentLinks(selectedEvent.attachments);
+        if (!cancelled) {
+          setResolvedAtts(list);
+        }
+      })();
+    } else {
+      setResolvedAtts([]);
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedEvent]);
 
   const handleEventClick = (event) => {
     setSelectedEvent(event);
@@ -135,12 +157,6 @@ const EventManager = ({ events, onEventUpdated, onEventDeleted, isProductionRead
     }
   };
 
-  const handleEditEvent = (event) => {
-    // 编辑功能 - 可以扩展为完整的编辑表单
-    console.log('编辑事件:', event);
-    alert('编辑功能正在开发中。当前可以删除事件并重新添加。');
-  };
-
   const formatDate = (dateString) => {
     const date = new Date(dateString);
     return date.toLocaleDateString('zh-CN', {
@@ -152,7 +168,6 @@ const EventManager = ({ events, onEventUpdated, onEventDeleted, isProductionRead
   };
 
   const getEventSummary = (event) => {
-    const config = eventTypeConfig[event.type];
     switch (event.type) {
       case 'self_test':
       case 'hospital_test':
@@ -271,7 +286,6 @@ const EventManager = ({ events, onEventUpdated, onEventDeleted, isProductionRead
             </div>
           ) : (
             filteredAndSortedEvents.map((event) => {
-              const config = eventTypeConfig[event.type];
               return (
                 <motion.div
                   key={event.eventId}
@@ -282,9 +296,9 @@ const EventManager = ({ events, onEventUpdated, onEventDeleted, isProductionRead
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-3">
-                      <span className="text-2xl">{config.icon}</span>
+                      <span className="text-2xl">{eventTypeConfig[event.type].icon}</span>
                       <div>
-                        <h4 className="font-medium text-gray-800">{config.label}</h4>
+                        <h4 className="font-medium text-gray-800">{eventTypeConfig[event.type].label}</h4>
                         <p className="text-sm text-gray-600">{getEventSummary(event)}</p>
                       </div>
                     </div>
@@ -359,7 +373,7 @@ const EventManager = ({ events, onEventUpdated, onEventDeleted, isProductionRead
                     <h4 className="font-medium text-gray-800 mb-2">详细信息</h4>
                     <div className="bg-gray-50 rounded-lg p-4 space-y-2">
                       {Object.entries(selectedEvent.details).map(([key, value]) => {
-                        if (!value || key === 'attachmentUrl') return null;
+                        if (!value || key === 'attachmentUrl') return null; // 旧字段忽略
                         return (
                           <div key={key} className="flex justify-between">
                             <span className="text-gray-600 capitalize">{key}:</span>
@@ -371,6 +385,24 @@ const EventManager = ({ events, onEventUpdated, onEventDeleted, isProductionRead
                           </div>
                         );
                       })}
+                    </div>
+                  </div>
+                )}
+
+                {resolvedAtts && resolvedAtts.length > 0 && (
+                  <div>
+                    <h4 className="font-medium text-gray-800 mb-2 mt-4">附件</h4>
+                    <div className="flex flex-wrap gap-2">
+                      {resolvedAtts.map((att, i) => (
+                        <a
+                          key={i}
+                          href={att.downloadUrl || att.fileUrl}
+                          target="_blank" rel="noreferrer"
+                          className="inline-flex items-center px-3 py-1.5 rounded-md bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200"
+                        >
+                          📎 {att.fileName || `附件${i+1}`}
+                        </a>
+                      ))}
                     </div>
                   </div>
                 )}

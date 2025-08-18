@@ -1,6 +1,4 @@
 import { get, post, put, del } from 'aws-amplify/api';
-import { Amplify } from 'aws-amplify';
-import { uploadData } from 'aws-amplify/storage';
 import { fetchAuthSession } from 'aws-amplify/auth';
 import { v4 as uuidv4 } from 'uuid';
 import mockData from './mock_data.json';
@@ -113,29 +111,30 @@ async function authenticatedDelete(path) {
 
 // ========== 核心API函数 ==========
 
-export const uploadFile = async (file, userId) => {
+export const addEvent = async (eventData) => {
   if (!isProductionReady() && !import.meta.env.VITE_FORCE_REAL) {
-    return Promise.resolve(`mock-uploads/${userId}/${file.name}`);
+    const mockItem = { userId: 'mock-user-id', eventId: uuidv4(), ...eventData, status: 'pending', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+    return Promise.resolve({ item: mockItem });
   }
-  const fileExtension = file.name.split('.').pop();
-  const fileName = `${uuidv4()}.${fileExtension}`;
-  const key = `${userId}/${fileName}`;
   try {
-    const result = await uploadData({ key, data: file, options: { contentType: file.type } }).result;
-    return result.key;
+    const requestBody = { type: eventData.type, date: eventData.date, details: eventData.details };
+    if (Array.isArray(eventData.attachments) && eventData.attachments.length) {
+      requestBody.attachments = eventData.attachments;
+    }
+    const resp = await authenticatedPost('/events', requestBody);
+    return resp;
   } catch (error) {
-    console.error('Error uploading file to S3:', error);
+    console.error('Error adding event via API:', error);
     throw error;
   }
 };
 
 export const getAllEvents = async () => {
   if (!isProductionReady() && !import.meta.env.VITE_FORCE_REAL) {
-    return Promise.resolve(mockData.events);
+    return Promise.resolve(mockData.events.map(({ attachments, ...rest }) => rest));
   }
   try {
-    const data = await simpleGet('/all-events');
-    return data;
+    return await simpleGet('/all-events');
   } catch (error) {
     console.error('Error fetching all public events:', error);
     throw error;
@@ -144,31 +143,9 @@ export const getAllEvents = async () => {
 
 export const getEventsByUserId = async (userId) => {
   if (!isProductionReady() && !import.meta.env.VITE_FORCE_REAL) {
-    const mockEvents = mockData.events.filter(e => e.userId === userId);
-    return Promise.resolve(mockEvents);
+    return Promise.resolve(mockData.events.filter(e => e.userId === userId));
   }
-  try {
-    const data = await authenticatedGet(`/events/${userId}`);
-    return data;
-  } catch (error) {
-    console.error('❌ API: 获取用户事件失败:', error);
-    throw error;
-  }
-};
-
-export const addEvent = async (eventData) => {
-  if (!isProductionReady() && !import.meta.env.VITE_FORCE_REAL) {
-    const mockItem = { userId: 'mock-user-id', eventId: uuidv4(), ...eventData, status: 'pending', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
-    return Promise.resolve({ item: mockItem });
-  }
-  try {
-    const requestBody = { type: eventData.type, date: eventData.date, details: eventData.details };
-    const resp = await authenticatedPost('/events', requestBody);
-    return resp;
-  } catch (error) {
-    console.error('Error adding event via API:', error);
-    throw error;
-  }
+  return await authenticatedGet(`/events/${userId}`);
 };
 
 export const deleteEvent = async (eventId) => {
@@ -205,36 +182,15 @@ export const callGeminiProxy = async (prompt) => {
   }
 };
 
-export const getEncouragingMessage = async (userData) => {
+export const getEncouragingMessage = async () => {
   const isAiEnabled = (isProductionReady() || !!import.meta.env.VITE_ENABLE_AI_IN_DEV);
-  if (!isAiEnabled) {
-    return "持续跟踪，持续进步 ✨";
-  }
+  if (!isAiEnabled) return "持续跟踪，持续进步 ✨";
   try {
-    const userProgressSummary = `...`; // Same logic as before
-    const prompt = `...`; // Same logic as before
-    const message = await callGeminiProxy(prompt);
-    return message;
-  } catch (error) {
-    console.error('🤖 Failed to get encouragement message via proxy:', error);
+    const prompt = '...';
+    return await callGeminiProxy(prompt);
+  } catch {
     return "持续跟踪，持续进步 ✨";
   }
-};
-
-const calculateConsistencyScore = (events) => {
-  if (!events || events.length === 0) return 0;
-  const trainingEvents = events.filter(e => e.type === 'voice_training' || e.type === 'self_practice');
-  if (trainingEvents.length < 2) return 50;
-  const dates = trainingEvents.map(e => new Date(e.createdAt || e.date)).sort();
-  const intervals = [];
-  for (let i = 1; i < dates.length; i++) {
-    const interval = (dates[i] - dates[i-1]) / (1000 * 60 * 60 * 24);
-    intervals.push(interval);
-  }
-  if (intervals.length === 0) return 50;
-  const avgInterval = intervals.reduce((a, b) => a + b, 0) / intervals.length;
-  const variance = intervals.reduce((sum, interval) => sum + Math.pow(interval - avgInterval, 2), 0) / intervals.length;
-  return Math.round(Math.max(0, Math.min(100, 100 - variance * 2)));
 };
 
 export const getUserProfile = async (userId) => {
