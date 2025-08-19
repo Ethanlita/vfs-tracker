@@ -16,7 +16,8 @@
 
 * **后端**（AWS）：
 
-    * API Gateway（HTTP API）→ Lambda（Python 3.11，容器镜像）→ S3（音频/图表/报告）→ DynamoDB（存储用户事件信息）。
+    * API Gateway（HTTP API）→ Lambda（Python 3.13，容器镜像）→ S3（音频/图表/报告）→ DynamoDB（存储用户事件信息）。
+    * 这个Lambda函数完全使用Python实现，不使用nodejs。
     * DSP/声学计算：**Praat(parselmouth)** + **NumPy/SciPy/librosa/pyworld**。
 
 * **S3 目录结构**（示例）：
