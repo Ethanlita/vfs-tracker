@@ -1,0 +1,9 @@
+boto3
+numpy
+scipy
+librosa
+soundfile
+webrtcvad
+matplotlib
+praat-parselmouth
+reportlab
