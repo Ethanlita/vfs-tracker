@@ -29,6 +29,12 @@ const EventManager = ({ events, onEventDeleted }) => { // 移除未使用参数
     'feeling_log': { label: '感受记录', icon: '💭', color: 'yellow' }
   };
 
+  // 安全获取类型配置（兜底）
+  const getTypeConfig = (type) => {
+    if (!type) return { label: '未分类', icon: '📌', color: 'gray' };
+    return eventTypeConfig[type] || { label: type, icon: '📌', color: 'gray' };
+  };
+
   const dateRangeOptions = [
     { value: 'all', label: '全部时间' },
     { value: '1week', label: '最近一周' },
@@ -51,10 +57,10 @@ const EventManager = ({ events, onEventDeleted }) => { // 移除未使用参数
       // 搜索过滤
       const searchLower = searchTerm.toLowerCase();
       const matchesSearch = !searchTerm ||
-        event.type.toLowerCase().includes(searchLower) ||
+        (event.type && event.type.toLowerCase().includes(searchLower)) ||
         (event.details?.notes && event.details.notes.toLowerCase().includes(searchLower)) ||
         (event.details?.content && event.details.content.toLowerCase().includes(searchLower)) ||
-        eventTypeConfig[event.type]?.label.toLowerCase().includes(searchLower);
+        getTypeConfig(event.type).label.toLowerCase().includes(searchLower);
 
       // 类型过滤
       const matchesType = selectedType === 'all' || event.type === selectedType;
@@ -88,26 +94,25 @@ const EventManager = ({ events, onEventDeleted }) => { // 移除未使用参数
         case 'oldest':
           return new Date(a.date || a.createdAt) - new Date(b.date || b.createdAt);
         case 'type':
-          return a.type.localeCompare(b.type);
+          return (a.type || '').localeCompare(b.type || '');
         default:
           return 0;
       }
     });
 
     return filtered;
-  }, [events, searchTerm, selectedType, selectedDateRange, sortBy, eventTypeConfig]);
+  }, [events, searchTerm, selectedType, selectedDateRange, sortBy]);
 
-  // 事件统计
+  // 事件统计（忽略无类型的）
   const eventStats = useMemo(() => {
     if (!events) return {};
-
     const stats = {};
     events.forEach(event => {
+      if (!event.type) return; // 跳过无类型
       stats[event.type] = (stats[event.type] || 0) + 1;
     });
-
     return stats;
-  }, [events, eventTypeConfig]);
+  }, [events]);
 
   useEffect(() => {
     let cancelled = false;
@@ -159,6 +164,7 @@ const EventManager = ({ events, onEventDeleted }) => { // 移除未使用参数
 
   const formatDate = (dateString) => {
     const date = new Date(dateString);
+    if (isNaN(date.getTime())) return '无日期';
     return date.toLocaleDateString('zh-CN', {
       year: 'numeric',
       month: 'long',
@@ -168,7 +174,8 @@ const EventManager = ({ events, onEventDeleted }) => { // 移除未使用参数
   };
 
   const getEventSummary = (event) => {
-    switch (event.type) {
+    const type = event.type;
+    switch (type) {
       case 'self_test':
       case 'hospital_test':
         return event.details?.fundamentalFrequency
@@ -207,21 +214,25 @@ const EventManager = ({ events, onEventDeleted }) => { // 移除未使用参数
           </div>
 
           {/* 事件类型 */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">事件类型</label>
-            <select
-              value={selectedType}
-              onChange={(e) => setSelectedType(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
-            >
-              <option value="all">全部类型</option>
-              {Object.entries(eventTypeConfig).map(([type, config]) => (
-                <option key={type} value={type}>
-                  {config.icon} {config.label}
-                </option>
-              ))}
-            </select>
-          </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">事件类型</label>
+              <select
+                value={selectedType}
+                onChange={(e) => setSelectedType(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+              >
+                <option value="all">全部类型</option>
+                {Object.entries(eventTypeConfig).map(([type, config]) => (
+                  <option key={type} value={type}>
+                    {config.icon} {config.label}
+                  </option>
+                ))}
+                {/* 如果存在未分类事件，提供快捷过滤 */}
+                {events?.some(ev => !ev.type) && (
+                  <option value="__undefined">📌 未分类</option>
+                )}
+              </select>
+            </div>
 
           {/* 日期范围 */}
           <div>
@@ -266,9 +277,14 @@ const EventManager = ({ events, onEventDeleted }) => { // 移除未使用参数
               key={type}
               className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-gray-100 text-gray-700"
             >
-              {eventTypeConfig[type]?.icon} {eventTypeConfig[type]?.label}: {count}
+              {getTypeConfig(type).icon} {getTypeConfig(type).label}: {count}
             </span>
           ))}
+          {events?.some(ev => !ev.type) && (
+            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-gray-100 text-gray-700">
+              📌 未分类: {events.filter(ev => !ev.type).length}
+            </span>
+          )}
         </div>
       </div>
 
@@ -286,6 +302,7 @@ const EventManager = ({ events, onEventDeleted }) => { // 移除未使用参数
             </div>
           ) : (
             filteredAndSortedEvents.map((event) => {
+              const cfg = getTypeConfig(event.type);
               return (
                 <motion.div
                   key={event.eventId}
@@ -296,9 +313,9 @@ const EventManager = ({ events, onEventDeleted }) => { // 移除未使用参数
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-3">
-                      <span className="text-2xl">{eventTypeConfig[event.type].icon}</span>
+                      <span className="text-2xl">{cfg.icon}</span>
                       <div>
-                        <h4 className="font-medium text-gray-800">{eventTypeConfig[event.type].label}</h4>
+                        <h4 className="font-medium text-gray-800">{cfg.label}</h4>
                         <p className="text-sm text-gray-600">{getEventSummary(event)}</p>
                       </div>
                     </div>
@@ -349,7 +366,7 @@ const EventManager = ({ events, onEventDeleted }) => { // 移除未使用参数
             >
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-xl font-semibold text-gray-800">
-                  {eventTypeConfig[selectedEvent.type]?.icon} {eventTypeConfig[selectedEvent.type]?.label}
+                  {getTypeConfig(selectedEvent.type).icon} {getTypeConfig(selectedEvent.type).label}
                 </h3>
                 <button
                   onClick={() => setShowDetails(false)}

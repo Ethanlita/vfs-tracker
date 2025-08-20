@@ -131,5 +131,66 @@
         "content": "今天和朋友聊天，他们说我的声音听起来自然多了，真的很开心！感觉所有的努力都值得了。"
       }
     }
-  ]
+  ],
+  "voiceTestResults": {
+    "done": {
+      "status": "done",
+      "metrics": {
+        "sustained": {
+          "spl_dbA": 75.8,
+          "f0_mean": 210.5,
+          "f0_sd": 12.1,
+          "jitter_local_percent": 0.98,
+          "shimmer_local_percent": 3.8,
+          "hnr_db": 21.5,
+          "mpt_s": 14.2,
+          "formants": {
+            "F1": 650,
+            "F2": 1600,
+            "F3": 2600
+          }
+        },
+        "vrp": {
+          "f0_min": 110,
+          "f0_max": 620,
+          "spl_min": 55,
+          "spl_max": 95,
+          "glide_jitter_median": 0.7,
+          "glide_jitter_iqr": 0.4
+        },
+        "reading": {
+          "duration_s": 28.5,
+          "voiced_ratio": 0.81,
+          "pause_count": 15,
+          "f0_stats": {
+            "p10": 190,
+            "median": 215,
+            "p90": 310
+          },
+          "spl_dbA_est": 72.1
+        },
+        "spontaneous": {
+          "duration_s": 45.1,
+          "voiced_ratio": 0.75,
+          "pause_count": 22,
+          "f0_stats": {
+            "p10": 185,
+            "median": 205,
+            "p90": 290
+          },
+          "spl_dbA_est": 70.3
+        },
+        "dsi": 7.9
+      },
+      "charts": {
+        "timeSeries": "/mock_assets/charts/timeSeries.png",
+        "vrp": "/mock_assets/charts/vrp.png",
+        "formants": "/mock_assets/charts/formants.png"
+      },
+      "reportPdf": "/mock_assets/reports/voice_report_mock.pdf"
+    },
+    "processing": {
+      "status": "processing"
+    }
+  }
 }

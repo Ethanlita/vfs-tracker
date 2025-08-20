@@ -21,6 +21,7 @@ import ProfileSetupWizard from './components/ProfileSetupWizard';
 import UserProfileManager from './components/UserProfileManager';
 import EnhancedDataCharts from './components/EnhancedDataCharts';
 import DevModeTest from './components/DevModeTest';
+import VoiceTestWizard from './components/VoiceTestWizard'; // 新增导入
 
 /**
  * @en A component to protect routes that require authentication in production mode.
@@ -155,6 +156,7 @@ const AppContent = () => {
             <Route path="/api-test" element={<APITestPage />} /> {/* 新增的API测试页面路由 */}
             <Route path="/profile-manager" element={<UserProfileManager />} /> {/* 用户资料管理 */}
             <Route path="/profile-setup-wizard" element={<ProfileSetupWizard />} /> {/* 用户引导设置 */}
+            <Route path="/voice-test" element={<VoiceTestWizard />} /> {/* 新增嗓音测试路由 */}
           </Route>
           {/* @en A catch-all route to redirect any unknown paths to the homepage. @zh 一个包罗万象的路由，可将任何未知路径重定向到主页。 */}
           <Route path="*" element={<Navigate to="/" replace />} />

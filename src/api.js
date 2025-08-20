@@ -36,7 +36,7 @@ async function authenticatedGet(path) {
     });
     const { body } = await op.response;
     const result = await body.json();
-    console.log('[authenticatedGet] ✅ API调用成功，使用了ID token');
+    console.log('✅ API调用成功，使用了ID token');
     if (result.data) {
       return result.data;
     } else if (result.events) {
@@ -45,7 +45,7 @@ async function authenticatedGet(path) {
       return result;
     }
   } catch (error) {
-    console.error('[authenticatedGet] ❌ 使用ID token API调用失败:', error);
+    console.error('❌ 使用ID token API调用失败:', error);
     throw error;
   }
 }
@@ -53,16 +53,21 @@ async function authenticatedGet(path) {
 async function authenticatedPost(path, bodyData) {
   console.log('[authenticatedPost] making authenticated request to:', path);
   const session = await fetchAuthSession();
-  if (!session.tokens?.idToken) {
+  const idTokenRaw = session.tokens?.idToken;
+  const idToken = typeof idTokenRaw === 'string' ? idTokenRaw : idTokenRaw?.toString?.();
+  if (!idToken) {
+    console.error('[authenticatedPost] No ID token in session.tokens');
     throw new Error('User not authenticated - no ID token');
   }
+  console.debug('[authenticatedPost] ID Token preview (first 20 chars):', idToken.slice(0,20));
   const op = post({
     apiName: 'api',
     path,
     options: {
       body: bodyData,
       headers: {
-        Authorization: `Bearer ${session.tokens.idToken}`
+        Authorization: `Bearer ${idToken}`,
+        'Content-Type': 'application/json'
       }
     }
   });
@@ -73,7 +78,9 @@ async function authenticatedPost(path, bodyData) {
 async function authenticatedPut(path, bodyData) {
   console.log('[authenticatedPut] making authenticated request to:', path);
   const session = await fetchAuthSession();
-  if (!session.tokens?.idToken) {
+  const idTokenRaw = session.tokens?.idToken;
+  const idToken = typeof idTokenRaw === 'string' ? idTokenRaw : idTokenRaw?.toString?.();
+  if (!idToken) {
     throw new Error('User not authenticated - no ID token');
   }
   const op = put({
@@ -82,7 +89,8 @@ async function authenticatedPut(path, bodyData) {
     options: {
       body: bodyData,
       headers: {
-        Authorization: `Bearer ${session.tokens.idToken}`
+        Authorization: `Bearer ${idToken}`,
+        'Content-Type': 'application/json'
       }
     }
   });
@@ -93,7 +101,9 @@ async function authenticatedPut(path, bodyData) {
 async function authenticatedDelete(path) {
   console.log('[authenticatedDelete] making authenticated request to:', path);
   const session = await fetchAuthSession();
-  if (!session.tokens?.idToken) {
+  const idTokenRaw = session.tokens?.idToken;
+  const idToken = typeof idTokenRaw === 'string' ? idTokenRaw : idTokenRaw?.toString?.();
+  if (!idToken) {
     throw new Error('User not authenticated - no ID token');
   }
   const op = del({
@@ -101,7 +111,8 @@ async function authenticatedDelete(path) {
     path,
     options: {
       headers: {
-        Authorization: `Bearer ${session.tokens.idToken}`
+        Authorization: `Bearer ${idToken}`,
+        'Content-Type': 'application/json'
       }
     }
   });
@@ -251,12 +262,107 @@ export const setupUserProfile = async (profileData) => {
   }
 };
 
-export const isUserProfileComplete = (userProfile) => {
-  if (!userProfile || !userProfile.profile) return false;
-  const profile = userProfile.profile;
-  const hasBasicInfo = profile.name !== undefined && profile.name !== null;
-  const hasPrivacySettings = typeof profile.isNamePublic === 'boolean' && typeof profile.areSocialsPublic === 'boolean';
-  return hasBasicInfo && hasPrivacySettings;
+// New API functions for Voice Test
+export const createVoiceTestSession = async (userId) => {
+  if (!isProductionReady() && !import.meta.env.VITE_FORCE_REAL) {
+    console.log('[mock] createVoiceTestSession: Returning mock session ID');
+    return Promise.resolve({ sessionId: uuidv4() });
+  }
+  try {
+    const path = '/sessions';
+    const bodyData = userId ? { userId } : {};
+    const resp = await authenticatedPost(path, bodyData);
+    return resp;
+  } catch (error) {
+    console.error('❌ API: Failed to create voice test session:', error);
+    throw error;
+  }
+};
+
+export const getVoiceTestUploadUrl = async (sessionId, step, fileName, contentType) => {
+  if (!isProductionReady() && !import.meta.env.VITE_FORCE_REAL) {
+    console.log('[mock] getVoiceTestUploadUrl: Returning mock upload URL');
+    const mockObjectKey = `voice-tests/mock-user/${sessionId}/raw/${step}/${fileName}`;
+    return Promise.resolve({
+      putUrl: `https://mock-s3-bucket.s3.amazonaws.com/${mockObjectKey}?mock=true`,
+      objectKey: mockObjectKey
+    });
+  }
+  try {
+    const path = '/uploads';
+    const bodyData = { sessionId, step, fileName, contentType };
+    const resp = await authenticatedPost(path, bodyData);
+    return resp;
+  } catch (error) {
+    console.error('❌ API: Failed to get voice test upload URL:', error);
+    throw error;
+  }
+};
+
+export const uploadVoiceTestFileToS3 = async (putUrl, file) => {
+  if (!isProductionReady() && !import.meta.env.VITE_FORCE_REAL) {
+    console.log('[mock] uploadVoiceTestFileToS3: Simulating successful upload');
+    return Promise.resolve();
+  }
+  try {
+    const response = await fetch(putUrl, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'audio/wav' // Ensure this matches the expected content type
+      },
+      body: file
+    });
+    if (!response.ok) {
+      throw new Error(`S3 upload failed: ${response.statusText}`);
+    }
+    console.log('✅ S3: Voice test file uploaded successfully');
+    return response;
+  } catch (error) {
+    console.error('❌ S3: Failed to upload voice test file:', error);
+    throw error;
+  }
+};
+
+let mockGetResultsCallCount = 0;
+const MOCK_POLLING_THRESHOLD = 2; // Return processing for 2 calls, then done
+
+export const requestVoiceTestAnalyze = async (sessionId, calibration, forms) => {
+  if (!isProductionReady() && !import.meta.env.VITE_FORCE_REAL) {
+    console.log('[mock] requestVoiceTestAnalyze: Returning mock queued status');
+    return Promise.resolve({ status: 'queued', sessionId });
+  }
+  try {
+    const path = '/analyze';
+    const bodyData = { sessionId, calibration, forms };
+    const resp = await authenticatedPost(path, bodyData);
+    return resp;
+  } catch (error) {
+    console.error('❌ API: Failed to request voice test analysis:', error);
+    throw error;
+  }
+};
+
+export const getVoiceTestResults = async (sessionId) => {
+  if (!isProductionReady() && !import.meta.env.VITE_FORCE_REAL) {
+    mockGetResultsCallCount++;
+    if (mockGetResultsCallCount <= MOCK_POLLING_THRESHOLD) {
+      console.log(`[mock] getVoiceTestResults: Returning mock processing status (call ${mockGetResultsCallCount})`);
+      return Promise.resolve(mockData.voiceTestResults.processing);
+    } else {
+      console.log('[mock] getVoiceTestResults: Returning mock done status');
+      // Reset counter for next session or test run
+      mockGetResultsCallCount = 0;
+      return Promise.resolve(mockData.voiceTestResults.done);
+    }
+  }
+  try {
+    const path = `/results/${sessionId}`;
+    const resp = await authenticatedGet(path);
+    return resp;
+  } catch (error) {
+    console.error('❌ API: Failed to get voice test results:', error);
+    throw error;
+  }
 };
 
 export const getUploadUrl = async (fileKey, contentType) => {
@@ -298,4 +404,12 @@ export const getAvatarUrl = async (userId) => {
     console.error('❌ 获取头像URL失败:', error);
     throw error;
   }
+};
+
+export const isUserProfileComplete = (userProfile) => {
+  if (!userProfile || !userProfile.profile) return false;
+  const profile = userProfile.profile;
+  const hasBasicInfo = profile.name !== undefined && profile.name !== null;
+  const hasPrivacySettings = typeof profile.isNamePublic === 'boolean' && typeof profile.areSocialsPublic === 'boolean';
+  return hasBasicInfo && hasPrivacySettings;
 };

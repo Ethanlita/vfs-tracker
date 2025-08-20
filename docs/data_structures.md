@@ -181,113 +181,19 @@ A simple journal entry for the user to record their feelings.
 
 ## API Request/Response Formats
 
+*Note: This section provides a brief overview. For complete details, see `API_Gateway_Documentation.md`.*
+
 ### GET /all-events (Public)
-返回的事件对象 **不包含** `attachments` 字段。
 
-**Request**:
-```http
-GET /all-events
-Content-Type: application/json
-```
-
-**Response** (200 OK):
-```json
-[
-  {
-    "userId": "cognito-user-sub-id",
-    "eventId": "550e8400-e29b-41d4-a716-446655440000",
-    "type": "voice_training",
-    "date": "2025-08-15T10:00:00.000Z",
-    "details": {
-      "trainingContent": "发音练习和气息控制",
-      "voiceStatus": "良好",
-      "instructor": "张老师",
-      "feelings": "今天的训练效果很好"
-    },
-    "createdAt": "2025-08-15T10:30:00.000Z"
-  },
-  {
-    "userId": "another-user-id",
-    "eventId": "660f9511-f3ac-52e5-b827-557766551111",
-    "type": "self_test",
-    "date": "2025-08-14T15:30:00.000Z",
-    "details": {
-      "appUsed": "Voice Tools",
-      "fundamentalFrequency": 180.5,
-      "sound": ["好"],
-      "voicing": ["没夹"],
-      "jitter": 0.02,
-      "shimmer": 0.03,
-      "hnr": 15.2
-    },
-    "createdAt": "2025-08-14T15:45:00.000Z"
-  }
-]
-```
-
-**Error Response** (500):
-```json
-{
-  "message": "Error fetching all events",
-  "error": "详细错误信息"
-}
-```
+Returns a list of approved `Event` objects. The `attachments` field is **excluded** from all objects in the response.
 
 ### GET /events/{userId} (Private)
-返回的事件对象包含其 `attachments` 数组（若存在）。
 
-**Description**: Retrieves all events for a specific authenticated user.
-
-**Request**:
-```http
-GET /events/{userId}
-Authorization: Bearer {cognito-jwt-token}
-Content-Type: application/json
-```
-
-**Response**: Similar to `/all-events` but includes events with all status values.
+Returns a list of all `Event` objects for the authenticated user. The `attachments` field is **included** if present.
 
 ### POST /events
-允许在顶层提交可选 `attachments` 数组。
 
-**Description**: Creates a new event for the authenticated user.
-
-**Request**:
-```http
-POST /events
-Authorization: Bearer {cognito-jwt-token}
-Content-Type: application/json
-
-{
-  "type": "voice_training",
-  "date": "2025-08-15T10:00:00.000Z",
-  "details": {
-    "trainingContent": "发音练习",
-    "voiceStatus": "良好",
-    "instructor": "张老师"
-  }
-}
-```
-
-**Response** (200):
-```json
-{
-  "item": {
-    "userId": "cognito-user-sub-id",
-    "eventId": "generated-uuid",
-    "type": "voice_training",
-    "date": "2025-08-15T10:00:00.000Z",
-    "details": {
-      "trainingContent": "发音练习",
-      "voiceStatus": "良好",
-      "instructor": "张老师"
-    },
-    "status": "pending",
-    "createdAt": "2025-08-15T10:30:00.000Z",
-    "updatedAt": "2025-08-15T10:30:00.000Z"
-  }
-}
-```
+Creates a new `Event` for the authenticated user. The request body can include an `attachments` array.
 
 ---
 
@@ -406,5 +312,117 @@ Content-Type: application/json
 1. Get user profile: Get item by `userId`
 2. Check if user exists: Get item by `userId` (returns empty if not found)
 3. Update user profile: Update item by `userId`
+
+---
+
+### VoiceTests Table
+
+This table stores the state and results of each voice test session initiated by a user.
+
+**Table Name**: `VoiceTests`
+
+**Partition Key**: `userOrAnonId` (String)
+**Sort Key**: `sessionId` (String)
+
+**Attributes**:
+
+| Attribute Name | Type | Description | Required |
+| :--- | :--- | :--- | :--- |
+| `userOrAnonId` | String | User ID (if logged in) or an anonymous ID. Partition Key. | Yes |
+| `sessionId` | String | Unique identifier for the test session (e.g., UUID). Sort Key. | Yes |
+| `status` | String | The current status of the analysis: `pending` \| `processing` \| `done` \| `failed`. | Yes |
+| `createdAt` | String | ISO 8601 timestamp of when the session was created. | Yes |
+| `calibration` | Map | Object containing calibration details. | No |
+| `tests` | List | A list of `Map` objects, each representing a recorded audio segment. | No |
+| `metrics` | Map | A map containing the final calculated acoustic metrics after analysis. | No |
+| `forms` | Map | A map containing the user-submitted questionnaire data. | No |
+| `artifacts` | Map | A map containing S3 URLs for generated files (charts, PDF report). | No |
+
+**Nested Object Structures**:
+
+*   **`calibration` Object**:
+    *   `hasExternal` (Boolean): `true` if external calibration was performed.
+    *   `offsetDb` (Number, optional): The calibration offset in dB, if provided.
+    *   `noiseFloorDbA` (Number, optional): Estimated background noise level in dB(A).
+*   **`tests` Object (in a List)**:
+    *   `step` (String): The wizard step ID where the recording was made.
+    *   `s3Key` (String): The S3 object key for the raw `.wav` audio file.
+    *   `durationMs` (Number): Duration of the recording in milliseconds.
+*   **`metrics` Object**:
+    *   `sustained` (Map): Metrics from sustained vowel test (e.g., `spl_dbA`, `f0_mean`, `jitter_local_percent`).
+    *   `vrp` (Map): Metrics from voice range profile test (e.g., `f0_min`, `f0_max`, `spl_min`).
+    *   `reading` (Map): Metrics from reading passage test (e.g., `duration_s`, `voiced_ratio`).
+    *   `spontaneous` (Map): Metrics from spontaneous speech test.
+    *   `dsi` (Number, optional): Dysphonia Severity Index score.
+*   **`forms` Object**:
+    *   `RBH` (Map): `{ "R": Number, "B": Number, "H": Number }`
+    *   `VHI9i` (Number): Total score for the VHI-9i or equivalent questionnaire.
+    *   `TVQ` (Map): `{ "total": Number, "percent": Number }` for the TVQ or equivalent.
+*   **`artifacts` Object**:
+    *   `timeSeries` (String): S3 URL for the time-series chart PNG.
+    *   `vrp` (String): S3 URL for the VRP chart PNG.
+    *   `formants` (String): S3 URL for the formants chart PNG.
+    *   `reportPdf` (String): S3 URL for the final PDF report.
+
+**Global Secondary Indexes**:
+
+1. **SessionIdIndex**
+   - Partition Key: `sessionId` (String)
+   - Sort Key: `createdAt` (String)
+   - Purpose: Allows for efficient querying of a session by its `sessionId` alone, which is useful for the result polling mechanism.
+
+**Sample Item**:
+```json
+{
+  "userOrAnonId": "us-east-1:12345678-1234-1234-1234-123456789012",
+  "sessionId": "a1b2c3d4-e5f6-7890-1234-567890abcdef",
+  "status": "done",
+  "createdAt": "2025-09-01T10:00:00.000Z",
+  "calibration": {
+    "hasExternal": false
+  },
+  "tests": [
+    { "step": "1", "s3Key": "voice-tests/us-east-1:123.../a1b2c3d4.../raw/1_1.wav", "durationMs": 5100 },
+    { "step": "2", "s3Key": "voice-tests/us-east-1:123.../a1b2c3d4.../raw/2_1.wav", "durationMs": 8200 }
+  ],
+  "metrics": {
+    "sustained": {
+      "spl_dbA": 76.8,
+      "f0_mean": 290,
+      "f0_sd": 15.2,
+      "jitter_local_percent": 1.04,
+      "shimmer_local_percent": 4.52,
+      "hnr_db": 20.0,
+      "mpt_s": 11.8,
+      "formants": {
+        "F1": 550,
+        "F2": 1500,
+        "F3": 2500
+      }
+    },
+    "vrp": {
+      "f0_min": 90,
+      "f0_max": 596,
+      "spl_min": 57,
+      "spl_max": 91
+    }
+  },
+  "forms": {
+    "RBH": { "R": 1, "B": 0, "H": 1 },
+    "VHI9i": 18,
+    "TVQ": { "total": 30, "percent": 42 }
+  },
+  "artifacts": {
+    "timeSeries": "s3://your-bucket-name/voice-tests/us-east-1:123.../a1b2c3d4.../artifacts/timeSeries.png",
+    "vrp": "s3://your-bucket-name/voice-tests/us-east-1:123.../a1b2c3d4.../artifacts/vrp.png",
+    "reportPdf": "s3://your-bucket-name/voice-tests/us-east-1:123.../a1b2c3d4.../report.pdf"
+  }
+}
+```
+
+**Access Patterns**:
+1. Get a specific test session: `GetItem` by `userOrAnonId` + `sessionId`.
+2. Get all test sessions for a user: `Query` by `userOrAnonId`.
+3. Get a session by its ID (e.g., for polling results): `Query` the `SessionIdIndex` by `sessionId`.
 
 ---
