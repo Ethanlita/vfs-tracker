@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 
 /**
  * @en A reusable audio recorder component that uses the MediaRecorder API.
@@ -14,11 +14,11 @@ import React, { useState, useRef, useEffect } from 'react';
  * @returns {JSX.Element} The rendered recorder component.
  */
 const Recorder = ({ onRecordingComplete, onStartRecording, onStopRecording, isRecording: propIsRecording, maxDurationSec = 60 }) => {
-  const [isRecording, setIsRecording] = useState(propIsRecording || false);
+  const [isRecording, setIsRecording] = useState(false); // 内部真实录音状态，仅由 start/stop 控制
   const [isPaused, setIsPaused] = useState(false);
   const [levelDb, setLevelDb] = useState(null);
   const [peakDb, setPeakDb] = useState(null); // 新增：峰值
-  const [isClipping, setIsClipping] = useState(false); // 新增：过载指示
+  const [isClipping, setIsClipping] = useState(false); // 新增：过载指��
   const [elapsedSec, setElapsedSec] = useState(0);
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
@@ -28,13 +28,6 @@ const Recorder = ({ onRecordingComplete, onStartRecording, onStopRecording, isRe
   const rafRef = useRef(null);
   const startTimeRef = useRef(null);
   const intervalRef = useRef(null);
-
-  useEffect(() => {
-    // Allows the parent component to disable the recorder
-    if (propIsRecording) {
-      setIsRecording(true);
-    }
-  }, [propIsRecording]);
 
   const pickSupportedMimeType = () => {
     const candidates = [
@@ -48,7 +41,7 @@ const Recorder = ({ onRecordingComplete, onStartRecording, onStopRecording, isRe
       try {
         if (!mime) return undefined; // 使用默认
         if (MediaRecorder.isTypeSupported(mime)) return mime;
-      } catch (_) { /* ignore */ }
+      } catch { /* ignore */ }
     }
     return undefined;
   };
@@ -79,7 +72,7 @@ const Recorder = ({ onRecordingComplete, onStartRecording, onStopRecording, isRe
       const pcm = rendered.getChannelData(0);
       // 写 WAV 头
       const bytesPerSample = 2;
-      const blockAlign = 1 * bytesPerSample;
+      const blockAlign = bytesPerSample;
       const buffer = new ArrayBuffer(44 + pcm.length * bytesPerSample);
       const view = new DataView(buffer);
       const writeString = (off, str) => { for (let i=0;i<str.length;i++) view.setUint8(off+i, str.charCodeAt(i)); };
@@ -96,7 +89,7 @@ const Recorder = ({ onRecordingComplete, onStartRecording, onStopRecording, isRe
       view.setUint16(offset, blockAlign, true); offset += 2; // block align
       view.setUint16(offset, bytesPerSample * 8, true); offset += 2; // bits per sample
       writeString(offset, 'data'); offset += 4;
-      view.setUint32(offset, pcm.length * bytesPerSample, true); offset += 4;
+      view.setUint32(offset, pcm.length * bytesPerSample, true); /* 最后一次写入后不再递增 offset 以避免 ESLint 警告 */
       // PCM samples
       let idx = 0;
       for (let i = 0; i < pcm.length; i++, idx += 2) {
