@@ -130,7 +130,7 @@ def extract_pitch_spl_series(path, f0min=75, f0max=1200):
         return []
 
 def analyze_glide_files(local_paths):
-    """聚合多条滑音文件生成 VRP 数据，使用10/90百分位取代绝对极值。"""
+    """聚合多条滑音文件生成 VRP 数据，使用10/90百分位计算F0和SPL范围。"""
     all_frames=[]
     for p in local_paths:
         all_frames.extend(extract_pitch_spl_series(p))
@@ -140,13 +140,11 @@ def analyze_glide_files(local_paths):
     f0s = np.array([f.f0 for f in all_frames])
     spls = np.array([f.spl for f in all_frames])
 
-    if f0s.size == 0:
+    if f0s.size == 0 or spls.size == 0:
         return {
             'error': 'no_voiced_frames_in_glides',
-            'f0_min': 0.0,
-            'f0_max': 0.0,
-            'spl_min': float(np.min(spls)) if spls.size > 0 else 0.0,
-            'spl_max': float(np.max(spls)) if spls.size > 0 else 0.0,
+            'f0_min': 0.0, 'f0_max': 0.0,
+            'spl_min': 0.0, 'spl_max': 0.0,
             'bins': []
         }
 
@@ -170,8 +168,8 @@ def analyze_glide_files(local_paths):
     return {
         'f0_min': float(np.percentile(f0s, 10)),
         'f0_max': float(np.percentile(f0s, 90)),
-        'spl_min': float(np.min(spls)),
-        'spl_max': float(np.max(spls)),
+        'spl_min': float(np.percentile(spls, 10)),
+        'spl_max': float(np.percentile(spls, 90)),
         'bins': bins
     }
 
