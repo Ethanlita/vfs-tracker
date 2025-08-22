@@ -117,7 +117,7 @@ TMP_BASE = '/tmp'
 # ---------- Analysis Logic ----------
 def perform_full_analysis(session_id: str, calibration: dict = None, forms: dict = None, userInfo: dict = None):
     from analysis import analyze_sustained_wav, analyze_speech_flow, analyze_glide_files, analyze_note_file
-    from artifacts import create_time_series_chart, create_vrp_chart, create_pdf_report
+    from artifacts import create_time_series_chart, create_vrp_chart, create_pdf_report, create_formant_chart
 
     audio_groups = list_session_audio_keys(session_id)
     logger.info(f'perform_full_analysis: Audio groups found: {{ { {k:len(v) for k,v in audio_groups.items()} } }}')
@@ -126,7 +126,7 @@ def perform_full_analysis(session_id: str, calibration: dict = None, forms: dict
     charts = {}
     artifact_prefix = ARTIFACT_PREFIX_TEMPLATE.format(sessionId=session_id)
 
-    # Sustained Vowel (Step 2) & Formants (Step 4)
+    # Sustained Vowel (Step 2)
     sustained_keys = audio_groups.get('2', [])[:MAX_DOWNLOAD_FILES_PER_STEP]
     sustained_local=[safe_download(k) for k in sustained_keys if k.endswith('.wav')]
     chosen_sustained=pick_longest_file(sustained_local)
@@ -144,8 +144,8 @@ def perform_full_analysis(session_id: str, calibration: dict = None, forms: dict
     # Formant analysis from Step 4
     note_keys = audio_groups.get('4', [])[:MAX_DOWNLOAD_FILES_PER_STEP]
     note_local = [safe_download(k) for k in note_keys if k.endswith('.wav')]
+    formant_low_metrics, formant_high_metrics = None, None
     if len(note_local) >= 1:
-        # Assuming first is lowest, second is highest as per instructions
         formant_low_metrics = analyze_note_file(note_local[0])
         if formant_low_metrics and 'error' not in formant_low_metrics:
             metrics['sustained']['formants_low'] = formant_low_metrics
@@ -153,6 +153,13 @@ def perform_full_analysis(session_id: str, calibration: dict = None, forms: dict
         formant_high_metrics = analyze_note_file(note_local[1])
         if formant_high_metrics and 'error' not in formant_high_metrics:
             metrics['sustained']['formants_high'] = formant_high_metrics
+    
+    if formant_low_metrics and formant_high_metrics and 'error' not in formant_low_metrics and 'error' not in formant_high_metrics:
+        formant_buf = create_formant_chart(formant_low_metrics, formant_high_metrics)
+        if formant_buf:
+            formant_key = artifact_prefix + 'formant.png'
+            s3_client.upload_fileobj(formant_buf, BUCKET, formant_key, ExtraArgs={'ContentType': 'image/png'})
+            charts['formant'] = f's3://{BUCKET}/{formant_key}'
 
     # Reading (Step 5)
     reading_keys = audio_groups.get('5', [])[:MAX_DOWNLOAD_FILES_PER_STEP]

@@ -117,6 +117,39 @@ def create_vrp_chart(data):
         plt.close(fig)
         return buf
 
+def create_formant_chart(formant_low, formant_high):
+    """Creates an F1-F2 vowel space chart."""
+    logger.info("Creating F1-F2 Vowel Space chart")
+    try:
+        fig, ax = plt.subplots(figsize=(8, 6))
+
+        # Plot points
+        ax.plot(formant_low['F2'], formant_low['F1'], 'o', markersize=10, color='blue', label='Lowest Note')
+        ax.plot(formant_high['F2'], formant_high['F1'], 'o', markersize=10, color='red', label='Highest Note')
+
+        # Annotate points
+        ax.text(formant_low['F2'] + 20, formant_low['F1'], 'Low')
+        ax.text(formant_high['F2'] + 20, formant_high['F1'], 'High')
+
+        # Standard F1-F2 chart conventions
+        ax.set_xlabel('F2 (Hz)')
+        ax.set_ylabel('F1 (Hz)')
+        ax.set_title('F1-F2 Vowel Space')
+        ax.invert_xaxis()
+        ax.invert_yaxis()
+        ax.grid(True, linestyle='--', alpha=0.6)
+        ax.legend()
+
+        buf = BytesIO()
+        plt.tight_layout()
+        plt.savefig(buf, format='png')
+        buf.seek(0)
+        plt.close(fig)
+        return buf
+    except Exception as e:
+        logger.error(f"Could not create formant chart. Error: {e}")
+        return None
+
 def create_pdf_report(session_id, metrics, chart_urls, userInfo=None):
     """
     Generates a PDF report from the analysis results with embedded charts and user info.
@@ -254,7 +287,7 @@ def create_pdf_report(session_id, metrics, chart_urls, userInfo=None):
             return (parts[0], parts[1]) if len(parts) == 2 else (None, None)
 
         s3 = boto3.client('s3')
-        chart_order = [('timeSeries', 'Time Series Waveform & F0'), ('vrp', 'Voice Range Profile (VRP)')]
+        chart_order = [('timeSeries', 'Time Series Waveform & F0'), ('vrp', 'Voice Range Profile (VRP)'), ('formant', 'F1-F2 Vowel Space')]
 
         for key_name, title in chart_order:
             url = chart_urls.get(key_name)
