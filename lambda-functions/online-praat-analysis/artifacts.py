@@ -1,6 +1,7 @@
 import logging
 from io import BytesIO
 import matplotlib.pyplot as plt
+from matplotlib.ticker import ScalarFormatter
 import numpy as np
 import librosa
 import parselmouth
@@ -11,9 +12,49 @@ from datetime import datetime, timezone
 import json
 import boto3
 from reportlab.lib.utils import ImageReader
+# 新增：更优排版支持
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image as RLImage, Table, TableStyle, PageBreak, KeepTogether
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.enums import TA_CENTER, TA_LEFT
+from reportlab.lib import colors
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.cidfonts import UnicodeCIDFont
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
+
+# 注册支持中文的字体（无需外部 TTF）
+try:
+    pdfmetrics.registerFont(UnicodeCIDFont('STSong-Light'))  # 简体中文支持
+    _CJK_FONT = 'STSong-Light'
+except Exception:
+    # 回退（仍可工作，但中文可能无法正确显示）
+    _CJK_FONT = 'Helvetica'
+
+
+def create_placeholder_chart(title: str, message: str):
+    """Creates a placeholder chart with a title and a message."""
+    logger.info(f"Creating placeholder chart: {title}")
+    try:
+        fig, ax = plt.subplots(figsize=(10, 6))
+        ax.text(0.5, 0.5, message, ha='center', va='center', fontsize=12, color='gray', wrap=True)
+        ax.set_title(title)
+        ax.set_xticks([])
+        ax.set_yticks([])
+        ax.spines['top'].set_visible(False)
+        ax.spines['right'].set_visible(False)
+        ax.spines['bottom'].set_visible(False)
+        ax.spines['left'].set_visible(False)
+        fig.tight_layout()
+        buf = BytesIO()
+        plt.savefig(buf, format='png')
+        buf.seek(0)
+        plt.close(fig)
+        return buf
+    except Exception as e:
+        logger.error(f"Could not create placeholder chart for {title}. Error: {e}")
+        return None
+
 
 def create_time_series_chart(file_path, f0min=75, f0max=600):
     """
@@ -55,6 +96,7 @@ def create_time_series_chart(file_path, f0min=75, f0max=600):
         ax2.plot(pitch_time, pitch_values, color='#e74c3c', linewidth=2, label='Fundamental Frequency (F0)')
         ax2.set_ylabel("Frequency (Hz)", color='#e74c3c')
         ax2.tick_params(axis='y', labelcolor='#e74c3c')
+        ax2.yaxis.set_major_formatter(ScalarFormatter()) # Disable scientific notation
         ax2.set_ylim([f0min, f0max])
 
         plt.title("Waveform and F0 Time Series")
@@ -71,7 +113,8 @@ def create_time_series_chart(file_path, f0min=75, f0max=600):
 
     except Exception as e:
         logger.error(f"Could not create time series chart for {file_path}. Error: {e}")
-        return None
+        return create_placeholder_chart('Time Series Waveform & F0', 'Chart generation failed.')
+
 
 def create_vrp_chart(data):
     """创建真实(基础版) VRP 图。
@@ -91,6 +134,7 @@ def create_vrp_chart(data):
         ax.fill_between(freqs, spl_min, spl_max, color='#c9e6ff', alpha=0.6, label='Range (min-max)')
         ax.plot(freqs, spl_mean, color='#0077cc', linewidth=2, label='Mean SPL')
         ax.set_xscale('log')
+        ax.xaxis.set_major_formatter(ScalarFormatter()) # Disable scientific notation for log scale
         ax.set_xlabel('Frequency (Hz) (log)')
         ax.set_ylabel('SPL dB(A) (est)')
         ax.set_title('Voice Range Profile')
@@ -104,18 +148,8 @@ def create_vrp_chart(data):
         return buf
     except Exception as e:
         logger.error(f'create_vrp_chart failed, fallback placeholder: {e}')
-        # 回退到旧占位
-        fig, ax = plt.subplots(figsize=(8, 6))
-        ax.set_xlabel('Frequency (Hz)')
-        ax.set_ylabel('Intensity (dB SPL)')
-        ax.set_title('Voice Range Profile (Placeholder)')
-        ax.text(0.5, 0.5, 'VRP Data Unavailable', ha='center', va='center', transform=ax.transAxes)
-        ax.grid(True)
-        buf = BytesIO()
-        plt.savefig(buf, format='png')
-        buf.seek(0)
-        plt.close(fig)
-        return buf
+        return create_placeholder_chart('Voice Range Profile', 'VRP Data Unavailable')
+
 
 def create_formant_chart(formant_low, formant_high):
     """Creates an F1-F2 vowel space chart."""
@@ -135,6 +169,8 @@ def create_formant_chart(formant_low, formant_high):
         ax.set_xlabel('F2 (Hz)')
         ax.set_ylabel('F1 (Hz)')
         ax.set_title('F1-F2 Vowel Space')
+        ax.xaxis.set_major_formatter(ScalarFormatter()) # Disable scientific notation
+        ax.yaxis.set_major_formatter(ScalarFormatter()) # Disable scientific notation
         ax.invert_xaxis()
         ax.invert_yaxis()
         ax.grid(True, linestyle='--', alpha=0.6)
@@ -148,7 +184,41 @@ def create_formant_chart(formant_low, formant_high):
         return buf
     except Exception as e:
         logger.error(f"Could not create formant chart. Error: {e}")
-        return None
+        return create_placeholder_chart('F1-F2 Vowel Space', 'Formant data incomplete.')
+
+
+def create_formant_spl_chart(spectrum_low, spectrum_high):
+    """Creates a Formant-SPL (LPC Spectrum) chart."""
+    logger.info("Creating Formant-SPL Spectrum chart")
+    try:
+        fig, ax = plt.subplots(figsize=(10, 6))
+
+        # Plot spectrum for the lowest note
+        if spectrum_low and 'frequencies' in spectrum_low and 'spl_values' in spectrum_low:
+            ax.plot(spectrum_low['frequencies'], spectrum_low['spl_values'], color='blue', label='Lowest Note Spectrum')
+
+        # Plot spectrum for the highest note
+        if spectrum_high and 'frequencies' in spectrum_high and 'spl_values' in spectrum_high:
+            ax.plot(spectrum_high['frequencies'], spectrum_high['spl_values'], color='red', label='Highest Note Spectrum')
+
+        ax.set_xlabel('Frequency (Hz)')
+        ax.set_ylabel('SPL (dB)')
+        ax.set_title('Formant-SPL Spectrum (LPC)')
+        ax.xaxis.set_major_formatter(ScalarFormatter()) # Disable scientific notation
+        ax.grid(True, linestyle='--', alpha=0.6)
+        ax.legend()
+        ax.set_xlim(0, 5500)
+
+        buf = BytesIO()
+        plt.tight_layout()
+        plt.savefig(buf, format='png')
+        buf.seek(0)
+        plt.close(fig)
+        return buf
+    except Exception as e:
+        logger.error(f"Could not create formant-SPL chart. Error: {e}")
+        return create_placeholder_chart('Formant-SPL Spectrum (LPC)', 'Spectrum data unavailable.')
+
 
 def create_pdf_report(session_id, metrics, chart_urls, userInfo=None):
     """
@@ -166,157 +236,254 @@ def create_pdf_report(session_id, metrics, chart_urls, userInfo=None):
     logger.info(f"Creating PDF report for session {session_id}")
     if userInfo is None:
         userInfo = {}
-        
+
     try:
+        # 文档与样式
         buf = BytesIO()
-        p = canvas.Canvas(buf, pagesize=letter)
-        width, height = letter
-        margin = inch
+        doc = SimpleDocTemplate(
+            buf,
+            pagesize=letter,
+            leftMargin=0.75 * inch,
+            rightMargin=0.75 * inch,
+            topMargin=0.8 * inch,
+            bottomMargin=0.8 * inch,
+        )
+        styles = getSampleStyleSheet()
+        # 基础样式
+        title_style = ParagraphStyle(
+            'TitleCnEn',
+            parent=styles['Title'],
+            alignment=TA_CENTER,
+            fontName=_CJK_FONT,
+            fontSize=20,
+            leading=24,
+            spaceAfter=6,
+        )
+        subtitle_style = ParagraphStyle(
+            'Subtitle', parent=styles['Normal'], alignment=TA_CENTER, fontName=_CJK_FONT, fontSize=10, leading=14
+        )
+        h1_style = ParagraphStyle(
+            'H1', parent=styles['Heading1'], fontName=_CJK_FONT, fontSize=14, leading=18, spaceBefore=6, spaceAfter=4
+        )
+        h2_style = ParagraphStyle(
+            'H2', parent=styles['Heading2'], fontName=_CJK_FONT, fontSize=12, leading=16, spaceBefore=4, spaceAfter=2
+        )
+        text_style = ParagraphStyle(
+            'Body', parent=styles['Normal'], fontName=_CJK_FONT, fontSize=10, leading=14
+        )
+        small_style = ParagraphStyle(
+            'Small', parent=styles['Normal'], fontName=_CJK_FONT, fontSize=8, leading=11, textColor=colors.grey
+        )
 
-        # Title
-        p.setFont("Helvetica-Bold", 18)
-        p.drawCentredString(width / 2.0, height - margin, "Voice Analysis Report")
-        
-        # Sub-header section
-        y_cursor = height - margin - 25
-        p.setFont("Helvetica", 10)
-        p.drawCentredString(width / 2.0, y_cursor, f"Session ID: {session_id}")
-        y_cursor -= 15
-        p.drawCentredString(width / 2.0, y_cursor, f"User: {userInfo.get('userName', 'N/A')} (ID: {userInfo.get('userId', 'N/A')})")
-        y_cursor -= 15
+        def on_page(canv, _doc):
+            # 页脚页码
+            canv.setFont('Helvetica', 8)
+            page_num = _doc.page
+            canv.setFillColor(colors.grey)
+            canv.drawRightString(_doc.pagesize[0] - 0.75 * inch, 0.5 * inch, f"{page_num}")
+            canv.setFillColor(colors.black)
+
+        # Header
+        story = []
+        story.append(Paragraph("Voice Analysis Report / 声音分析报告", title_style))
+        info_rows = []
         report_time_utc = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S %Z")
-        p.drawCentredString(width / 2.0, y_cursor, f"Report Date: {report_time_utc}")
-        y_cursor -= 15
-        p.setFont("Helvetica-Oblique", 9)
-        p.drawCentredString(width/2.0, y_cursor, "Tool: VFS Tracker Voice Analysis Tool based on Parselmouth")
+        info_rows.append([
+            Paragraph("Session ID / 会话ID", text_style),
+            Paragraph(str(session_id), text_style)
+        ])
+        info_rows.append([
+            Paragraph("User / 用户", text_style),
+            Paragraph(f"{userInfo.get('userName', 'N/A')} (ID: {userInfo.get('userId', 'N/A')})", text_style)
+        ])
+        info_rows.append([
+            Paragraph("Report Date / 报告时间", text_style),
+            Paragraph(report_time_utc, text_style)
+        ])
+        info_tbl = Table(info_rows, colWidths=[1.6*inch, None])
+        info_tbl.setStyle(TableStyle([
+            ('FONT', (0,0), (-1,-1), _CJK_FONT, 10),
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+            ('ALIGN', (0,0), (0,-1), 'RIGHT'),
+            ('LINEBELOW', (0,-1), (-1,-1), 0.25, colors.lightgrey),
+            ('BOTTOMPADDING', (0,0), (-1,-1), 6),
+        ]))
+        story.append(info_tbl)
+        story.append(Spacer(1, 4))
+        story.append(Paragraph("Tool / 工具：VFS Tracker Voice Analysis（基于 Parselmouth）", small_style))
+        story.append(Spacer(1, 10))
 
-        # --- Metrics Section ---
-        y_cursor = height - 2*margin - 20 # Adjust starting position
-        text = p.beginText(margin, y_cursor)
+        # ---- Metrics Section ----
+        story.append(Paragraph("Acoustic Metrics / 声学指标", h1_style))
 
-        def check_page_break(current_y, threshold=margin + 120):
-            if current_y < threshold:
-                p.drawText(text)
-                p.showPage()
-                text.setTextOrigin(margin, height - margin)
-                return True
-            return False
+        # 工具函数：安全格式化
+        def _fmt(v):
+            try:
+                if isinstance(v, float):
+                    if np.isnan(v) or np.isinf(v):
+                        return '0'
+                    return f"{v:.2f}"
+                return str(v)
+            except Exception:
+                return str(v)
 
-        # --- Acoustic Metrics ---
-        p.setFont("Helvetica-Bold", 14)
-        p.drawString(margin, y_cursor, "Acoustic Metrics")
-        y_cursor -= 8
-        p.line(margin, y_cursor, width - margin, y_cursor)
-        y_cursor -= 12
-        text.setTextOrigin(margin, y_cursor)
-        text.setFont("Helvetica", 10)
-        
-        acoustic_categories = [cat for cat in metrics if cat != 'questionnaires']
-        for category in acoustic_categories:
-            block_data = metrics[category]
-            block_title = category.replace('_',' ').title()
-            
-            text.setFont("Helvetica-Bold", 11)
-            text.textLine(block_title)
-            text.setFont("Helvetica", 10)
-            
-            for key, value in block_data.items():
-                if key in ['formants_low', 'formants_high', 'bins']:
+        # 标签的中英映射
+        label_map = {
+            'mpt_s': 'Maximum Phonation Time (s) / 最长发声时间（秒）',
+            'f0_mean': 'Mean F0 (Hz) / 平均基频（Hz）',
+            'f0_sd': 'F0 Standard Deviation (Hz) / 基频标准差（Hz）',
+            'jitter_local_percent': 'Jitter Local (%) / 抖动（%）',
+            'shimmer_local_percent': 'Shimmer Local (%) / 闪烁（%）',
+            'hnr_db': 'HNR (dB) / 谐噪比（dB）',
+            'spl_dbA_est': 'Estimated SPL dB(A) / 估计声压级 dB(A)',
+            'duration_s': 'Duration (s) / 时长（秒）',
+            'voiced_ratio': 'Voiced Ratio / 发声占比',
+            'pause_count': 'Pause Count / 停顿次数',
+            'f0_stats': 'F0 Stats / 基频统计',
+            'p10': 'P10 (Hz) / 第10百分位（Hz）',
+            'median': 'Median (Hz) / 中位数（Hz）',
+            'p90': 'P90 (Hz) / 第90百分位（Hz）',
+            'f0_min': 'Lowest F0 (P10) / 最低基频（P10）',
+            'f0_max': 'Highest F0 (P90) / 最高基频（P90）',
+            'spl_min': 'Lowest SPL (P10) / 最低声压级（P10）',
+            'spl_max': 'Highest SPL (P90) / 最高声压级（P90）',
+        }
+
+        # 分类标题映射
+        section_title_map = {
+            'sustained': 'Sustained Vowel / 持续元音',
+            'reading': 'Reading / 朗读',
+            'spontaneous': 'Spontaneous Speech / 自发语音',
+            'vrp': 'Voice Range Profile / 声音范围图',
+        }
+
+        def add_metric_block(name, data):
+            if not isinstance(data, dict):
+                story.append(Paragraph(f"{section_title_map.get(name, name.title())}: {_fmt(data)}", text_style))
+                return
+            rows = []
+            for k, v in data.items():
+                if k in ['formants_low', 'formants_high', 'bins', 'formant_analysis_failed']:
                     continue
-                
-                label = key.replace('_',' ').title()
-                if key == 'f0_min':
-                    label = "Lowest F0 (10th Percentile)"
-                elif key == 'f0_max':
-                    label = "Highest F0 (90th Percentile)"
-
-                if isinstance(value, dict):
-                    text.textLine(f"  {label}:")
-                    for sub_key, sub_val in value.items():
-                        text.textLine(f"    {sub_key}: {sub_val}")
+                if isinstance(v, dict):
+                    # 展开二级
+                    rows.append([Paragraph(label_map.get(k, k.replace('_',' ').title()), text_style), Paragraph('', text_style)])
+                    for sk, sv in v.items():
+                        rows.append([Paragraph(f"• {label_map.get(sk, sk.upper())}", text_style), Paragraph(_fmt(sv), text_style)])
                 else:
-                    text.textLine(f"  {label}: {value}")
-            text.moveCursor(0, 10)
+                    rows.append([Paragraph(label_map.get(k, k.replace('_',' ').title()), text_style), Paragraph(_fmt(v), text_style)])
+            if not rows:
+                return
+            tbl = Table(rows, colWidths=[3.0*inch, None], hAlign='LEFT')
+            tbl.setStyle(TableStyle([
+                ('FONT', (0,0), (-1,-1), _CJK_FONT, 10),
+                ('VALIGN', (0,0), (-1,-1), 'TOP'),
+                ('ROWSPACING', (0,0), (-1,-1), 2),
+                ('LINEBELOW', (0,0), (-1,-1), 0.1, colors.whitesmoke),
+            ]))
+            story.append(Paragraph(section_title_map.get(name, name.replace('_',' ').title()), h2_style))
+            story.append(tbl)
+            story.append(Spacer(1, 6))
 
-        # --- Formant Analysis ---
-        sustained_metrics = metrics.get('sustained', {})
+        # 只遍历非问卷部分
+        acoustic_categories = [cat for cat in metrics if cat != 'questionnaires']
+        for cat in acoustic_categories:
+            add_metric_block(cat, metrics.get(cat))
+
+        # Formant Analysis / 共振峰分析
+        sustained_metrics = metrics.get('sustained', {}) if isinstance(metrics.get('sustained'), dict) else {}
         formant_low = sustained_metrics.get('formants_low')
         formant_high = sustained_metrics.get('formants_high')
-        if formant_low or formant_high:
-            text.setFont("Helvetica-Bold", 11)
-            text.textLine("Formant Analysis")
-            text.setFont("Helvetica", 10)
+        formant_failed = sustained_metrics.get('formant_analysis_failed')
+
+        story.append(Spacer(1, 4))
+        story.append(Paragraph("Formant Analysis / 共振峰分析", h2_style))
+        if formant_failed:
+            bullet = (
+                "Analysis failed. Common causes / 分析失败，常见原因：<br/>"
+                "- Very low volume or too soft / 音量过低或发声太轻；<br/>"
+                "- Excessive noise, coughing, throat clearing / 背景噪声、咳嗽或清嗓；<br/>"
+                "- Not holding a stable /a/ vowel / /a/ 元音不稳定。"
+            )
+            story.append(Paragraph(bullet, text_style))
+        else:
             if formant_low:
-                text.textLine(f"  Lowest Note: F1={formant_low.get('F1', 0):.0f}Hz, F2={formant_low.get('F2', 0):.0f}Hz, F3={formant_low.get('F3', 0):.0f}Hz, SPL={formant_low.get('spl_dbA_est', 0):.1f}dB")
+                story.append(Paragraph(
+                    f"Lowest Note / 最低音：F1={formant_low.get('F1',0):.0f} Hz，F2={formant_low.get('F2',0):.0f} Hz，F3={formant_low.get('F3',0):.0f} Hz，SPL={formant_low.get('spl_dbA_est',0):.1f} dB",
+                    text_style
+                ))
             if formant_high:
-                text.textLine(f"  Highest Note: F1={formant_high.get('F1', 0):.0f}Hz, F2={formant_high.get('F2', 0):.0f}Hz, F3={formant_high.get('F3', 0):.0f}Hz, SPL={formant_high.get('spl_dbA_est', 0):.1f}dB")
-            text.moveCursor(0, 10)
+                story.append(Paragraph(
+                    f"Highest Note / 最高音：F1={formant_high.get('F1',0):.0f} Hz，F2={formant_high.get('F2',0):.0f} Hz，F3={formant_high.get('F3',0):.0f} Hz，SPL={formant_high.get('spl_dbA_est',0):.1f} dB",
+                    text_style
+                ))
+        story.append(Spacer(1, 8))
 
-        p.drawText(text)
-        y_cursor = text.getY()
-
-        # --- Subjective Questionnaires ---
+        # ---- Questionnaires ----
         questionnaire_scores = metrics.get('questionnaires')
         if questionnaire_scores:
-            y_cursor -= 20
-            if y_cursor < margin + 120:
-                p.showPage()
-                y_cursor = height - margin
-
-            p.setFont("Helvetica-Bold", 14)
-            p.drawString(margin, y_cursor, "Subjective Questionnaires")
-            y_cursor -= 8
-            p.line(margin, y_cursor, width - margin, y_cursor)
-            y_cursor -= 12
-            text.setTextOrigin(margin, y_cursor)
-            text.setFont("Helvetica", 10)
-
+            story.append(Paragraph("Subjective Questionnaires / 主观量表", h1_style))
+            rows = []
             for key, value in questionnaire_scores.items():
                 if isinstance(value, dict):
                     rbh_str = ", ".join([f"{k.upper()}: {v}" for k, v in value.items()])
-                    text.textLine(f"  {key}: {rbh_str}")
+                    rows.append([Paragraph(key, text_style), Paragraph(rbh_str, text_style)])
                 else:
-                    text.textLine(f"  {key}: {value}")
-            p.drawText(text)
-            y_cursor = text.getY()
+                    rows.append([Paragraph(key, text_style), Paragraph(_fmt(value), text_style)])
+            qt = Table(rows, colWidths=[2.5*inch, None])
+            qt.setStyle(TableStyle([
+                ('FONT', (0,0), (-1,-1), _CJK_FONT, 10),
+                ('VALIGN', (0,0), (-1,-1), 'TOP'),
+                ('ROWSPACING', (0,0), (-1,-1), 2),
+                ('LINEBELOW', (0,0), (-1,-1), 0.1, colors.whitesmoke),
+            ]))
+            story.append(qt)
+            story.append(Spacer(1, 8))
 
-        # --- Charts Section ---
+        # ---- Charts ----
         def parse_s3_url(url: str):
-            if not url or not url.startswith('s3://'): return None, None
-            parts = url[5:].split('/',1)
+            if not url or not url.startswith('s3://'):
+                return None, None
+            parts = url[5:].split('/', 1)
             return (parts[0], parts[1]) if len(parts) == 2 else (None, None)
 
         s3 = boto3.client('s3')
-        chart_order = [('timeSeries', 'Time Series Waveform & F0'), ('vrp', 'Voice Range Profile (VRP)'), ('formant', 'F1-F2 Vowel Space')]
+        chart_order = [
+            ('timeSeries', 'Time Series Waveform & F0 / 波形与基频'),
+            ('vrp', 'Voice Range Profile (VRP) / 声音范围图'),
+            ('formant', 'F1-F2 Vowel Space / F1-F2 元音空间'),
+            ('formant_spl_spectrum', 'Formant-SPL Spectrum (LPC) / 共振峰-声压谱（LPC）')
+        ]
 
         for key_name, title in chart_order:
             url = chart_urls.get(key_name)
-            if not url: continue
+            if not url:
+                continue
             bkt, obj_key = parse_s3_url(url)
-            if not bkt: continue
+            if not bkt:
+                continue
             try:
                 obj = s3.get_object(Bucket=bkt, Key=obj_key)
                 data = obj['Body'].read()
-                img_reader = ImageReader(BytesIO(data))
-                p.showPage()
-                p.setFont("Helvetica-Bold", 14)
-                p.drawString(margin, height - margin, title)
-                img_w, img_h = img_reader.getSize()
-                max_w, max_h = width - 2*margin, height - 2*margin - 30
-                scale = min(max_w / img_w, max_h / img_h, 1.0)
-                draw_w, draw_h = img_w * scale, img_h * scale
-                x, y = (width - draw_w)/2, (height - margin - 30 - draw_h)
-                p.drawImage(img_reader, x, y, width=draw_w, height=draw_h, preserveAspectRatio=True, anchor='c')
+                # 创建图片并按页宽限制缩放
+                img = RLImage(BytesIO(data))
+                img.hAlign = 'CENTER'
+                iw, ih = img.imageWidth, img.imageHeight
+                max_w, max_h = doc.width, doc.height - 1.2 * inch
+                scale = min(max_w/iw, max_h/ih, 1.0)
+                img.drawWidth, img.drawHeight = iw * scale, ih * scale
+                story.append(PageBreak())
+                story.append(Paragraph(title, h1_style))
+                story.append(Spacer(1, 6))
+                story.append(img)
             except Exception as e:
                 logger.error(f"Failed embedding chart {key_name}: {e}")
-                p.showPage()
-                p.setFont("Helvetica-Bold", 14)
-                p.drawString(margin, height - margin, title)
-                p.setFont("Helvetica", 10)
-                p.drawString(margin, height - margin - 20, f"(Failed to embed image. URL: {url})")
+                story.append(PageBreak())
+                story.append(Paragraph(title, h1_style))
+                story.append(Paragraph(f"Failed to embed image. URL: {url}", small_style))
 
-        p.showPage()
-        p.save()
+        # 构建 PDF
+        doc.build(story, onFirstPage=on_page, onLaterPages=on_page)
         buf.seek(0)
         logger.info(f"Successfully created PDF report with embedded charts for session {session_id}")
         return buf
