@@ -78,6 +78,7 @@ const TestResultsDisplay = ({ results }) => {
   const sustained = metrics.sustained || {};
   const vrp = metrics.vrp || {};
   const questionnaires = metrics.questionnaires || {};
+  const isPdfReady = !!resolvedUrls.reportPdf;
 
   return (
     <div className="w-full max-w-4xl mx-auto space-y-6">
@@ -139,11 +140,16 @@ const TestResultsDisplay = ({ results }) => {
 
       <div className="text-center mt-8">
         <a
-          href={resolvedUrls.reportPdf}
+          href={isPdfReady ? resolvedUrls.reportPdf : undefined}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-block px-8 py-3 bg-green-600 text-white rounded-lg font-semibold shadow-lg hover:bg-green-700 transition-all duration-300 transform hover:scale-105 disabled:bg-gray-400"
-          disabled={!resolvedUrls.reportPdf}
+          className={`inline-block px-8 py-3 rounded-lg font-semibold shadow-lg transition-all duration-300 transform hover:scale-105 ${
+            isPdfReady 
+              ? 'bg-green-600 text-white hover:bg-green-700' 
+              : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+          }`}
+          aria-disabled={!isPdfReady}
+          onClick={(e) => !isPdfReady && e.preventDefault()}
         >
           下载完整PDF报告
         </a>

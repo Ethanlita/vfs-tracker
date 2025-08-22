@@ -196,3 +196,34 @@ def analyze_note_file(path, f0min=75, f0max=1200):
     except Exception as e:
         logger.error(f'analyze_note_file failed for {path}: {e}')
         return {'error': str(e)}
+
+def get_lpc_spectrum(file_path: str):
+    """
+    Analyzes a sound file to get its LPC spectrum.
+
+    Args:
+        file_path (str): The local path to the .wav file.
+
+    Returns:
+        dict: A dictionary with 'frequencies' and 'spl_values' lists, or None on failure.
+    """
+    logger.info(f"Getting LPC spectrum for {file_path}")
+    try:
+        sound = parselmouth.Sound(file_path)
+        mid_start = sound.get_total_duration() * 0.33
+        mid_end = sound.get_total_duration() * 0.66
+        segment = sound.extract_part(from_time=mid_start, to_time=mid_end, preserve_times=False)
+        
+        lpc = segment.to_lpc_burg(time_step=0.01, max_formant=5500)
+        spectrum = lpc.to_spectrum(maximum_frequency=5500)
+        
+        frequencies = spectrum.xs()
+        spl_values = spectrum.values.T[0]
+
+        return {
+            "frequencies": frequencies.tolist(),
+            "spl_values": spl_values.tolist()
+        }
+    except Exception as e:
+        logger.error(f"Could not get LPC spectrum for {file_path}. Error: {e}")
+        return None

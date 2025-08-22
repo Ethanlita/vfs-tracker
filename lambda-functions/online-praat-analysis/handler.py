@@ -116,8 +116,8 @@ TMP_BASE = '/tmp'
 
 # ---------- Analysis Logic ----------
 def perform_full_analysis(session_id: str, calibration: dict = None, forms: dict = None, userInfo: dict = None):
-    from analysis import analyze_sustained_wav, analyze_speech_flow, analyze_glide_files, analyze_note_file
-    from artifacts import create_time_series_chart, create_vrp_chart, create_pdf_report, create_formant_chart
+    from analysis import analyze_sustained_wav, analyze_speech_flow, analyze_glide_files, analyze_note_file, get_lpc_spectrum
+    from artifacts import create_time_series_chart, create_vrp_chart, create_pdf_report, create_formant_chart, create_formant_spl_chart, create_placeholder_chart
 
     audio_groups = list_session_audio_keys(session_id)
     logger.info(f'perform_full_analysis: Audio groups found: {{ { {k:len(v) for k,v in audio_groups.items()} } }}')
@@ -145,21 +145,51 @@ def perform_full_analysis(session_id: str, calibration: dict = None, forms: dict
     note_keys = audio_groups.get('4', [])[:MAX_DOWNLOAD_FILES_PER_STEP]
     note_local = [safe_download(k) for k in note_keys if k.endswith('.wav')]
     formant_low_metrics, formant_high_metrics = None, None
+    spectrum_low, spectrum_high = None, None
+    formant_analysis_failed = False
+
     if len(note_local) >= 1:
         formant_low_metrics = analyze_note_file(note_local[0])
         if formant_low_metrics and 'error' not in formant_low_metrics:
-            metrics['sustained']['formants_low'] = formant_low_metrics
+            metrics.setdefault('sustained', {})['formants_low'] = formant_low_metrics
+        spectrum_low = get_lpc_spectrum(note_local[0])
+
     if len(note_local) >= 2:
         formant_high_metrics = analyze_note_file(note_local[1])
         if formant_high_metrics and 'error' not in formant_high_metrics:
-            metrics['sustained']['formants_high'] = formant_high_metrics
+            metrics.setdefault('sustained', {})['formants_high'] = formant_high_metrics
+        spectrum_high = get_lpc_spectrum(note_local[1])
     
+    # Create formant charts if data is available, otherwise create placeholders
     if formant_low_metrics and formant_high_metrics and 'error' not in formant_low_metrics and 'error' not in formant_high_metrics:
         formant_buf = create_formant_chart(formant_low_metrics, formant_high_metrics)
         if formant_buf:
             formant_key = artifact_prefix + 'formant.png'
             s3_client.upload_fileobj(formant_buf, BUCKET, formant_key, ExtraArgs={'ContentType': 'image/png'})
             charts['formant'] = f's3://{BUCKET}/{formant_key}'
+    else:
+        formant_analysis_failed = True
+        placeholder_buf = create_placeholder_chart('F1-F2 Vowel Space', 'Formant analysis failed.\nSee notes in report for details.')
+        if placeholder_buf:
+            formant_key = artifact_prefix + 'formant.png'
+            s3_client.upload_fileobj(placeholder_buf, BUCKET, formant_key, ExtraArgs={'ContentType': 'image/png'})
+            charts['formant'] = f's3://{BUCKET}/{formant_key}'
+
+    if spectrum_low or spectrum_high:
+        formant_spl_buf = create_formant_spl_chart(spectrum_low, spectrum_high)
+        if formant_spl_buf:
+            formant_spl_key = artifact_prefix + 'formant_spl_spectrum.png'
+            s3_client.upload_fileobj(formant_spl_buf, BUCKET, formant_spl_key, ExtraArgs={'ContentType': 'image/png'})
+            charts['formant_spl_spectrum'] = f's3://{BUCKET}/{formant_spl_key}'
+    elif formant_analysis_failed:
+        placeholder_buf = create_placeholder_chart('Formant-SPL Spectrum (LPC)', 'Formant analysis failed.\nSee notes in report for details.')
+        if placeholder_buf:
+            formant_spl_key = artifact_prefix + 'formant_spl_spectrum.png'
+            s3_client.upload_fileobj(placeholder_buf, BUCKET, formant_spl_key, ExtraArgs={'ContentType': 'image/png'})
+            charts['formant_spl_spectrum'] = f's3://{BUCKET}/{formant_spl_key}'
+
+    if formant_analysis_failed:
+        metrics.setdefault('sustained', {})['formant_analysis_failed'] = True
 
     # Reading (Step 5)
     reading_keys = audio_groups.get('5', [])[:MAX_DOWNLOAD_FILES_PER_STEP]
