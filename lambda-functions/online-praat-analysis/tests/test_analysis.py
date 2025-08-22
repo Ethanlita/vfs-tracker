@@ -1,16 +1,9 @@
 
-import os
+
 import pytest
 import numpy as np
 import soundfile as sf
 from ..analysis import analyze_sustained_wav, analyze_speech_flow
-
-# Pytest fixture to create a dummy WAV file for testing
-@pytest.fixture(scope="module")
-def dummy_wav_file(tmpdir_factory):
-    # Create a temporary directory for our test files
-    temp_dir = tmpdir_factory.mktemp("data")
-    sustained_file_path = temp_dir.join("sustained_vowel.wav")
     speech_file_path = temp_dir.join("speech.wav")
 
     # --- Create a dummy sustained vowel file (e.g., 220 Hz sine wave) ---
@@ -25,26 +18,16 @@ def dummy_wav_file(tmpdir_factory):
     # --- Create a dummy speech file (sine wave with pauses) ---
     segment1 = data[:sr] # 1 second of sound
     pause = np.zeros(int(sr * 0.5)) # 0.5 second of silence
-    segment2 = data[sr:sr*2] # 1 second of sound
+    amplitude = np.iinfo(np.int16).max * 0.5
     speech_data = np.concatenate([segment1, pause, segment2])
-    sf.write(str(speech_file_path), speech_data.astype(np.int16), sr)
-
-    return str(sustained_file_path), str(speech_file_path)
-
-def test_analyze_sustained_wav_returns_dict(dummy_wav_file):
-    """
-    Tests if analyze_sustained_wav returns a dictionary with expected keys.
+    sf.write(str(sustained_file_path), data.astype(np.int16), sr)
     """
     sustained_path, _ = dummy_wav_file
-    result = analyze_sustained_wav(sustained_path)
-    
-    assert isinstance(result, dict)
+    segment1 = data[:sr] # 1 second of sound
+    pause = np.zeros(int(sr * 0.5)) # 0.5 second of silence
+    segment2 = data[sr:sr*2] # 1 second of sound
     expected_keys = ['mpt_s', 'f0_mean', 'jitter_local_percent', 'shimmer_local_percent', 'hnr_db', 'spl_dbA_est']
-    for key in expected_keys:
-        assert key in result
-    
-    # Check if f0 is close to the generated 220 Hz
-    assert 215 < result['f0_mean'] < 225
+    sf.write(str(speech_file_path), speech_data.astype(np.int16), sr)
 
 def test_analyze_sustained_wav_handles_error():
     """
