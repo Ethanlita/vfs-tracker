@@ -5,7 +5,6 @@ librosa
 soundfile
 webrtcvad
 soundfile
-webrtcvad
 matplotlib
 praat-parselmouth
 reportlab
