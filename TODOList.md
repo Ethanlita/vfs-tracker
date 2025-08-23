@@ -7,9 +7,9 @@
 2. # 更改以下后端API：
     1. ~~~用于PublicDashboard的all-events API不返回姓名不公开的用户的名字（以“（非公开）”替代）（已解决）~~~
 3. # 做好online praat
-   1. 详细要求参照online_praat_plan.md
-   2. 细化设计参照online_praat_detailed_plan.md
-   3. 开发计划参照online_praat_development_plan.md
+   1. ~~~详细要求参照online_praat_plan.md（已解决）~~
+   2. ~~~细化设计参照online_praat_detailed_plan.md（已解决）~~
+   3. ~~~开发计划参照online_praat_development_plan.md（已解决）~~~
 4. # 增加图表
     1. ~~~图表增加非仅训练的数据图表（以第一次训练为第0天对齐对齐）（已解决）~~
     2. ~~~图表增加增加无VFS、无训练的图表（以第一次事件为第0天对齐）（已解决）~~
@@ -44,3 +44,4 @@
 26. ~~~Gemini自动审核有问题，Cloudwatch log见多模态上传失败（已完成）~~~
 27. （远期）增加一个定期运行的，删除S3中没有被事件引用的附件的Lambda
 28. Gemini鼓励语的修复，并且为其加入知识库。
+29. 退出登录后登录其他账户，页面上方的头像和nickname仍是之前登录的用户的
