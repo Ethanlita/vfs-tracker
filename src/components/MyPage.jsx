@@ -116,7 +116,7 @@ const MyPage = () => {
       </div>
 
       {/* 操作按钮组 */}
-      <div className="flex flex-col sm:flex-row gap-4 mb-8 justify-center">
+      <div className="flex flex-wrap gap-4 mb-8 justify-center">
         <button
           onClick={handleNavigateToAddEvent}
           className="bg-gradient-to-r from-pink-500 to-purple-600 text-white px-6 py-3 rounded-lg font-semibold shadow-lg hover:from-pink-600 hover:to-purple-700 transition-all duration-300 transform hover:scale-105"
@@ -134,6 +134,12 @@ const MyPage = () => {
           className="bg-gradient-to-r from-purple-500 to-pink-600 text-white px-6 py-3 rounded-lg font-semibold shadow-lg hover:from-purple-600 hover:to-pink-700 transition-all duration-300 transform hover:scale-105"
         >
           👤 管理资料
+        </button>
+        <button
+          onClick={() => navigate('/voice-test')}
+          className="bg-gradient-to-r from-green-500 to-cyan-600 text-white px-6 py-3 rounded-lg font-semibold shadow-lg hover:from-green-600 hover:to-cyan-700 transition-all duration-300 transform hover:scale-105"
+        >
+          🎤 启动嗓音测试
         </button>
       </div>
 

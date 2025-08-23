@@ -2,8 +2,8 @@
 
 **API Base URL**: `https://2rzxc2x5l8.execute-api.us-east-1.amazonaws.com/dev`
 
-**Version**: 1.1  
-**Last Updated**: August 18, 2025
+**Version**: 1.2
+**Last Updated**: August 19, 2025
 
 ---
 
@@ -476,6 +476,155 @@ Content-Type: application/json
 
 ---
 
+## Online Praat / Voice Test Endpoints
+
+This set of endpoints manages the multi-step voice analysis test feature.
+
+### POST /sessions
+
+**Description**: Initiates a new voice test session and returns a unique session ID. This is the first step for a user starting a new voice test.
+
+**Authentication**: Required (Cognito JWT)
+
+**Request Body**: (Empty)
+
+**Response (201 Created)**:
+```json
+{
+  "sessionId": "a1b2c3d4-e5f6-7890-1234-567890abcdef"
+}
+```
+
+**HTTP Status Codes**:
+- `201 Created`: Session created successfully.
+- `401 Unauthorized`: Missing or invalid JWT token.
+- `500 Internal Server Error`: Server error.
+
+---
+
+### POST /uploads
+
+**Description**: Gets a pre-signed S3 URL for uploading a single audio file corresponding to a specific step in the voice test wizard.
+
+**Authentication**: Required (Cognito JWT)
+
+**Request Body**:
+```json
+{
+  "sessionId": "string",
+  "step": "string (e.g., \"calibration\", \"mpt\")",
+  "fileName": "string",
+  "contentType": "audio/wav"
+}
+```
+
+**Response (200 OK)**:
+```json
+{
+  "putUrl": "https://your-bucket.s3.amazonaws.com/voice-tests/.../1_1.wav?AWSAccessKeyId=...&Signature=...&Expires=...",
+  "objectKey": "voice-tests/us-east-1:123.../a1b2c3d4.../raw/1_1.wav"
+}
+```
+
+**HTTP Status Codes**:
+- `200 OK`: Success.
+- `400 Bad Request`: Missing required fields.
+- `401 Unauthorized`: Missing or invalid JWT token.
+- `500 Internal Server Error`: Server error.
+
+---
+
+### POST /analyze
+
+**Description**: Submits a completed voice test session for asynchronous analysis. This triggers the backend Lambda function to process all uploaded audio files for the session.
+
+**Authentication**: Required (Cognito JWT)
+
+**Request Body**:
+```json
+{
+  "sessionId": "a1b2c3d4-e5f6-7890-1234-567890abcdef"
+}
+```
+
+**Response (202 Accepted)**:
+```json
+{
+  "status": "queued",
+  "sessionId": "a1b2c3d4-e5f6-7890-1234-567890abcdef"
+}
+```
+
+**HTTP Status Codes**:
+- `202 Accepted`: The analysis request has been successfully queued.
+- `400 Bad Request`: Invalid request format or data.
+- `401 Unauthorized`: Missing or invalid JWT token.
+- `500 Internal Server Error`: Server error.
+
+---
+
+### GET /results/{sessionId}
+
+**Description**: Polls for and retrieves the results of a voice test analysis. The client should call this endpoint periodically after a session has been submitted for analysis.
+
+**Authentication**: Required (Cognito JWT)
+
+**Parameters**:
+- `sessionId` (path): The unique ID of the voice test session.
+
+**Response Format (while processing)**:
+```json
+{
+  "status": "processing"
+}
+```
+
+**Response Format (when complete)**:
+```json
+{
+  "status": "done",
+  "metrics": {
+    "sustained": {
+      "spl_dbA": 76.8,
+      "f0_mean": 290,
+      "f0_sd": 15.2,
+      "jitter_local_percent": 1.04,
+      "shimmer_local_percent": 4.52,
+      "hnr_db": 20.0,
+      "mpt_s": 11.8,
+      "formants": { "F1": 550, "F2": 1500, "F3": 2500 }
+    },
+    "vrp": {
+      "f0_min": 90,
+      "f0_max": 596,
+      "spl_min": 57,
+      "spl_max": 91
+    }
+  },
+  "charts": {
+    "timeSeries": "s3://your-bucket/voice-tests/.../artifacts/timeSeries.png",
+    "vrp": "s3://your-bucket/voice-tests/.../artifacts/vrp.png"
+  },
+  "reportPdf": "s3://your-bucket/voice-tests/.../report.pdf"
+}
+```
+
+**Response Format (if failed)**:
+```json
+{
+  "status": "failed",
+  "error": "Analysis pipeline failed for session..."
+}
+```
+
+**HTTP Status Codes**:
+- `200 OK`: Success (status is `processing`, `done`, or `failed`).
+- `401 Unauthorized`: Missing or invalid JWT token.
+- `404 Not Found`: Session with the given ID not found.
+- `500 Internal Server Error`: Server error.
+
+---
+
 ## 文件管理端点 (S3预签名URL)
 
 ### POST /upload-url
@@ -618,5 +767,6 @@ uploads/{userId}/           # 通用上传文件
 ---
 
 ## Change Log
+- 1.2: Added Online Praat / Voice Test endpoints (/sessions, /uploads, /analyze, /results).
 - 1.1: Added multi-attachment support; documented private `attachments` field visibility rules.
 - 1.0: Initial version.
