@@ -455,32 +455,58 @@ def create_pdf_report(session_id, metrics, chart_urls, userInfo=None):
             ('formant_spl_spectrum', 'Formant-SPL Spectrum (LPC) / 共振峰-声压谱（LPC）')
         ]
 
+        # 缺失图表时的占位提示
+        missing_reason = {
+            'timeSeries': 'Chart unavailable.',
+            'vrp': 'VRP data unavailable.',
+            'formant': 'Formant analysis failed or unavailable.',
+            'formant_spl_spectrum': 'Spectrum analysis failed or unavailable.'
+        }
+
         for key_name, title in chart_order:
             url = chart_urls.get(key_name)
-            if not url:
-                continue
-            bkt, obj_key = parse_s3_url(url)
+            bkt, obj_key = parse_s3_url(url) if url else (None, None)
+            story.append(PageBreak())
+            story.append(Paragraph(title, h1_style))
+            story.append(Spacer(1, 6))
             if not bkt:
+                # 无URL则直接占位
+                ph_buf = create_placeholder_chart(title.split(' / ')[0], missing_reason.get(key_name, 'Chart unavailable.'))
+                if ph_buf:
+                    img = RLImage(ph_buf)
+                    img.hAlign = 'CENTER'
+                    iw, ih = img.imageWidth, img.imageHeight
+                    max_w, max_h = doc.width, doc.height - 1.2 * inch
+                    scale = min(max_w/iw, max_h/ih, 1.0)
+                    img.drawWidth, img.drawHeight = iw * scale, ih * scale
+                    story.append(img)
+                else:
+                    story.append(Paragraph('Placeholder unavailable.', small_style))
                 continue
             try:
                 obj = s3.get_object(Bucket=bkt, Key=obj_key)
                 data = obj['Body'].read()
-                # 创建图片并按页宽限制缩放
                 img = RLImage(BytesIO(data))
                 img.hAlign = 'CENTER'
                 iw, ih = img.imageWidth, img.imageHeight
                 max_w, max_h = doc.width, doc.height - 1.2 * inch
                 scale = min(max_w/iw, max_h/ih, 1.0)
                 img.drawWidth, img.drawHeight = iw * scale, ih * scale
-                story.append(PageBreak())
-                story.append(Paragraph(title, h1_style))
-                story.append(Spacer(1, 6))
                 story.append(img)
             except Exception as e:
                 logger.error(f"Failed embedding chart {key_name}: {e}")
-                story.append(PageBreak())
-                story.append(Paragraph(title, h1_style))
-                story.append(Paragraph(f"Failed to embed image. URL: {url}", small_style))
+                # 获取失败时也用占位图
+                ph_buf = create_placeholder_chart(title.split(' / ')[0], missing_reason.get(key_name, 'Chart unavailable.'))
+                if ph_buf:
+                    img = RLImage(ph_buf)
+                    img.hAlign = 'CENTER'
+                    iw, ih = img.imageWidth, img.imageHeight
+                    max_w, max_h = doc.width, doc.height - 1.2 * inch
+                    scale = min(max_w/iw, max_h/ih, 1.0)
+                    img.drawWidth, img.drawHeight = iw * scale, ih * scale
+                    story.append(img)
+                else:
+                    story.append(Paragraph(f"Failed to embed image. URL: {url}", small_style))
 
         # 构建 PDF
         doc.build(story, onFirstPage=on_page, onLaterPages=on_page)

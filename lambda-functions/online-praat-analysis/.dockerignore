@@ -1,0 +1,26 @@
+# IDE and editor specific files
+.idea/
+.vscode/
+*.iml
+
+# Python specific files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+
+# Build artifacts
+dist/
+build/
+*.egg-info/
+
+# Test files
+tests/
+
+# Local scripts and configurations
+push-image.ps1
+README.md
+

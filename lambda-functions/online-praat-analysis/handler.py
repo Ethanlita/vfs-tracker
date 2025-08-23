@@ -120,7 +120,7 @@ def perform_full_analysis(session_id: str, calibration: dict = None, forms: dict
     from artifacts import create_time_series_chart, create_vrp_chart, create_pdf_report, create_formant_chart, create_formant_spl_chart, create_placeholder_chart
 
     audio_groups = list_session_audio_keys(session_id)
-    logger.info(f'perform_full_analysis: Audio groups found: {{ { {k:len(v) for k,v in audio_groups.items()} } }}')
+    logger.info(f'perform_full_analysis: Audio groups found: { {k:len(v) for k,v in audio_groups.items()} }')
 
     metrics = {}
     charts = {}
@@ -181,8 +181,10 @@ def perform_full_analysis(session_id: str, calibration: dict = None, forms: dict
             formant_spl_key = artifact_prefix + 'formant_spl_spectrum.png'
             s3_client.upload_fileobj(formant_spl_buf, BUCKET, formant_spl_key, ExtraArgs={'ContentType': 'image/png'})
             charts['formant_spl_spectrum'] = f's3://{BUCKET}/{formant_spl_key}'
-    elif formant_analysis_failed:
-        placeholder_buf = create_placeholder_chart('Formant-SPL Spectrum (LPC)', 'Formant analysis failed.\nSee notes in report for details.')
+    else:
+        # 无频谱数据时也必须生成占位图，避免PDF缺失该图表
+        reason_msg = 'Formant analysis failed.\nSee notes in report for details.' if formant_analysis_failed else '共振峰分析失败了。可能的原因包括：1. 发声问题：气声过重、声门不稳或发音不清晰，会让共振峰模糊。2. 个体特征：儿童、高音女声或极低音男声的共振峰频率分布特殊，容易超出软件默认参数范围。3.  病理因素：声带小结、麻痹等嗓音疾病，会使信号失真。4. 录音条件差：背景噪音、设备采样率不足、麦克风质量不佳。'
+        placeholder_buf = create_placeholder_chart('Formant-SPL Spectrum (LPC)', reason_msg)
         if placeholder_buf:
             formant_spl_key = artifact_prefix + 'formant_spl_spectrum.png'
             s3_client.upload_fileobj(placeholder_buf, BUCKET, formant_spl_key, ExtraArgs={'ContentType': 'image/png'})
@@ -413,14 +415,50 @@ def handle_analyze_task(event):
             try:
                 event_id = str(uuid.uuid4())
                 now_iso = datetime.utcnow().isoformat() + 'Z'
+
+                # 从 S3 URI 中提取对象键
+                report_key = report_url.replace(f's3://{BUCKET}/', '') if report_url.startswith('s3://') else report_url
+
+                # 准备 details 对象，严格遵循文档定义的 self_test 格式
+                sustained_metrics = metrics.get('sustained', {})
+                vrp_metrics = metrics.get('vrp', {})
+
+                event_details = {
+                    'notes': 'VFS Tracker Voice Analysis Tools 自动生成报告',
+                    'appUsed': 'VFS Tracker Online Analysis',
+                    'fundamentalFrequency': sustained_metrics.get('f0_mean'),
+                    'jitter': sustained_metrics.get('jitter_local_percent'),
+                    'shimmer': sustained_metrics.get('shimmer_local_percent'),
+                    'hnr': sustained_metrics.get('hnr_db'),
+                }
+
+                # 创建嵌套的 formants 对象
+                formants_low = sustained_metrics.get('formants_low', {})
+                if formants_low:
+                    event_details['formants'] = {
+                        'f1': formants_low.get('F1'),
+                        'f2': formants_low.get('F2'),
+                        'f3': formants_low.get('F3'),
+                    }
+
+                # 创建嵌套的 pitch 对象
+                if vrp_metrics and 'error' not in vrp_metrics:
+                    event_details['pitch'] = {
+                        'max': vrp_metrics.get('f0_max'),
+                        'min': vrp_metrics.get('f0_min'),
+                    }
+
+                # 保留完整的 metrics 对象，以备将来进行更详细的分析
+                event_details['full_metrics'] = metrics
+
                 events_table.put_item(Item={
                     'userId': user_id,
                     'eventId': event_id,
-                    'type': '自我测试',
+                    'type': 'self_test',
                     'date': now_iso,
-                    'details': 'VFS Tracker Voice Analysis Tools 自动生成报告',
+                    'details': _to_dynamo(event_details),
                     'status': 'pending',
-                    'attachments': [{'fileUrl': report_url, 'fileType': 'application/pdf', 'fileName': 'voice_test_report.pdf'}],
+                    'attachments': [{'fileUrl': report_key, 'fileType': 'application/pdf', 'fileName': 'voice_test_report.pdf'}],
                     'createdAt': now_iso,
                     'updatedAt': now_iso
                 })
