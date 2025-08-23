@@ -408,6 +408,7 @@ export const AuthProvider = ({ children }) => {
   const logout = () => {
     setUser(null);
     setUserProfile(null);
+    setCognitoUserInfo(null); // 修复：退出时清除Cognito用户信息
     setNeedsProfileSetup(false);
     // 清除本地存储
     if (!ready) {
