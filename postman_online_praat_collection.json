@@ -1,0 +1,191 @@
+{
+	"info": {
+		"_postman_id": "a1b2c3d4-e5f6-4a9b-8c7d-1234567890ab",
+		"name": "VFS Tracker - Online Praat Analysis",
+		"description": "A collection for testing the Online Praat voice analysis backend endpoints.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Online Praat Analysis Flow",
+			"item": [
+				{
+					"name": "1. Create Voice Test Session",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"// This script runs after the request is sent.",
+									"// It parses the JSON response and saves the sessionId",
+									"// to a collection variable for use in subsequent requests.",
+									"var jsonData = pm.response.json();",
+									"pm.collectionVariables.set(\"sessionId\", jsonData.sessionId);",
+									"console.log(\"Session ID set to: \" + jsonData.sessionId);"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/sessions",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"sessions"
+							]
+						},
+						"description": "Initiates a new voice test session and returns a unique session ID. The `sessionId` is automatically saved to a collection variable."
+					},
+					"response": []
+				},
+				{
+					"name": "2. Get Upload URL for Audio File",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"sessionId\": \"{{sessionId}}\",\n    \"step\": \"sustained_vowel\",\n    \"fileName\": \"recording.wav\",\n    \"contentType\": \"audio/wav\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/uploads",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"uploads"
+							]
+						},
+						"description": "Gets a pre-signed S3 URL for uploading an audio file.\n\n**MANUAL STEP REQUIRED**:\n1. Copy the `putUrl` from the response.\n2. Create a new `PUT` request in Postman.\n3. Paste the `putUrl` as the request URL.\n4. In the `Body` tab, select `binary`, and choose your local `.wav` file.\n5. Send the `PUT` request. A `200 OK` response means the upload was successful."
+					},
+					"response": []
+				},
+				{
+					"name": "3. Request Analysis",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"sessionId\": \"{{sessionId}}\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/analyze",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"analyze"
+							]
+						},
+						"description": "Submits the session for backend analysis. This should be called after all required audio files have been uploaded to S3."
+					},
+					"response": []
+				},
+				{
+					"name": "4. Get Analysis Results",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{jwt_token}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/results/{{sessionId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"results",
+								"{{sessionId}}"
+							]
+						},
+						"description": "Polls for the analysis results. You may need to run this request multiple times.\n- **Initial Status**: `processing`\n- **Final Status**: `done` (with full metrics) or `failed`."
+					},
+					"response": []
+				}
+			]
+		}
+	],
+	"auth": {
+		"type": "bearer",
+		"bearer": [
+			{
+				"key": "token",
+				"value": "{{jwt_token}}",
+				"type": "string"
+			}
+		]
+	},
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "https://YOUR_API_GATEWAY_URL/dev",
+			"type": "string",
+			"description": "The base URL of your deployed API Gateway stage."
+		},
+		{
+			"key": "sessionId",
+			"value": "",
+			"type": "string",
+			"description": "This variable is automatically set by the '1. Create Voice Test Session' request."
+		},
+		{
+			"key": "jwt_token",
+			"value": "PASTE_YOUR_COGNITO_ID_TOKEN_HERE",
+			"type": "string"
+		}
+	]
+}

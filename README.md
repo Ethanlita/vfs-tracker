@@ -11,6 +11,10 @@
   - 支持事件类型：self_test、自我测试；hospital_test、医院检测；voice_training、嗓音训练；self_practice、自我练习；surgery、手术；feeling_log、感受记录
   - 文件上传（生产环境经 S3，开发环境返回模拟 Key）
   - 表单字段动态变化，严格遵循数据契约（见 docs/data_structures.md）
+- **在线嗓音测试 (Online Praat)**
+  - **新增功能**: 提供一个多步骤向导，引导用户完成一系列标准化声学测试（如：持续元音、朗读、自发音等）。
+  - **后端分析**: 使用新的 `online-praat-analysis` Lambda 函数，通过 `praat-parselmouth` 等库进行专业的声学分析。
+  - **结果生成**: 自动计算基频 (F0)、Jitter、Shimmer、HNR 等核心指标，并生成图表和 PDF 报告。
 - 个人时间轴与指标
   - 基于 Chart.js 的时间序列可视化
   - AI 鼓励消息（生产环境启用 Gemini API，否则回退为默认消息）
@@ -24,11 +28,13 @@
 ## 目录结构（摘录）
 
 - src/components
+  - **VoiceTestWizard.jsx**: 新增的在线嗓音测试向导核心组件。
   - PublicDashboard.jsx：公开仪表板，聚合全体用户匿名数据与可视化
   - EventForm.jsx：事件录入表单，支持文件上传与动态字段
   - Timeline.jsx：个人时间轴与图表展示
   - PostList.jsx / PostViewer.jsx / PostsDropdown.jsx：帖子列表与阅读
 - src/api.js：对接 AWS Amplify（API/Storage），提供开发环境回退逻辑
+- **lambda-functions/online-praat-analysis**: 新增的嗓音分析后端服务。
 - scripts/generate-posts-list.js：生成 public/posts.json
 - docs/data_structures.md：数据结构契约（禁止修改）
 
@@ -93,6 +99,7 @@
 - 后端（若启用）：
   - 需在托管平台配置上述 VITE_* 环境变量
   - AWS 侧需准备 Cognito、API Gateway、Lambda、DynamoDB、S3，并在 Amplify 配置中与之对应
+  - **新增**: `online-praat-analysis` Lambda 函数需要单独部署，详情参见其目录下的 `README.md`。
 
 ## FAQ
 
