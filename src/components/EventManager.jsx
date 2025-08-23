@@ -115,20 +115,29 @@ const EventManager = ({ events, onEventDeleted }) => { // 移除未使用参数
   }, [events]);
 
   useEffect(() => {
-    let cancelled = false;
-    if (selectedEvent?.attachments?.length > 0) {
-      (async () => {
-        const list = await resolveAttachmentLinks(selectedEvent.attachments);
-        if (!cancelled) {
-          setResolvedAtts(list);
-        }
-      })();
-    } else {
-      setResolvedAtts([]);
-    }
-    return () => {
-      cancelled = true;
+    const fetchAttachments = async () => {
+      if (selectedEvent && selectedEvent.attachments) {
+        const urls = await Promise.all(
+          selectedEvent.attachments.map(async (attachment) => {
+            if (!attachment.fileUrl) return null;
+            // 如果 fileUrl 已经是可访问的 URL，则直接使用
+            if (attachment.fileUrl.startsWith('http')) {
+              return { ...attachment, signedUrl: attachment.fileUrl };
+            }
+            // 否则，它是一个 S3 key，需要获取签名 URL
+            try {
+              const signedUrl = await getFileUrl(attachment.fileUrl);
+              return { ...attachment, signedUrl };
+            } catch (error) {
+              console.error(`获取文件 ${attachment.fileName} 的签名URL失败:`, error);
+              return { ...attachment, signedUrl: null, error: true }; // 标记错误
+            }
+          })
+        );
+        setAttachmentUrls(urls.filter(Boolean));
+      }
     };
+    fetchAttachments();
   }, [selectedEvent]);
 
   const handleEventClick = (event) => {
@@ -150,7 +159,7 @@ const EventManager = ({ events, onEventDeleted }) => { // 移除未使用参数
         onEventDeleted(eventId);
       }
 
-      // 关闭详情弹窗
+      // 关���详情弹窗
       setShowDetails(false);
 
       // 提示用户成功

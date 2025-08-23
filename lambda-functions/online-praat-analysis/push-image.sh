@@ -18,9 +18,9 @@ FULL_IMAGE_NAME="${ECR_REPO_URI}/${IMAGE_NAME}:latest"
 echo "Step 1: Authenticating to AWS ECR..."
 aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$ECR_REPO_URI"
 
-# Step 2: Build the Docker image with Docker BuildKit DISABLED for Lambda compatibility.
-echo "Step 2: Building Docker image..."
-DOCKER_BUILDKIT=0 docker build -t "$IMAGE_NAME" .
+# Step 2: Build the Docker image for linux/arm64 architecture.
+echo "Step 2: Building Docker image for linux/arm64..."
+docker build --platform linux/arm64 -t "$IMAGE_NAME" .
 
 # Step 3: Tag the local image with the ECR repository URI.
 echo "Step 3: Tagging image as $FULL_IMAGE_NAME"
