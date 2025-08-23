@@ -4,8 +4,14 @@ import pytest
 import numpy as np
 import soundfile as sf
 from ..analysis import analyze_sustained_wav, analyze_speech_flow
-    speech_file_path = temp_dir.join("speech.wav")
 
+import tempfile
+import os
+
+@pytest.fixture
+def dummy_wav_file(tmp_path):
+    sustained_file_path = tmp_path / "sustained.wav"
+    speech_file_path = tmp_path / "speech.wav"
     # --- Create a dummy sustained vowel file (e.g., 220 Hz sine wave) ---
     sr = 44100  # Sample rate
     duration = 3  # seconds
