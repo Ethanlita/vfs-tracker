@@ -278,7 +278,7 @@ const EventForm = ({ onEventAdded }) => {
               <div className="ml-3">
                 <p className="font-semibold text-indigo-800">请上传您的医院报告（附件）</p>
                   <p className="text-sm text-indigo-700 mt-1">
-                      为确保数据准确性，<span className="font-bold">Gemini AI</span> 将会自动审核您上传的报告内容。请确保报告清晰可读，包含所有相关页面（如正反面）。全过程没有人工干预，不会有人看到您的报告。
+                      为确保数据准确性，<span className="font-bold">Gemini AI</span> 将会基于附件中的报告自动核对您输入的数据是否正确。请确保报告清晰可读，包含所有相关页面（如正反面）。全过程没有人工干预，不会有人看到您的报告。
                       <br />
                       <span className="font-semibold">提示：</span>出于隐私保护的考虑，您可以选择遮挡住您的个人识别信息，这不会影响判断。
                   </p>
