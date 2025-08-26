@@ -209,7 +209,7 @@ def analyze_note_file(path, f0min=75, f0max=1200):
 
 def get_lpc_spectrum(file_path: str):
     """
-    Analyzes a sound file to get its LPC spectrum.
+    Analyzes a sound file to get its LPC spectrum using correct Parselmouth API.
 
     Args:
         file_path (str): The local path to the .wav file.
@@ -219,16 +219,43 @@ def get_lpc_spectrum(file_path: str):
     """
     logger.info(f"Getting LPC spectrum for {file_path}")
     try:
+        from parselmouth.praat import call
+        
         sound = parselmouth.Sound(file_path)
-        mid_start = sound.get_total_duration() * 0.33
-        mid_end = sound.get_total_duration() * 0.66
+        total_duration = sound.get_total_duration()
+        
+        # Use middle segment for more stable analysis
+        mid_start = total_duration * 0.33
+        mid_end = total_duration * 0.66
         segment = sound.extract_part(from_time=mid_start, to_time=mid_end, preserve_times=False)
         
-        lpc = segment.to_lpc_burg(time_step=0.01, max_formant=5500)
-        spectrum = lpc.to_spectrum(maximum_frequency=5500)
+        # Create LPC object using correct Parselmouth API
+        # Parameters: prediction_order, window_length, time_step, pre_emphasis_frequency
+        lpc = call(segment, "To LPC (burg)", 16, 0.025, 0.005, 50.0)
         
+        # Convert LPC to spectrum using slice method
+        # Parameters: time, maximum_frequency, bandwidth, de_emphasis_frequency  
+        segment_duration = segment.get_total_duration()
+        analysis_time = segment_duration / 2  # Middle of the segment
+        spectrum = call(lpc, "To Spectrum (slice)", analysis_time, 5500, 20, 50.0)
+        
+        # Extract frequency and amplitude data
         frequencies = spectrum.xs()
-        spl_values = spectrum.values.T[0]
+        values = spectrum.values
+        
+        # Convert to power spectrum (dB scale)
+        # The values array is 2D: (2, n_frequencies) where first row is real, second is imaginary
+        # For power spectrum, we want the magnitude: sqrt(real^2 + imag^2)
+        if values.shape[0] >= 2:
+            real_part = values[0, :]  # Real part (first row)
+            imag_part = values[1, :]  # Imaginary part (second row)
+            magnitude = np.sqrt(real_part**2 + imag_part**2)
+        else:
+            # Fallback to real part only if only one row
+            magnitude = np.abs(values[0, :])
+        
+        # Convert to dB scale (20*log10 for amplitude)
+        spl_values = 20 * np.log10(magnitude + 1e-12)  # Add small value to avoid log(0)
 
         return {
             "frequencies": frequencies.tolist(),
