@@ -29,6 +29,7 @@ logger.setLevel(logging.INFO)
 _CJK_FONT_NAME = 'NotoSansSC'
 _FALLBACK_FONT_NAME = 'Helvetica'
 _CJK_FONT_REGISTERED = False
+_MATPLOTLIB_FONT_PROP = None
 
 # 假设字体文件与此脚本位于同一目录或Lambda层中
 # 在部署时，确保 'NotoSansSC-Regular.ttf' 文件存在
@@ -51,11 +52,26 @@ try:
         # 为 ReportLab 注册字体
         pdfmetrics.registerFont(TTFont(_CJK_FONT_NAME, font_path))
         
-        # 为 Matplotlib 注册字体
-        fm.fontManager.addfont(font_path)
-        plt.rcParams['font.family'] = 'sans-serif'
-        plt.rcParams['font.sans-serif'] = [_CJK_FONT_NAME, 'sans-serif']
-        plt.rcParams['axes.unicode_minus'] = False  # 正确显示负号
+        # 为 Matplotlib 创建字体属性对象 - 更可靠的方法
+        _MATPLOTLIB_FONT_PROP = fm.FontProperties(fname=font_path)
+        
+        # 尝试注册字体到matplotlib字体管理器
+        try:
+            fm.fontManager.addfont(font_path)
+            
+            # 设置 matplotlib 使用中文字体
+            plt.rcParams['font.family'] = ['sans-serif']
+            plt.rcParams['font.sans-serif'] = [_CJK_FONT_NAME] + plt.rcParams['font.sans-serif']
+            plt.rcParams['axes.unicode_minus'] = False  # 正确显示负号
+            
+            # 清除matplotlib字体缓存以确保新字体被识别
+            try:
+                fm._get_font.cache_clear()
+            except AttributeError:
+                pass  # 在较老版本的matplotlib中可能不存在
+                
+        except Exception as matplotlib_error:
+            logger.warning(f"Matplotlib font registration failed: {matplotlib_error}. Will use FontProperties fallback.")
         
         _CJK_FONT_REGISTERED = True
         _FONT = _CJK_FONT_NAME
@@ -73,8 +89,44 @@ def create_placeholder_chart(title: str, message: str):
     logger.info(f"Creating placeholder chart: {title}")
     try:
         fig, ax = plt.subplots(figsize=(10, 6))
-        ax.text(0.5, 0.5, message, ha='center', va='center', fontsize=12, color='gray', wrap=True)
-        ax.set_title(title)
+        
+        # Use Chinese font if available for the message
+        text_kwargs = {}
+        title_kwargs = {}
+        
+        if _CJK_FONT_REGISTERED and _MATPLOTLIB_FONT_PROP:
+            # Use FontProperties object for better Chinese text support
+            text_kwargs['fontproperties'] = _MATPLOTLIB_FONT_PROP
+            title_kwargs['fontproperties'] = _MATPLOTLIB_FONT_PROP
+        elif _CJK_FONT_REGISTERED:
+            # Fallback to font family name
+            text_kwargs['fontfamily'] = _CJK_FONT_NAME
+            title_kwargs['fontfamily'] = _CJK_FONT_NAME
+        
+        # Split long messages into multiple lines for better display
+        lines = []
+        max_line_length = 60  # Adjust based on your needs
+        words = message.split()
+        current_line = ""
+        
+        for word in words:
+            if len(current_line + " " + word) <= max_line_length:
+                current_line += (" " + word) if current_line else word
+            else:
+                if current_line:
+                    lines.append(current_line)
+                current_line = word
+        
+        if current_line:
+            lines.append(current_line)
+        
+        # Display multi-line message
+        message_text = "\n".join(lines)
+        ax.text(0.5, 0.5, message_text, ha='center', va='center', 
+                fontsize=10, color='gray', wrap=True, **text_kwargs)
+        
+        # Set title with appropriate font
+        ax.set_title(title, **title_kwargs)
         ax.set_xticks([])
         ax.set_yticks([])
         ax.spines['top'].set_visible(False)
@@ -82,8 +134,9 @@ def create_placeholder_chart(title: str, message: str):
         ax.spines['bottom'].set_visible(False)
         ax.spines['left'].set_visible(False)
         fig.tight_layout()
+        
         buf = BytesIO()
-        plt.savefig(buf, format='png')
+        plt.savefig(buf, format='png', dpi=150, bbox_inches='tight')
         buf.seek(0)
         plt.close(fig)
         return buf
@@ -231,23 +284,38 @@ def create_formant_spl_chart(spectrum_low, spectrum_high):
 
         # Plot spectrum for the lowest note
         if spectrum_low and 'frequencies' in spectrum_low and 'spl_values' in spectrum_low:
-            ax.plot(spectrum_low['frequencies'], spectrum_low['spl_values'], color='blue', label='Lowest Note Spectrum')
+            frequencies = spectrum_low['frequencies']
+            spl_values = spectrum_low['spl_values']
+            if len(frequencies) == len(spl_values):
+                ax.plot(frequencies, spl_values, color='blue', label='Lowest Note Spectrum', linewidth=2)
+            else:
+                logger.warning(f"Low spectrum dimension mismatch: freq={len(frequencies)}, spl={len(spl_values)}")
 
         # Plot spectrum for the highest note
         if spectrum_high and 'frequencies' in spectrum_high and 'spl_values' in spectrum_high:
-            ax.plot(spectrum_high['frequencies'], spectrum_high['spl_values'], color='red', label='Highest Note Spectrum')
+            frequencies = spectrum_high['frequencies']
+            spl_values = spectrum_high['spl_values']
+            if len(frequencies) == len(spl_values):
+                ax.plot(frequencies, spl_values, color='red', label='Highest Note Spectrum', linewidth=2)
+            else:
+                logger.warning(f"High spectrum dimension mismatch: freq={len(frequencies)}, spl={len(spl_values)}")
 
         ax.set_xlabel('Frequency (Hz)')
         ax.set_ylabel('SPL (dB)')
         ax.set_title('Formant-SPL Spectrum (LPC)')
         ax.xaxis.set_major_formatter(ScalarFormatter()) # Disable scientific notation
         ax.grid(True, linestyle='--', alpha=0.6)
-        ax.legend()
+        
+        # Only add legend if there are labeled lines
+        handles, labels = ax.get_legend_handles_labels()
+        if handles:
+            ax.legend()
+            
         ax.set_xlim(0, 5500)
 
         buf = BytesIO()
         plt.tight_layout()
-        plt.savefig(buf, format='png')
+        plt.savefig(buf, format='png', dpi=150, bbox_inches='tight')
         buf.seek(0)
         plt.close(fig)
         return buf
