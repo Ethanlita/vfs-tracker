@@ -18,18 +18,54 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_CENTER, TA_LEFT
 from reportlab.lib import colors
 from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.cidfonts import UnicodeCIDFont
+from reportlab.pdfbase.ttfonts import TTFont
+import os
+import matplotlib.font_manager as fm
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
-# 注册支持中文的字体（无需外部 TTF）
+# --- Font Configuration ---
+_CJK_FONT_NAME = 'NotoSansSC'
+_FALLBACK_FONT_NAME = 'Helvetica'
+_CJK_FONT_REGISTERED = False
+
+# 假设字体文件与此脚本位于同一目录或Lambda层中
+# 在部署时，确保 'NotoSansSC-Regular.ttf' 文件存在
+font_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'NotoSansSC-Regular.ttf')
+
+if not os.path.exists(font_path):
+    # 如果在当前目录找不到，尝试在根目录或通用字体目录查找
+    # 这是为了适应不同的Lambda部署结构
+    possible_paths = [
+        '/var/task/NotoSansSC-Regular.ttf',
+        os.path.join(os.path.dirname(__file__), 'NotoSansSC-Regular.ttf')
+    ]
+    for p in possible_paths:
+        if os.path.exists(p):
+            font_path = p
+            break
+
 try:
-    pdfmetrics.registerFont(UnicodeCIDFont('STSong-Light'))  # 简体中文支持
-    _CJK_FONT = 'STSong-Light'
-except Exception:
-    # 回退（仍可工作，但中文可能无法正确显示）
-    _CJK_FONT = 'Helvetica'
+    if os.path.exists(font_path):
+        # 为 ReportLab 注册字体
+        pdfmetrics.registerFont(TTFont(_CJK_FONT_NAME, font_path))
+        
+        # 为 Matplotlib 注册字体
+        fm.fontManager.addfont(font_path)
+        plt.rcParams['font.family'] = 'sans-serif'
+        plt.rcParams['font.sans-serif'] = [_CJK_FONT_NAME, 'sans-serif']
+        plt.rcParams['axes.unicode_minus'] = False  # 正确显示负号
+        
+        _CJK_FONT_REGISTERED = True
+        _FONT = _CJK_FONT_NAME
+        logger.info(f"Successfully registered CJK font '{_CJK_FONT_NAME}' from path: {font_path}")
+    else:
+        _FONT = _FALLBACK_FONT_NAME
+        logger.warning(f"Font file not found at expected paths. Using fallback font '{_FONT}'. CJK characters may not render.")
+except Exception as e:
+    _FONT = _FALLBACK_FONT_NAME
+    logger.error(f"Failed to register font. Error: {e}. Using fallback font '{_FONT}'.")
 
 
 def create_placeholder_chart(title: str, message: str):
@@ -254,25 +290,25 @@ def create_pdf_report(session_id, metrics, chart_urls, userInfo=None):
             'TitleCnEn',
             parent=styles['Title'],
             alignment=TA_CENTER,
-            fontName=_CJK_FONT,
+            fontName=_FONT,
             fontSize=20,
             leading=24,
             spaceAfter=6,
         )
         subtitle_style = ParagraphStyle(
-            'Subtitle', parent=styles['Normal'], alignment=TA_CENTER, fontName=_CJK_FONT, fontSize=10, leading=14
+            'Subtitle', parent=styles['Normal'], alignment=TA_CENTER, fontName=_FONT, fontSize=10, leading=14
         )
         h1_style = ParagraphStyle(
-            'H1', parent=styles['Heading1'], fontName=_CJK_FONT, fontSize=14, leading=18, spaceBefore=6, spaceAfter=4
+            'H1', parent=styles['Heading1'], fontName=_FONT, fontSize=14, leading=18, spaceBefore=6, spaceAfter=4
         )
         h2_style = ParagraphStyle(
-            'H2', parent=styles['Heading2'], fontName=_CJK_FONT, fontSize=12, leading=16, spaceBefore=4, spaceAfter=2
+            'H2', parent=styles['Heading2'], fontName=_FONT, fontSize=12, leading=16, spaceBefore=4, spaceAfter=2
         )
         text_style = ParagraphStyle(
-            'Body', parent=styles['Normal'], fontName=_CJK_FONT, fontSize=10, leading=14
+            'Body', parent=styles['Normal'], fontName=_FONT, fontSize=10, leading=14
         )
         small_style = ParagraphStyle(
-            'Small', parent=styles['Normal'], fontName=_CJK_FONT, fontSize=8, leading=11, textColor=colors.grey
+            'Small', parent=styles['Normal'], fontName=_FONT, fontSize=8, leading=11, textColor=colors.grey
         )
 
         def on_page(canv, _doc):
@@ -302,7 +338,7 @@ def create_pdf_report(session_id, metrics, chart_urls, userInfo=None):
         ])
         info_tbl = Table(info_rows, colWidths=[1.6*inch, None])
         info_tbl.setStyle(TableStyle([
-            ('FONT', (0,0), (-1,-1), _CJK_FONT, 10),
+            ('FONT', (0,0), (-1,-1), _FONT, 10),
             ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
             ('ALIGN', (0,0), (0,-1), 'RIGHT'),
             ('LINEBELOW', (0,-1), (-1,-1), 0.25, colors.lightgrey),
@@ -376,7 +412,7 @@ def create_pdf_report(session_id, metrics, chart_urls, userInfo=None):
                 return
             tbl = Table(rows, colWidths=[3.0*inch, None], hAlign='LEFT')
             tbl.setStyle(TableStyle([
-                ('FONT', (0,0), (-1,-1), _CJK_FONT, 10),
+                ('FONT', (0,0), (-1,-1), _FONT, 10),
                 ('VALIGN', (0,0), (-1,-1), 'TOP'),
                 ('ROWSPACING', (0,0), (-1,-1), 2),
                 ('LINEBELOW', (0,0), (-1,-1), 0.1, colors.whitesmoke),
@@ -432,7 +468,7 @@ def create_pdf_report(session_id, metrics, chart_urls, userInfo=None):
                     rows.append([Paragraph(key, text_style), Paragraph(_fmt(value), text_style)])
             qt = Table(rows, colWidths=[2.5*inch, None])
             qt.setStyle(TableStyle([
-                ('FONT', (0,0), (-1,-1), _CJK_FONT, 10),
+                ('FONT', (0,0), (-1,-1), _FONT, 10),
                 ('VALIGN', (0,0), (-1,-1), 'TOP'),
                 ('ROWSPACING', (0,0), (-1,-1), 2),
                 ('LINEBELOW', (0,0), (-1,-1), 0.1, colors.whitesmoke),

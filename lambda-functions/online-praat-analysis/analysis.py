@@ -56,33 +56,43 @@ def analyze_sustained_wav(file_path, f0min=75, f0max=600):
         return None
 
 def analyze_speech_flow(file_path, f0min=75, f0max=600):
-    """分析朗读/自由说话音频，输出时长、发声占比、停顿数及 F0 统计。失败返回 None。"""
+    """
+    分析朗读/自由说话音频，输出时长、发声占比、停顿数及 F0 统计。
+    新增：增加返回 f0_mean 和 f0_sd。
+    失败返回 None。
+    """
     logger.info(f"Analyzing speech flow at {file_path} with F0 range {f0min}-{f0max} Hz")
     try:
         sound = parselmouth.Sound(file_path)
         pitch = sound.to_pitch(pitch_floor=f0min, pitch_ceiling=f0max)
         f0_values_all = pitch.selected_array['frequency']
-        f0_values = f0_values_all[(f0_values_all>0) & np.isfinite(f0_values_all)]
+        f0_values = f0_values_all[(f0_values_all > 0) & np.isfinite(f0_values_all)]
 
         if f0_values.size:
+            f0_mean = float(np.mean(f0_values))
+            f0_sd = float(np.std(f0_values))
             f0_stats = {
                 'p10': round(float(np.percentile(f0_values, 10)), 2),
                 'median': round(float(np.median(f0_values)), 2),
                 'p90': round(float(np.percentile(f0_values, 90)), 2)
             }
         else:
-            f0_stats = {'p10':0, 'median':0, 'p90':0}
+            f0_mean = 0.0
+            f0_sd = 0.0
+            f0_stats = {'p10': 0, 'median': 0, 'p90': 0}
 
         y, sr = librosa.load(file_path, sr=None)
         duration_s = librosa.get_duration(y=y, sr=sr)
-        voiced_ratio = (len(f0_values)/len(pitch.xs())) if len(pitch.xs())>0 else 0
+        voiced_ratio = (len(f0_values) / len(pitch.xs())) if len(pitch.xs()) > 0 else 0
         non_silent = librosa.effects.split(y, top_db=40)
-        pause_count = len(non_silent)-1 if len(non_silent)>0 else 0
+        pause_count = len(non_silent) - 1 if len(non_silent) > 0 else 0
 
         metrics = {
-            'duration_s': round(float(duration_s),2),
-            'voiced_ratio': round(float(voiced_ratio),2),
+            'duration_s': round(float(duration_s), 2),
+            'voiced_ratio': round(float(voiced_ratio), 2),
             'pause_count': int(pause_count),
+            'f0_mean': round(f0_mean, 2),
+            'f0_sd': round(f0_sd, 2),
             'f0_stats': f0_stats
         }
         logger.info(f"Speech flow analysis successful for {file_path}: {metrics}")

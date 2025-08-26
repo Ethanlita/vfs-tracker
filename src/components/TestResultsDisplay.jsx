@@ -76,6 +76,7 @@ const TestResultsDisplay = ({ results }) => {
   }
 
   const sustained = metrics.sustained || {};
+  const spontaneous = metrics.spontaneous || {}; // 新增：获取自发语音数据
   const vrp = metrics.vrp || {};
   const questionnaires = metrics.questionnaires || {};
   const isPdfReady = !!resolvedUrls.reportPdf;
@@ -86,7 +87,8 @@ const TestResultsDisplay = ({ results }) => {
 
       <Section title="主要声学指标">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <MetricCard title="平均基频 (F0)" value={sustained.f0_mean?.toFixed(1)} unit="Hz" />
+          {/* 修正：基频数据源来自 spontaneous 对象 */}
+          <MetricCard title="平均基频 (F0)" value={spontaneous.f0_mean?.toFixed(1)} unit="Hz" />
           <MetricCard title="最长发声时 (MPT)" value={sustained.mpt_s?.toFixed(1)} unit="s" />
           <MetricCard title="谐噪比 (HNR)" value={sustained.hnr_db?.toFixed(1)} unit="dB" />
           <MetricCard title="Jitter (局部)" value={sustained.jitter_local_percent?.toFixed(2)} unit="%" />
