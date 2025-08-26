@@ -193,14 +193,37 @@ export const callGeminiProxy = async (prompt) => {
   }
 };
 
-export const getEncouragingMessage = async () => {
+export const getEncouragingMessage = async (userData) => {
   const isAiEnabled = (isProductionReady() || !!import.meta.env.VITE_ENABLE_AI_IN_DEV);
   if (!isAiEnabled) return "持续跟踪，持续进步 ✨";
+
   try {
-    const prompt = '...';
+    // If there's no data, return a generic starter message.
+    if (!userData || !userData.events || userData.events.length === 0) {
+      return "开始记录你的声音数据，让我为你加油吧！";
+    }
+
+    // Construct a detailed prompt from userData.
+    // The backend lambda already has the full knowledge base.
+    // The prompt here should just be the user's specific data, formatted clearly.
+    const eventsSummary = userData.events.map(e => {
+      const date = new Date(e.date || e.createdAt).toLocaleDateString('zh-CN');
+      const details = e.details ? JSON.stringify(e.details) : '无';
+      return `- 日期: ${date}, 事件类型: ${e.type}, 详情: ${details}`;
+    }).join('\n');
+
+    const prompt = `
+这是用户最近的嗓音事件记录：
+${eventsSummary}
+
+请基于这些数据，结合你的知识库，给用户一句鼓励和分析的话。
+`;
+
+    console.log("Constructed prompt for Gemini:", prompt);
     return await callGeminiProxy(prompt);
-  } catch {
-    return "持续跟踪，持续进步 ✨";
+  } catch (error) {
+    console.error("获取AI消息失败:", error);
+    return "持续跟踪，持续进步 ✨"; // Fallback message
   }
 };
 
