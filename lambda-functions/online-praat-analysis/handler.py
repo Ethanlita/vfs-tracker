@@ -419,20 +419,23 @@ def handle_analyze_task(event):
                 # 从 S3 URI 中提取对象键
                 report_key = report_url.replace(f's3://{BUCKET}/', '') if report_url.startswith('s3://') else report_url
 
-                # 准备 details 对象，严格遵循文档定义的 self_test 格式
+                # 准备 details 对象，严格遵循现有的数据结构，但修正数据源
+                spontaneous_metrics = metrics.get('spontaneous', {})
                 sustained_metrics = metrics.get('sustained', {})
                 vrp_metrics = metrics.get('vrp', {})
 
                 event_details = {
                     'notes': 'VFS Tracker Voice Analysis Tools 自动生成报告',
                     'appUsed': 'VFS Tracker Online Analysis',
-                    'fundamentalFrequency': sustained_metrics.get('f0_mean'),
-                    'jitter': sustained_metrics.get('jitter_local_percent'),
-                    'shimmer': sustained_metrics.get('shimmer_local_percent'),
-                    'hnr': sustained_metrics.get('hnr_db'),
+                    
+                    # 修正：根据用户的精确要求，为顶层指标设置正确的数据源
+                    'fundamentalFrequency': spontaneous_metrics.get('f0_mean'), # 来自自发语音
+                    'jitter': sustained_metrics.get('jitter_local_percent'),     # 来自持续元音
+                    'shimmer': sustained_metrics.get('shimmer_local_percent'),   # 来自持续元音
+                    'hnr': sustained_metrics.get('hnr_db'),                      # 来自持续元音
                 }
 
-                # 创建嵌套的 formants 对象
+                # 保持顶层 formants 对象的现有结构
                 formants_low = sustained_metrics.get('formants_low', {})
                 if formants_low:
                     event_details['formants'] = {
@@ -441,14 +444,14 @@ def handle_analyze_task(event):
                         'f3': formants_low.get('F3'),
                     }
 
-                # 创建嵌套的 pitch 对象
+                # 保持顶层 pitch 对象的现有结构
                 if vrp_metrics and 'error' not in vrp_metrics:
                     event_details['pitch'] = {
                         'max': vrp_metrics.get('f0_max'),
                         'min': vrp_metrics.get('f0_min'),
                     }
 
-                # 保留完整的 metrics 对象，以备将来进行更详细的分析
+                # 保持完整的 full_metrics 对象，以确保向后兼容
                 event_details['full_metrics'] = metrics
 
                 events_table.put_item(Item={
