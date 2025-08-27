@@ -102,6 +102,10 @@ const MyPage = () => {
     navigate('/event-manager');
   };
 
+  const handleNavigateToQuickF0Test = () => {
+    navigate('/quick-f0-test');
+  };
+
   // --- RENDER ---
   return (
     <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-6 max-w-7xl">
@@ -140,6 +144,12 @@ const MyPage = () => {
           className="bg-gradient-to-r from-green-500 to-cyan-600 text-white px-6 py-3 rounded-lg font-semibold shadow-lg hover:from-green-600 hover:to-cyan-700 transition-all duration-300 transform hover:scale-105"
         >
           🎤 启动嗓音测试
+        </button>
+        <button
+          onClick={handleNavigateToQuickF0Test}
+          className="bg-gradient-to-r from-teal-500 to-cyan-600 text-white px-6 py-3 rounded-lg font-semibold shadow-lg hover:from-teal-600 hover:to-cyan-700 transition-all duration-300 transform hover:scale-105"
+        >
+          ⚡ 快速基频测试
         </button>
       </div>
 
