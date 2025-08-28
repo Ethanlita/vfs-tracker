@@ -96,6 +96,17 @@ if (isProductionReady) {
 // 导入App组件（在Amplify配置完成后）
 import App from './App.jsx'
 
+// 注册 Service Worker
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').then(registration => {
+      console.log('Service Worker registered: ', registration);
+    }).catch(registrationError => {
+      console.log('Service Worker registration failed: ', registrationError);
+    });
+  });
+}
+
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <BrowserRouter>
