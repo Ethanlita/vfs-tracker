@@ -47,13 +47,13 @@
 29. ~~~退出登录后登录其他账户，页面上方的头像和nickname仍是之前登录的用户的（已解决）~~~
 30. ~~~PDF报告图表中的中文字符无法正常显示（已解决）~~~
 31. ~~~目前分析器保存的事件数据中，基频是元音发音时的基频，并不能很好地反映说话时的情况。让我们将这一基频改为自由发言部分的基频平均值。（已解决）~~~
-32. 新功能：本地快速反应简易测试（基频only）-也可以自动增加事件
-    1. 前端录音并且在本地分析基频
-    2. 给实时反馈当前基频数值（图表、数值和音阶显示）
-    3. 新建事件保存当前时间和基频数值
-    4. 用户可以自行点击开始和停止，停止后就计算刚才那段时间内的平均值，允许用户点击保存事件，或者开始新的录音
-    5. 在Mypage内现有的按钮右侧新增“快速基频测试”按钮
-    6. 保存事件时直接复用EventForm那个创建新事件的逻辑得了
+32. ~~~新功能：本地快速反应简易测试（基频only）-也可以自动增加事件（已解决）~~~
+    1. ~~~前端录音并且在本地分析基频（已解决）~~~
+    2. ~~~给实时反馈当前基频数值（图表、数值和音阶显示）（已解决）~~~
+    3. ~~~新建事件保存当前时间和基频数值（已解决）~~~
+    4. ~~~用户可以自行点击开始和停止，停止后就计算刚才那段时间内的平均值，允许用户点击保存事件，或者开始新的录音（已解决）~~~
+    5. ~~~在Mypage内现有的按钮右侧新增“快速基频测试”按钮（已解决）~~~
+    6. ~~~保存事件时直接复用EventForm那个创建新事件的逻辑得了（已解决）~~~
 33. 新功能：爬音阶指导和音域测定
     1. 要求用户戴上耳机，并请求录音权限
     2. 检查用户是否戴上耳机（播放一段音频然后检测是否有录音）
@@ -69,3 +69,5 @@
     6. 下降练习结束后向用户展示练习成果，显示最高到达音和最低到达音
     7. 在Mypage现有的按钮右侧新增“音阶练习”按钮
 34. 让这个app变得可以被安装（Chrome中“安装”功能）
+35. ~~~现在在Timeline中查看事件的时候，用户自己上传的附件是可以正常下载的，但是由分析工具生成的pdf报告却不能正常下载，生成的地址是错误的：https://vfs-tracker.app/voice-tests/5d233766-936e-4e7e-8382-da6c6562d5fe/report.pdf，正确的地址应该诸如：https://vfs-tracker-objstor.s3.us-east-1.amazonaws.com/attachments/34f8b418-1011-70a7-633b-720845138963/1755503156343_MVIMG_20250818_134717.jpg?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=ASIAUKG7MXK5IF6QUGER%2F20250828%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20250828T152840Z&X-Amz-Expires=3600&X-Amz-Security-Token=IQoJb3JpZ2luX2VjEFAaCXVzLWVhc3QtMSJHMEUCIQD1iDIbzX6jwChaRTSe4MOjlbr6RhIe9Us2A6GXKHYJKwIgGL4YZLODKfasWtjhZlcR4c8PaZON6cC64SC3P5lOEXUq8QIIqf%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FARADGgwyOTY4MjEyNDI1NTQiDPiCcr2pGtROFL0l1CrFAnrIVRL%2BHgchRu%2B8FBkXe%2BQQyLTS2FMqOVtyHHBxoojnIR8ktLNtlj8ev5mnltqwr4QEoijizfa6bkkfuA87bmiKV9VRYRUX%2Fs7hgHeNUln%2FC6GcE%2BqwYgmALYAiJiLVpMXrKcO3VI%2FTL%2FoF5oC%2BhU%2FvOwSm6bmqCF25gapWgwtPVOwQ6%2BAWSPGNXP7spmdjCc3Mf10tVAxM%2FsFvV4rTz%2BVeDWZeHU8hfg43OS36UVPxiAwSercqI3K9SpaRXsfOkUcQaRJvCnn7TBp8rvS9SGoGmQ18owaqQNrCMGR6nUa2PTRfNar03mjWqCzc4kBgedDQUwtSvE%2FQeYkBGg%2Fh9aJgINe7oIACV1VYabUU0lnHwDUdZUAsuWKaQVjJDxviJZA%2BX59Wo5ZdpAB08lCiH2uiW8HdkrRKGRzriOnOAtG0X02XHLMwpevBxQY6ngH47hZB12FXQahDqqfiS%2FJLTmeTNkPb7tHU1P9H%2Fauzgt2Ozdhb3OTdv6U5u1gpFGTNoYTGx%2FtKH%2Beftu8pjjDeMwAhhXQGMy5RTXs2%2FvkRVVUCK%2FfcwsFCeuy1b5oExfjOvcqsNnP4JEc4PSRqS2aJSJ0nNrjXZkZUYA73cOtxSWI8OBnrs4ENBJ%2BEMVp6Vd0kY%2BMUv4W7%2B1jCsfmtNA%3D%3D&X-Amz-Signature=0abf1c94b4018ef0e28685e37dab42422998eaca6ba65c9fd78feadbc1d69c4b&X-Amz-SignedHeaders=host&x-amz-checksum-mode=ENABLED&x-id=GetObject（已解决）~~~
+36. 

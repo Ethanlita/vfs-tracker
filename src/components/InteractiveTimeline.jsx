@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { createPortal } from 'react-dom';
 import { resolveAttachmentLinks } from '../utils/attachments.js';
@@ -93,19 +93,24 @@ const EventDetails = ({ event }) => {
       break;
   }
 
-  // 新增解析附件的状态
-  const [resolvedAtts, setResolvedAtts] = React.useState([]);
-  React.useEffect(() => {
+  // --- 统一解析附件 ---
+  const [resolvedAtts, setResolvedAtts] = useState([]);
+  useEffect(() => {
     let cancelled = false;
     (async () => {
-      if (!event?.attachments || event.attachments.length === 0) { setResolvedAtts([]); return; }
+      if (!event?.attachments || event.attachments.length === 0) {
+        setResolvedAtts([]);
+        return;
+      }
+      // The backend saves the PDF report as a standard attachment.
+      // We just need to resolve all attachments and the link will be correct.
       const list = await resolveAttachmentLinks(event.attachments);
-      if (!cancelled) setResolvedAtts(list);
+      if (!cancelled) {
+        setResolvedAtts(list);
+      }
     })();
     return () => { cancelled = true; };
-  }, [event?.attachments]);
-
-  const attachments = resolvedAtts; // 统一使用解析后
+  }, [event]);
 
   Object.entries(d).forEach(([k, v]) => {
     if (shownKeys.has(k)) return;
@@ -119,7 +124,7 @@ const EventDetails = ({ event }) => {
           </div>
         );
       } catch (e) {
-        // 忽略无法序列化的对象，避免阻塞渲染
+        // 忽略无法序列化的对象
         void e;
       }
     } else {
@@ -134,20 +139,29 @@ const EventDetails = ({ event }) => {
         {rows}
       </div>
 
-      {attachments && attachments.length > 0 && (
+      {resolvedAtts.length > 0 && (
         <div className="pt-3">
-          <h4 className="font-medium text-gray-800 mb-2">附件</h4>
+          <h4 className="font-medium text-gray-800 mb-2">附件与报告</h4>
           <div className="flex flex-wrap gap-2">
-            {attachments.map((att, i) => (
-              <a
-                key={i}
-                href={att.downloadUrl || att.fileUrl}
-                target="_blank" rel="noreferrer"
-                className="inline-flex items-center px-3 py-1.5 rounded-md bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200"
-              >
-                📎 {att.fileName || `附件${i+1}`}
-              </a>
-            ))}
+            {resolvedAtts.map((att, i) => {
+              // Differentiate the report PDF by its filename for special styling
+              const isReport = att.fileName === 'voice_test_report.pdf';
+              const linkClass = isReport
+                ? "inline-flex items-center px-3 py-1.5 rounded-md bg-green-50 text-green-700 hover:bg-green-100 border border-green-200 text-sm font-semibold"
+                : "inline-flex items-center px-3 py-1.5 rounded-md bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 text-sm";
+              const icon = isReport ? '📄' : '📎';
+
+              return (
+                <a
+                  key={i}
+                  href={att.downloadUrl || att.fileUrl}
+                  target="_blank" rel="noreferrer"
+                  className={linkClass}
+                >
+                  {icon} {att.fileName || `附件${i+1}`}
+                </a>
+              );
+            })}
           </div>
         </div>
       )}
