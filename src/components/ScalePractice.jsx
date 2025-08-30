@@ -6,7 +6,6 @@ import { PitchDetector } from 'pitchy';
 import Soundfont from 'soundfont-player';
 import {
   accumulateStableWindow,
-  adaptiveParamsFromMAD,
   gateByEnergy,
   gateByStability
 } from '../utils/pitchEval.js';
@@ -34,18 +33,12 @@ const freqToPercent = (f, range) => {
   return Math.min(1, Math.max(0, ratio));
 };
 
-// 中位数和MAD计算
+// 中位数计算
 const median = (arr) => {
   if (arr.length === 0) return 0;
   const sorted = [...arr].sort((a, b) => a - b);
   const mid = Math.floor(sorted.length / 2);
   return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
-};
-
-const mad = (arr) => {
-  const med = median(arr);
-  const deviations = arr.map(v => Math.abs(v - med));
-  return median(deviations);
 };
 
 /**
@@ -88,8 +81,8 @@ const ScalePractice = () => {
 
   // --- 练习参数与缓存 ---
   const baselineRmsRef = useRef(0);
-  const [tolerance, setTolerance] = useState(50);
-  const [stableWindowMs, setStableWindowMs] = useState(300);
+  const tolerance = 50; // 允许的音差（cents）
+  const stableWindowMs = 300; // 判定所需的稳定时间
   const clarityTheta = 0.6;
   const deltaDb = 12;
   const currentFramesRef = useRef([]);
@@ -160,7 +153,9 @@ const ScalePractice = () => {
   const playTone = (freq, duration = 700) => {
     return new Promise(resolve => {
       if (pianoRef.current) {
-        pianoRef.current.play(freq, audioCtxRef.current.currentTime, {
+        // soundfont-player 需要音名或 MIDI 号，这里将频率转换为最近的音名
+        const note = frequencyToNoteName(freq);
+        pianoRef.current.play(note, audioCtxRef.current.currentTime, {
           duration: duration / 1000,
           gain: 1
         });
@@ -200,26 +195,6 @@ const ScalePractice = () => {
       setStartOffset(recommendIdx);
     }
     setShowRecommend(false);
-  };
-
-  // --- 基线校准：获取舒适基频与波动度 ---
-  const handleCalibrationStart = async () => {
-    setMessage('请用舒适的音高持续发声5秒...');
-    currentFramesRef.current = [];
-    collectingRef.current = true;
-    await new Promise(r => setTimeout(r, 5000));
-    collectingRef.current = false;
-    const valid = currentFramesRef.current.filter(f => f.pitch > 50 && f.pitch < 1200);
-    const f0s = valid.map(f => f.pitch);
-    const sff = median(f0s);
-    const madVal = mad(f0s);
-    const params = adaptiveParamsFromMAD(madVal);
-    setTolerance(params.tolerance);
-    setStableWindowMs(params.windowMs);
-    rootIndexRef.current = Math.round(12 * Math.log2(sff / 261.63)) - 2;
-    setStartOffset(rootIndexRef.current);
-    setMessage('校准完成');
-    setTimeout(() => setStep('setup'), 500);
   };
 
   // --- 工具函数：测量 RMS，用于耳机检测 ---
@@ -273,7 +248,7 @@ const ScalePractice = () => {
     // 若参考音通过麦克风，被测 RMS 会显著提升
     if (test <= baseline * 1.1) {
       setMessage('耳机检测通过！');
-      setStep('calibration');
+      setTimeout(() => setStep('setup'), 500);
     } else {
       setMessage('似乎未佩戴耳机，建议佩戴耳机以获得更佳效果。');
       setStep('headphoneFail');
@@ -481,7 +456,7 @@ const ScalePractice = () => {
               重试
             </button>
             <button
-              onClick={() => setStep('calibration')}
+              onClick={() => setStep('setup')}
               className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded-lg font-semibold"
             >
               继续
@@ -490,17 +465,7 @@ const ScalePractice = () => {
         </div>
       )}
 
-      {step === 'calibration' && (
-        <div className="bg-white p-6 rounded-xl shadow-md mb-6 text-center">
-          <p className="mb-4 text-gray-700">{message || '点击开始后，请用舒适音高发声5秒。'}</p>
-          <button
-            onClick={handleCalibrationStart}
-            className="bg-pink-500 hover:bg-pink-600 text-white px-4 py-2 rounded-lg font-semibold"
-          >
-            开始校准
-          </button>
-        </div>
-      )}
+      {/* 校准步骤已移除，默认从 C4 开始 */}
 
       {step === 'setup' && (
         <div className="bg-white p-6 rounded-xl shadow-md mb-6 text-center">
