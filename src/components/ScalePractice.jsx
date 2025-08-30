@@ -290,9 +290,10 @@ const ScalePractice = () => {
       targetFreq
     ]);
     const beatDur = 600;
-    currentFramesRef.current = [];
-    collectingRef.current = true;
+    const beatData = [];
     for (let i = 1; i <= 8; i++) {
+      currentFramesRef.current = [];
+      collectingRef.current = true;
       setBeat(i);
       setDotX(((i - 1) / 7) * 100);
       let freq = null;
@@ -311,20 +312,47 @@ const ScalePractice = () => {
       } else {
         await new Promise(r => setTimeout(r, beatDur));
       }
-      if (i === 8) collectingRef.current = false;
+      collectingRef.current = false;
+      beatData.push([...currentFramesRef.current]);
     }
-    if (isDemo) {
-      setStep('demoEnd');
-      setMessage('演示结束');
-      return;
-    }
-    const frames = currentFramesRef.current;
-    const valid = frames.filter(f =>
+
+    const gateFrames = (frames) => frames.filter(f =>
       f.pitch > 50 &&
       f.pitch < 1200 &&
       gateByEnergy(f.rms, baselineRmsRef.current, deltaDb) &&
       gateByStability(f.clarity, clarityTheta)
     );
+
+    if (isDemo) {
+      let resultMsg = '演示结束，做得很好！';
+      const early = gateFrames(beatData[0]).length || gateFrames(beatData[1]).length;
+      if (early) {
+        resultMsg = '切入太早，应该和系统播放的目标音同时切入';
+      } else {
+        for (let j = 0; j < offsets.length; j++) {
+          const expected = baseFreq * Math.pow(semitoneRatio, offsets[j]);
+          const frames = gateFrames(beatData[j + 2]);
+          if (!frames.length) {
+            resultMsg = `第${j + 1}个音${frequencyToNoteName(expected)}不够${direction === 'ascending' ? '高' : '低'}`;
+            break;
+          }
+          const pitch = direction === 'ascending'
+            ? Math.max(...frames.map(f => f.pitch))
+            : Math.min(...frames.map(f => f.pitch));
+          const cents = 1200 * Math.log2(pitch / expected);
+          if ((direction === 'ascending' && cents < -tolerance) || (direction === 'descending' && cents > tolerance)) {
+            resultMsg = `第${j + 1}个音${frequencyToNoteName(expected)}不够${direction === 'ascending' ? '高' : '低'}`;
+            break;
+          }
+        }
+      }
+      setMessage(resultMsg);
+      setStep('demoEnd');
+      return;
+    }
+
+    const frames = beatData.flat();
+    const valid = gateFrames(frames);
     if (direction === 'ascending') {
       setStep('ascending');
       const maxF0 = valid.length ? Math.max(...valid.map(f => f.pitch)) : 0;
@@ -580,6 +608,21 @@ const ScalePractice = () => {
 
       {['demoLoop', 'ascending', 'descending'].includes(step) && (
         <div className="bg-white p-6 rounded-xl shadow-md mb-6 text-center">
+          {step === 'demoLoop' && (
+            <p className="mb-4 text-gray-700">
+              演示说明：全过程共 8 拍，第 1 拍为音高示例无需出声，第 2、8 拍为空拍，第 3-7 拍需与系统同时出声。
+            </p>
+          )}
+          <div className="flex justify-center mb-4">
+            {Array.from({ length: 8 }).map((_, idx) => (
+              <div key={idx} className="flex flex-col items-center mx-1">
+                <span className="text-xs text-gray-500 mb-1">{idx + 1}</span>
+                <div
+                  className={`w-3 h-3 rounded-full ${beat === idx + 1 ? 'bg-pink-500' : 'bg-gray-300'}`}
+                ></div>
+              </div>
+            ))}
+          </div>
           <div className="relative h-48 bg-gray-100 rounded mb-4">
             {ladderNotes.map((f, idx) => (
               <div
