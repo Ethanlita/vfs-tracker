@@ -275,16 +275,29 @@ const ScalePractice = () => {
 
   // --- 节拍循环与练习逻辑 ---
   const runCycle = async (direction, isDemo = false) => {
-    const baseIndex = direction === 'ascending' ? rootIndexRef.current : descendingIndexRef.current;
+    const baseIndex = direction === 'ascending'
+      ? rootIndexRef.current
+      : descendingIndexRef.current;
     const baseFreq = 261.63 * Math.pow(semitoneRatio, baseIndex);
-    const offsets = direction === 'ascending' ? [0, 2, 4, 2, 0] : [0, -2, -4, -2, 0];
-    const targetFreq = baseFreq * Math.pow(semitoneRatio, direction === 'ascending' ? 4 : -4);
-    setIndicatorRange({ min: Math.min(baseFreq, targetFreq), max: Math.max(baseFreq, targetFreq) });
+
+    // 每个循环内部的音程与爬升练习相同，都是从起始音向上两音再回到起始音
+    const offsets = [0, 2, 4, 2, 0];
+
+    // 爬升练习关注最高音是否达到，下降练习关注最低音是否达到
+    const targetFreq = direction === 'ascending'
+      ? baseFreq * Math.pow(semitoneRatio, 4)
+      : baseFreq;
+
+    setIndicatorRange({
+      min: baseFreq,
+      max: baseFreq * Math.pow(semitoneRatio, 4)
+    });
+
     setStep(isDemo ? 'demoLoop' : direction);
     setLadderNotes([
       baseFreq,
-      baseFreq * Math.pow(semitoneRatio, direction === 'ascending' ? 2 : -2),
-      targetFreq
+      baseFreq * Math.pow(semitoneRatio, 2),
+      baseFreq * Math.pow(semitoneRatio, 4)
     ]);
     const beatDur = 600;
     const beatData = [];
@@ -407,7 +420,7 @@ const ScalePractice = () => {
         frameDurationRef.current
       );
       if (stable >= stableWindowMs) {
-        const cycleLow = baseFreq * Math.pow(semitoneRatio, -4);
+        const cycleLow = baseFreq;
         setLowestHz(lowestHz === 0 ? cycleLow : Math.min(lowestHz, cycleLow));
         descendingIndexRef.current -= 1;
         setTimeout(() => runCycle('descending'), 800);
@@ -464,12 +477,16 @@ const ScalePractice = () => {
     const freqToMidi = f => 69 + 12 * Math.log2(f / 440);
     const lowMidi = Math.floor(freqToMidi(lowestHz));
     const highMidi = Math.ceil(freqToMidi(highestHz));
-    const startMidi = Math.floor(lowMidi / 12) * 12;
-    const endMidi = Math.ceil(highMidi / 12) * 12 + 12;
-    const whiteWidth = 20;
+
+    // 固定绘制 108 键（C0-B8）
+    const startMidi = 12; // C0
+    const endMidi = 120; // B8 + 1
+
+    const whiteWidth = 12;
     const whiteHeight = 80;
     const blackWidth = whiteWidth * 0.6;
     const blackHeight = whiteHeight * 0.6;
+
     let whiteCount = 0;
     const whites = [];
     const blacks = [];
@@ -480,16 +497,29 @@ const ScalePractice = () => {
         const x = whiteCount * whiteWidth;
         const inRange = m >= lowMidi && m <= highMidi;
         whites.push(
-          <rect key={`w${m}`} x={x} y={0} width={whiteWidth} height={whiteHeight}
-            fill={inRange ? '#fbcfe8' : '#fff'} stroke="#000" />
+          <rect
+            key={`w${m}`}
+            x={x}
+            y={0}
+            width={whiteWidth}
+            height={whiteHeight}
+            fill={inRange ? '#fbcfe8' : '#fff'}
+            stroke="#000"
+          />
         );
         whiteCount++;
       } else {
         const x = whiteCount * whiteWidth - blackWidth / 2;
         const inRange = m >= lowMidi && m <= highMidi;
         blacks.push(
-          <rect key={`b${m}`} x={x} y={0} width={blackWidth} height={blackHeight}
-            fill={inRange ? '#f472b6' : '#000'} />
+          <rect
+            key={`b${m}`}
+            x={x}
+            y={0}
+            width={blackWidth}
+            height={blackHeight}
+            fill={inRange ? '#f472b6' : '#000'}
+          />
         );
       }
     }
@@ -584,8 +614,13 @@ const ScalePractice = () => {
       {step === 'setup' && (
         <div className="bg-white p-6 rounded-xl shadow-md mb-6 text-center">
           <p className="mb-4 text-gray-700">
-            请选择练习音节。不同音节可以练习不同的共鸣位置，例如 a 偏喉部、i 更靠前。
+            请选择练习音节。不同音节可以练习不同的共鸣位置。
           </p>
+          <div className="bg-blue-100 rounded-lg p-4 text-left text-gray-700 mb-4">
+            热身与寻找共鸣，首选闭口哼鸣 [m]，感受面部振动。建立稳定、连贯的声音，用 [mi] (咪) 找到集中的高位置感，
+            然后用 [mɑ] (嘛) 在保持该位置的同时练习口腔打开。提升咬字清晰度与舌头灵活性，可多用 [lɑ] (啦)。从
+            [m] 到 [mi]/[mɑ] 再到 [lɑ] 是一个高效、科学的练习路径。
+          </div>
           <select
             value={syllable}
             onChange={e => setSyllable(e.target.value)}
