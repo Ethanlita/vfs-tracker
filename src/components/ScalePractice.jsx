@@ -149,7 +149,8 @@ const ScalePractice = () => {
   }, [pitchLoop]);
 
   // --- 工具函数：播放一个音 ---
-  const playTone = (freq, duration = 700, usePiano = true, gainValue = 2) => {
+  // 增大默认增益，使钢琴声音更清晰
+  const playTone = (freq, duration = 700, usePiano = true, gainValue = 4) => {
     return new Promise(resolve => {
       if (usePiano && pianoRef.current) {
         // soundfont-player 需要音名或 MIDI 号，这里将频率转换为最近的音名
@@ -353,6 +354,26 @@ const ScalePractice = () => {
 
     const frames = beatData.flat();
     const valid = gateFrames(frames);
+
+    // 辅助函数：找出失败的音符序号
+    const findFailedNote = () => {
+      for (let j = 0; j < offsets.length; j++) {
+        const expected = baseFreq * Math.pow(semitoneRatio, offsets[j]);
+        const frames = gateFrames(beatData[j + 2]);
+        if (!frames.length) {
+          return { idx: j + 1, freq: expected };
+        }
+        const pitch = direction === 'ascending'
+          ? Math.max(...frames.map(f => f.pitch))
+          : Math.min(...frames.map(f => f.pitch));
+        const cents = 1200 * Math.log2(pitch / expected);
+        if ((direction === 'ascending' && cents < -tolerance) || (direction === 'descending' && cents > tolerance)) {
+          return { idx: j + 1, freq: expected };
+        }
+      }
+      return null;
+    };
+
     if (direction === 'ascending') {
       setStep('ascending');
       const maxF0 = valid.length ? Math.max(...valid.map(f => f.pitch)) : 0;
@@ -370,7 +391,11 @@ const ScalePractice = () => {
         rootIndexRef.current += 1;
         setTimeout(() => runCycle('ascending'), 800);
       } else {
-        setMessage('未达到目标音，是否重试？');
+        const failed = findFailedNote();
+        const failMsg = failed
+          ? `第${failed.idx}个音${frequencyToNoteName(failed.freq)}不够高`
+          : '未达到目标音，是否重试？';
+        setMessage(failMsg);
         setStep('ascendFail');
       }
     } else {
@@ -390,7 +415,11 @@ const ScalePractice = () => {
         descendingIndexRef.current -= 1;
         setTimeout(() => runCycle('descending'), 800);
       } else {
-        setMessage('未达到目标音，是否重试？');
+        const failed = findFailedNote();
+        const failMsg = failed
+          ? `第${failed.idx}个音${frequencyToNoteName(failed.freq)}不够低`
+          : '未达到目标音，是否重试？';
+        setMessage(failMsg);
         setStep('descendFail');
       }
     }
@@ -613,30 +642,42 @@ const ScalePractice = () => {
               演示说明：全过程共 8 拍，第 1 拍为音高示例无需出声，第 2、8 拍为空拍，第 3-7 拍需与系统同时出声。
             </p>
           )}
-          <div className="flex justify-center mb-4">
-            {Array.from({ length: 8 }).map((_, idx) => (
-              <div key={idx} className="flex flex-col items-center mx-1">
-                <span className="text-xs text-gray-500 mb-1">{idx + 1}</span>
-                <div
-                  className={`w-3 h-3 rounded-full ${beat === idx + 1 ? 'bg-pink-500' : 'bg-gray-300'}`}
-                ></div>
-              </div>
-            ))}
-          </div>
           <div className="relative h-48 bg-gray-100 rounded mb-4">
-            {ladderNotes.map((f, idx) => (
-              <div
-                key={idx}
-                className="absolute w-full h-px bg-gray-300"
-                style={{ bottom: `${freqToPercent(f, indicatorRange) * 100}%` }}
-              ></div>
-            ))}
+            {ladderNotes.map((f, idx) => {
+              const lower = freqToPercent(f * Math.pow(2, -tolerance / 1200), indicatorRange) * 100;
+              const upper = freqToPercent(f * Math.pow(2, tolerance / 1200), indicatorRange) * 100;
+              const center = freqToPercent(f, indicatorRange) * 100;
+              return (
+                <React.Fragment key={idx}>
+                  <div
+                    className="absolute w-full bg-pink-200 opacity-40"
+                    style={{ bottom: `${lower}%`, height: `${upper - lower}%` }}
+                  ></div>
+                  <div
+                    className="absolute w-full h-px bg-pink-500"
+                    style={{ bottom: `${center}%` }}
+                  ></div>
+                </React.Fragment>
+              );
+            })}
             <div
               className="absolute w-3 h-3 bg-pink-500 rounded-full"
               style={{ left: `${dotX}%`, bottom: `${freqToPercent(currentF0, indicatorRange) * 100}%` }}
             ></div>
           </div>
-          <p className="mb-2 text-gray-700">第{beat}/8拍 {beatLabel}</p>
+          <div className="flex flex-col items-center mb-2">
+            <div className="flex justify-center mb-2">
+              {Array.from({ length: 8 }).map((_, idx) => (
+                <div key={idx} className="flex flex-col items-center mx-1">
+                  <span className="text-xs text-gray-500 mb-1">{idx + 1}</span>
+                  <div
+                    className={`w-3 h-3 rounded-full ${beat === idx + 1 ? 'bg-pink-500' : 'bg-gray-300'}`}
+                  ></div>
+                </div>
+              ))}
+            </div>
+            <p className="text-gray-700">第{beat}/8拍 {beatLabel}</p>
+          </div>
           <p className="text-sm text-gray-500">当前F0: {currentF0 > 0 ? currentF0.toFixed(1) : '--'} Hz</p>
         </div>
       )}
