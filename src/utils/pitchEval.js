@@ -32,8 +32,18 @@ export const accumulateStableWindow = (
   return maxStable;
 };
 
+// Constants for adaptiveParamsFromMAD
+const MAD_HIGH_THRESHOLD = 50;
+const MAD_LOW_THRESHOLD = 15;
+const TOLERANCE_HIGH = 75;
+const TOLERANCE_LOW = 30;
+const TOLERANCE_DEFAULT = 50;
+const WINDOW_MS_HIGH = 350;
+const WINDOW_MS_LOW = 250;
+const WINDOW_MS_DEFAULT = 300;
+
 export const adaptiveParamsFromMAD = (mad) => {
-  if (mad > 50) return { tolerance: 75, windowMs: 350 };
-  if (mad < 15) return { tolerance: 30, windowMs: 250 };
-  return { tolerance: 50, windowMs: 300 };
+  if (mad > MAD_HIGH_THRESHOLD) return { tolerance: TOLERANCE_HIGH, windowMs: WINDOW_MS_HIGH };
+  if (mad < MAD_LOW_THRESHOLD) return { tolerance: TOLERANCE_LOW, windowMs: WINDOW_MS_LOW };
+  return { tolerance: TOLERANCE_DEFAULT, windowMs: WINDOW_MS_DEFAULT };
 };
