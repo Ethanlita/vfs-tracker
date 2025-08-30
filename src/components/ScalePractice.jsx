@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext.jsx';
 import { addEvent } from '../api';
 import { PitchDetector } from 'pitchy';
+import { accumulateStableWindow, adaptiveParamsFromMAD } from '../utils/pitchEval.js';
 
 /**
  * @zh 将给定的频率（Hz）转换为最接近的音乐音名。
@@ -17,6 +18,20 @@ const frequencyToNoteName = (frequency) => {
   const noteIndex = (halfStepsFromA4 + 57) % 12;
   const octave = Math.floor((halfStepsFromA4 + 57) / 12);
   return `${noteNames[noteIndex]}${octave}`;
+};
+
+// 中位数和MAD计算
+const median = (arr) => {
+  if (arr.length === 0) return 0;
+  const sorted = [...arr].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+};
+
+const mad = (arr) => {
+  const med = median(arr);
+  const deviations = arr.map(v => Math.abs(v - med));
+  return median(deviations);
 };
 
 /**
@@ -45,7 +60,19 @@ const ScalePractice = () => {
   const detectorRef = useRef(null);
   const mediaStreamRef = useRef(null);
   const rafRef = useRef(null);
-  const currentCycleF0s = useRef([]);
+
+  // --- 练习参数与缓存 ---
+  const baselineRmsRef = useRef(0);
+  const [tolerance, setTolerance] = useState(50);
+  const [stableWindowMs, setStableWindowMs] = useState(300);
+  const clarityTheta = 0.6;
+  const deltaDb = 12;
+  const currentFramesRef = useRef([]);
+  const collectingRef = useRef(false);
+  const frameDurationRef = useRef(0);
+  const semitoneRatio = Math.pow(2, 1 / 12);
+  const rootIndexRef = useRef(0); // 起始音相对C4的半音数
+  const descendingIndexRef = useRef(0);
 
   // 当前实时 F0，用于 UI 显示
   const [currentF0, setCurrentF0] = useState(0);
@@ -72,9 +99,14 @@ const ScalePractice = () => {
     if (!detectorRef.current || !analyserRef.current || !audioCtxRef.current) return;
     const input = new Float32Array(detectorRef.current.inputLength);
     analyserRef.current.getFloatTimeDomainData(input);
+    let sum = 0;
+    for (let i = 0; i < input.length; i++) sum += input[i] * input[i];
+    const rms = Math.sqrt(sum / input.length);
     const [pitch, clarity] = detectorRef.current.findPitch(input, audioCtxRef.current.sampleRate);
+    if (collectingRef.current) {
+      currentFramesRef.current.push({ pitch, clarity, rms });
+    }
     if (clarity > 0.95 && pitch > 50 && pitch < 1200) {
-      currentCycleF0s.current.push(pitch);
       setCurrentF0(pitch);
     } else {
       setCurrentF0(0);
@@ -93,6 +125,7 @@ const ScalePractice = () => {
     source.connect(analyser);
     analyserRef.current = analyser;
     detectorRef.current = PitchDetector.forFloat32Array(analyser.fftSize);
+    frameDurationRef.current = (detectorRef.current.inputLength / ctx.sampleRate) * 1000;
     pitchLoop();
   }, [pitchLoop]);
 
@@ -111,6 +144,25 @@ const ScalePractice = () => {
         resolve();
       }, duration);
     });
+  };
+
+  // --- 基线校准：获取舒适基频与波动度 ---
+  const handleCalibrationStart = async () => {
+    setMessage('请用舒适的音高持续发声5秒...');
+    currentFramesRef.current = [];
+    collectingRef.current = true;
+    await new Promise(r => setTimeout(r, 5000));
+    collectingRef.current = false;
+    const valid = currentFramesRef.current.filter(f => f.pitch > 50 && f.pitch < 1200);
+    const f0s = valid.map(f => f.pitch);
+    const sff = median(f0s);
+    const madVal = mad(f0s);
+    const params = adaptiveParamsFromMAD(madVal);
+    setTolerance(params.tolerance);
+    setStableWindowMs(params.windowMs);
+    rootIndexRef.current = Math.round(12 * Math.log2(sff / 261.63)) - 2;
+    setMessage('校准完成');
+    setTimeout(() => setStep('demo'), 500);
   };
 
   // --- 工具函数：测量 RMS，用于耳机检测 ---
@@ -142,12 +194,13 @@ const ScalePractice = () => {
       setStep('headphone');
       setMessage('请保持安静，我们正在检测环境噪音...');
       const baseline = await measureRms(800);
+      baselineRmsRef.current = baseline;
       setMessage('现在播放一段参考音，请确认不会被麦克风录到');
       await playTone(440, 1000);
       const test = await measureRms(800);
       if (test - baseline < 0.02) {
         setMessage('耳机检测通过！');
-        setStep('demo');
+        setStep('calibration');
       } else {
         setMessage('似乎未佩戴耳机，建议佩戴耳机以获得更佳效果。');
       }
@@ -169,22 +222,30 @@ const ScalePractice = () => {
   };
 
   // --- 爬升/下降练习核心逻辑 ---
-  const semitoneRatio = Math.pow(2, 1 / 12);
-  const rootIndexRef = useRef(0); // 记录当前循环的起始音相对C4的半音数
-  const descendingIndexRef = useRef(0);
 
   const runAscendingCycle = async () => {
     setStep('ascending');
     const baseFreq = 261.63 * Math.pow(semitoneRatio, rootIndexRef.current);
     const targetHigh = baseFreq * Math.pow(semitoneRatio, 4);
     const sequence = [0, 2, 4, 2, 0];
-    currentCycleF0s.current = [];
+    currentFramesRef.current = [];
+    collectingRef.current = true;
     for (const offset of sequence) {
       await playTone(baseFreq * Math.pow(semitoneRatio, offset), 600);
       await new Promise(r => setTimeout(r, 80));
     }
-    const maxF0 = Math.max(...currentCycleF0s.current, 0);
-    if (maxF0 >= targetHigh * Math.pow(2, -50 / 1200)) {
+    collectingRef.current = false;
+    const maxF0 = Math.max(...currentFramesRef.current.map(f => f.pitch), 0);
+    const stable = accumulateStableWindow(
+      currentFramesRef.current,
+      targetHigh,
+      tolerance,
+      baselineRmsRef.current,
+      deltaDb,
+      clarityTheta,
+      frameDurationRef.current
+    );
+    if (stable >= stableWindowMs) {
       setHighestHz(Math.max(highestHz, maxF0));
       rootIndexRef.current += 1; // 下一循环半音
       setMessage('很好，继续上升半音');
@@ -210,13 +271,27 @@ const ScalePractice = () => {
     const baseFreq = 261.63 * Math.pow(semitoneRatio, descendingIndexRef.current);
     const targetLow = baseFreq * Math.pow(semitoneRatio, -4);
     const sequence = [0, -2, -4, -2, 0];
-    currentCycleF0s.current = [];
+    currentFramesRef.current = [];
+    collectingRef.current = true;
     for (const offset of sequence) {
       await playTone(baseFreq * Math.pow(semitoneRatio, offset), 600);
       await new Promise(r => setTimeout(r, 80));
     }
-    const minF0 = Math.min(...currentCycleF0s.current.filter(f => f > 0), Infinity);
-    if (minF0 <= targetLow * Math.pow(2, 50 / 1200)) {
+    collectingRef.current = false;
+    const minF0 = Math.min(
+      ...currentFramesRef.current.filter(f => f.pitch > 0).map(f => f.pitch),
+      Infinity
+    );
+    const stable = accumulateStableWindow(
+      currentFramesRef.current,
+      targetLow,
+      tolerance,
+      baselineRmsRef.current,
+      deltaDb,
+      clarityTheta,
+      frameDurationRef.current
+    );
+    if (stable >= stableWindowMs) {
       setLowestHz(lowestHz === 0 ? minF0 : Math.min(lowestHz, minF0));
       descendingIndexRef.current -= 1;
       setMessage('下降成功，继续下降半音');
@@ -290,6 +365,18 @@ const ScalePractice = () => {
         <div className="bg-white p-6 rounded-xl shadow-md mb-6 text-center">
           <p className="text-gray-700 mb-2">{message}</p>
           <p className="text-sm text-gray-500">当前F0: {currentF0 > 0 ? currentF0.toFixed(1) : '--'} Hz</p>
+        </div>
+      )}
+
+      {step === 'calibration' && (
+        <div className="bg-white p-6 rounded-xl shadow-md mb-6 text-center">
+          <p className="mb-4 text-gray-700">{message || '点击开始后，请用舒适音高发声5秒。'}</p>
+          <button
+            onClick={handleCalibrationStart}
+            className="bg-pink-500 hover:bg-pink-600 text-white px-4 py-2 rounded-lg font-semibold"
+          >
+            开始校准
+          </button>
         </div>
       )}
 
