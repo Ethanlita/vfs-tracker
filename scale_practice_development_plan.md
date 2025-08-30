@@ -1,226 +1,98 @@
-# 爬音阶指导与音域测定（Scale Practice & Vocal Range）开发计划
+# 爬音阶指导与音域测定（Scale Practice & Vocal Range）开发计划（鲁棒化版｜任务 #33）
+
+## 0. 概述
+- 在保持原多步向导与入口/路由不变的前提下，引入**基线校准、门控+稳定窗判定、个体自适应与失败保护**；
+- 默认 `pitchy`，实现 `PitchTracker` 抽象以便后续切换 `tfjs-crepe`（实验）或 pYIN；
+- 不新增后端；遵循 `isProductionReady` 与数据契约。
+
+## 0.5 成功标准（更新）
+- 校准步骤可产出 SFF 与 MAD，并驱动自适应阈值；
+- 判定采用“能量+稳定度门控 → 半音误差 + 连续稳定窗”两阶段；
+- 高波动样例下命中率较瞬时判定提升 ≥30%；
+- UI 含稳定度进度环与结果建议；移动/桌面可用；
+- 多注释与测试覆盖。
 
 ---
 
-## 0. 概述与目标
+## 1. 技术选型与抽象
+- **PitchTracker 抽象（必须）**：
+  - `PitchyTracker`：基于 pitchy@4.x，输出 `{f0Hz, cents, clarity, voiced, rms}`；
+  - `CrepeTracker`（实验，可选）：tfjs/onnx 版本二选一，behind flag；
+  - `PyinTracker`（可选）：性能降级路径；
+- **门控与稳定窗模块**（纯函数，便于单测）：
+  - `gateByEnergy(rms, baseline, deltaDb)`；
+  - `gateByStability(clarity, thetaV)`；
+  - `accumulateStableWindow(cents, tolerance, dt)`；
+  - `adaptiveParamsFromMAD(mad)`（返回 tolerance/stableWindow 的微调）。
 
-- 提供一个多步向导，指导用户完成：
-  - 佩戴耳机与麦克风授权；
-  - 耳机佩戴检测（回录泄漏检测）；
-  - 练习演示（可跳过）；
-  - 爬升练习（每循环半音上行）；
-  - 下降练习（从最高达标音起，每循环半音下行）；
-  - 结果展示（最高/最低达标音、覆盖半音/八度）；
-- 起始音由“起始音选择器”确定：
-  - 自动推荐（默认）：采样 1–2 秒“舒适持续音”，F0 中位数映射到最近音名，并下调 2 个半音作为起点（可调 1–3）。
-  - 手动选择：音名+八度（A2–G5）选择并支持试听参考音。
+## 2. 组件结构
+- `ScalePracticeWizard.jsx`（页面根）
+  - `HeadphoneCheckStep`
+  - `DemonstrationStep`
+  - `AscendPracticeStep`
+  - `DescendPracticeStep`
+  - `ResultStep`
+- 共享：
+  - `StartingNoteSelector`（含“基线校准”引导并存储 SFF/MAD）
+  - `CentsMeter` + **StableRing**（稳定窗累计可视化）
+  - `BeatIndicator`（8 拍 + 倒计时）
+  - `TonePlayer`（参考音/目标音播放，10ms attack/release）
+  - `notes`（音名映射/半音位移/cents 计算）
 
----
+## 3. 关键流程
+- **Step 0**：权限 + 基线校准（10–15s 舒适音 → SFF/MAD/噪声基线），起始音= SFF–2 半音（可 1–3）或手动
+- **Step 1**：耳机检测（参考音泄漏 + RMS 升幅判断；兜底继续）
+- **Step 2**：演示（可跳过），展示 StableRing
+- **Step 3**：爬升（+1 半音/循环），每目标拍开启“延迟 ~100ms 的判定窗”，累计稳定 ≥250–400ms 即通过；连续失败≥3 触发保护
+- **Step 4**：下降（-1 半音/循环），同判定
+- **Step 5**：结果页（最高/最低、范围、命中率/平均偏差与建议）；可选保存事件
 
-## 0.5 成功标准
+## 4. 判定参数（可配置）
+- 声强阈值：`baseline + 12 dB`（相对阈值 + 绝对下限）
+- 稳定度阈值：`clarity ≥ 0.6`（θ_v 可调）
+- 容差三档：±75/±50/±30 cents（默认中级 ±50）
+- 稳定窗：默认 300 ms（区间 250–400，自适应调参）
+- 动态窗：拍开始 200ms 内宽松（如 ±100/200ms），其后收紧
+- BPM：默认 84（72–100）
+- 上/下限：A2–G5（可调）
 
-- 用户能通过耳机检测或得知未通过的可操作建议；
-- 八拍节拍引导清晰：1 拍参考、2/8 空拍、3–7 目标拍同步播放与判定；
-- 实时基频判定稳定（阈值与实现一致：±150 cents，稳定≥100ms）；
-- 结果页清晰展示最高/最低达标音（音名+Hz+八度），标注起始音模式与音名并显示覆盖范围；
-- 不需要保存事件（自我测试）写入时间轴；如果代码实现了，删掉
-- UI/UX 风格与项目一致，适配移动端与桌面端。
+## 5. 音频与调度
+- AudioContext 调度：lookahead 25ms，scheduleAhead ~180ms；
+- 检测对齐：拍起点 +100ms 开窗，收尾前 60–100ms 关窗；
+- UI 节流 15–30fps；检测累计在 Worker/Worklet 侧。
 
----
+## 6. 数据与契约
+- 仅本地统计；如保存事件，沿用 `self_test`：`details.pitch = {maxHz, minHz}`；`notes` 标注起始音与模式；不上传原始音频。
 
-## 1. 技术选型与依赖
+## 7. 里程碑（D 表示天）
+- **D0**：设计冻结与任务拆分；核对第三方手册（pitchy/WebAudio）
+- **D1**：`notes` 工具、Cents 计算、TonePlayer
+- **D2**：PitchTracker 抽象 + `PitchyTracker`；门控与稳定窗纯函数 + 单测
+- **D3**：基线校准（SFF/MAD/噪声），StartingNoteSelector 整合
+- **D4**：HeadphoneCheckStep；BeatIndicator；StableRing
+- **D5**：AscendPracticeStep（判定窗 + 动态窗 + 失败保护）
+- **D6**：DescendPracticeStep + ResultStep（建议/统计）
+- **D7**：样式统一、入口按钮、跨浏览器与移动端测试；（可选）事件保存
+- **缓冲**：D8–D9 修复与微调；预留实验 CrepeTracker 接入点（不作为本次验收）
 
-- Web Audio API：MediaDevices.getUserMedia、AudioContext（播放/调度/分析）、AudioWorklet 或 ScriptProcessor（若需）。
-- 基频检测：pitchy（实时 F0 与置信度）。
-- UI：React + Tailwind CSS；节拍动画（8 拍灯条/环形进度高亮）。
-- 节拍调度：AudioContext 的时间基准 + lookahead（25ms）+ scheduleAheadTime（~180ms）。
-- 第三方手册校验（上线前必做）：
-  - pitchy：API 参数、采样率、帧长、输出单位与稳定性建议；
-  - Web Audio：iOS/Safari 的 AudioContext resume、自动播放限制、输出设备切换注意事项。
+## 8. 测试
+- **单测**：音名映射/半音位移/cents；门控与稳定窗；自适应策略
+- **集成/手测**：
+  - 校准：不同噪声与波动度；
+  - 耳机检测：通过/不通过与兜底继续；
+  - 八拍与倒计时同步误差 < 40ms；
+  - 爬升/下降：重试/保护路径；
+  - 低性能设备：降级/刷新率降低；
+  - `isProductionReady` 开关行为一致；
+- **兼容**：Chrome、Safari(iOS)、Firefox；响应式 320–1280px
 
----
+## 9. 风险与回滚
+- 性能瓶颈 → 优先 pitchy；必要时关闭 StableRing 动画/降低刷新率；
+- 设备/环境差异 → 相对阈值与稳定窗；结果以半音域展示；
+- 兼容异常 → 可临时关闭“自动推荐”，强制手动起点；隐藏“实验 Crepe”入口。
 
-## 2. 前端架构与组件清单
+## 10. 文档与发布
+- 为向导新增内嵌帮助与阈值说明；
+- 在 PR 中附带 README 片段：参数表、默认值与改动点；
+- 常量集中在 `src/config/scalePractice.ts`（或同名 js）便于调参。
 
-- 页面入口：/scale-practice → `<ScalePracticeWizard/>`
-- 分步子视图：
-  - `HeadphoneCheckStep`：耳机佩戴检测（播放参考音 + 回录频段峰值检测）
-  - `DemonstrationStep`：八拍流程演示（1 参考、2/8 空拍、3–7 目标拍），动画和文字同时提示
-  - `AscendPracticeStep`：半音上行，起点来自“起始音选择器”
-  - `DescendPracticeStep`：从最高达标音起半音下行
-  - `ResultStep`：结果展示 + 可选保存事件
-- 共享子组件与工具：
-  - `StartingNoteSelector`：自动推荐/手动选择 + 试听参考音
-  - `CentsMeter`：实时显示当前与目标音的偏差（cents）、色彩语义达标状态
-  - `NoteBadge`：音名/八度/Hz 显示
-  - `PracticeControls`：开始/停止/重试/跳过
-  - `BeatIndicator`：8 拍动画与 2 拍倒计时提示
-  - `TonePlayer`（工具）：生成与调度参考音/目标音（淡入淡出，避免爆音）
-  - `notes`（工具）：音名↔频率↔半音位移映射、cents 差计算
-
----
-
-## 3. 交互流程与状态机
-
-- 核心状态：
-  - `currentStep`、`selectedSyllable`、`startNoteMode`（auto/manual）、`startNote`、`micGranted`、`headphoneCheckPassed`
-  - `bpm`、`currentBeat`（1–8）、`ascendLoopIndex`、`descendLoopIndex`
-  - `highestNote`、`lowestNote`、`attempts`、`lastFailureReason`
-- 关键流程：
-  - Step 0：权限与准备 → 选择音节与起始音模式（auto/manual）
-  - Step 1：耳机检测 → 通过则继续；失败给出提示与“强制继续”兜底选项（提示准确性下降）
-  - Step 2：演示八拍流程 → 支持重试或跳过
-  - Step 3：爬升（每循环 +1 半音）→ 五个目标拍均达标进入下一循环；失败可重试或转入下降
-  - Step 4：下降（从最高达标音起，每循环 -1 半音）→ 终止于下限或主动停止
-  - Step 5：结果展示
-
----
-
-## 4. 音频与算法细节
-
-### 4.1 音频图与资源
-- 录音：getUserMedia({audio:true}) → AudioContext.createMediaStreamSource → 分析节点（AnalyserNode/Worklet）
-- 播放：AudioContext + Oscillator/AudioBuffer（正弦或柔和波形），10 ms Attack/Release，音量 -12～-18 dBFS
-- 同步：以 AudioContext.currentTime 为基准进行播放调度；UI 通过 requestAnimationFrame 读取“当前拍”
-
-### 4.2 基频检测（pitchy）
-- 每帧（~20–30 ms）进行一次估计，输出 F0、置信度
-- 平滑/去抖：中值/EMA 对 F0 与 cents 偏差做滤波，忽略瞬态
-- 仅在声强超过阈值（RMS > baseline + 12 dB）时进行判定
-
-### 4.3 耳机佩戴检测（回录泄漏）
-- 流程：
-  1) 静默 1 s 采基线 RMS/频谱；
-  2) 播放 1 kHz 参考音（-18 dBFS, 2–3 s），同时录音；
-  3) 检测麦克风信号在 1 kHz ±30 Hz 内的峰值与基线差值；
-  4) 峰值-基线 < T1（如 10–15 dB）且整体 RMS 无显著升高 → “通过”；否则“不通过”
-- 注意：移动端可能串音，允许“我已戴耳机，继续”，但提示可能影响判定
-
-### 4.4 起始音选择器
-- 自动推荐：
-  - 采样 1–2 s 舒适持续音，计算 F0 中位数 → 最近音名（含八度）
-  - 下调 2 个半音作为起点（可配置 1–3），并边界夹取到 A2–G5
-  - 不稳定（cents 方差大）或无有效 F0 → 回退 C4 并提示可重试/手动选择
-- 手动选择：
-  - 音名+八度选择器；提供“试听参考音”
-  - 选择值越界（<A2 或 >G5）→ 夹取并提示
-
-### 4.5 八拍节拍与调度（84 BPM 默认）
-- 节拍映射：1=参考（不判定）、2=空拍、3–7=目标拍（播放目标音并判定）、8=空拍
-- 调度策略：lookahead（25ms）+ scheduleAheadTime（100–200ms，约180ms），将各拍的参考/目标音预先安排到 AudioContext 时间线上
-- 倒计时：开始前 2 拍倒计时提示音/动画
-- 变速：BPM 仅在每个新循环开始时应用（避免中途抖动）
-
-### 4.6 判定阈值与稳定窗口（与实现一致）
-- 声强阈值：短窗 RMS > baseline + 12 dB（等效实现为绝对/相对双阈）
-- 音高阈值：目标频率 ±150 cents
-- 稳定时间：目标拍内累计满足 ≥100 ms
-- 延迟补偿：检测窗口相对目标拍起点延迟 ~100 ms 开始，结束前预留 60–100 ms
-- 失败策略：循环内任一目标拍判定未通过 → 提供“重试本循环”与“开始下降练习”
-
-### 4.7 边界与安全
-- 上限：建议 G5（784 Hz）；下限：A2（110 Hz）
-- 达到上/下限时停止并提示，避免极端发声导致疲劳或受伤
-
----
-
-## 5. 数据与事件保存（可选）
-
-- 结果保存为 self_test 事件：
-  - `details.pitch = { "max": Number, "min": Number }`（Hz）
-  - 补充 `notes`：记录起始音模式与音名（如 “Scale start: B3 (Auto)”）
-  - 附件：无
-- 隐私：默认不上传音频，仅保存统计结果与时间戳
-
----
-
-## 6. 可配置项（设置或实验参数）
-
-- BPM（72–100，默认 84）
-- 起点自动下调半音数（1–3，默认 2）
-- 判定阈值：声强 dB 增量、cents 容忍度、稳定时长、延迟补偿
-- 上/下限音高（默认 A2–G5）
-
----
-
-## 7. 开发步骤与里程碑
-
-- D0：设计冻结与任务分解；确认第三方 API 手册最新用法
-- D1：音名/频率/半音位移工具 + CentsMeter（本地验证）
-- D2：TonePlayer（播放/淡入出/序列调度）+ BeatIndicator（8 拍动画 + 倒计时）
-- D3：StartingNoteSelector（自动/手动 + 试听）；自动推荐稳健性调试
-- D4：HeadphoneCheckStep（泄漏检测）与提示文案；兜底继续路径
-- D5：AscendPracticeStep（八拍流程 + 判定窗口对齐）；失败重试逻辑
-- D6：DescendPracticeStep（复用八拍与判定）；结果页与范围计算
-- D7：保存事件（可选）与入口按钮；样式统一与文案润色；跨浏览器测试与修复
-- 每个阶段完成后立即执行 §9 手动测试清单对应条目
-
----
-
-## 8. 单元测试（建议）
-
-- notes 工具：音名↔频率↔半音位移映射；cents 差值计算
-- 稳定性判定纯函数：输入 F0 序列/振幅 → 输出达标/未达标
-- BPM/节拍进度计算：给定 BPM/起始时间 → 各拍开始/结束时间计算
-
----
-
-## 9. 手动测试清单
-
-- 起始音选择：
-  - 自动推荐：低/中/高舒适音样例验证“下调 2 半音”策略；失败回退与提示路径
-  - 手动选择：A2/G5 边界夹取与提示；试听参考音正常
-- 耳机检测：通过/不通过路径；外放音量变化影响评估；“我已戴耳机，继续”提示清晰
-- 八拍与节拍同步：
-  - 动画与提示音同步误差 < 40 ms；2 拍倒计时正确
-  - 3–7 目标拍播放/高亮/判定窗口对齐；BPM 在 72–100 可调，变速于新循环生效
-- 爬升练习：连续达标、单点失败重试、连续失败转入下降
-- 下降练习：自最高达标音起到下限；最低音记录正确
-- 结果页：显示最高/最低音与频率，覆盖半音/八度；标注起始音模式与音名
-- 兼容性：Chrome（桌面/安卓）、Safari（iOS）、Firefox（桌面）
-- 响应式：320–1280 px；按钮触达与文案不折叠
-
----
-
-## 10. 性能与无障碍
-
-- 性能：音频调度与 UI 解耦，UI 更新节流至 15–30 fps；Worklet 优先
-- A11y：高对比度、清晰标签、可键盘操作；动画不过度
-
----
-
-## 11. 风险与缓解
-
-- 回录/串音误判 → 泄漏检测 + 兜底继续 + 文案提示准确性下降
-- 采样率/AGC 影响 → 相对阈值 + 平滑；提示安静环境
-- 极端声部范围 → 上/下限可配置；起点手动选择兜底
-- iOS 自动播放限制 → 所有音频启动在用户手势后 resume
-- pitchy 噪声鲁棒性 → 声强阈值、稳定窗口与中值滤波
-
----
-
-## 12. 文档与发布
-
-- 文档：在功能提交时补充用户帮助（音节选择建议、八拍流程说明、BPM 设置说明）
-- 部署：前端正常构建与发布；无新增后端
-- 变更记录：列出阈值默认值、BPM、边界与可配置项
-
----
-
-## 13. 追踪与回滚
-
-- 埋点（可选）：统计耳机检测失败率、自动推荐失败率、重试次数
-- 回滚策略：若出现广泛浏览器兼容问题，可先关闭“自动推荐”默认，切换到手动起点模式；必要时隐藏入口按钮
-
----
-
-## 14. 验收清单（摘要）
-
-- 起始音选择器（自动/手动）工作正常；自动推荐稳定
-- 耳机佩戴检测可用并有兜底继续
-- 八拍流程与动画/提示音/判定窗口对齐
-- 爬升/下降练习达标/失败流程可用
-- 判定阈值：±150 cents、稳定≥100ms
-- 结果展示与（可选）事件保存正确
-- 跨浏览器与移动端验证通过
-- UI/UX 与 Tailwind 规范一致

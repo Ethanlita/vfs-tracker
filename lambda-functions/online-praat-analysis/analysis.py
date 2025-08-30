@@ -5,6 +5,11 @@ from parselmouth.praat import call
 import librosa
 import math
 from dataclasses import dataclass
+from typing import Optional, Dict
+try:
+    from scipy import signal as _scisignal
+except Exception:
+    _scisignal = None
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -209,30 +214,58 @@ def analyze_note_file(path, f0min=75, f0max=1200):
 
 def get_lpc_spectrum(file_path: str):
     """
-    Analyzes a sound file to get its LPC spectrum.
+    计算音频中段的 LPC 频谱包络，用于“共振峰-SPL（LPC）”图。
 
-    Args:
-        file_path (str): The local path to the .wav file.
-
-    Returns:
-        dict: A dictionary with 'frequencies' and 'spl_values' lists, or None on failure.
+    返回:
+        dict: { 'frequencies': List[float], 'spl_values': List[float] }，失败返回 None。
+    说明:
+        - 采用 librosa.lpc 估计 LPC 系数，再用 scipy.signal.freqz 计算频率响应，转为 dB。
+        - 避免误用 Parselmouth 的 to_lpc_burg 参数导致的运行时错误。
     """
     logger.info(f"Getting LPC spectrum for {file_path}")
     try:
-        sound = parselmouth.Sound(file_path)
-        mid_start = sound.get_total_duration() * 0.33
-        mid_end = sound.get_total_duration() * 0.66
-        segment = sound.extract_part(from_time=mid_start, to_time=mid_end, preserve_times=False)
-        
-        lpc = segment.to_lpc_burg(time_step=0.01, max_formant=5500)
-        spectrum = lpc.to_spectrum(maximum_frequency=5500)
-        
-        frequencies = spectrum.xs()
-        spl_values = spectrum.values.T[0]
-
+        # 加载单声道
+        y, sr = librosa.load(file_path, sr=None, mono=True)
+        if y is None or y.size == 0:
+            return None
+        # 取中间 1/3 片段以避免起止端不稳定
+        n = len(y)
+        start = int(n * 0.33)
+        end = int(n * 0.66)
+        if end <= start:
+            start, end = 0, n
+        seg = y[start:end]
+        if seg.size < int(0.1 * sr):  # 至少 100ms
+            seg = y
+        # 预加重，有助于高频建模
+        pre_emph = 0.97
+        seg = np.append(seg[0], seg[1:] - pre_emph * seg[:-1])
+        # 选择 LPC 阶数：常用经验 2 + 2 * (sr/1000)
+        order = max(8, int(2 + 2 * (sr / 1000)))
+        # librosa.lpc 需要数值稳定的输入
+        if np.allclose(np.std(seg), 0.0):
+            return None
+        try:
+            a = librosa.lpc(seg, order)
+        except Exception as e:
+            logger.warning(f"librosa.lpc failed (order={order}), fallback to lower order: {e}")
+            order = max(8, int(2 + (sr / 1000)))
+            a = librosa.lpc(seg, order)
+        # 计算频率响应
+        if _scisignal is None:
+            logger.error("scipy.signal not available; cannot compute LPC spectrum")
+            return None
+        worN = 4096
+        w, h = _scisignal.freqz(b=[1.0], a=a, worN=worN, fs=sr)
+        freqs = w  # Hz
+        mag = np.abs(h)
+        mag[mag <= 1e-12] = 1e-12
+        spl_db = 20.0 * np.log10(mag)
+        # 仅保留 0 ~ 5500 Hz
+        mask = freqs <= 5500.0
         return {
-            "frequencies": frequencies.tolist(),
-            "spl_values": spl_values.tolist()
+            "frequencies": freqs[mask].astype(float).tolist(),
+            "spl_values": spl_db[mask].astype(float).tolist()
         }
     except Exception as e:
         logger.error(f"Could not get LPC spectrum for {file_path}. Error: {e}")
