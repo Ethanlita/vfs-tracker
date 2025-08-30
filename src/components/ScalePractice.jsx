@@ -1,7 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext.jsx';
-import { addEvent } from '../api';
 import { PitchDetector } from 'pitchy';
 import Soundfont from 'soundfont-player';
 import {
@@ -49,7 +47,6 @@ const median = (arr) => {
  */
 const ScalePractice = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
 
   // --- 向导步骤状态 ---
   // 初始即进入权限请求页面
@@ -57,7 +54,6 @@ const ScalePractice = () => {
   const [message, setMessage] = useState('');
   const [syllable, setSyllable] = useState('a');
   const [error, setError] = useState(null);
-  const [isSaving, setIsSaving] = useState(false);
   const [permissionMsg, setPermissionMsg] = useState('');
   const [startOffset, setStartOffset] = useState(0); // 起始音相对C4的半音数
   const [beat, setBeat] = useState(0);
@@ -281,8 +277,8 @@ const ScalePractice = () => {
   const runCycle = async (direction, isDemo = false) => {
     const baseIndex = direction === 'ascending' ? rootIndexRef.current : descendingIndexRef.current;
     const baseFreq = 261.63 * Math.pow(semitoneRatio, baseIndex);
-    const offsets = direction === 'ascending' ? [0, 2, 4, 2, 0] : [0, -2, -4, -2, 0];
-    const targetFreq = baseFreq * Math.pow(semitoneRatio, direction === 'ascending' ? 4 : -4);
+    const offsets = [0, 2, 4, 2, 0];
+    const targetFreq = baseFreq * Math.pow(semitoneRatio, 4);
     setIndicatorRange({ min: Math.min(baseFreq, targetFreq), max: Math.max(baseFreq, targetFreq) });
     setStep(isDemo ? 'demoLoop' : direction);
     setLadderNotes([
@@ -334,15 +330,16 @@ const ScalePractice = () => {
           const expected = baseFreq * Math.pow(semitoneRatio, offsets[j]);
           const frames = gateFrames(beatData[j + 2]);
           if (!frames.length) {
-            resultMsg = `第${j + 1}个音${frequencyToNoteName(expected)}不够${direction === 'ascending' ? '高' : '低'}`;
+            resultMsg = `第${j + 1}个音${frequencyToNoteName(expected)}未检测到`;
             break;
           }
-          const pitch = direction === 'ascending'
-            ? Math.max(...frames.map(f => f.pitch))
-            : Math.min(...frames.map(f => f.pitch));
+          const pitch = median(frames.map(f => f.pitch));
           const cents = 1200 * Math.log2(pitch / expected);
-          if ((direction === 'ascending' && cents < -tolerance) || (direction === 'descending' && cents > tolerance)) {
-            resultMsg = `第${j + 1}个音${frequencyToNoteName(expected)}不够${direction === 'ascending' ? '高' : '低'}`;
+          if (cents < -tolerance) {
+            resultMsg = `第${j + 1}个音${frequencyToNoteName(expected)}不够高`;
+            break;
+          } else if (cents > tolerance) {
+            resultMsg = `第${j + 1}个音${frequencyToNoteName(expected)}不够低`;
             break;
           }
         }
@@ -361,14 +358,15 @@ const ScalePractice = () => {
         const expected = baseFreq * Math.pow(semitoneRatio, offsets[j]);
         const frames = gateFrames(beatData[j + 2]);
         if (!frames.length) {
-          return { idx: j + 1, freq: expected };
+          return { idx: j + 1, freq: expected, type: 'low' };
         }
-        const pitch = direction === 'ascending'
-          ? Math.max(...frames.map(f => f.pitch))
-          : Math.min(...frames.map(f => f.pitch));
+        const pitch = median(frames.map(f => f.pitch));
         const cents = 1200 * Math.log2(pitch / expected);
-        if ((direction === 'ascending' && cents < -tolerance) || (direction === 'descending' && cents > tolerance)) {
-          return { idx: j + 1, freq: expected };
+        if (cents < -tolerance) {
+          return { idx: j + 1, freq: expected, type: 'low' };
+        }
+        if (cents > tolerance) {
+          return { idx: j + 1, freq: expected, type: 'high' };
         }
       }
       return null;
@@ -393,7 +391,7 @@ const ScalePractice = () => {
       } else {
         const failed = findFailedNote();
         const failMsg = failed
-          ? `第${failed.idx}个音${frequencyToNoteName(failed.freq)}不够高`
+          ? `第${failed.idx}个音${frequencyToNoteName(failed.freq)}不够${failed.type === 'low' ? '高' : '低'}`
           : '未达到目标音，是否重试？';
         setMessage(failMsg);
         setStep('ascendFail');
@@ -417,7 +415,7 @@ const ScalePractice = () => {
       } else {
         const failed = findFailedNote();
         const failMsg = failed
-          ? `第${failed.idx}个音${frequencyToNoteName(failed.freq)}不够低`
+          ? `第${failed.idx}个音${frequencyToNoteName(failed.freq)}不够${failed.type === 'low' ? '高' : '低'}`
           : '未达到目标音，是否重试？';
         setMessage(failMsg);
         setStep('descendFail');
@@ -441,7 +439,13 @@ const ScalePractice = () => {
   };
 
   const handleStartDescending = () => {
-    descendingIndexRef.current = rootIndexRef.current - 1;
+    // 根据上行练习达到的最高音确定下降练习起始音
+    if (highestHz > 0) {
+      const highestIndex = Math.round(12 * Math.log2(highestHz / 261.63));
+      descendingIndexRef.current = highestIndex - 4;
+    } else {
+      descendingIndexRef.current = startOffset;
+    }
     runCycle('descending');
   };
 
@@ -455,33 +459,49 @@ const ScalePractice = () => {
     setStep('result');
   };
 
-  // --- 保存事件 ---
-  const handleSave = async () => {
-    if (!user?.userId) return;
-    setIsSaving(true);
-    const eventData = {
-      type: 'self_test',
-      date: new Date().toISOString(),
-      details: {
-        appUsed: 'VFS Tracker Scale Practice',
-        pitch: { max: highestHz, min: lowestHz },
-        sound: ['其他'],
-        customSoundDetail: `音阶练习使用音节 ${syllable}`,
-        voicing: ['其他'],
-        customVoicingDetail: '通过音阶练习自动记录',
-        notes: `音阶练习，最高 ${frequencyToNoteName(highestHz)} (${highestHz.toFixed(1)} Hz)，最低 ${frequencyToNoteName(lowestHz)} (${lowestHz.toFixed(1)} Hz)`
+  // 绘制钢琴键盘并标注声域范围
+  const renderRangeKeyboard = () => {
+    if (!highestHz || !lowestHz) return null;
+    const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+    const freqToMidi = f => 69 + 12 * Math.log2(f / 440);
+    const lowMidi = Math.floor(freqToMidi(lowestHz));
+    const highMidi = Math.ceil(freqToMidi(highestHz));
+    const startMidi = Math.floor(lowMidi / 12) * 12;
+    const endMidi = Math.ceil(highMidi / 12) * 12 + 12;
+    const whiteWidth = 20;
+    const whiteHeight = 80;
+    const blackWidth = whiteWidth * 0.6;
+    const blackHeight = whiteHeight * 0.6;
+    let whiteCount = 0;
+    const whites = [];
+    const blacks = [];
+    for (let m = startMidi; m < endMidi; m++) {
+      const note = noteNames[m % 12];
+      const isBlack = note.includes('#');
+      if (!isBlack) {
+        const x = whiteCount * whiteWidth;
+        const inRange = m >= lowMidi && m <= highMidi;
+        whites.push(
+          <rect key={`w${m}`} x={x} y={0} width={whiteWidth} height={whiteHeight}
+            fill={inRange ? '#fbcfe8' : '#fff'} stroke="#000" />
+        );
+        whiteCount++;
+      } else {
+        const x = whiteCount * whiteWidth - blackWidth / 2;
+        const inRange = m >= lowMidi && m <= highMidi;
+        blacks.push(
+          <rect key={`b${m}`} x={x} y={0} width={blackWidth} height={blackHeight}
+            fill={inRange ? '#f472b6' : '#000'} />
+        );
       }
-    };
-    try {
-      await addEvent(eventData);
-      alert('事件已保存');
-      navigate('/mypage');
-    } catch (e) {
-      console.error(e);
-      alert('保存失败');
-    } finally {
-      setIsSaving(false);
     }
+    const svgWidth = whiteCount * whiteWidth;
+    return (
+      <svg width={svgWidth} height={whiteHeight} className="mx-auto mb-4">
+        {whites}
+        {blacks}
+      </svg>
+    );
   };
 
   // --- 渲染 ---
@@ -727,14 +747,8 @@ const ScalePractice = () => {
           <h2 className="text-2xl font-semibold text-gray-800 mb-4">练习结果</h2>
           <p className="mb-2 text-gray-700">最高音：{frequencyToNoteName(highestHz)} ({highestHz.toFixed(1)} Hz)</p>
           <p className="mb-4 text-gray-700">最低音：{frequencyToNoteName(lowestHz)} ({lowestHz.toFixed(1)} Hz)</p>
-          <div className="flex gap-4 justify-center">
-            <button
-              onClick={handleSave}
-              disabled={isSaving}
-              className="bg-pink-500 hover:bg-pink-600 text-white px-4 py-2 rounded-lg font-semibold disabled:opacity-50"
-            >
-              {isSaving ? '保存中...' : '保存事件'}
-            </button>
+          {renderRangeKeyboard()}
+          <div className="flex justify-center">
             <button
               onClick={() => navigate('/mypage')}
               className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded-lg font-semibold"
