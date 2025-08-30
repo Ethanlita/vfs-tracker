@@ -67,20 +67,29 @@ except Exception as e:
     _FONT = _FALLBACK_FONT_NAME
     logger.error(f"Failed to register font. Error: {e}. Using fallback font '{_FONT}'.")
 
+# 统一的 Matplotlib 字体属性（若可用）
+_MP_FONT = fm.FontProperties(fname=font_path) if _CJK_FONT_REGISTERED else None
+
 
 def create_placeholder_chart(title: str, message: str):
-    """Creates a placeholder chart with a title and a message."""
+    """Creates a placeholder chart with a title and a message.
+    明确指定字体，避免中文不显示。
+    """
     logger.info(f"Creating placeholder chart: {title}")
     try:
         fig, ax = plt.subplots(figsize=(10, 6))
-        ax.text(0.5, 0.5, message, ha='center', va='center', fontsize=12, color='gray', wrap=True)
-        ax.set_title(title)
+        # 标题
+        if _MP_FONT is not None:
+            ax.set_title(title, fontproperties=_MP_FONT)
+        else:
+            ax.set_title(title)
+        # 主体文字
+        ax.text(0.5, 0.5, message, ha='center', va='center', fontsize=12, color='gray', wrap=True,
+                fontproperties=_MP_FONT)
         ax.set_xticks([])
         ax.set_yticks([])
-        ax.spines['top'].set_visible(False)
-        ax.spines['right'].set_visible(False)
-        ax.spines['bottom'].set_visible(False)
-        ax.spines['left'].set_visible(False)
+        for sp in ('top','right','bottom','left'):
+            ax.spines[sp].set_visible(False)
         fig.tight_layout()
         buf = BytesIO()
         plt.savefig(buf, format='png')
@@ -239,7 +248,10 @@ def create_formant_spl_chart(spectrum_low, spectrum_high):
 
         ax.set_xlabel('Frequency (Hz)')
         ax.set_ylabel('SPL (dB)')
-        ax.set_title('Formant-SPL Spectrum (LPC)')
+        if _MP_FONT is not None:
+            ax.set_title('Formant-SPL Spectrum (LPC)', fontproperties=_MP_FONT)
+        else:
+            ax.set_title('Formant-SPL Spectrum (LPC)')
         ax.xaxis.set_major_formatter(ScalarFormatter()) # Disable scientific notation
         ax.grid(True, linestyle='--', alpha=0.6)
         ax.legend()
@@ -491,12 +503,12 @@ def create_pdf_report(session_id, metrics, chart_urls, userInfo=None):
             ('formant_spl_spectrum', 'Formant-SPL Spectrum (LPC) / 共振峰-声压谱（LPC）')
         ]
 
-        # 缺失图表时的占位提示
+        # 缺失图表时的占位提示（中英双语）
         missing_reason = {
-            'timeSeries': 'Chart unavailable.',
-            'vrp': 'VRP data unavailable.',
-            'formant': 'Formant analysis failed or unavailable.',
-            'formant_spl_spectrum': 'Spectrum analysis failed or unavailable.'
+            'timeSeries': 'Chart unavailable. / 图表不可用',
+            'vrp': 'VRP data unavailable. / VRP 数据不可用',
+            'formant': 'Formant analysis failed or unavailable. / 共振峰分析失败或数据不可用',
+            'formant_spl_spectrum': 'Spectrum analysis failed or unavailable. / 频谱分析失败或数据不可用'
         }
 
         for key_name, title in chart_order:
