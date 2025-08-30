@@ -3,7 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext.jsx';
 import { addEvent } from '../api';
 import { PitchDetector } from 'pitchy';
-import { accumulateStableWindow, adaptiveParamsFromMAD } from '../utils/pitchEval.js';
+import Soundfont from 'soundfont-player';
+import {
+  accumulateStableWindow,
+  adaptiveParamsFromMAD,
+  gateByEnergy,
+  gateByStability
+} from '../utils/pitchEval.js';
 
 /**
  * @zh 将给定的频率（Hz）转换为最接近的音乐音名。
@@ -52,7 +58,8 @@ const ScalePractice = () => {
   const { user } = useAuth();
 
   // --- 向导步骤状态 ---
-  const [step, setStep] = useState('intro');
+  // 初始即进入权限请求页面
+  const [step, setStep] = useState('permission');
   const [message, setMessage] = useState('');
   const [syllable, setSyllable] = useState('a');
   const [error, setError] = useState(null);
@@ -77,6 +84,7 @@ const ScalePractice = () => {
   const detectorRef = useRef(null);
   const mediaStreamRef = useRef(null);
   const rafRef = useRef(null);
+  const pianoRef = useRef(null); // 采样钢琴音色
 
   // --- 练习参数与缓存 ---
   const baselineRmsRef = useRef(0);
@@ -136,6 +144,8 @@ const ScalePractice = () => {
     mediaStreamRef.current = stream;
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
     audioCtxRef.current = ctx;
+    // 加载钢琴音色
+    pianoRef.current = await Soundfont.instrument(ctx, 'acoustic_grand_piano');
     const source = ctx.createMediaStreamSource(stream);
     const analyser = ctx.createAnalyser();
     analyser.fftSize = 2048;
@@ -149,17 +159,25 @@ const ScalePractice = () => {
   // --- 工具函数：播放一个音 ---
   const playTone = (freq, duration = 700) => {
     return new Promise(resolve => {
-      const osc = audioCtxRef.current.createOscillator();
-      const gain = audioCtxRef.current.createGain();
-      osc.type = 'sine';
-      osc.frequency.value = freq;
-      osc.connect(gain);
-      gain.connect(audioCtxRef.current.destination);
-      osc.start();
-      setTimeout(() => {
-        osc.stop();
-        resolve();
-      }, duration);
+      if (pianoRef.current) {
+        pianoRef.current.play(freq, audioCtxRef.current.currentTime, {
+          duration: duration / 1000,
+          gain: 1
+        });
+        setTimeout(resolve, duration);
+      } else {
+        const osc = audioCtxRef.current.createOscillator();
+        const gain = audioCtxRef.current.createGain();
+        osc.type = 'sine';
+        osc.frequency.value = freq;
+        osc.connect(gain);
+        gain.connect(audioCtxRef.current.destination);
+        osc.start();
+        setTimeout(() => {
+          osc.stop();
+          resolve();
+        }, duration);
+      }
     });
   };
 
@@ -227,8 +245,7 @@ const ScalePractice = () => {
   };
 
   // --- Step0: 申请权限 ---
-  const handleStart = async () => {
-    setStep('permission');
+  const requestPermission = useCallback(async () => {
     setPermissionMsg('正在申请麦克风权限...');
     try {
       await initAudio();
@@ -237,7 +254,12 @@ const ScalePractice = () => {
       console.error(err);
       setError('无法获取麦克风权限');
     }
-  };
+  }, [initAudio]);
+
+  // 页面加载即请求权限
+  useEffect(() => {
+    requestPermission();
+  }, [requestPermission]);
 
   // --- Step1: 耳机检测 ---
   const handleHeadphoneCheck = async () => {
@@ -248,11 +270,13 @@ const ScalePractice = () => {
     setMessage('现在播放一段参考音，请确认不会被麦克风录到');
     await playTone(440, 1000);
     const test = await measureRms(800);
-    if (test - baseline < 0.02) {
+    // 若参考音通过麦克风，被测 RMS 会显著提升
+    if (test <= baseline * 1.1) {
       setMessage('耳机检测通过！');
       setStep('calibration');
     } else {
       setMessage('似乎未佩戴耳机，建议佩戴耳机以获得更佳效果。');
+      setStep('headphoneFail');
     }
   };
 
@@ -299,9 +323,15 @@ const ScalePractice = () => {
       return;
     }
     const frames = currentFramesRef.current;
+    const valid = frames.filter(f =>
+      f.pitch > 50 &&
+      f.pitch < 1200 &&
+      gateByEnergy(f.rms, baselineRmsRef.current, deltaDb) &&
+      gateByStability(f.clarity, clarityTheta)
+    );
     if (direction === 'ascending') {
       setStep('ascending');
-      const maxF0 = Math.max(...frames.map(f => f.pitch), 0);
+      const maxF0 = valid.length ? Math.max(...valid.map(f => f.pitch)) : 0;
       const stable = accumulateStableWindow(
         frames,
         targetFreq,
@@ -321,10 +351,7 @@ const ScalePractice = () => {
       }
     } else {
       setStep('descending');
-      const minF0 = Math.min(
-        ...frames.filter(f => f.pitch > 0).map(f => f.pitch),
-        Infinity
-      );
+      const minF0 = valid.length ? Math.min(...valid.map(f => f.pitch)) : Infinity;
       const stable = accumulateStableWindow(
         frames,
         targetFreq,
@@ -339,9 +366,8 @@ const ScalePractice = () => {
         descendingIndexRef.current -= 1;
         setTimeout(() => runCycle('descending'), 800);
       } else {
-        setMessage('下降练习结束');
-        setStep('result');
-        cleanupAudio();
+        setMessage('未达到目标音，是否重试？');
+        setStep('descendFail');
       }
     }
   };
@@ -364,6 +390,16 @@ const ScalePractice = () => {
   const handleStartDescending = () => {
     descendingIndexRef.current = rootIndexRef.current - 1;
     runCycle('descending');
+  };
+
+  const handleRetryDescend = () => {
+    setMessage('再试一次');
+    runCycle('descending');
+  };
+
+  const handleFinishPractice = () => {
+    cleanupAudio();
+    setStep('result');
   };
 
   // --- 保存事件 ---
@@ -412,18 +448,6 @@ const ScalePractice = () => {
         <div className="bg-red-100 text-red-700 p-4 rounded mb-4">{error}</div>
       )}
 
-      {step === 'intro' && (
-        <div className="bg-white p-6 rounded-xl shadow-md mb-6">
-          <p className="mb-4 text-gray-700">请佩戴耳机，并确保周围环境安静。点击下方按钮开始。</p>
-          <button
-            onClick={handleStart}
-            className="bg-pink-500 hover:bg-pink-600 text-white px-6 py-3 rounded-lg font-semibold"
-          >
-            开始
-          </button>
-        </div>
-      )}
-
       {step === 'permission' && (
         <div className="bg-white p-6 rounded-xl shadow-md mb-6 text-center">
           <div className="text-6xl mb-4 animate-bounce">🎧</div>
@@ -443,6 +467,26 @@ const ScalePractice = () => {
         <div className="bg-white p-6 rounded-xl shadow-md mb-6 text-center">
           <p className="text-gray-700 mb-2">{message}</p>
           <p className="text-sm text-gray-500">当前F0: {currentF0 > 0 ? currentF0.toFixed(1) : '--'} Hz</p>
+        </div>
+      )}
+
+      {step === 'headphoneFail' && (
+        <div className="bg-white p-6 rounded-xl shadow-md mb-6 text-center">
+          <p className="text-gray-700 mb-4">{message}</p>
+          <div className="flex gap-4 justify-center">
+            <button
+              onClick={handleHeadphoneCheck}
+              className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold"
+            >
+              重试
+            </button>
+            <button
+              onClick={() => setStep('calibration')}
+              className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded-lg font-semibold"
+            >
+              继续
+            </button>
+          </div>
         </div>
       )}
 
@@ -569,7 +613,7 @@ const ScalePractice = () => {
             {ladderNotes.map((f, idx) => (
               <div
                 key={idx}
-                className="absolute w-full border-t border-gray-300"
+                className="absolute w-full h-px bg-gray-300"
                 style={{ bottom: `${freqToPercent(f, indicatorRange) * 100}%` }}
               ></div>
             ))}
@@ -598,6 +642,26 @@ const ScalePractice = () => {
               className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg font-semibold"
             >
               开始下降练习
+            </button>
+          </div>
+        </div>
+      )}
+
+      {step === 'descendFail' && (
+        <div className="bg-white p-6 rounded-xl shadow-md mb-6 text-center">
+          <p className="mb-4 text-gray-700">{message}</p>
+          <div className="flex gap-4 justify-center">
+            <button
+              onClick={handleRetryDescend}
+              className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold"
+            >
+              重试
+            </button>
+            <button
+              onClick={handleFinishPractice}
+              className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded-lg font-semibold"
+            >
+              结束
             </button>
           </div>
         </div>
