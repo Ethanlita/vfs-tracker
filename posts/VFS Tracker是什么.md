@@ -79,4 +79,4 @@ VFS Tracker现在的功能还并不完善，仅有简单的记录和汇总功能
 ## 如果你也想做出贡献
 - 使用VFS Tracker，就是帮助了每一个跨性别女生，就是这么简单
 - 阅读代码库中的CONTRIBUTION.md，然后你就可以提交Pull Request来给VFS Tracker贡献代码了
-- 如果你不是程序员，但也有想要实现的东西的话，请直接联系丽塔。
+- 如果你不是程序员，但也有想要实现的东西的话，请直接联系丽塔。 lita@vfs-tracker.app
