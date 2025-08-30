@@ -18,11 +18,12 @@ import {
 const frequencyToNoteName = (frequency) => {
   if (!frequency || frequency <= 0) return '--';
   const A4 = 440;
-  const noteNames = ['A', 'A#', 'B', 'C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#'];
+  const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
   const halfStepsFromA4 = Math.round(12 * Math.log2(frequency / A4));
-  const noteIndex = (halfStepsFromA4 + 57) % 12;
-  const octave = Math.floor((halfStepsFromA4 + 57) / 12);
-  return `${noteNames[noteIndex]}${octave}`;
+  const midi = 69 + halfStepsFromA4; // MIDI 69 对应 A4
+  const note = noteNames[(midi + 12) % 12];
+  const octave = Math.floor(midi / 12) - 1;
+  return `${note}${octave}`;
 };
 
 // 将频率映射为指示器的垂直百分比位置
@@ -59,8 +60,6 @@ const ScalePractice = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [permissionMsg, setPermissionMsg] = useState('');
   const [startOffset, setStartOffset] = useState(0); // 起始音相对C4的半音数
-  const [showRecommend, setShowRecommend] = useState(false);
-  const [recommendIdx, setRecommendIdx] = useState(null);
   const [beat, setBeat] = useState(0);
   const [beatLabel, setBeatLabel] = useState('');
   const [dotX, setDotX] = useState(0);
@@ -150,14 +149,14 @@ const ScalePractice = () => {
   }, [pitchLoop]);
 
   // --- 工具函数：播放一个音 ---
-  const playTone = (freq, duration = 700) => {
+  const playTone = (freq, duration = 700, usePiano = true, gainValue = 2) => {
     return new Promise(resolve => {
-      if (pianoRef.current) {
+      if (usePiano && pianoRef.current) {
         // soundfont-player 需要音名或 MIDI 号，这里将频率转换为最近的音名
         const note = frequencyToNoteName(freq);
         pianoRef.current.play(note, audioCtxRef.current.currentTime, {
           duration: duration / 1000,
-          gain: 1
+          gain: gainValue
         });
         setTimeout(resolve, duration);
       } else {
@@ -165,6 +164,7 @@ const ScalePractice = () => {
         const gain = audioCtxRef.current.createGain();
         osc.type = 'sine';
         osc.frequency.value = freq;
+        gain.gain.value = gainValue;
         osc.connect(gain);
         gain.connect(audioCtxRef.current.destination);
         osc.start();
@@ -174,27 +174,6 @@ const ScalePractice = () => {
         }, duration);
       }
     });
-  };
-
-  // --- 自动推荐起始音 ---
-  const handleAutoRecommend = async () => {
-    currentFramesRef.current = [];
-    collectingRef.current = true;
-    await new Promise(r => setTimeout(r, 3000));
-    collectingRef.current = false;
-    const valid = currentFramesRef.current.filter(f => f.pitch > 50 && f.pitch < 1200);
-    const f0s = valid.map(f => f.pitch);
-    const sff = median(f0s);
-    let idx = Math.round(12 * Math.log2(sff / 261.63)) - 2;
-    if (idx > 12) idx = 12; if (idx < -12) idx = -12;
-    setRecommendIdx(idx);
-  };
-
-  const handleUseRecommend = () => {
-    if (recommendIdx !== null) {
-      setStartOffset(recommendIdx);
-    }
-    setShowRecommend(false);
   };
 
   // --- 工具函数：测量 RMS，用于耳机检测 ---
@@ -208,6 +187,28 @@ const ScalePractice = () => {
         let sum = 0;
         for (let i = 0; i < buffer.length; i++) sum += buffer[i] * buffer[i];
         samples.push(Math.sqrt(sum / buffer.length));
+        if (performance.now() < end) {
+          requestAnimationFrame(collect);
+        } else {
+          const avg = samples.reduce((a, b) => a + b, 0) / samples.length;
+          resolve(avg);
+        }
+      };
+      collect();
+    });
+  };
+
+  // --- 测量指定频率处的能量（dB） ---
+  const measureFreqDb = (freq, duration = 800) => {
+    return new Promise(resolve => {
+      const analyser = analyserRef.current;
+      const buffer = new Float32Array(analyser.frequencyBinCount);
+      const index = Math.round((freq / audioCtxRef.current.sampleRate) * analyser.fftSize);
+      const samples = [];
+      const end = performance.now() + duration;
+      const collect = () => {
+        analyser.getFloatFrequencyData(buffer);
+        samples.push(buffer[index]);
         if (performance.now() < end) {
           requestAnimationFrame(collect);
         } else {
@@ -240,19 +241,39 @@ const ScalePractice = () => {
   const handleHeadphoneCheck = async () => {
     setStep('headphone');
     setMessage('请保持安静，我们正在检测环境噪音...');
-    const baseline = await measureRms(800);
-    baselineRmsRef.current = baseline;
-    setMessage('现在播放一段参考音，请确认不会被麦克风录到');
-    await playTone(440, 1000);
-    const test = await measureRms(800);
-    // 若参考音通过麦克风，被测 RMS 会显著提升
-    if (test <= baseline * 1.1) {
-      setMessage('耳机检测通过！');
-      setTimeout(() => setStep('setup'), 500);
-    } else {
+    const baselineRms = await measureRms(800);
+    baselineRmsRef.current = baselineRms;
+    const baselineDb = await measureFreqDb(1000, 800);
+    setMessage('现在播放1kHz标准音，请确认不会被麦克风录到');
+    const testPromise = measureFreqDb(1000, 800);
+    await playTone(1000, 800, false, 1);
+    const testDb = await testPromise;
+    if (testDb > baselineDb + 3) {
       setMessage('似乎未佩戴耳机，建议佩戴耳机以获得更佳效果。');
       setStep('headphoneFail');
+    } else {
+      setMessage('耳机检测通过！');
+      setTimeout(() => setStep('calibration'), 500);
     }
+  };
+
+  // --- 校准：获取舒适音高并推荐起始音 ---
+  const handleCalibrationStart = async () => {
+    setStep('calibrating');
+    setMessage('正在录音，请在听到嘀声后以舒适的音高发 /a/ 音');
+    currentFramesRef.current = [];
+    await playTone(1000, 300, false, 1);
+    collectingRef.current = true;
+    await new Promise(r => setTimeout(r, 3000));
+    collectingRef.current = false;
+    const valid = currentFramesRef.current.filter(f => f.pitch > 50 && f.pitch < 1200);
+    const f0s = valid.map(f => f.pitch);
+    const sff = median(f0s);
+    let idx = Math.round(12 * Math.log2(sff / 261.63)) - 2;
+    if (idx > 12) idx = 12;
+    if (idx < -12) idx = -12;
+    setStartOffset(idx);
+    setStep('setup');
   };
 
   // --- 节拍循环与练习逻辑 ---
@@ -456,7 +477,7 @@ const ScalePractice = () => {
               重试
             </button>
             <button
-              onClick={() => setStep('setup')}
+              onClick={() => setStep('calibration')}
               className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded-lg font-semibold"
             >
               继续
@@ -465,7 +486,25 @@ const ScalePractice = () => {
         </div>
       )}
 
-      {/* 校准步骤已移除，默认从 C4 开始 */}
+      {step === 'calibration' && (
+        <div className="bg-white p-6 rounded-xl shadow-md mb-6 text-center">
+          <p className="mb-4 text-gray-700">
+            点击开始录音后你将会听到嘀声，请在听到后以最舒适的音高发 /a/ 音。
+          </p>
+          <button
+            onClick={handleCalibrationStart}
+            className="bg-pink-500 hover:bg-pink-600 text-white px-4 py-2 rounded-lg font-semibold"
+          >
+            开始录音
+          </button>
+        </div>
+      )}
+
+      {step === 'calibrating' && (
+        <div className="bg-white p-6 rounded-xl shadow-md mb-6 text-center">
+          <p className="mb-4 text-gray-700">正在录音...</p>
+        </div>
+      )}
 
       {step === 'setup' && (
         <div className="bg-white p-6 rounded-xl shadow-md mb-6 text-center">
@@ -484,7 +523,7 @@ const ScalePractice = () => {
             <option value="na">na</option>
           </select>
           <div className="mb-4">
-            <p className="text-gray-700 mb-2">起始音：{frequencyToNoteName(261.63 * Math.pow(semitoneRatio, startOffset))}</p>
+            <p className="text-gray-700 mb-2">起始音：{frequencyToNoteName(261.63 * Math.pow(semitoneRatio, startOffset))}（可调整）</p>
             <input
               type="range"
               min="-12"
@@ -499,12 +538,6 @@ const ScalePractice = () => {
                 className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-3 py-1 rounded"
               >
                 试听
-              </button>
-              <button
-                onClick={() => { setRecommendIdx(null); setShowRecommend(true); handleAutoRecommend(); }}
-                className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded"
-              >
-                自动推荐
               </button>
             </div>
           </div>
@@ -521,33 +554,6 @@ const ScalePractice = () => {
             >
               开始练习
             </button>
-          </div>
-        </div>
-      )}
-
-      {showRecommend && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-xl shadow-md text-center max-w-sm w-full">
-            <p className="mb-4 text-gray-700">请以最舒适的音高发 "a" 音，我们将推荐起始音。</p>
-            {recommendIdx === null ? (
-              <p className="text-gray-500">采集中...</p>
-            ) : (
-              <p className="text-gray-700 mb-4">推荐起始音：{frequencyToNoteName(261.63 * Math.pow(semitoneRatio, recommendIdx))}</p>
-            )}
-            <div className="flex gap-4 justify-center">
-              <button
-                onClick={handleUseRecommend}
-                className="bg-pink-500 hover:bg-pink-600 text-white px-4 py-2 rounded-lg font-semibold"
-              >
-                使用推荐起始音
-              </button>
-              <button
-                onClick={() => setShowRecommend(false)}
-                className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded-lg font-semibold"
-              >
-                取消
-              </button>
-            </div>
           </div>
         </div>
       )}
