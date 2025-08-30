@@ -106,6 +106,10 @@ const MyPage = () => {
     navigate('/quick-f0-test');
   };
 
+  const handleNavigateToScalePractice = () => {
+    navigate('/scale-practice');
+  };
+
   // --- RENDER ---
   return (
     <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-6 max-w-7xl">
@@ -150,6 +154,12 @@ const MyPage = () => {
           className="bg-gradient-to-r from-teal-500 to-cyan-600 text-white px-6 py-3 rounded-lg font-semibold shadow-lg hover:from-teal-600 hover:to-cyan-700 transition-all duration-300 transform hover:scale-105"
         >
           ⚡ 快速基频测试
+        </button>
+        <button
+          onClick={handleNavigateToScalePractice}
+          className="bg-gradient-to-r from-orange-500 to-red-600 text-white px-6 py-3 rounded-lg font-semibold shadow-lg hover:from-orange-600 hover:to-red-700 transition-all duration-300 transform hover:scale-105"
+        >
+          🎶 音阶练习
         </button>
       </div>
 
