@@ -277,8 +277,8 @@ const ScalePractice = () => {
   const runCycle = async (direction, isDemo = false) => {
     const baseIndex = direction === 'ascending' ? rootIndexRef.current : descendingIndexRef.current;
     const baseFreq = 261.63 * Math.pow(semitoneRatio, baseIndex);
-    const offsets = [0, 2, 4, 2, 0];
-    const targetFreq = baseFreq * Math.pow(semitoneRatio, 4);
+    const offsets = direction === 'ascending' ? [0, 2, 4, 2, 0] : [0, -2, -4, -2, 0];
+    const targetFreq = baseFreq * Math.pow(semitoneRatio, direction === 'ascending' ? 4 : -4);
     setIndicatorRange({ min: Math.min(baseFreq, targetFreq), max: Math.max(baseFreq, targetFreq) });
     setStep(isDemo ? 'demoLoop' : direction);
     setLadderNotes([
@@ -350,7 +350,6 @@ const ScalePractice = () => {
     }
 
     const frames = beatData.flat();
-    const valid = gateFrames(frames);
 
     // 辅助函数：找出失败的音符序号
     const findFailedNote = () => {
@@ -374,7 +373,6 @@ const ScalePractice = () => {
 
     if (direction === 'ascending') {
       setStep('ascending');
-      const maxF0 = valid.length ? Math.max(...valid.map(f => f.pitch)) : 0;
       const stable = accumulateStableWindow(
         frames,
         targetFreq,
@@ -385,7 +383,8 @@ const ScalePractice = () => {
         frameDurationRef.current
       );
       if (stable >= stableWindowMs) {
-        setHighestHz(Math.max(highestHz, maxF0));
+        const cycleHigh = baseFreq * Math.pow(semitoneRatio, 4);
+        setHighestHz(Math.max(highestHz, cycleHigh));
         rootIndexRef.current += 1;
         setTimeout(() => runCycle('ascending'), 800);
       } else {
@@ -398,7 +397,6 @@ const ScalePractice = () => {
       }
     } else {
       setStep('descending');
-      const minF0 = valid.length ? Math.min(...valid.map(f => f.pitch)) : Infinity;
       const stable = accumulateStableWindow(
         frames,
         targetFreq,
@@ -409,7 +407,8 @@ const ScalePractice = () => {
         frameDurationRef.current
       );
       if (stable >= stableWindowMs) {
-        setLowestHz(lowestHz === 0 ? minF0 : Math.min(lowestHz, minF0));
+        const cycleLow = baseFreq * Math.pow(semitoneRatio, -4);
+        setLowestHz(lowestHz === 0 ? cycleLow : Math.min(lowestHz, cycleLow));
         descendingIndexRef.current -= 1;
         setTimeout(() => runCycle('descending'), 800);
       } else {
@@ -439,13 +438,8 @@ const ScalePractice = () => {
   };
 
   const handleStartDescending = () => {
-    // 根据上行练习达到的最高音确定下降练习起始音
-    if (highestHz > 0) {
-      const highestIndex = Math.round(12 * Math.log2(highestHz / 261.63));
-      descendingIndexRef.current = highestIndex - 4;
-    } else {
-      descendingIndexRef.current = startOffset;
-    }
+    // 下降练习从爬升练习最后一轮的起始音开始
+    descendingIndexRef.current = rootIndexRef.current - 1;
     runCycle('descending');
   };
 
@@ -456,6 +450,10 @@ const ScalePractice = () => {
 
   const handleFinishPractice = () => {
     cleanupAudio();
+    if (lowestHz === 0) {
+      const startFreq = 261.63 * Math.pow(semitoneRatio, startOffset);
+      setLowestHz(startFreq);
+    }
     setStep('result');
   };
 
