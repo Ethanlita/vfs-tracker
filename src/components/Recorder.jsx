@@ -9,17 +9,16 @@ import React, { useState, useRef } from 'react';
  * @param {function(Blob): void} props.onRecordingComplete - Callback function that is executed when recording stops, returning the recorded audio as a Blob.
  * @param {function(): void} [props.onStartRecording] - Optional callback for when recording starts.
  * @param {function(): void} [props.onStopRecording] - Optional callback for when recording stops.
- * @param {function(): void} [props.onDiscardRecording] - Optional callback when user chooses to stop and discard the current take (不会上传/回调 Blob)。
  * @param {boolean} [props.isRecording] - Prop to externally control the recording state (e.g., disable the button).
  * @param {number} [props.maxDurationSec] - Optional maximum duration for recording in seconds. Default is 60 seconds.
  * @returns {JSX.Element} The rendered recorder component.
  */
-const Recorder = ({ onRecordingComplete, onStartRecording, onStopRecording, onDiscardRecording, isRecording: propIsRecording, maxDurationSec = 60 }) => {
+const Recorder = ({ onRecordingComplete, onStartRecording, onStopRecording, isRecording: propIsRecording, maxDurationSec = 60 }) => {
   const [isRecording, setIsRecording] = useState(false); // 内部真实录音状态，仅由 start/stop 控制
   const [isPaused, setIsPaused] = useState(false);
   const [levelDb, setLevelDb] = useState(null);
   const [peakDb, setPeakDb] = useState(null); // 新增：峰值
-  const [isClipping, setIsClipping] = useState(false); // 新增：过载指示
+  const [isClipping, setIsClipping] = useState(false); // 新增：过载指��
   const [elapsedSec, setElapsedSec] = useState(0);
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
@@ -29,7 +28,6 @@ const Recorder = ({ onRecordingComplete, onStartRecording, onStopRecording, onDi
   const rafRef = useRef(null);
   const startTimeRef = useRef(null);
   const intervalRef = useRef(null);
-  const stopModeRef = useRef('continue'); // 'continue' | 'discard' 用于 onstop 行为分流
 
   const pickSupportedMimeType = () => {
     const candidates = [
@@ -124,32 +122,22 @@ const Recorder = ({ onRecordingComplete, onStartRecording, onStopRecording, onDi
       console.log('[Recorder] 使用 mimeType =', mediaRecorderRef.current.mimeType);
 
       audioChunksRef.current = [];
-      stopModeRef.current = 'continue'; // 每次开始录音时重置停止模式
       mediaRecorderRef.current.ondataavailable = (event) => {
         if (event.data && event.data.size > 0) audioChunksRef.current.push(event.data);
       };
 
       mediaRecorderRef.current.onstop = async () => {
-        try {
-          if (stopModeRef.current === 'discard') {
-            // 放弃本段：不做转码也不回调 blob，仅清理资源与通知可选回调
-            audioChunksRef.current = [];
-            onDiscardRecording && onDiscardRecording();
-          } else {
-            const rawBlob = new Blob(audioChunksRef.current, { type: mediaRecorderRef.current.mimeType || 'audio/webm' });
-            let finalBlob = rawBlob;
-            if (!/^audio\/wav$/i.test(rawBlob.type)) {
-              finalBlob = await encodeWav(rawBlob);
-            }
-            onRecordingComplete(finalBlob);
-            audioChunksRef.current = [];
-          }
-        } finally {
-          if (streamRef.current) {
-            streamRef.current.getTracks().forEach(track => track.stop());
-          }
-          cleanupAudio();
+        const rawBlob = new Blob(audioChunksRef.current, { type: mediaRecorderRef.current.mimeType || 'audio/webm' });
+        let finalBlob = rawBlob;
+        if (!/^audio\/wav$/i.test(rawBlob.type)) {
+          finalBlob = await encodeWav(rawBlob);
         }
+        onRecordingComplete(finalBlob);
+        audioChunksRef.current = [];
+        if (streamRef.current) {
+          streamRef.current.getTracks().forEach(track => track.stop());
+        }
+        cleanupAudio();
       };
 
       mediaRecorderRef.current.start();
@@ -161,9 +149,7 @@ const Recorder = ({ onRecordingComplete, onStartRecording, onStopRecording, onDi
         setElapsedSec(elapsed);
         if (elapsed >= maxDurationSec) {
           console.log('[Recorder] 达到最大录音时长，自动停止');
-          // 达到上限默认视为“继续”（保留本段）
-          stopModeRef.current = 'continue';
-          stopRecording();
+            stopRecording();
         }
       }, 200);
 
@@ -187,19 +173,6 @@ const Recorder = ({ onRecordingComplete, onStartRecording, onStopRecording, onDi
       console.log('录音停止。');
       stopLevelLoop();
     }
-  };
-
-  // 停止并保留当前段（继续流程）
-  const stopAndContinue = () => {
-    stopModeRef.current = 'continue';
-    stopRecording();
-  };
-
-  // 停止并放弃当前段（回到开始本段前状态）
-  const stopAndDiscard = () => {
-    if (!confirm('确定放弃当前这段录音吗？本段将不会被保存或上传。')) return;
-    stopModeRef.current = 'discard';
-    stopRecording();
   };
 
   const pauseRecording = () => {
@@ -330,12 +303,12 @@ const Recorder = ({ onRecordingComplete, onStartRecording, onStopRecording, onDi
       )}
 
       {isRecording && !isPaused && (
-        <div className="flex flex-wrap gap-3 justify-center">
+        <div className="flex space-x-4">
           <button
-            onClick={stopAndContinue}
+            onClick={stopRecording}
             className="px-6 py-3 bg-red-500 text-white rounded-full shadow-lg hover:bg-red-600 transition-colors duration-200"
           >
-            停止录音且继续
+            停止录音
           </button>
           <button
             onClick={pauseRecording}
@@ -343,17 +316,11 @@ const Recorder = ({ onRecordingComplete, onStartRecording, onStopRecording, onDi
           >
             暂停
           </button>
-          <button
-            onClick={stopAndDiscard}
-            className="px-6 py-3 bg-white text-red-600 border border-red-300 rounded-full shadow hover:bg-red-50 transition-colors duration-200"
-          >
-            停止录音且放弃
-          </button>
         </div>
       )}
 
       {isPaused && (
-        <div className="flex flex-wrap gap-3 justify-center">
+        <div className="flex space-x-4">
           <button
             onClick={resumeRecording}
             className="px-6 py-3 bg-blue-500 text-white rounded-full shadow-lg hover:bg-blue-600 transition-colors duration-200"
@@ -361,16 +328,10 @@ const Recorder = ({ onRecordingComplete, onStartRecording, onStopRecording, onDi
             继续录音
           </button>
           <button
-            onClick={stopAndContinue}
+            onClick={stopRecording}
             className="px-6 py-3 bg-red-500 text-white rounded-full shadow-lg hover:bg-red-600 transition-colors duration-200"
           >
-            停止录音且继续
-          </button>
-          <button
-            onClick={stopAndDiscard}
-            className="px-6 py-3 bg-white text-red-600 border border-red-300 rounded-full shadow hover:bg-red-50 transition-colors duration-200"
-          >
-            停止录音且放弃
+            停止录音
           </button>
         </div>
       )}
