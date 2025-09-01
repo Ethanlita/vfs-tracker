@@ -18,17 +18,17 @@ import TestResultsDisplay from './TestResultsDisplay';
  * @zh 定义嗓音测试向导中每个步骤的结构和内容。
  */
 const STEPS = [
-  { id: 0, title: '说明与同意', instructions: '本工具旨在提供嗓音分析的参考数据，并非医疗诊断。您的数据将被匿名化处理，仅能用于参考。过程需要约10分钟，请您在测试途中不要退出页面或者刷新页面，否则所有进度都将会丢失。这不仅会浪费您的时间，也会占用额外的AWS Lambda运行时和S3存储空间。每次您完成一个片段的录音后，请点击“停止录音且继续”，这样录音才会停止并自动上传。如本段说错或失误，可点击“停止录音且放弃”丢弃本段并重新录制。如果您准备好了，点击“下一步”即表示您同意以上条款。', requiresRecording: false },
-  { id: 1, title: '设备与环境校准', instructions: '请在安静的环境中进行测试。首先，录制5秒钟的静音。然后，用正常音量朗读“他去无锡市，我到黑龙江”两遍。', requiresRecording: true, recordingsNeeded: 2, recordingLabels: ['点击开始录音，保持安静5秒，然后请点击“停止录音且继续”', '点击开始录音，朗读标准句，然后点击“停止录音且继续”'] },
-  { id: 2, title: '最长发声时 (MPT) + 稳定元音', instructions: '请用舒适的音量，尽可能长地发出元音 /a/。此步骤需要录制两次，我们会取效果最好的一次。', requiresRecording: true, recordingsNeeded: 2, recordingLabels: ['第一次 /a/ （啊）发声，录制完成后请点击“停止录音且继续”', '第二次 /a/ （啊）发声，录制完成后请点击“停止录音且继续”'] },
-  { id: 3, title: '音域测定：滑音', instructions: '请从您最低的音平滑地唱到最高的音（上滑音），然后从最高的音平滑地唱到最低的音（下滑音）。上下滑音各需录制两次。提示：滑音，即选择一个元音（如“/a/ (啊)”或“/u/ (呜)”），从自己舒适的中音开始，把声音顺滑地持续拉高到能达到的最高音（上滑音），再连续滑回最低音（下滑音）。要求连贯不中断、不突然跳音，用来测试声音能覆盖的最高与最低范围，也就是音域极限。', requiresRecording: true, recordingsNeeded: 4, recordingLabels: ['第一次上滑音，录制完成后请点击“停止录音且继续”', '第二次上滑音，录制完成后请点击“停止录音且继续”', '第一次下滑音，录制完成后请点击“停止录音且继续”', '第二次下滑音，录制完成后请点击“停止录音且继续”'] },
-  { id: 4, title: '定点音 + 共振峰', instructions: '请分别用您最低和最高的可控音量，稳定地发出元音 /a/，各持续3-4秒。', requiresRecording: true, recordingsNeeded: 2, recordingLabels: ['最低音 /a/，录制完成后请点击“停止录音且继续”', '最高音 /a/，录制完成后请点击“停止录音且继续”'] },
+  { id: 0, title: '说明与同意', instructions: '本工具旨在提供嗓音分析的参考数据，并非医疗诊断。您的数据将被匿名化处理，仅能用于参考。过程需要约10分钟，请您在测试途中不要退出页面或者刷新页面，否则所有进度都将会丢失。这不仅会浪费您的时间，也会占用额外的AWS Lambda运行时和S3存储空间。每次您完成一个片段的录音后，请点击停止，这样录音才会停止并自动上传。如果您准备好了，点击“下一步”即表示您同意以上条款。', requiresRecording: false },
+  { id: 1, title: '设备与环境校准', instructions: '请在安静的环境中进行测试。首先，录制5秒钟的静音。然后，用正常音量朗读“他去无锡市，我到黑龙江”两遍。', requiresRecording: true, recordingsNeeded: 2, recordingLabels: ['点击开始录音，保持安静5秒，然后请点击停止', '点击开始录音，朗读标准句，然后点击停止'] },
+  { id: 2, title: '最长发声时 (MPT) + 稳定元音', instructions: '请用舒适的音量，尽可能长地发出元音 /a/。此步骤需要录制两次，我们会取效果最好的一次。', requiresRecording: true, recordingsNeeded: 2, recordingLabels: ['第一次 /a/ （啊）发声，录制完成后请点击停止', '第二次 /a/ （啊）发声，录制完成后请点击停止'] },
+  { id: 3, title: '音域测定：滑音', instructions: '请从您最低的音平滑地唱到最高的音（上滑音），然后从最高的音平滑地唱到最低的音（下滑音）。上下滑音各需录制两次。提示：滑音，即选择一个元音（如“/a/ (啊)”或“/u/ (呜)”），从自己舒适的中音开始，把声音顺滑地持续拉高到能达到的最高音（上滑音），再连续滑回最低音（下滑音）。要求连贯不中断、不突然跳音，用来测试声音能覆盖的最高与最低范围，也就是音域极限。', requiresRecording: true, recordingsNeeded: 4, recordingLabels: ['第一次上滑音，录制完成后请点击停止', '第二次上滑音，录制完成后请点击停止', '第一次下滑音，录制完成后请点击停止', '第二次下滑音，录制完成后请点击停止'] },
+  { id: 4, title: '定点音 + 共振峰', instructions: '请分别用您最低和最高的可控音量，稳定地发出元音 /a/，各持续3-4秒。', requiresRecording: true, recordingsNeeded: 2, recordingLabels: ['最低音 /a/，录制完成后请点击停止', '最高音 /a/，录制完成后请点击停止'] },
   { id: 5, title: '朗读指定语句', instructions: '请按屏幕上显示的文字进行朗读。\n许多人感觉跨性别女性多为程序员，这让人联想到计算机之父图灵的遭遇。他因同性恋被迫接受雌激素注射作为惩罚，并因此承受了乳房发育等副作用带来的巨大身心痛苦。\n' +
           '\n' +
           '然而，一种反向思考是：如果承受这种“惩罚”的是一位有性别认同障碍的跨性别女性，那么刑罚就变成了奖励，副作用也成了期望的疗效。\n' +
           '\n' +
-          '这种惩罚与奖励的戏剧性反转，何尝不是图灵对后辈的一种“爱护”与“保护”呢？他仿佛以自己的牺牲，通过施加在性别认同上的影响，为后来的从业者开辟了一条独特的道路，使得她们再也无惧这种毫无人道的惩罚。因此，当我们每一次打开电脑，每一次解锁手机，我们都应当回想起那位伟大的计算机科学家，不仅是为了他对计算机科学领域做出的贡献，也是为了他一直以来对该领域的后辈的无私保护，而从心中升起无限的敬意。', requiresRecording: true, recordingsNeeded: 1, recordingLabels: ['朗读完成后请点击“停止录音且继续”'] },
-  { id: 6, title: '自由说话', instructions: '请围绕开放话题“介绍一下你最喜欢的食物”进行30-60秒的自由发言。', requiresRecording: true, recordingsNeeded: 1, recordingLabels: ['发言完成后请点击“停止录音且继续”'] },
+          '这种惩罚与奖励的戏剧性反转，何尝不是图灵对后辈的一种“爱护”与“保护”呢？他仿佛以自己的牺牲，通过施加在性别认同上的影响，为后来的从业者开辟了一条独特的道路，使得她们再也无惧这种毫无人道的惩罚。因此，当我们每一次打开电脑，每一次解锁手机，我们都应当回想起那位伟大的计算机科学家，不仅是为了他对计算机科学领域做出的贡献，也是为了他一直以来对该领域的后辈的无私保护，而从心中升起无限的敬意。', requiresRecording: true, recordingsNeeded: 1 },
+  { id: 6, title: '自由说话', instructions: '请围绕开放话题“介绍一下你最喜欢的食物”进行30-60秒的自由发言。', requiresRecording: true, recordingsNeeded: 1 },
   { id: 7, title: '主观量表', instructions: '请根据您近期的嗓音情况，完成以下主观评估量表。', requiresRecording: false },
   { id: 8, title: '结果确认与报告生成', instructions: '所有测试已完成！请点击下方按钮，开始生成您的嗓音分析报告。', requiresRecording: false },
 ];
@@ -52,7 +52,6 @@ const VoiceTestWizard = () => {
   const [recordedBlobs, setRecordedBlobs] = useState({});
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState(null);
-  const [discardInfo, setDiscardInfo] = useState(false); // 放弃提示状态
   
   const [formData, setFormData] = useState({
     rbh: { R: null, B: null, H: null },
@@ -110,7 +109,6 @@ const VoiceTestWizard = () => {
       failedUploadRef.current = null;
       setUploadError(null);
       setIsUploading(false);
-      setDiscardInfo(false);
     } catch {
       alert('重新开始失败，请稍后再试。');
     } finally {
@@ -119,12 +117,17 @@ const VoiceTestWizard = () => {
   };
 
   /**
+   * 本地重置当前步骤（只影响前端显示和后续计数，已上传文件仍存在后端，分析时可能仍被纳入）。
+   * 若用户需要彻底重录，请使用“重新开始整个测试”以创建新 session。
+   */
+  // const handleResetCurrentStep = () => { /* 旧的单步骤重置逻辑已废弃，统一改为需重新开始整个测试 */ };
+
+  /**
    * 上传完成回调：负责获取上传 URL 并上传；失败时缓存 blob 以便用户点击“重试上传”。
    */
   const handleRecordingComplete = async (blob) => {
     setIsUploading(true);
     setUploadError(null);
-    setDiscardInfo(false); // 有新上传时清除放弃提示
     failedUploadRef.current = null; // 清除旧的失败记录
     const stepInfo = STEPS[currentStep];
     const recordingIndex = recordedBlobs[currentStep]?.length || 0; // 下一个序号
@@ -140,15 +143,6 @@ const VoiceTestWizard = () => {
     } finally {
       setIsUploading(false);
     }
-  };
-
-  /**
-   * 当用户选择“停止录音且放弃”：不触发上传，不改变已完成计数，仅给出轻提示。
-   */
-  const handleDiscardRecording = () => {
-    setDiscardInfo(true);
-    // 2-3 秒后自动隐藏提示
-    setTimeout(() => setDiscardInfo(false), 3000);
   };
 
   /**
@@ -275,10 +269,7 @@ const VoiceTestWizard = () => {
           <div className="my-4 p-3 bg-gray-100 rounded-lg space-y-1">
             <p className="font-semibold">进度: {recordingsForStep.length} / {stepInfo.recordingsNeeded}</p>
             {stepInfo.recordingLabels && <p className="text-sm text-gray-500">当前录制: {stepInfo.recordingLabels[recordingsForStep.length] || '已完成'}</p>}
-            {/* 辅助提示：放弃本段将回到本次开始前状态 */}
-            <p className="text-xs text-gray-400">如说错或失误，可点击“停止录音且放弃”——本段不会计入进度。</p>
           </div>
-          {discardInfo && <div className="my-3 p-2 bg-gray-50 text-gray-600 rounded text-sm">已放弃刚才的录音，本次不计入进度。</div>}
           {isUploading && <p className="my-4 text-blue-600">正在上传...</p>}
           {uploadError && <div className="my-4 p-3 bg-red-100 text-red-700 rounded-md space-y-2">
             <p>{uploadError}</p>
@@ -286,7 +277,7 @@ const VoiceTestWizard = () => {
           </div>}
           {allRecordingsDone && !isUploading && !uploadError && <div className="my-4 p-3 bg-green-100 text-green-800 rounded-lg"><p>✅ 本步骤所有录音已完成。</p></div>}
           <div className="mt-4">
-            <Recorder key={`${currentStep}-${recordingsForStep.length}`} onRecordingComplete={handleRecordingComplete} onDiscardRecording={handleDiscardRecording} isRecording={isUploading || allRecordingsDone} />
+            <Recorder key={`${currentStep}-${recordingsForStep.length}`} onRecordingComplete={handleRecordingComplete} isRecording={isUploading || allRecordingsDone} />
           </div>
           <div className="mt-6 flex flex-wrap gap-3 justify-center">
             {/* 已隐藏单步重置功能：强制用户使用重新开始测试，以避免旧文件仍存在导致的混淆 */}
