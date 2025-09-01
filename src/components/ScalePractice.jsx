@@ -617,15 +617,9 @@ const ScalePractice = () => {
             请选择练习音节。不同音节可以练习不同的共鸣位置。
           </p>
           <div className="bg-blue-100 rounded-lg p-4 text-left text-gray-700 mb-4">
-              <p>
-                  热身与寻找共鸣: 首选闭口哼鸣 [m]，感受面部振动。
-              </p>
-              <p>
-                  建立稳定、连贯的声音: 用 [mi] 找到集中的高位置感，然后用 [mɑ] 在保持该位置的同时练习口腔打开。
-              </p>
-              <p>
-                  提升咬字清晰度与舌头灵活性: 可考虑用 [lɑ]。
-              </p>
+            热身与寻找共鸣，首选闭口哼鸣 [m]，感受面部振动。建立稳定、连贯的声音，用 [mi] (咪) 找到集中的高位置感，
+            然后用 [mɑ] (嘛) 在保持该位置的同时练习口腔打开。提升咬字清晰度与舌头灵活性，可多用 [lɑ] (啦)。从
+            [m] 到 [mi]/[mɑ] 再到 [lɑ] 是一个高效、科学的练习路径。
           </div>
           <select
             value={syllable}
@@ -697,17 +691,9 @@ const ScalePractice = () => {
       {['demoLoop', 'ascending', 'descending'].includes(step) && (
         <div className="bg-white p-6 rounded-xl shadow-md mb-6 text-center">
           {step === 'demoLoop' && (
-            <div className="bg-blue-100 rounded-lg p-4 text-left text-gray-700 mb-4">
-                <p className="mb-4 text-gray-700">
-                    演示说明：全过程共 8 拍，第 1 拍为音高示例无需出声，第 2、8 拍为空拍，第 3-7 拍需与系统同时出声。
-                </p>
-                <p>
-                    演示周期结束后将会显示提示信息。在正式练习周期中，如果当前周期通过了，则会自动进入下一周期。
-                </p>
-                <p>
-                    在音高指示器下方有节拍指示器，建议在第一、第二拍时吸气，然后在第三拍开始时发声。
-                </p>
-              </div>
+            <p className="mb-4 text-gray-700">
+              演示说明：全过程共 8 拍，第 1 拍为音高示例无需出声，第 2、8 拍为空拍，第 3-7 拍需与系统同时出声。
+            </p>
           )}
           <div className="relative h-48 bg-gray-100 rounded mb-4">
             {ladderNotes.map((f, idx) => {
