@@ -246,18 +246,26 @@ def get_lpc_spectrum(file_path: str):
         if np.allclose(np.std(seg), 0.0):
             return None
         try:
-            a = librosa.lpc(seg, order)
+            a = librosa.lpc(seg, order=order)
         except Exception as e:
             logger.warning(f"librosa.lpc failed (order={order}), fallback to lower order: {e}")
             order = max(8, int(2 + (sr / 1000)))
-            a = librosa.lpc(seg, order)
+            a = librosa.lpc(seg, order=order)
         # 计算频率响应
-        if _scisignal is None:
-            logger.error("scipy.signal not available; cannot compute LPC spectrum")
-            return None
         worN = 4096
-        w, h = _scisignal.freqz(b=[1.0], a=a, worN=worN, fs=sr)
-        freqs = w  # Hz
+        if _scisignal is not None:
+            # 优先使用 scipy.signal.freqz（若可用）
+            w, h = _scisignal.freqz(b=[1.0], a=a, worN=worN, fs=sr)
+            freqs = w  # Hz
+        else:
+            # 回退：使用 numpy 直接计算频率响应，避免在缺少 scipy 时返回 None
+            logger.warning("scipy.signal not available; falling back to numpy freq response")
+            w = np.linspace(0, np.pi, worN)
+            # 由于 b=[1.0]，分子恒为1，这里仅计算分母多项式
+            exp = np.exp(-1j * np.outer(w, np.arange(len(a))))
+            h = 1.0 / (exp @ a)
+            freqs = w * sr / (2 * np.pi)
+
         mag = np.abs(h)
         mag[mag <= 1e-12] = 1e-12
         spl_db = 20.0 * np.log10(mag)
