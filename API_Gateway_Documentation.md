@@ -476,6 +476,62 @@ Content-Type: application/json
 
 ---
 
+### POST /recommend-songs
+
+**Description**: Provides song recommendations based on the user's vocal range. This endpoint securely proxies requests to the Google Gemini API with a specialized prompt for music curation.
+
+**Authentication**: Required (Cognito JWT)
+
+**Headers**:
+```
+Authorization: Bearer {jwt-token}
+Content-Type: application/json
+```
+
+**Request Body**:
+```json
+{
+  "lowestNote": "string",  // The lowest note in the user's vocal range (e.g., "G3")
+  "highestNote": "string" // The highest note in the user's vocal range (e.g., "A5")
+}
+```
+
+**Success Response (200 OK)**:
+```json
+{
+  "success": true,
+  "recommendations": [
+    {
+      "songName": "Someone Like You",
+      "artist": "Adele",
+      "reason": "这首歌的音域与您的非常匹配，主歌部分在中音区，副歌部分则能很好地展现您的高音能力，是练习情感表达和音高控制的绝佳选择。"
+    },
+    {
+      "songName": "Thinking Out Loud",
+      "artist": "Ed Sheeran",
+      "reason": "这首歌的旋律平缓，音高变化不大，非常适合在您舒适的音域内进行练习，有助于巩固稳定的发声和气息支持。"
+    }
+  ]
+}
+```
+
+**Error Response (e.g., 502 Bad Gateway)**:
+```json
+{
+  "success": false,
+  "error": "Failed to call Gemini API."
+}
+```
+
+**HTTP Status Codes**:
+- `200 OK`: Success.
+- `400 Bad Request`: The request body is missing `lowestNote` or `highestNote`, or is not valid JSON.
+- `401 Unauthorized`: Missing or invalid JWT token.
+- `500 Internal Server Error`: An unexpected server error occurred.
+- `502 Bad Gateway`: The proxy failed to get a valid response from the Gemini API.
+
+---
+
 ## Online Praat / Voice Test Endpoints
 
 This set of endpoints manages the multi-step voice analysis test feature.

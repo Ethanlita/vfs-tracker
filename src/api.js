@@ -227,6 +227,29 @@ ${eventsSummary}
   }
 };
 
+export const getSongRecommendations = async ({ lowestNote, highestNote }) => {
+  const isAiEnabled = (isProductionReady() || !!import.meta.env.VITE_ENABLE_AI_IN_DEV);
+  if (!isAiEnabled) {
+    console.log('🔧 开发/未就绪：mock 歌曲推荐');
+    return Promise.resolve([
+      { songName: "Mock Song 1", artist: "Mock Artist A", reason: "这是一个模拟的推荐理由。" },
+      { songName: "Mock Song 2", artist: "Mock Artist B", reason: "这首歌的音域非常适合您。" },
+    ]);
+  }
+
+  try {
+    const result = await authenticatedPost('/recommend-songs', { lowestNote, highestNote });
+    if (result.success) {
+      return result.recommendations;
+    } else {
+      throw new Error(result.error || 'The song recommendation service failed.');
+    }
+  } catch (error) {
+    console.error('❌ Failed to call song recommendation API:', error);
+    throw error;
+  }
+};
+
 export const getUserProfile = async (userId) => {
   if (!isProductionReady() && !import.meta.env.VITE_FORCE_REAL) {
     const mockUserProfile = { userId, email: 'mock-user@example.com', profile: { name: '模拟用户', isNamePublic: false, socials: [], areSocialsPublic: false }, createdAt: '2025-08-01T10:00:00.000Z', updatedAt: '2025-08-16T10:30:00.000Z' };
