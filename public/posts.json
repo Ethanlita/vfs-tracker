@@ -4,14 +4,24 @@
     "type": "folder",
     "children": [
       {
-        "name": "part1.md",
+        "name": "嗓音分析（快速&完整）使用指南.md",
         "type": "file",
-        "path": "tutorial/part1.md"
+        "path": "tutorial/嗓音分析（快速&完整）使用指南.md"
       },
       {
-        "name": "part2.md",
+        "name": "数据查询使用指南.md",
         "type": "file",
-        "path": "tutorial/part2.md"
+        "path": "tutorial/数据查询使用指南.md"
+      },
+      {
+        "name": "数据记录使用指南.md",
+        "type": "file",
+        "path": "tutorial/数据记录使用指南.md"
+      },
+      {
+        "name": "音阶练习使用指南.md",
+        "type": "file",
+        "path": "tutorial/音阶练习使用指南.md"
       }
     ]
   },
@@ -44,5 +54,10 @@
     "name": "测试基频和其它参数的方法.md",
     "type": "file",
     "path": "测试基频和其它参数的方法.md"
+  },
+  {
+    "name": "联系和交流.md",
+    "type": "file",
+    "path": "联系和交流.md"
   }
 ]
