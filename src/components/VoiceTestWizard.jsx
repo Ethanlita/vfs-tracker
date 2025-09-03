@@ -13,6 +13,10 @@ import SurveyOVHS9 from './SurveyOVHS9';
 import SurveyTVQG from './SurveyTVQG';
 import TestResultsDisplay from './TestResultsDisplay';
 
+/**
+ * @en Defines the structure and content for each step of the voice test wizard.
+ * @zh 定义嗓音测试向导中每个步骤的结构和内容。
+ */
 const STEPS = [
   { id: 0, title: '说明与同意', instructions: '本工具旨在提供嗓音分析的参考数据，并非医疗诊断。您的数据将被匿名化处理，仅能用于参考。过程需要约10分钟，请您在测试途中不要退出页面或者刷新页面，否则所有进度都将会丢失。这不仅会浪费您的时间，也会占用额外的AWS Lambda运行时和S3存储空间。每次您完成一个片段的录音后，请点击停止，这样录音才会停止并自动上传。如果您准备好了，点击“下一步”即表示您同意以上条款。', requiresRecording: false },
   { id: 1, title: '设备与环境校准', instructions: '请在安静的环境中进行测试。首先，录制5秒钟的静音。然后，用正常音量朗读“他去无锡市，我到黑龙江”两遍。', requiresRecording: true, recordingsNeeded: 2, recordingLabels: ['点击开始录音，保持安静5秒，然后请点击停止', '点击开始录音，朗读标准句，然后点击停止'] },
@@ -29,6 +33,15 @@ const STEPS = [
   { id: 8, title: '结果确认与报告生成', instructions: '所有测试已完成！请点击下方按钮，开始生成您的嗓音分析报告。', requiresRecording: false },
 ];
 
+/**
+ * @en The VoiceTestWizard component is a multi-step wizard that guides the user through a comprehensive voice analysis test.
+ * It manages the overall state of the test, including the current step, session ID, recorded audio data, and questionnaire answers.
+ * It orchestrates the recording, uploading, and final analysis processes.
+ * @zh VoiceTestWizard 组件是一个多步骤向导，引导用户完成全面的嗓音分析测试。
+ * 它管理测试的整体状态，包括当前步骤、会话ID、录制的音频数据和问卷答案。
+ * 它负责协调录音、上传和最终的分析流程。
+ * @returns {JSX.Element} The rendered voice test wizard component.
+ */
 const VoiceTestWizard = () => {
   const { user } = useAuth();
   const [currentStep, setCurrentStep] = useState(0);
@@ -45,7 +58,7 @@ const VoiceTestWizard = () => {
   const failedUploadRef = useRef(null);
 
   // Playback state
-  const audioRef = useRef(null);
+  const audioRef = useRef(null); // Ref to store the Audio object
   const [activePlayback, setActivePlayback] = useState({ blob: null, isPlaying: false, progress: 0, duration: 0 });
 
   const handleFormChange = (formName, values) => setFormData(prev => ({ ...prev, [formName]: values }));
@@ -66,13 +79,14 @@ const VoiceTestWizard = () => {
 
     return () => {
       clearInterval(pollingRef.current);
-      if (audioRef.current) {
-        audioRef.current.pause();
-        URL.revokeObjectURL(audioRef.current.src);
-      }
+      cleanupAudio(); // Clean up audio player on component unmount
     };
   }, [user]);
 
+  /**
+   * @en Cleans up the audio player, pausing it and revoking the object URL.
+   * @zh 清理音频播放器，暂停播放并释放对象URL。
+   */
   const cleanupAudio = () => {
     if (audioRef.current) {
       audioRef.current.pause();
@@ -82,6 +96,11 @@ const VoiceTestWizard = () => {
     setActivePlayback({ blob: null, isPlaying: false, progress: 0, duration: 0 });
   };
 
+  /**
+   * @en Handles playback of recorded audio, including play, pause, and switching tracks.
+   * @zh 处理录制音频的回放，包括播放、暂停和切换音轨。
+   * @param {Blob} blob The audio blob to play.
+   */
   const handlePlayback = (blob) => {
     if (audioRef.current && activePlayback.blob === blob) {
       if (activePlayback.isPlaying) {
@@ -106,6 +125,11 @@ const VoiceTestWizard = () => {
     }
   };
 
+  /**
+   * @en Handles seeking the audio to a new time.
+   * @zh 处理音频跳转到新的时间点。
+   * @param {React.ChangeEvent<HTMLInputElement>} e The input change event.
+   */
   const handleSeek = (e) => {
     if (audioRef.current) {
       const newTime = Number(e.target.value);
@@ -114,6 +138,10 @@ const VoiceTestWizard = () => {
     }
   };
 
+  /**
+   * @en Restarts the entire test: creates a new session and clears all recorded data, form inputs, and analysis status.
+   * @zh 重新开始整个测试：新建 session，清空所有已录制、表单与分析状态。
+   */
   const handleRestartWizard = async () => {
     if (!window.confirm('确定要重新开始整个测试吗？\n此操作会新建会话并清空当前进度。')) return;
     cleanupAudio();
@@ -137,6 +165,10 @@ const VoiceTestWizard = () => {
     }
   };
 
+  /**
+   * @en Callback for when recording is complete: gets an upload URL and uploads the file.
+   * @zh 上传完成回调：负责获取上传 URL 并上传文件。
+   */
   const handleRecordingComplete = async (blob) => {
     setIsUploading(true);
     setUploadError(null);
@@ -157,6 +189,10 @@ const VoiceTestWizard = () => {
     }
   };
 
+  /**
+   * @en Retries uploading the last failed recording.
+   * @zh 重试上传：使用缓存的失败 blob 再次请求 presigned URL 上传。
+   */
   const handleRetryUpload = async () => {
     if (!failedUploadRef.current) return;
     const { blob, stepId, fileName } = failedUploadRef.current;
@@ -175,6 +211,10 @@ const VoiceTestWizard = () => {
     }
   };
 
+  /**
+   * @en Triggers the backend analysis and starts polling for results.
+   * @zh 触发后端分析，启动轮询。
+   */
   const handleGenerateReport = async () => {
     setAnalysisStatus('processing');
     try {
@@ -202,6 +242,10 @@ const VoiceTestWizard = () => {
     }
   };
 
+  /**
+   * @en Retries the analysis if it failed.
+   * @zh 分析失败或需要重新生成报告时的重试。
+   */
   const handleRetryAnalysis = () => {
     if (!window.confirm('将重新发起分析，这可能再次消耗计算资源。继续吗？')) return;
     setAnalysisStatus('idle');
@@ -220,7 +264,7 @@ const VoiceTestWizard = () => {
   const renderStepContent = () => {
     const stepInfo = STEPS[currentStep];
     
-    if (stepInfo.id === 8) {
+    if (stepInfo.id === 8) { // 结果生成步骤
       switch (analysisStatus) {
         case 'idle':
           return (
@@ -288,11 +332,12 @@ const VoiceTestWizard = () => {
             <Recorder key={`${currentStep}-${recordingsForStep.length}`} onRecordingComplete={handleRecordingComplete} isRecording={isUploading || allRecordingsDone} />
           </div>
           <div className="mt-6 flex flex-wrap gap-3 justify-center">
+            {/* 已隐藏单步重置功能：强制用户使用重新开始测试，以避免旧文件仍存在导致的混淆 */}
             <button onClick={handleRestartWizard} disabled={isUploading} className="px-4 py-2 bg-gray-100 text-gray-600 rounded-lg text-sm font-medium hover:bg-gray-200 disabled:opacity-60 disabled:cursor-not-allowed transition-colors">重新开始测试</button>
           </div>
           {recordingsForStep.length > 0 && (
             <div className="mt-8 text-left max-w-xl mx-auto">
-              <h4 className="font-semibold mb-2 text-gray-700 text-sm">已录制文件</h4>
+              <h4 className="font-semibold mb-2 text-gray-700 text-sm">已录制文件（列表仅表示本地进度，后端暂不支持删除已上传文件）</h4>
               <ul className="space-y-2 max-h-60 overflow-auto pr-1 text-xs">
                 {recordingsForStep.map((r, idx) => {
                   const isActive = activePlayback.blob === r.blob;
@@ -335,7 +380,7 @@ const VoiceTestWizard = () => {
   };
 
   const stepInfo = STEPS[currentStep];
-  let isStepComplete;
+  let isStepComplete; // 去除冗余初始值
   if (stepInfo.id === 7) isStepComplete = isFormsComplete();
   else if (stepInfo.requiresRecording) isStepComplete = (recordedBlobs[currentStep] || []).length >= (stepInfo.recordingsNeeded || 0);
   else isStepComplete = true;
