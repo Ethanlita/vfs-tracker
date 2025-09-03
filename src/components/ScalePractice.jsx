@@ -7,6 +7,7 @@ import {
   gateByEnergy,
   gateByStability
 } from '../utils/pitchEval.js';
+import { getSongRecommendations } from '../api.js'; // Import the new API function
 
 /**
  * @zh 将给定的频率（Hz）转换为最接近的音乐音名。
@@ -49,7 +50,6 @@ const ScalePractice = () => {
   const navigate = useNavigate();
 
   // --- 向导步骤状态 ---
-  // 初始即进入权限请求页面
   const [step, setStep] = useState('permission');
   const [message, setMessage] = useState('');
   const [syllable, setSyllable] = useState('a');
@@ -65,6 +65,11 @@ const ScalePractice = () => {
   // --- 练习结果 ---
   const [highestHz, setHighestHz] = useState(0);
   const [lowestHz, setLowestHz] = useState(0);
+
+  // --- 歌曲推荐状态 ---
+  const [recommendations, setRecommendations] = useState([]);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [recommendationError, setRecommendationError] = useState(null);
 
   // --- 音频与分析相关引用 ---
   const audioCtxRef = useRef(null);
@@ -470,6 +475,25 @@ const ScalePractice = () => {
     setStep('result');
   };
 
+  // --- 获取歌曲推荐 ---
+  const handleGetRecommendations = async () => {
+    setIsGenerating(true);
+    setRecommendationError(null);
+    setRecommendations([]);
+
+    try {
+      const lowestNote = frequencyToNoteName(lowestHz);
+      const highestNote = frequencyToNoteName(highestHz);
+      const result = await getSongRecommendations({ lowestNote, highestNote });
+      setRecommendations(result);
+    } catch (err) {
+      console.error('Failed to get song recommendations:', err);
+      setRecommendationError('获取推荐失败，请稍后再试。');
+    }
+
+    setIsGenerating(false);
+  };
+
   // 绘制钢琴键盘并标注声域范围
   const renderRangeKeyboard = () => {
     if (!highestHz || !lowestHz) return null;
@@ -478,9 +502,9 @@ const ScalePractice = () => {
     const lowMidi = Math.floor(freqToMidi(lowestHz));
     const highMidi = Math.ceil(freqToMidi(highestHz));
 
-    // 固定绘制 108 键（C0-B8）
-    const startMidi = 12; // C0
-    const endMidi = 120; // B8 + 1
+    // 绘制标准的88键钢琴 (A0-C8)
+    const startMidi = 21; // A0
+    const endMidi = 109; // C8 + 1
 
     const whiteWidth = 12;
     const whiteHeight = 80;
@@ -781,13 +805,47 @@ const ScalePractice = () => {
           <p className="mb-2 text-gray-700">最高音：{frequencyToNoteName(highestHz)} ({highestHz.toFixed(1)} Hz)</p>
           <p className="mb-4 text-gray-700">最低音：{frequencyToNoteName(lowestHz)} ({lowestHz.toFixed(1)} Hz)</p>
           {renderRangeKeyboard()}
-          <div className="flex justify-center">
+          <div className="flex justify-center gap-4 mt-6">
             <button
               onClick={() => navigate('/mypage')}
               className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded-lg font-semibold"
             >
               返回
             </button>
+            <button
+              onClick={handleGetRecommendations}
+              disabled={isGenerating}
+              className="bg-pink-500 hover:bg-pink-600 text-white px-4 py-2 rounded-lg font-semibold disabled:bg-pink-300 disabled:cursor-not-allowed"
+            >
+              {isGenerating ? '生成中...' : '获取歌曲推荐'}
+            </button>
+          </div>
+
+          {/* Recommendation Section */}
+          <div className="mt-6 text-left">
+            {isGenerating && (
+              <div className="flex justify-center items-center p-4">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-pink-500"></div>
+                <span className="ml-3 text-gray-600">正在为您寻找合适的歌曲...</span>
+              </div>
+            )}
+            {recommendationError && (
+              <div className="bg-red-100 text-red-700 p-3 rounded-lg">{recommendationError}</div>
+            )}
+            {recommendations.length > 0 && (
+              <div>
+                <h3 className="text-xl font-semibold text-gray-800 mb-3 text-center">歌曲推荐</h3>
+                <ul className="space-y-4">
+                  {recommendations.map((song, index) => (
+                    <li key={index} className="bg-gray-50 p-4 rounded-lg shadow-sm">
+                      <p className="font-bold text-pink-600">{song.songName}</p>
+                      <p className="text-sm text-gray-600 mb-1">原唱: {song.artist}</p>
+                      <p className="text-sm text-gray-700">推荐理由: {song.reason}</p>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
         </div>
       )}

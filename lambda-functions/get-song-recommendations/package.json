@@ -1,0 +1,10 @@
+{
+  "name": "get-song-recommendations",
+  "version": "1.0.0",
+  "description": "Lambda function to get song recommendations from Gemini based on vocal range.",
+  "main": "index.mjs",
+  "type": "module",
+  "dependencies": {
+    "@google/generative-ai": "^0.24.1"
+  }
+}
