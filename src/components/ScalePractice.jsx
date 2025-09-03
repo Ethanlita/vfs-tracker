@@ -839,7 +839,7 @@ const ScalePractice = () => {
                   {recommendations.map((song, index) => (
                     <li key={index} className="bg-gray-50 p-4 rounded-lg shadow-sm">
                       <p className="font-bold text-pink-600">{song.songName}</p>
-                      <p className="text-sm text-gray-600 mb-1">原唱: {song.artist}</p>
+                      <p className="text-sm text-gray-600 mb-1">Cover:  {song.artist}</p>
                       <p className="text-sm text-gray-700">推荐理由: {song.reason}</p>
                     </li>
                   ))}
