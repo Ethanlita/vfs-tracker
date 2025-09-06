@@ -21,7 +21,7 @@ const STEPS = [
   { id: 0, title: '说明与同意', instructions: '本工具旨在提供嗓音分析的参考数据，并非医疗诊断。您的数据将被匿名化处理，仅能用于参考。' +
           '\n过程需要约10分钟，请您在测试途中不要退出页面或者刷新页面，否则所有进度都将会丢失。' +
           '\n这不仅会浪费您的时间，也会占用额外的AWS Lambda运行时和S3存储空间。' +
-          '\n每次您完成一个片段的录音后，请点击停止，这样录音才会停止并自动上传。' +
+          '\n每次您完成一个片段的录音后，请点击“停止录音且继续”，这样录音才会停止并自动上传。如本段说错或失误，可点击“停止录音且放弃”丢弃本段并重新录制。' +
           '\n上传的音频文件只会在S3中保留60分钟，因此，请务必在60分钟内完成测试，否则将会产生不可预知的测试结果。' +
           '\n如果您准备好了，点击“下一步”即表示您同意以上条款。', requiresRecording: false },
   { id: 1, title: '设备与环境校准', instructions: '请在安静的环境中进行测试。首先，录制5秒钟的静音。然后，用正常音量朗读“他去无锡市，我到黑龙江”两遍。', requiresRecording: true, recordingsNeeded: 2, recordingLabels: ['点击开始录音，保持安静5秒，然后请点击停止', '点击开始录音，朗读标准句，然后点击停止'] },
@@ -58,8 +58,15 @@ const VoiceTestWizard = () => {
   const [recordedBlobs, setRecordedBlobs] = useState({});
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState(null);
-  const [formData, setFormData] = useState({ rbh: { R: null, B: null, H: null }, ovhs9: Array(9).fill(null), tvqg: Array(12).fill(null) });
-  const [analysisStatus, setAnalysisStatus] = useState('idle');
+  const [discardInfo, setDiscardInfo] = useState(false); // 放弃提示状态
+
+  const [formData, setFormData] = useState({
+    rbh: { R: null, B: null, H: null },
+    ovhs9: Array(9).fill(null),
+    tvqg: Array(12).fill(null),
+  });
+
+  const [analysisStatus, setAnalysisStatus] = useState('idle'); // idle, processing, done, failed
   const [analysisResults, setAnalysisResults] = useState(null);
   const pollingRef = useRef(null);
   const failedUploadRef = useRef(null);
@@ -71,6 +78,7 @@ const VoiceTestWizard = () => {
   const handleFormChange = (formName, values) => setFormData(prev => ({ ...prev, [formName]: values }));
 
   useEffect(() => {
+    // IIFE to handle async session start
     (async () => {
       try {
         setIsLoading(true);
@@ -157,6 +165,7 @@ const VoiceTestWizard = () => {
       setIsLoading(true);
       const response = await createVoiceTestSession(user?.userId);
       setSessionId(response.sessionId);
+      // 清空本地状态（确保所有相关状态都被复位）
       setCurrentStep(0);
       setRecordedBlobs({});
       setFormData({ rbh: { R: null, B: null, H: null }, ovhs9: Array(9).fill(null), tvqg: Array(12).fill(null) });
@@ -165,6 +174,7 @@ const VoiceTestWizard = () => {
       failedUploadRef.current = null;
       setUploadError(null);
       setIsUploading(false);
+      setDiscardInfo(false);
     } catch {
       alert('重新开始失败，请稍后再试。');
     } finally {
@@ -179,9 +189,10 @@ const VoiceTestWizard = () => {
   const handleRecordingComplete = async (blob) => {
     setIsUploading(true);
     setUploadError(null);
-    failedUploadRef.current = null;
+    setDiscardInfo(false); // 有新上传时清除放弃提示
+    failedUploadRef.current = null; // 清除旧的失败记录
     const stepInfo = STEPS[currentStep];
-    const recordingIndex = recordedBlobs[currentStep]?.length || 0;
+    const recordingIndex = recordedBlobs[currentStep]?.length || 0; // 下一个序号
     const fileName = `${stepInfo.id}_${recordingIndex + 1}.wav`;
     try {
       const { putUrl, objectKey } = await getVoiceTestUploadUrl(sessionId, stepInfo.id, fileName, 'audio/wav');
@@ -194,6 +205,15 @@ const VoiceTestWizard = () => {
     } finally {
       setIsUploading(false);
     }
+  };
+
+  /**
+   * 当用户选择“停止录音且放弃”：不触发上传，不改变已完成计数，仅给出轻提示。
+   */
+  const handleDiscardRecording = () => {
+    setDiscardInfo(true);
+    // 2-3 秒后自动隐藏提示
+    setTimeout(() => setDiscardInfo(false), 3000);
   };
 
   /**
@@ -255,6 +275,7 @@ const VoiceTestWizard = () => {
    */
   const handleRetryAnalysis = () => {
     if (!window.confirm('将重新发起分析，这可能再次消耗计算资源。继续吗？')) return;
+    // 重新设为 idle 以触发重新生成按钮流转
     setAnalysisStatus('idle');
     setAnalysisResults(null);
   };
@@ -328,7 +349,10 @@ const VoiceTestWizard = () => {
           <div className="my-4 p-3 bg-gray-100 rounded-lg space-y-1">
             <p className="font-semibold">进度: {recordingsForStep.length} / {stepInfo.recordingsNeeded}</p>
             {stepInfo.recordingLabels && <p className="text-sm text-gray-500">当前录制: {stepInfo.recordingLabels[recordingsForStep.length] || '已完成'}</p>}
+            {/* 辅助提示：放弃本段将回到本次开始前状态 */}
+            <p className="text-xs text-gray-400">如说错或失误，可点击“停止录音且放弃”——本段不会计入进度。</p>
           </div>
+          {discardInfo && <div className="my-3 p-2 bg-gray-50 text-gray-600 rounded text-sm">已放弃刚才的录音，本次不计入进度。</div>}
           {isUploading && <p className="my-4 text-blue-600">正在上传...</p>}
           {uploadError && <div className="my-4 p-3 bg-red-100 text-red-700 rounded-md space-y-2">
             <p>{uploadError}</p>
@@ -336,7 +360,7 @@ const VoiceTestWizard = () => {
           </div>}
           {allRecordingsDone && !isUploading && !uploadError && <div className="my-4 p-3 bg-green-100 text-green-800 rounded-lg"><p>✅ 本步骤所有录音已完成。</p></div>}
           <div className="mt-4">
-            <Recorder key={`${currentStep}-${recordingsForStep.length}`} onRecordingComplete={handleRecordingComplete} isRecording={isUploading || allRecordingsDone} />
+            <Recorder key={`${currentStep}-${recordingsForStep.length}`} onRecordingComplete={handleRecordingComplete} onDiscardRecording={handleDiscardRecording} isRecording={isUploading || allRecordingsDone} />
           </div>
           <div className="mt-6 flex flex-wrap gap-3 justify-center">
             {/* 已隐藏单步重置功能：强制用户使用重新开始测试，以避免旧文件仍存在导致的混淆 */}
