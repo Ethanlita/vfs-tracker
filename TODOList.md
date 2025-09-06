@@ -63,14 +63,14 @@
        1. ~~~以中央C开始的循环为例（已解决）~~~
        2. ~~~播放中央C作为起始音（给用户作为参考）（已解决）~~~
        3. ~~~依次播放中央C-D-E-D-中央C，同时录音（已解决）~~~
-        4. ~~~检查用户的音高是否达到，如果达到了，则开始下一循环（已解决）~~~
-        5. ~~~如果没有达到，允许用户重试这一循环，或者开始下降练习（已解决）~~~
+       4. ~~~检查用户的音高是否达到，如果达到了，则开始下一循环（已解决）~~~
+       5. ~~~如果没有达到，允许用户重试这一循环，或者开始下降练习（已解决）~~~
     5. ~~~下降练习从爬升练习中用户到达的最高音开始，每次循环下降半个音，其他的一样（已解决）~~~
     6. ~~~下降练习结束后向用户展示练习成果，显示最高到达音和最低到达音（已解决）~~~
     7. ~~~在Mypage现有的按钮右侧新增“音阶练习”按钮（已解决）~~~
 34. ~~~让这个app变得可以被安装（Chrome中“安装”功能）（已解决）~~~
 35. ~~~现在在Timeline中查看事件的时候，用户自己上传的附件是可以正常下载的，但是由分析工具生成的pdf报告却不能正常下载，生成的地址是错误的：https://vfs-tracker.app/voice-tests/5d233766-936e-4e7e-8382-da6c6562d5fe/report.pdf，正确的地址应该诸如：https://vfs-tracker-objstor.s3.us-east-1.amazonaws.com/attachments/34f8b418-1011-70a7-633b-720845138963/1755503156343_MVIMG_20250818_134717.jpg?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Content-Sha256=UNSIGNED-PAYLOAD&X-Amz-Credential=ASIAUKG7MXK5IF6QUGER%2F20250828%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-Date=20250828T152840Z&X-Amz-Expires=3600&X-Amz-Security-Token=IQoJb3JpZ2luX2VjEFAaCXVzLWVhc3QtMSJHMEUCIQD1iDIbzX6jwChaRTSe4MOjlbr6RhIe9Us2A6GXKHYJKwIgGL4YZLODKfasWtjhZlcR4c8PaZON6cC64SC3P5lOEXUq8QIIqf%2F%2F%2F%2F%2F%2F%2F%2F%2F%2FARADGgwyOTY4MjEyNDI1NTQiDPiCcr2pGtROFL0l1CrFAnrIVRL%2BHgchRu%2B8FBkXe%2BQQyLTS2FMqOVtyHHBxoojnIR8ktLNtlj8ev5mnltqwr4QEoijizfa6bkkfuA87bmiKV9VRYRUX%2Fs7hgHeNUln%2FC6GcE%2BqwYgmALYAiJiLVpMXrKcO3VI%2FTL%2FoF5oC%2BhU%2FvOwSm6bmqCF25gapWgwtPVOwQ6%2BAWSPGNXP7spmdjCc3Mf10tVAxM%2FsFvV4rTz%2BVeDWZeHU8hfg43OS36UVPxiAwSercqI3K9SpaRXsfOkUcQaRJvCnn7TBp8rvS9SGoGmQ18owaqQNrCMGR6nUa2PTRfNar03mjWqCzc4kBgedDQUwtSvE%2FQeYkBGg%2Fh9aJgINe7oIACV1VYabUU0lnHwDUdZUAsuWKaQVjJDxviJZA%2BX59Wo5ZdpAB08lCiH2uiW8HdkrRKGRzriOnOAtG0X02XHLMwpevBxQY6ngH47hZB12FXQahDqqfiS%2FJLTmeTNkPb7tHU1P9H%2Fauzgt2Ozdhb3OTdv6U5u1gpFGTNoYTGx%2FtKH%2Beftu8pjjDeMwAhhXQGMy5RTXs2%2FvkRVVUCK%2FfcwsFCeuy1b5oExfjOvcqsNnP4JEc4PSRqS2aJSJ0nNrjXZkZUYA73cOtxSWI8OBnrs4ENBJ%2BEMVp6Vd0kY%2BMUv4W7%2B1jCsfmtNA%3D%3D&X-Amz-Signature=0abf1c94b4018ef0e28685e37dab42422998eaca6ba65c9fd78feadbc1d69c4b&X-Amz-SignedHeaders=host&x-amz-checksum-mode=ENABLED&x-id=GetObject（已解决）~~~
-36. ~~~VoiceTestWizard中，如果录音时用户说错话了等，允0.许用户点击“停止录音且放弃”按钮放弃这段录音，点击后向导回到开始这段录音前的状态。原本的停止录音按钮改为“停止录音且继续”（已解决）~~~
+36. ~~~VoiceTestWizard中，如果录音时用户说错话了等，允许用户点击“停止录音且放弃”按钮放弃这段录音，点击后向导回到开始这段录音前的状态。原本的停止录音按钮改为“停止录音且继续”（已解决）~~~
 37. ~~~在ScalePractice中，显示结果页面新增一个类似于Timeline中的Gemini请求，向Gemini发送用户的音域，然后要求Gemini推荐适合用户演唱的歌曲（已解决）~~~
 38. ~~~在VoiceTestWizard中，用户上传完成后的“已录制文件”列表内提供一个回放录音的功能（已解决）~~~
 39. 进一步解决Formant-SPL分析的问题（现在Formant-SPL图始终无法在报告里展示）
