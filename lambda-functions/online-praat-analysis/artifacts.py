@@ -27,12 +27,15 @@ logger.setLevel(logging.INFO)
 
 # --- Font Configuration ---
 _CJK_FONT_NAME = 'NotoSansSC'
+_EN_FONT_NAME = 'Roboto'
 _FALLBACK_FONT_NAME = 'Helvetica'
 _CJK_FONT_REGISTERED = False
+_EN_FONT_REGISTERED = False
 
 # 假设字体文件与此脚本位于同一目录或Lambda层中
 # 在部署时，确保 'NotoSansSC-Regular.ttf' 文件存在
 font_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'NotoSansSC-Regular.ttf')
+en_font_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'Roboto-Regular.ttf')
 
 if not os.path.exists(font_path):
     # 如果在当前目录找不到，尝试在根目录或通用字体目录查找
@@ -48,27 +51,61 @@ if not os.path.exists(font_path):
 
 try:
     if os.path.exists(font_path):
-        # 为 ReportLab 注册字体
+        # 为 ReportLab 注册中文字体
         pdfmetrics.registerFont(TTFont(_CJK_FONT_NAME, font_path))
-        
-        # 为 Matplotlib 注册字体
+        # 为 Matplotlib 注册中文字体
         fm.fontManager.addfont(font_path)
-        plt.rcParams['font.family'] = 'sans-serif'
-        plt.rcParams['font.sans-serif'] = [_CJK_FONT_NAME, 'sans-serif']
-        plt.rcParams['axes.unicode_minus'] = False  # 正确显示负号
-        
         _CJK_FONT_REGISTERED = True
         _FONT = _CJK_FONT_NAME
-        logger.info(f"Successfully registered CJK font '{_CJK_FONT_NAME}' from path: {font_path}")
+        logger.info(
+            f"Successfully registered CJK font '{_CJK_FONT_NAME}' from path: {font_path}"
+        )
     else:
         _FONT = _FALLBACK_FONT_NAME
-        logger.warning(f"Font file not found at expected paths. Using fallback font '{_FONT}'. CJK characters may not render.")
+        logger.warning(
+            f"Font file not found at expected paths. Using fallback font '{_FONT}'. CJK characters may not render."
+        )
+
+    # 注册英文 Roboto 字体以改善字距
+    if os.path.exists(en_font_path):
+        pdfmetrics.registerFont(TTFont(_EN_FONT_NAME, en_font_path))
+        fm.fontManager.addfont(en_font_path)
+        _EN_FONT_REGISTERED = True
+        logger.info(
+            f"Successfully registered English font '{_EN_FONT_NAME}' from path: {en_font_path}"
+        )
+    else:
+        logger.warning(
+            f"Roboto font not found at {en_font_path}; using default sans-serif for English text."
+        )
+
+    # Matplotlib 全局字体配置: 先英文 Roboto 再中文 NotoSansSC
+    plt.rcParams['font.family'] = 'sans-serif'
+    plt.rcParams['font.sans-serif'] = [_EN_FONT_NAME, _CJK_FONT_NAME, 'sans-serif']
+    plt.rcParams['axes.unicode_minus'] = False  # 正确显示负号
+
 except Exception as e:
     _FONT = _FALLBACK_FONT_NAME
-    logger.error(f"Failed to register font. Error: {e}. Using fallback font '{_FONT}'.")
+    logger.error(
+        f"Failed to register fonts. Error: {e}. Using fallback font '{_FONT}'."
+    )
 
 # 统一的 Matplotlib 字体属性（若可用）
-_MP_FONT = fm.FontProperties(fname=font_path) if _CJK_FONT_REGISTERED else None
+
+
+def _bilingual(text: str) -> str:
+    """Return HTML-styled bilingual text using Roboto for English and
+    the configured CJK font for Chinese. If no separator is found, the
+    whole text is treated as English.  The function expects strings
+    formatted like "English / 中文"."""
+    parts = text.split('/', 1)
+    if len(parts) == 2:
+        en, zh = parts[0].strip(), parts[1].strip()
+        return (
+            f'<font name="{_EN_FONT_NAME}">{en}</font> / '
+            f'<font name="{_FONT}">{zh}</font>'
+        )
+    return f'<font name="{_EN_FONT_NAME}">{text}</font>'
 
 
 def create_placeholder_chart(title: str, message: str):
@@ -78,14 +115,18 @@ def create_placeholder_chart(title: str, message: str):
     logger.info(f"Creating placeholder chart: {title}")
     try:
         fig, ax = plt.subplots(figsize=(10, 6))
-        # 标题
-        if _MP_FONT is not None:
-            ax.set_title(title, fontproperties=_MP_FONT)
-        else:
-            ax.set_title(title)
-        # 主体文字
-        ax.text(0.5, 0.5, message, ha='center', va='center', fontsize=12, color='gray', wrap=True,
-                fontproperties=_MP_FONT)
+        # 标题与主体文字使用 rcParams 字体 (Roboto + NotoSansSC)
+        ax.set_title(title)
+        ax.text(
+            0.5,
+            0.5,
+            message,
+            ha='center',
+            va='center',
+            fontsize=12,
+            color='gray',
+            wrap=True,
+        )
         ax.set_xticks([])
         ax.set_yticks([])
         for sp in ('top','right','bottom','left'):
@@ -132,7 +173,9 @@ def create_time_series_chart(file_path, f0min=75, f0max=600):
         ax1.set_xlabel("Time (s)")
         ax1.set_ylabel("Amplitude", color='#8e44ad')
         ax1.tick_params(axis='y', labelcolor='#8e44ad')
-        ax1.set_ylim([-1, 1])
+        # 根据实际波形动态调整纵轴，避免误导性的衰减外观
+        peak = np.max(np.abs(y)) or 1
+        ax1.set_ylim([-peak, peak])
         ax1.grid(True, linestyle='--', alpha=0.6)
 
         # Plot F0 on a second y-axis
@@ -178,12 +221,14 @@ def create_vrp_chart(data):
         fig, ax = plt.subplots(figsize=(8,5))
         ax.fill_between(freqs, spl_min, spl_max, color='#c9e6ff', alpha=0.6, label='Range (min-max)')
         ax.plot(freqs, spl_mean, color='#0077cc', linewidth=2, label='Mean SPL')
-        ax.set_xscale('log')
-        ax.xaxis.set_major_formatter(ScalarFormatter()) # Disable scientific notation for log scale
-        ax.set_xlabel('Frequency (Hz) (log)')
+        # 使用线性坐标并显示具体数值刻度
+        ax.set_xlim(min(freqs), max(freqs))
+        ax.xaxis.set_major_formatter(ScalarFormatter())
+        ax.set_xticks(np.linspace(min(freqs), max(freqs), num=6))
+        ax.set_xlabel('Frequency (Hz)')
         ax.set_ylabel('SPL dB(A) (est)')
         ax.set_title('Voice Range Profile')
-        ax.grid(True, which='both', linestyle='--', alpha=0.4)
+        ax.grid(True, linestyle='--', alpha=0.4)
         ax.legend()
         buf = BytesIO()
         plt.tight_layout()
@@ -248,14 +293,16 @@ def create_formant_spl_chart(spectrum_low, spectrum_high):
 
         ax.set_xlabel('Frequency (Hz)')
         ax.set_ylabel('SPL (dB)')
-        if _MP_FONT is not None:
-            ax.set_title('Formant-SPL Spectrum (LPC)', fontproperties=_MP_FONT)
-        else:
-            ax.set_title('Formant-SPL Spectrum (LPC)')
-        ax.xaxis.set_major_formatter(ScalarFormatter()) # Disable scientific notation
+        ax.set_title('Formant-SPL Spectrum (LPC)')
+        ax.set_xlim(0, 5500)
+        # 增加更多刻度，便于用户读取共振峰位置
+        ax.set_xticks(np.arange(0, 5501, 500))
+        ax.xaxis.set_major_formatter(ScalarFormatter())
+        # y 轴刻度以 10 dB 为间隔
+        ymin, ymax = ax.get_ylim()
+        ax.set_yticks(np.arange(int(ymin // 10 * 10), int(ymax // 10 * 10 + 20), 10))
         ax.grid(True, linestyle='--', alpha=0.6)
         ax.legend()
-        ax.set_xlim(0, 5500)
 
         buf = BytesIO()
         plt.tight_layout()
@@ -291,10 +338,10 @@ def create_pdf_report(session_id, metrics, chart_urls, userInfo=None):
         doc = SimpleDocTemplate(
             buf,
             pagesize=letter,
-            leftMargin=0.75 * inch,
-            rightMargin=0.75 * inch,
-            topMargin=0.8 * inch,
-            bottomMargin=0.8 * inch,
+            leftMargin=0.5 * inch,
+            rightMargin=0.5 * inch,
+            topMargin=0.5 * inch,
+            bottomMargin=0.5 * inch,
         )
         styles = getSampleStyleSheet()
         # 基础样式
@@ -333,19 +380,19 @@ def create_pdf_report(session_id, metrics, chart_urls, userInfo=None):
 
         # Header
         story = []
-        story.append(Paragraph("Voice Analysis Report / 声音分析报告", title_style))
+        story.append(Paragraph(_bilingual("Voice Analysis Report / 声音分析报告"), title_style))
         info_rows = []
         report_time_utc = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S %Z")
         info_rows.append([
-            Paragraph("Session ID / 会话ID", text_style),
+            Paragraph(_bilingual("Session ID / 会话ID"), text_style),
             Paragraph(str(session_id), text_style)
         ])
         info_rows.append([
-            Paragraph("User / 用户", text_style),
+            Paragraph(_bilingual("User / 用户"), text_style),
             Paragraph(f"{userInfo.get('userName', 'N/A')} (ID: {userInfo.get('userId', 'N/A')})", text_style)
         ])
         info_rows.append([
-            Paragraph("Report Date / 报告时间", text_style),
+            Paragraph(_bilingual("Report Date / 报告时间"), text_style),
             Paragraph(report_time_utc, text_style)
         ])
         info_tbl = Table(info_rows, colWidths=[1.6*inch, None])
@@ -358,11 +405,11 @@ def create_pdf_report(session_id, metrics, chart_urls, userInfo=None):
         ]))
         story.append(info_tbl)
         story.append(Spacer(1, 4))
-        story.append(Paragraph("Tool / 工具：VFS Tracker Voice Analysis（基于 Parselmouth）", small_style))
+        story.append(Paragraph(_bilingual("Tool / 工具：VFS Tracker Voice Analysis（基于 Parselmouth）"), small_style))
         story.append(Spacer(1, 10))
 
         # ---- Metrics Section ----
-        story.append(Paragraph("Acoustic Metrics / 声学指标", h1_style))
+        story.append(Paragraph(_bilingual("Acoustic Metrics / 声学指标"), h1_style))
 
         # 工具函数：安全格式化
         def _fmt(v):
@@ -399,10 +446,10 @@ def create_pdf_report(session_id, metrics, chart_urls, userInfo=None):
 
         # 分类标题映射
         section_title_map = {
-            'sustained': 'Sustained Vowel / 持续元音',
-            'reading': 'Reading / 朗读',
-            'spontaneous': 'Spontaneous Speech / 自发语音',
-            'vrp': 'Voice Range Profile / 声音范围图',
+            'sustained': _bilingual('Sustained Vowel / 持续元音'),
+            'reading': _bilingual('Reading / 朗读'),
+            'spontaneous': _bilingual('Spontaneous Speech / 自发语音'),
+            'vrp': _bilingual('Voice Range Profile / 声音范围图'),
         }
 
         def add_metric_block(name, data):
@@ -415,11 +462,20 @@ def create_pdf_report(session_id, metrics, chart_urls, userInfo=None):
                     continue
                 if isinstance(v, dict):
                     # 展开二级
-                    rows.append([Paragraph(label_map.get(k, k.replace('_',' ').title()), text_style), Paragraph('', text_style)])
+                    rows.append([
+                        Paragraph(_bilingual(label_map.get(k, k.replace('_', ' ').title())), text_style),
+                        Paragraph('', text_style),
+                    ])
                     for sk, sv in v.items():
-                        rows.append([Paragraph(f"• {label_map.get(sk, sk.upper())}", text_style), Paragraph(_fmt(sv), text_style)])
+                        rows.append([
+                            Paragraph(_bilingual(f"• {label_map.get(sk, sk.upper())}"), text_style),
+                            Paragraph(_fmt(sv), text_style),
+                        ])
                 else:
-                    rows.append([Paragraph(label_map.get(k, k.replace('_',' ').title()), text_style), Paragraph(_fmt(v), text_style)])
+                    rows.append([
+                        Paragraph(_bilingual(label_map.get(k, k.replace('_', ' ').title())), text_style),
+                        Paragraph(_fmt(v), text_style),
+                    ])
             if not rows:
                 return
             tbl = Table(rows, colWidths=[3.0*inch, None], hAlign='LEFT')
@@ -427,16 +483,64 @@ def create_pdf_report(session_id, metrics, chart_urls, userInfo=None):
                 ('FONT', (0,0), (-1,-1), _FONT, 10),
                 ('VALIGN', (0,0), (-1,-1), 'TOP'),
                 ('ROWSPACING', (0,0), (-1,-1), 2),
-                ('LINEBELOW', (0,0), (-1,-1), 0.1, colors.whitesmoke),
+                ('ROWBACKGROUNDS', (0,0), (-1,-1), [colors.whitesmoke, colors.lightgrey]),
+                ('GRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
             ]))
             story.append(Paragraph(section_title_map.get(name, name.replace('_',' ').title()), h2_style))
             story.append(tbl)
             story.append(Spacer(1, 6))
 
+        # ---- Chart Embedding Utilities ----
+        def parse_s3_url(url: str):
+            if not url or not url.startswith('s3://'):
+                return None, None
+            parts = url[5:].split('/', 1)
+            return (parts[0], parts[1]) if len(parts) == 2 else (None, None)
+
+        s3 = boto3.client('s3')
+
+        def embed_chart(key_name: str, title: str, caption: str):
+            """Embed a chart image from S3 with optional caption."""
+            url = chart_urls.get(key_name)
+            bkt, obj_key = parse_s3_url(url) if url else (None, None)
+            elements = [Paragraph(_bilingual(title), h2_style), Spacer(1, 4)]
+            img_buf = None
+            if bkt:
+                try:
+                    obj = s3.get_object(Bucket=bkt, Key=obj_key)
+                    img_buf = BytesIO(obj['Body'].read())
+                except Exception as e:
+                    logger.error(f"Failed embedding chart {key_name}: {e}")
+            if img_buf is None:
+                img_buf = create_placeholder_chart(title.split(' / ')[0], 'Chart unavailable. / 图表不可用')
+            img = RLImage(img_buf)
+            img.hAlign = 'CENTER'
+            iw, ih = img.imageWidth, img.imageHeight
+            max_w, max_h = doc.width, doc.height - 1.2 * inch
+            scale = min(max_w/iw, max_h/ih, 1.0)
+            img.drawWidth, img.drawHeight = iw * scale, ih * scale
+            elements.append(img)
+            if caption:
+                elements.append(Spacer(1, 2))
+                elements.append(Paragraph(_bilingual(caption), small_style))
+            story.append(KeepTogether(elements))
+
         # 只遍历非问卷部分
         acoustic_categories = [cat for cat in metrics if cat != 'questionnaires']
         for cat in acoustic_categories:
             add_metric_block(cat, metrics.get(cat))
+            if cat == 'sustained':
+                embed_chart(
+                    'timeSeries',
+                    'Time Series Waveform & F0 / 波形与基频',
+                    'Based on sustained vowel recording / 基于持续元音录音',
+                )
+            if cat == 'vrp':
+                embed_chart(
+                    'vrp',
+                    'Voice Range Profile (VRP) / 声音范围图',
+                    'Based on glide exercises / 基于滑音练习',
+                )
 
         # Formant Analysis / 共振峰分析
         sustained_metrics = metrics.get('sustained', {}) if isinstance(metrics.get('sustained'), dict) else {}
@@ -445,7 +549,7 @@ def create_pdf_report(session_id, metrics, chart_urls, userInfo=None):
         formant_failed = sustained_metrics.get('formant_analysis_failed')
 
         story.append(Spacer(1, 4))
-        story.append(Paragraph("Formant Analysis / 共振峰分析", h2_style))
+        story.append(Paragraph(_bilingual("Formant Analysis / 共振峰分析"), h2_style))
         if formant_failed:
             bullet = (
                 "Analysis failed. Common causes / 分析失败，常见原因：<br/>"
@@ -455,22 +559,49 @@ def create_pdf_report(session_id, metrics, chart_urls, userInfo=None):
             )
             story.append(Paragraph(bullet, text_style))
         else:
-            if formant_low:
-                story.append(Paragraph(
-                    f"Lowest Note / 最低音：F1={formant_low.get('F1',0):.0f} Hz，F2={formant_low.get('F2',0):.0f} Hz，F3={formant_low.get('F3',0):.0f} Hz，SPL={formant_low.get('spl_dbA_est',0):.1f} dB",
-                    text_style
-                ))
-            if formant_high:
-                story.append(Paragraph(
-                    f"Highest Note / 最高音：F1={formant_high.get('F1',0):.0f} Hz，F2={formant_high.get('F2',0):.0f} Hz，F3={formant_high.get('F3',0):.0f} Hz，SPL={formant_high.get('spl_dbA_est',0):.1f} dB",
-                    text_style
-                ))
-        story.append(Spacer(1, 8))
+            if formant_low or formant_high:
+                headers = ["", _bilingual("Lowest Note / 最低音"), _bilingual("Highest Note / 最高音")]
+                rows = [headers]
+                formant_labels = [
+                    ('f0_mean', 'Mean F0 (Hz) / 平均基频（Hz）'),
+                    ('F1', 'F1 (Hz) / F1（Hz）'),
+                    ('F2', 'F2 (Hz) / F2（Hz）'),
+                    ('F3', 'F3 (Hz) / F3（Hz）'),
+                    ('spl_dbA_est', 'SPL dB(A) / 声压级 dB(A)'),
+                ]
+                for key, label in formant_labels:
+                    rows.append([
+                        Paragraph(_bilingual(label), text_style),
+                        Paragraph(_fmt((formant_low or {}).get(key, 0)), text_style),
+                        Paragraph(_fmt((formant_high or {}).get(key, 0)), text_style),
+                    ])
+                ft = Table(rows, colWidths=[2.2*inch, 1.2*inch, 1.2*inch])
+                ft.setStyle(TableStyle([
+                    ('FONT', (0,0), (-1,-1), _FONT, 10),
+                    ('ROWBACKGROUNDS', (0,0), (-1,-1), [colors.whitesmoke, colors.lightgrey]),
+                    ('GRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
+                    ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+                ]))
+                story.append(ft)
+        story.append(Spacer(1, 6))
+        # 在共振峰表之后嵌入相关图表
+        embed_chart(
+            'formant',
+            'F1-F2 Vowel Space / F1-F2 元音空间',
+            'Based on lowest & highest note / 基于最低与最高音',
+        )
+        story.append(Spacer(1, 4))
+        embed_chart(
+            'formant_spl_spectrum',
+            'Formant-SPL Spectrum (LPC) / 共振峰-声压谱（LPC）',
+            'Based on lowest & highest note / 基于最低与最高音',
+        )
+        story.append(Spacer(1, 6))
 
         # ---- Questionnaires ----
         questionnaire_scores = metrics.get('questionnaires')
         if questionnaire_scores:
-            story.append(Paragraph("Subjective Questionnaires / 主观量表", h1_style))
+            story.append(Paragraph(_bilingual("Subjective Questionnaires / 主观量表"), h1_style))
             rows = []
             for key, value in questionnaire_scores.items():
                 if isinstance(value, dict):
@@ -487,74 +618,6 @@ def create_pdf_report(session_id, metrics, chart_urls, userInfo=None):
             ]))
             story.append(qt)
             story.append(Spacer(1, 8))
-
-        # ---- Charts ----
-        def parse_s3_url(url: str):
-            if not url or not url.startswith('s3://'):
-                return None, None
-            parts = url[5:].split('/', 1)
-            return (parts[0], parts[1]) if len(parts) == 2 else (None, None)
-
-        s3 = boto3.client('s3')
-        chart_order = [
-            ('timeSeries', 'Time Series Waveform & F0 / 波形与基频'),
-            ('vrp', 'Voice Range Profile (VRP) / 声音范围图'),
-            ('formant', 'F1-F2 Vowel Space / F1-F2 元音空间'),
-            ('formant_spl_spectrum', 'Formant-SPL Spectrum (LPC) / 共振峰-声压谱（LPC）')
-        ]
-
-        # 缺失图表时的占位提示（中英双语）
-        missing_reason = {
-            'timeSeries': 'Chart unavailable. / 图表不可用',
-            'vrp': 'VRP data unavailable. / VRP 数据不可用',
-            'formant': 'Formant analysis failed or unavailable. / 共振峰分析失败或数据不可用',
-            'formant_spl_spectrum': 'Spectrum analysis failed or unavailable. / 频谱分析失败或数据不可用'
-        }
-
-        for key_name, title in chart_order:
-            url = chart_urls.get(key_name)
-            bkt, obj_key = parse_s3_url(url) if url else (None, None)
-            story.append(PageBreak())
-            story.append(Paragraph(title, h1_style))
-            story.append(Spacer(1, 6))
-            if not bkt:
-                # 无URL则直接占位
-                ph_buf = create_placeholder_chart(title.split(' / ')[0], missing_reason.get(key_name, 'Chart unavailable.'))
-                if ph_buf:
-                    img = RLImage(ph_buf)
-                    img.hAlign = 'CENTER'
-                    iw, ih = img.imageWidth, img.imageHeight
-                    max_w, max_h = doc.width, doc.height - 1.2 * inch
-                    scale = min(max_w/iw, max_h/ih, 1.0)
-                    img.drawWidth, img.drawHeight = iw * scale, ih * scale
-                    story.append(img)
-                else:
-                    story.append(Paragraph('Placeholder unavailable.', small_style))
-                continue
-            try:
-                obj = s3.get_object(Bucket=bkt, Key=obj_key)
-                data = obj['Body'].read()
-                img = RLImage(BytesIO(data))
-                img.hAlign = 'CENTER'
-                iw, ih = img.imageWidth, img.imageHeight
-                max_w, max_h = doc.width, doc.height - 1.2 * inch
-                scale = min(max_w/iw, max_h/ih, 1.0)
-                img.drawWidth, img.drawHeight = iw * scale, ih * scale
-                story.append(img)
-            except Exception as e:
-                logger.error(f"Failed embedding chart {key_name}: {e}")
-                # 获取失败时也用占位图
-                ph_buf = create_placeholder_chart(title.split(' / ')[0], missing_reason.get(key_name, 'Chart unavailable.'))
-                if ph_buf:
-                    img = RLImage(ph_buf)
-                    img.hAlign = 'CENTER'
-                    iw, ih = img.imageWidth, img.imageHeight
-                    max_w, max_h = doc.width, doc.height - 1.2 * inch
-                    scale = min(max_w/iw, max_h/ih, 1.0)
-                    img.drawWidth, img.drawHeight = iw * scale, ih * scale
-                    story.append(img)
-                else:
-                    story.append(Paragraph(f"Failed to embed image. URL: {url}", small_style))
 
         # 构建 PDF
         doc.build(story, onFirstPage=on_page, onLaterPages=on_page)
