@@ -22,6 +22,10 @@ from reportlab.pdfbase.ttfonts import TTFont
 import os
 import matplotlib.font_manager as fm
 
+# Table row background colors
+LIGHT_PINK = colors.HexColor("#ffe6f1")
+LIGHT_GRAY = colors.whitesmoke
+
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
@@ -400,7 +404,8 @@ def create_pdf_report(session_id, metrics, chart_urls, userInfo=None):
             ('FONT', (0,0), (-1,-1), _FONT, 10),
             ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
             ('ALIGN', (0,0), (0,-1), 'RIGHT'),
-            ('LINEBELOW', (0,-1), (-1,-1), 0.25, colors.lightgrey),
+            ('ROWBACKGROUNDS', (0,0), (-1,-1), [LIGHT_PINK, LIGHT_GRAY]),
+            ('GRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
             ('BOTTOMPADDING', (0,0), (-1,-1), 6),
         ]))
         story.append(info_tbl)
@@ -483,11 +488,89 @@ def create_pdf_report(session_id, metrics, chart_urls, userInfo=None):
                 ('FONT', (0,0), (-1,-1), _FONT, 10),
                 ('VALIGN', (0,0), (-1,-1), 'TOP'),
                 ('ROWSPACING', (0,0), (-1,-1), 2),
-                ('ROWBACKGROUNDS', (0,0), (-1,-1), [colors.whitesmoke, colors.lightgrey]),
+                ('ROWBACKGROUNDS', (0,0), (-1,-1), [LIGHT_PINK, LIGHT_GRAY]),
                 ('GRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
             ]))
             story.append(Paragraph(section_title_map.get(name, name.replace('_',' ').title()), h2_style))
             story.append(tbl)
+            story.append(Spacer(1, 6))
+
+        def add_voice_tasks_table(reading_data, spontaneous_data):
+            """Combine reading and spontaneous metrics into a single table."""
+            if not reading_data and not spontaneous_data:
+                return
+            header = [
+                Paragraph("", text_style),
+                Paragraph(_bilingual("Reading / 朗读"), text_style),
+                Paragraph(_bilingual("Spontaneous Speech / 自发语音"), text_style),
+            ]
+            rows = [header]
+            keys = set()
+            if isinstance(reading_data, dict):
+                keys |= set(reading_data.keys())
+            if isinstance(spontaneous_data, dict):
+                keys |= set(spontaneous_data.keys())
+            for k in sorted(keys):
+                rv = reading_data.get(k) if isinstance(reading_data, dict) else None
+                sv = spontaneous_data.get(k) if isinstance(spontaneous_data, dict) else None
+                if isinstance(rv, dict) or isinstance(sv, dict):
+                    rows.append([
+                        Paragraph(_bilingual(label_map.get(k, k.replace('_', ' ').title())), text_style),
+                        Paragraph("", text_style),
+                        Paragraph("", text_style),
+                    ])
+                    subkeys = set(rv.keys() if isinstance(rv, dict) else []) | set(sv.keys() if isinstance(sv, dict) else [])
+                    for sk in sorted(subkeys):
+                        rv_sub = rv.get(sk) if isinstance(rv, dict) else None
+                        sv_sub = sv.get(sk) if isinstance(sv, dict) else None
+                        rows.append([
+                            Paragraph(_bilingual(f"• {label_map.get(sk, sk.upper())}"), text_style),
+                            Paragraph(_fmt(rv_sub) if rv_sub is not None else '-', text_style),
+                            Paragraph(_fmt(sv_sub) if sv_sub is not None else '-', text_style),
+                        ])
+                else:
+                    rows.append([
+                        Paragraph(_bilingual(label_map.get(k, k.replace('_', ' ').title())), text_style),
+                        Paragraph(_fmt(rv) if rv is not None else '-', text_style),
+                        Paragraph(_fmt(sv) if sv is not None else '-', text_style),
+                    ])
+            tbl = Table(rows, colWidths=[2.8*inch, 1.2*inch, 1.2*inch])
+            tbl.setStyle(TableStyle([
+                ('FONT', (0,0), (-1,-1), _FONT, 10),
+                ('VALIGN', (0,0), (-1,-1), 'TOP'),
+                ('ROWSPACING', (0,0), (-1,-1), 2),
+                ('ROWBACKGROUNDS', (0,1), (-1,-1), [LIGHT_PINK, LIGHT_GRAY]),
+                ('GRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
+            ]))
+            story.append(Paragraph(_bilingual("Voice Tasks / 语音任务"), h2_style))
+            story.append(tbl)
+            story.append(Spacer(1, 6))
+
+        def add_questionnaire_table(scores):
+            """Render subjective questionnaire scores in a 2x4 grid."""
+            if not scores:
+                return
+            cells = []
+            for k, v in scores.items():
+                if isinstance(v, dict):
+                    detail = ", ".join([f"{sk.upper()}: {sv}" for sk, sv in v.items()])
+                    text = f"{k.upper()}: {detail}"
+                else:
+                    text = f"{k.upper()}: {_fmt(v)}"
+                cells.append(Paragraph(text, text_style))
+            while len(cells) < 8:
+                cells.append(Paragraph("", text_style))
+            rows = [cells[:4], cells[4:8]]
+            qt = Table(rows, colWidths=[doc.width/4.0]*4)
+            qt.setStyle(TableStyle([
+                ('FONT', (0,0), (-1,-1), _FONT, 10),
+                ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+                ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+                ('ROWBACKGROUNDS', (0,0), (-1,-1), [LIGHT_PINK, LIGHT_GRAY]),
+                ('GRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
+            ]))
+            story.append(Paragraph(_bilingual("Subjective Questionnaires / 主观量表"), h2_style))
+            story.append(qt)
             story.append(Spacer(1, 6))
 
         # ---- Chart Embedding Utilities ----
@@ -525,30 +608,46 @@ def create_pdf_report(session_id, metrics, chart_urls, userInfo=None):
                 elements.append(Paragraph(_bilingual(caption), small_style))
             story.append(KeepTogether(elements))
 
-        # 只遍历非问卷部分
-        acoustic_categories = [cat for cat in metrics if cat != 'questionnaires']
-        for cat in acoustic_categories:
-            add_metric_block(cat, metrics.get(cat))
-            if cat == 'sustained':
-                embed_chart(
-                    'timeSeries',
-                    'Time Series Waveform & F0 / 波形与基频',
-                    'Based on sustained vowel recording / 基于持续元音录音',
-                )
-            if cat == 'vrp':
+        # ---- Sustained Vowel ----
+        sustained_data = metrics.get('sustained')
+        if sustained_data:
+            add_metric_block('sustained', sustained_data)
+            embed_chart(
+                'timeSeries',
+                'Time Series Waveform & F0 / 波形与基频',
+                'Based on sustained vowel recording / 基于持续元音录音',
+            )
+            # 波形与基频部分结束后换页
+            story.append(PageBreak())
+
+        # ---- Voice Tasks: Reading & Spontaneous ----
+        reading_data = metrics.get('reading') if isinstance(metrics.get('reading'), dict) else {}
+        spontaneous_data = metrics.get('spontaneous') if isinstance(metrics.get('spontaneous'), dict) else {}
+        if reading_data or spontaneous_data:
+            add_voice_tasks_table(reading_data, spontaneous_data)
+            story.append(PageBreak())
+
+        # ---- VRP + Questionnaires on same page ----
+        vrp_data = metrics.get('vrp') if isinstance(metrics.get('vrp'), dict) else {}
+        questionnaire_scores = metrics.get('questionnaires')
+        if vrp_data or questionnaire_scores:
+            if vrp_data:
+                add_metric_block('vrp', vrp_data)
                 embed_chart(
                     'vrp',
                     'Voice Range Profile (VRP) / 声音范围图',
                     'Based on glide exercises / 基于滑音练习',
                 )
+            if questionnaire_scores:
+                add_questionnaire_table(questionnaire_scores)
+            story.append(PageBreak())
 
-        # Formant Analysis / 共振峰分析
+        # ---- Formant Analysis ----
         sustained_metrics = metrics.get('sustained', {}) if isinstance(metrics.get('sustained'), dict) else {}
         formant_low = sustained_metrics.get('formants_low')
         formant_high = sustained_metrics.get('formants_high')
         formant_failed = sustained_metrics.get('formant_analysis_failed')
 
-        story.append(Spacer(1, 4))
         story.append(Paragraph(_bilingual("Formant Analysis / 共振峰分析"), h2_style))
         if formant_failed:
             bullet = (
@@ -578,7 +677,7 @@ def create_pdf_report(session_id, metrics, chart_urls, userInfo=None):
                 ft = Table(rows, colWidths=[2.2*inch, 1.2*inch, 1.2*inch])
                 ft.setStyle(TableStyle([
                     ('FONT', (0,0), (-1,-1), _FONT, 10),
-                    ('ROWBACKGROUNDS', (0,0), (-1,-1), [colors.whitesmoke, colors.lightgrey]),
+                    ('ROWBACKGROUNDS', (0,0), (-1,-1), [LIGHT_PINK, LIGHT_GRAY]),
                     ('GRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
                     ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
                 ]))
@@ -597,27 +696,6 @@ def create_pdf_report(session_id, metrics, chart_urls, userInfo=None):
             'Based on lowest & highest note / 基于最低与最高音',
         )
         story.append(Spacer(1, 6))
-
-        # ---- Questionnaires ----
-        questionnaire_scores = metrics.get('questionnaires')
-        if questionnaire_scores:
-            story.append(Paragraph(_bilingual("Subjective Questionnaires / 主观量表"), h1_style))
-            rows = []
-            for key, value in questionnaire_scores.items():
-                if isinstance(value, dict):
-                    rbh_str = ", ".join([f"{k.upper()}: {v}" for k, v in value.items()])
-                    rows.append([Paragraph(key, text_style), Paragraph(rbh_str, text_style)])
-                else:
-                    rows.append([Paragraph(key, text_style), Paragraph(_fmt(value), text_style)])
-            qt = Table(rows, colWidths=[2.5*inch, None])
-            qt.setStyle(TableStyle([
-                ('FONT', (0,0), (-1,-1), _FONT, 10),
-                ('VALIGN', (0,0), (-1,-1), 'TOP'),
-                ('ROWSPACING', (0,0), (-1,-1), 2),
-                ('LINEBELOW', (0,0), (-1,-1), 0.1, colors.whitesmoke),
-            ]))
-            story.append(qt)
-            story.append(Spacer(1, 8))
 
         # 构建 PDF
         doc.build(story, onFirstPage=on_page, onLaterPages=on_page)
