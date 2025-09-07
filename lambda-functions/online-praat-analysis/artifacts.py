@@ -657,7 +657,8 @@ def create_pdf_report(session_id, metrics, chart_urls, userInfo=None):
                         'vrp',
                         'Voice Range Profile (VRP) / 声音范围图',
                         'Based on glide exercises / 基于滑音练习',
-                        scale_ratio=0.9,
+                        # Further reduce chart size so VRP and Voice Tasks share a page comfortably
+                        scale_ratio=0.75,
                     )
                 )
             # 语音任务与VRP共用一页
