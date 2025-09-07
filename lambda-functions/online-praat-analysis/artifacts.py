@@ -228,7 +228,8 @@ def create_vrp_chart(data):
         # 使用线性坐标并显示具体数值刻度
         ax.set_xlim(min(freqs), max(freqs))
         ax.xaxis.set_major_formatter(ScalarFormatter())
-        ax.set_xticks(np.linspace(min(freqs), max(freqs), num=6))
+        # 增加横轴刻度密度，便于读取不同频率点
+        ax.set_xticks(np.linspace(min(freqs), max(freqs), num=10))
         ax.set_xlabel('Frequency (Hz)')
         ax.set_ylabel('SPL dB(A) (est)')
         ax.set_title('Voice Range Profile')
@@ -613,6 +614,9 @@ def create_pdf_report(session_id, metrics, chart_urls, userInfo=None):
                 elements.append(Paragraph(_bilingual(caption), small_style))
             return KeepTogether(elements)
 
+        # ---- Subjective Questionnaires moved to first page ----
+        questionnaire_scores = metrics.get('questionnaires')
+
         # ---- Sustained Vowel ----
         sustained_data = metrics.get('sustained')
         if sustained_data:
@@ -624,20 +628,19 @@ def create_pdf_report(session_id, metrics, chart_urls, userInfo=None):
                     'Based on sustained vowel recording / 基于持续元音录音',
                 )
             )
-            # 波形与基频部分结束后换页
+            # 主观量表移至第一页，与持续元音结果同页呈现
+            if questionnaire_scores:
+                add_questionnaire_table(questionnaire_scores)
+            # 第一页结束
             story.append(PageBreak())
 
-        # ---- Voice Tasks: Reading & Spontaneous ----
+        # ---- Voice Tasks with VRP on same page ----
         reading_data = metrics.get('reading') if isinstance(metrics.get('reading'), dict) else {}
         spontaneous_data = metrics.get('spontaneous') if isinstance(metrics.get('spontaneous'), dict) else {}
-        if reading_data or spontaneous_data:
-            add_voice_tasks_table(reading_data, spontaneous_data)
-            story.append(PageBreak())
-
-        # ---- VRP + Questionnaires on same page ----
         vrp_data = metrics.get('vrp') if isinstance(metrics.get('vrp'), dict) else {}
-        questionnaire_scores = metrics.get('questionnaires')
-        if vrp_data or questionnaire_scores:
+        if reading_data or spontaneous_data or vrp_data:
+            if reading_data or spontaneous_data:
+                add_voice_tasks_table(reading_data, spontaneous_data)
             if vrp_data:
                 add_metric_block('vrp', vrp_data)
                 story.append(
@@ -647,8 +650,7 @@ def create_pdf_report(session_id, metrics, chart_urls, userInfo=None):
                         'Based on glide exercises / 基于滑音练习',
                     )
                 )
-            if questionnaire_scores:
-                add_questionnaire_table(questionnaire_scores)
+            # 语音任务与VRP共用一页
             story.append(PageBreak())
 
         # ---- Formant Analysis ----
