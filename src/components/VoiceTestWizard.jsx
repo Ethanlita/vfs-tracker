@@ -424,9 +424,35 @@ const VoiceTestWizard = () => {
         <div className="min-h-[300px] flex items-center justify-center bg-gray-50 rounded-lg p-6 mb-8">
           {renderStepContent()}
         </div>
-        <div className="flex justify-between">
-          <button onClick={handleBack} disabled={currentStep === 0 || analysisStatus === 'processing'} className="px-6 py-2 bg-gray-300 text-gray-800 rounded-lg font-semibold hover:bg-gray-400 disabled:bg-gray-200 disabled:cursor-not-allowed transition-colors">上一步</button>
-          {currentStep < STEPS.length - 1 && <button onClick={handleNext} disabled={!isStepComplete || isUploading} className="px-6 py-2 bg-purple-600 text-white rounded-lg font-semibold hover:bg-purple-700 disabled:bg-purple-300 disabled:cursor-not-allowed transition-colors">下一步</button>}
+        <div className="flex justify-between items-center">
+          <button 
+            onClick={handleBack} 
+            disabled={currentStep === 0 || analysisStatus === 'processing'} 
+            className="px-6 py-2 bg-gray-300 text-gray-800 rounded-lg font-semibold hover:bg-gray-400 disabled:bg-gray-200 disabled:cursor-not-allowed transition-colors"
+          >
+            上一步
+          </button>
+          
+          <div className="flex items-center gap-4">
+            {currentStep === 7 && (
+              <button 
+                onClick={handleNext} 
+                className="px-6 py-2 bg-gray-500 text-white rounded-lg font-semibold hover:bg-gray-600 transition-colors"
+              >
+                跳过
+              </button>
+            )}
+
+            {currentStep < STEPS.length - 1 && (
+              <button 
+                onClick={handleNext} 
+                disabled={!isStepComplete || isUploading} 
+                className="px-6 py-2 bg-purple-600 text-white rounded-lg font-semibold hover:bg-purple-700 disabled:bg-purple-300 disabled:cursor-not-allowed transition-colors"
+              >
+                {currentStep === 7 ? '提交' : '下一步'}
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>
