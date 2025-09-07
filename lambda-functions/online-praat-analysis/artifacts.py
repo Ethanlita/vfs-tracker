@@ -586,8 +586,17 @@ def create_pdf_report(session_id, metrics, chart_urls, userInfo=None):
 
         s3 = boto3.client('s3')
 
-        def embed_chart(key_name: str, title: str, caption: str, max_height=None):
-            """Create a flowable for a chart image from S3 with optional caption."""
+        def embed_chart(key_name: str, title: str, caption: str, max_height=None, scale_ratio=1.0):
+            """Create a flowable for a chart image from S3 with optional caption.
+
+            Args:
+                key_name: lookup key for the chart URL.
+                title: chart title displayed above the image.
+                caption: small text shown underneath.
+                max_height: optional maximum height constraint in points.
+                scale_ratio: extra multiplier applied to the final scale.  This
+                    can be used to shrink a chart (e.g., 0.9 for 90% size).
+            """
             url = chart_urls.get(key_name)
             bkt, obj_key = parse_s3_url(url) if url else (None, None)
             elements = [Paragraph(_bilingual(title), h2_style), Spacer(1, 4)]
@@ -606,7 +615,7 @@ def create_pdf_report(session_id, metrics, chart_urls, userInfo=None):
             max_w = doc.width
             max_h_default = doc.height - 1.2 * inch
             max_h_val = max_height if max_height is not None else max_h_default
-            scale = min(max_w/iw, max_h_val/ih, 1.0)
+            scale = min(max_w/iw, max_h_val/ih, 1.0) * scale_ratio
             img.drawWidth, img.drawHeight = iw * scale, ih * scale
             elements.append(img)
             if caption:
@@ -648,6 +657,7 @@ def create_pdf_report(session_id, metrics, chart_urls, userInfo=None):
                         'vrp',
                         'Voice Range Profile (VRP) / 声音范围图',
                         'Based on glide exercises / 基于滑音练习',
+                        scale_ratio=0.9,
                     )
                 )
             # 语音任务与VRP共用一页
