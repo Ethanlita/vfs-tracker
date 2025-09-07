@@ -22,9 +22,9 @@ from reportlab.pdfbase.ttfonts import TTFont
 import os
 import matplotlib.font_manager as fm
 
-# Table row background colors
-LIGHT_PINK = colors.HexColor("#ffe6f1")
-LIGHT_GRAY = colors.whitesmoke
+# Table row background colors (subtle pastels)
+LIGHT_PINK = colors.HexColor("#fdf2f8")
+LIGHT_GRAY = colors.HexColor("#f9fafb")
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
@@ -547,21 +547,24 @@ def create_pdf_report(session_id, metrics, chart_urls, userInfo=None):
             story.append(Spacer(1, 6))
 
         def add_questionnaire_table(scores):
-            """Render subjective questionnaire scores in a 2x4 grid."""
+            """Render subjective questionnaire scores as 2-row table.
+
+            First row lists the questionnaire names, second row shows the
+            corresponding results."""
             if not scores:
                 return
-            cells = []
+            names, values = [], []
             for k, v in scores.items():
+                names.append(Paragraph(k.upper(), text_style))
                 if isinstance(v, dict):
-                    detail = ", ".join([f"{sk.upper()}: {sv}" for sk, sv in v.items()])
-                    text = f"{k.upper()}: {detail}"
+                    detail = ", ".join([f"{sk.upper()}: {_fmt(sv)}" for sk, sv in v.items()])
+                    values.append(Paragraph(detail, text_style))
                 else:
-                    text = f"{k.upper()}: {_fmt(v)}"
-                cells.append(Paragraph(text, text_style))
-            while len(cells) < 8:
-                cells.append(Paragraph("", text_style))
-            rows = [cells[:4], cells[4:8]]
-            qt = Table(rows, colWidths=[doc.width/4.0]*4)
+                    values.append(Paragraph(_fmt(v), text_style))
+            while len(names) < 4:
+                names.append(Paragraph("", text_style))
+                values.append(Paragraph("", text_style))
+            qt = Table([names, values], colWidths=[doc.width/4.0]*4)
             qt.setStyle(TableStyle([
                 ('FONT', (0,0), (-1,-1), _FONT, 10),
                 ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
@@ -582,8 +585,8 @@ def create_pdf_report(session_id, metrics, chart_urls, userInfo=None):
 
         s3 = boto3.client('s3')
 
-        def embed_chart(key_name: str, title: str, caption: str):
-            """Embed a chart image from S3 with optional caption."""
+        def embed_chart(key_name: str, title: str, caption: str, max_height=None):
+            """Create a flowable for a chart image from S3 with optional caption."""
             url = chart_urls.get(key_name)
             bkt, obj_key = parse_s3_url(url) if url else (None, None)
             elements = [Paragraph(_bilingual(title), h2_style), Spacer(1, 4)]
@@ -599,23 +602,27 @@ def create_pdf_report(session_id, metrics, chart_urls, userInfo=None):
             img = RLImage(img_buf)
             img.hAlign = 'CENTER'
             iw, ih = img.imageWidth, img.imageHeight
-            max_w, max_h = doc.width, doc.height - 1.2 * inch
-            scale = min(max_w/iw, max_h/ih, 1.0)
+            max_w = doc.width
+            max_h_default = doc.height - 1.2 * inch
+            max_h_val = max_height if max_height is not None else max_h_default
+            scale = min(max_w/iw, max_h_val/ih, 1.0)
             img.drawWidth, img.drawHeight = iw * scale, ih * scale
             elements.append(img)
             if caption:
                 elements.append(Spacer(1, 2))
                 elements.append(Paragraph(_bilingual(caption), small_style))
-            story.append(KeepTogether(elements))
+            return KeepTogether(elements)
 
         # ---- Sustained Vowel ----
         sustained_data = metrics.get('sustained')
         if sustained_data:
             add_metric_block('sustained', sustained_data)
-            embed_chart(
-                'timeSeries',
-                'Time Series Waveform & F0 / 波形与基频',
-                'Based on sustained vowel recording / 基于持续元音录音',
+            story.append(
+                embed_chart(
+                    'timeSeries',
+                    'Time Series Waveform & F0 / 波形与基频',
+                    'Based on sustained vowel recording / 基于持续元音录音',
+                )
             )
             # 波形与基频部分结束后换页
             story.append(PageBreak())
@@ -633,10 +640,12 @@ def create_pdf_report(session_id, metrics, chart_urls, userInfo=None):
         if vrp_data or questionnaire_scores:
             if vrp_data:
                 add_metric_block('vrp', vrp_data)
-                embed_chart(
-                    'vrp',
-                    'Voice Range Profile (VRP) / 声音范围图',
-                    'Based on glide exercises / 基于滑音练习',
+                story.append(
+                    embed_chart(
+                        'vrp',
+                        'Voice Range Profile (VRP) / 声音范围图',
+                        'Based on glide exercises / 基于滑音练习',
+                    )
                 )
             if questionnaire_scores:
                 add_questionnaire_table(questionnaire_scores)
@@ -648,7 +657,7 @@ def create_pdf_report(session_id, metrics, chart_urls, userInfo=None):
         formant_high = sustained_metrics.get('formants_high')
         formant_failed = sustained_metrics.get('formant_analysis_failed')
 
-        story.append(Paragraph(_bilingual("Formant Analysis / 共振峰分析"), h2_style))
+        formant_section = [Paragraph(_bilingual("Formant Analysis / 共振峰分析"), h2_style)]
         if formant_failed:
             bullet = (
                 "Analysis failed. Common causes / 分析失败，常见原因：<br/>"
@@ -656,10 +665,14 @@ def create_pdf_report(session_id, metrics, chart_urls, userInfo=None):
                 "- Excessive noise, coughing, throat clearing / 背景噪声、咳嗽或清嗓；<br/>"
                 "- Not holding a stable /a/ vowel / /a/ 元音不稳定。"
             )
-            story.append(Paragraph(bullet, text_style))
+            formant_section.append(Paragraph(bullet, text_style))
         else:
             if formant_low or formant_high:
-                headers = ["", _bilingual("Lowest Note / 最低音"), _bilingual("Highest Note / 最高音")]
+                headers = [
+                    Paragraph("", text_style),
+                    Paragraph(_bilingual("Lowest Note / 最低音"), text_style),
+                    Paragraph(_bilingual("Highest Note / 最高音"), text_style),
+                ]
                 rows = [headers]
                 formant_labels = [
                     ('f0_mean', 'Mean F0 (Hz) / 平均基频（Hz）'),
@@ -681,21 +694,27 @@ def create_pdf_report(session_id, metrics, chart_urls, userInfo=None):
                     ('GRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
                     ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
                 ]))
-                story.append(ft)
-        story.append(Spacer(1, 6))
-        # 在共振峰表之后嵌入相关图表
-        embed_chart(
-            'formant',
-            'F1-F2 Vowel Space / F1-F2 元音空间',
-            'Based on lowest & highest note / 基于最低与最高音',
-        )
-        story.append(Spacer(1, 4))
-        embed_chart(
-            'formant_spl_spectrum',
-            'Formant-SPL Spectrum (LPC) / 共振峰-声压谱（LPC）',
-            'Based on lowest & highest note / 基于最低与最高音',
-        )
-        story.append(Spacer(1, 6))
+                formant_section.append(ft)
+                formant_section.append(Spacer(1, 6))
+                formant_section.append(
+                    embed_chart(
+                        'formant',
+                        'F1-F2 Vowel Space / F1-F2 元音空间',
+                        'Based on lowest & highest note / 基于最低与最高音',
+                        max_height=3.0*inch,
+                    )
+                )
+                formant_section.append(Spacer(1, 4))
+                formant_section.append(
+                    embed_chart(
+                        'formant_spl_spectrum',
+                        'Formant-SPL Spectrum (LPC) / 共振峰-声压谱（LPC）',
+                        'Based on lowest & highest note / 基于最低与最高音',
+                        max_height=3.0*inch,
+                    )
+                )
+        formant_section.append(Spacer(1, 6))
+        story.append(KeepTogether(formant_section))
 
         # 构建 PDF
         doc.build(story, onFirstPage=on_page, onLaterPages=on_page)
