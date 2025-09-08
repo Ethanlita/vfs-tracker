@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { updateUserProfile } from '../api';
-import { generateAvatar } from '../utils/avatar';
+import { getUserAvatarUrl } from '../utils/avatar';
 import AvatarUpload from './AvatarUpload';
 
 const UserProfileManager = () => {
@@ -39,6 +39,8 @@ const UserProfileManager = () => {
     newPassword: '',
     confirmPassword: ''
   });
+
+  const [avatarUrl, setAvatarUrl] = useState('');
 
   const [currentSocial, setCurrentSocial] = useState({ platform: '', handle: '' });
 
@@ -82,6 +84,17 @@ const UserProfileManager = () => {
       });
     }
   }, [cognitoUserInfo]);
+
+  useEffect(() => {
+    const loadAvatar = async () => {
+      const sourceUser = cognitoUserInfo || user;
+      if (sourceUser) {
+        const url = await getUserAvatarUrl(sourceUser, 64);
+        setAvatarUrl(url);
+      }
+    };
+    loadAvatar();
+  }, [cognitoUserInfo, user]);
 
   // 更新Cognito用户信息 - 增强邮箱验证处理
   const handleUpdateCognitoInfo = async () => {
@@ -232,11 +245,12 @@ const UserProfileManager = () => {
   };
 
   // 处理头像更新
-  const handleAvatarUpdate = async (avatarUrl) => {
+  const handleAvatarUpdate = async (avatarKey) => {
     try {
-      const result = await updateCognitoUserInfo({ avatarUrl });
+      const result = await updateCognitoUserInfo({ avatarKey });
       if (result.success) {
         setSuccess('头像更新成功！');
+        await refreshCognitoUserInfo();
       }
     } catch (error) {
       setError('头像更新失败：' + error.message);
@@ -340,10 +354,7 @@ const UserProfileManager = () => {
         <div className="px-6 py-4 space-y-4">
           {/* 头像部分 - 使用AvatarUpload组件 */}
           <AvatarUpload
-            currentAvatar={
-              cognitoUserInfo?.avatarUrl ||
-              generateAvatar(cognitoUserInfo?.username || user?.email || '用户', 64)
-            }
+            currentAvatar={avatarUrl}
             onAvatarUpdate={handleAvatarUpdate}
           />
 

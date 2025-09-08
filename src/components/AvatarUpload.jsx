@@ -3,8 +3,8 @@ import SecureFileUpload from './SecureFileUpload';
 
 const AvatarUpload = ({ currentAvatar, onAvatarUpdate }) => {
   const handleAvatarUpdate = (fileUrl, fileKey) => {
-    // 传递文件URL给父组件
-    onAvatarUpdate(fileUrl);
+    // 传递文件key给父组件
+    onAvatarUpdate(fileKey);
   };
 
   return (
