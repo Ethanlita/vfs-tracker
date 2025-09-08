@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useAuthenticator } from '@aws-amplify/ui-react';
 import {
@@ -5,7 +6,6 @@ import {
   fetchUserAttributes,
   updateUserAttributes,
   updatePassword,
-  confirmUserAttribute,
   resendSignUpCode
 } from 'aws-amplify/auth';
 import { getUserProfile, isUserProfileComplete, setupUserProfile } from '../api.js';
@@ -40,10 +40,11 @@ export const AuthProvider = ({ children }) => {
   });
 
   // 生产模式下监听Amplify认证状态
-  const amplifyAuthHook = ready ? useAuthenticator(context => [
+  const authenticatorData = useAuthenticator(context => [
     context.authStatus,
     context.user
-  ]) : { authStatus: 'unauthenticated', user: null };
+  ]);
+  const amplifyAuthHook = ready ? authenticatorData : { authStatus: 'unauthenticated', user: null };
 
   console.log('🔍 AuthContext: amplifyAuthHook 状态', {
     ready,
@@ -121,7 +122,7 @@ export const AuthProvider = ({ children }) => {
         hasCurrentUser: !!user,
         reason: authStatus !== 'authenticated' ? 'not authenticated' :
                 !amplifyUser ? 'no amplify user' :
-                !!user ? 'user already exists' : 'unknown'
+                user ? 'user already exists' : 'unknown'
       });
     }
   }, [amplifyAuthHook.authStatus, amplifyAuthHook.user, authInitialized, ready, user]);
@@ -228,7 +229,7 @@ export const AuthProvider = ({ children }) => {
           nickname: userAttributes.nickname,
           preferred_username: userAttributes.preferred_username,
           email_verified: userAttributes.email_verified,
-          picture: userAttributes.picture,
+          avatarKey: userAttributes['custom:avatarKey'] || userAttributes.avatarKey,
           ...userAttributes // 包含所有其他属性
         }
       };
@@ -264,7 +265,7 @@ export const AuthProvider = ({ children }) => {
           nickname: null,
           preferred_username: null,
           email_verified: 'false',
-          picture: null
+          avatarKey: null
         }
       };
 
@@ -287,11 +288,12 @@ export const AuthProvider = ({ children }) => {
         email: 'dev@example.com',
         nickname: 'Dev User',
         email_verified: true,
-        avatarUrl: null, // 开发模式下没有头像
+        avatarKey: null, // 开发模式下没有头像
         attributes: {
           email: 'dev@example.com',
           nickname: 'Dev User',
-          email_verified: 'true'
+          email_verified: 'true',
+          avatarKey: null
         }
       });
       return;
@@ -301,6 +303,7 @@ export const AuthProvider = ({ children }) => {
     try {
       const currentUser = await getCurrentUser();
       const attributes = await fetchUserAttributes();
+      const avatarKey = attributes['custom:avatarKey'] || attributes.avatarKey || null;
 
       const cognitoUserData = {
         username: currentUser.username,
@@ -308,8 +311,8 @@ export const AuthProvider = ({ children }) => {
         email: attributes.email,
         nickname: attributes.nickname || attributes.preferred_username || '',
         email_verified: attributes.email_verified === 'true',
-        avatarUrl: attributes.picture || null, // 从Cognito picture属性获取头像URL
-        attributes: attributes
+        avatarKey,
+        attributes: { ...attributes, avatarKey }
       };
 
       setCognitoUserInfo(cognitoUserData);
@@ -343,9 +346,9 @@ export const AuthProvider = ({ children }) => {
         emailChanged = true;
       }
 
-      // 支持头像URL更新
-      if (updates.avatarUrl !== undefined) {
-        attributesToUpdate.picture = updates.avatarUrl;
+      // 支持头像Key更新
+      if (updates.avatarKey !== undefined) {
+        attributesToUpdate['custom:avatarKey'] = updates.avatarKey;
       }
 
       if (Object.keys(attributesToUpdate).length > 0) {
@@ -373,7 +376,7 @@ export const AuthProvider = ({ children }) => {
       if (emailChanged) {
         message += ' 请检查新邮箱收件箱，点击验证链接完成邮箱验证。';
       }
-      if (updates.avatarUrl) {
+      if (updates.avatarKey) {
         message += ' 头像已更新！';
       }
 
