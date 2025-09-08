@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect, useMemo } from 'react';
 import { Authenticator, useAuthenticator } from '@aws-amplify/ui-react';
 import { Amplify } from 'aws-amplify';
 import { useNavigate } from 'react-router-dom';
@@ -150,7 +150,7 @@ const Auth = () => {
 const ProductionAuthStatus = ({ onShowLogin, navigate }) => {
     // @en Use AuthContext exclusively - it already uses Amplify v6 standard APIs
     // @zh 专门使用 AuthContext - 它已经使用了 Amplify v6 标准 API
-    const { user, cognitoUserInfo } = useAuth();
+    const { user, cognitoUserInfo, refreshCognitoUserInfo } = useAuth();
     const { signOut } = useAuthenticator((context) => [context.signOut]);
 
     console.log('📍 [验证点20] Auth组件用户信息来源验证:', {
@@ -163,15 +163,23 @@ const ProductionAuthStatus = ({ onShowLogin, navigate }) => {
         混合来源检查: '仅signOut函数来自useAuthenticator，其余均来自AuthContext'
     });
 
-    const completeUser = user ? {
-        ...user,
-        attributes: {
-            ...user.attributes,
-            nickname: cognitoUserInfo?.nickname || user.attributes?.nickname,
-            email: cognitoUserInfo?.email || user.attributes?.email,
-            avatarKey: cognitoUserInfo?.avatarKey || user.attributes?.avatarKey
+    useEffect(() => {
+        if (user && !cognitoUserInfo) {
+            refreshCognitoUserInfo();
         }
-    } : null;
+    }, [user, cognitoUserInfo, refreshCognitoUserInfo]);
+
+    const completeUser = useMemo(() => {
+        return user ? {
+            ...user,
+            attributes: {
+                ...user.attributes,
+                nickname: cognitoUserInfo?.nickname || user.attributes?.nickname,
+                email: cognitoUserInfo?.email || user.attributes?.email,
+                avatarKey: cognitoUserInfo?.avatarKey || user.attributes?.avatarKey
+            }
+        } : null;
+    }, [user, cognitoUserInfo]);
 
     const [avatarUrl, setAvatarUrl] = useState('');
 
