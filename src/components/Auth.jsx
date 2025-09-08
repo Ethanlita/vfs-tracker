@@ -8,10 +8,11 @@ import { getUserAvatarUrl, getUserDisplayName } from '../utils/avatar.js';
 
 const Auth = () => {
     const navigate = useNavigate();
-    const { user, login, logout, handleAuthSuccess } = useAuth();
+    const { user, login, logout } = useAuth();
     const [showAuthenticator, setShowAuthenticator] = useState(false);
     const [amplifyReady, setAmplifyReady] = useState(false);
     const ready = globalIsProductionReady();
+    const [avatarUrl, setAvatarUrl] = useState('');
 
     // 检查Amplify配置状态
     useEffect(() => {
@@ -49,6 +50,16 @@ const Auth = () => {
         navigate('/');
     };
 
+    useEffect(() => {
+        const fetchAvatar = async () => {
+            if (user) {
+                const url = await getUserAvatarUrl(user, 40);
+                setAvatarUrl(url);
+            }
+        };
+        fetchAvatar();
+    }, [user]);
+
     // 开发模式的认证组件
     if (!ready) {
         if (user) {
@@ -56,7 +67,7 @@ const Auth = () => {
             return (
                 <div className="flex items-center gap-2 sm:gap-3">
                     <img
-                        src={getUserAvatarUrl(user, 40)}
+                        src={avatarUrl}
                         alt={getUserDisplayName(user)}
                         className="w-9 h-9 sm:w-10 sm:h-10 rounded-full border-2 border-pink-500"
                     />
@@ -152,23 +163,33 @@ const ProductionAuthStatus = ({ onShowLogin, navigate }) => {
         混合来源检查: '仅signOut函数来自useAuthenticator，其余均来自AuthContext'
     });
 
-    // 构建完整的用户对象，优先使用AuthContext提供的数据
     const completeUser = user ? {
         ...user,
         attributes: {
             ...user.attributes,
             nickname: cognitoUserInfo?.nickname || user.attributes?.nickname,
             email: cognitoUserInfo?.email || user.attributes?.email,
-            picture: cognitoUserInfo?.avatarUrl || user.attributes?.picture
+            avatarKey: cognitoUserInfo?.avatarKey || user.attributes?.avatarKey
         }
     } : null;
 
+    const [avatarUrl, setAvatarUrl] = useState('');
+
+    useEffect(() => {
+        const fetchAvatar = async () => {
+            if (completeUser) {
+                const url = await getUserAvatarUrl(completeUser, 40);
+                setAvatarUrl(url);
+            }
+        };
+        fetchAvatar();
+    }, [completeUser]);
+
     if (completeUser) {
-        // 生产模式 - 已认证用户
         return (
             <div className="flex items-center gap-2 sm:gap-3">
                 <img
-                    src={getUserAvatarUrl(completeUser, 40)}
+                    src={avatarUrl}
                     alt={getUserDisplayName(completeUser)}
                     className="w-9 h-9 sm:w-10 sm:h-10 rounded-full border-2 border-pink-500"
                 />
@@ -276,8 +297,7 @@ const AuthenticatorWrapper = ({ onAuthSuccess }) => {
         <Authenticator
             hideSignUp={false}
         >
-            {({ signOut, user }) => {
-                // 当用户认证成功时，调用AuthContext的处理方法
+            {({ user }) => {
                 if (user) {
                     handleAuthSuccess(user);
                     onAuthSuccess();

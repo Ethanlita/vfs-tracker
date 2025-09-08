@@ -46,7 +46,7 @@ const MyPage = () => {
       nickname: cognitoUserInfo?.nickname,
       name: cognitoUserInfo?.name || authContextUser.attributes?.name,
       preferred_username: authContextUser.attributes?.preferred_username,
-      picture: authContextUser.attributes?.picture
+      avatarKey: cognitoUserInfo?.avatarKey || authContextUser.attributes?.avatarKey
     },
     username: authContextUser.username
   } : {

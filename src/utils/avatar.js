@@ -1,3 +1,5 @@
+import { getAvatarUrl } from '../api.js';
+
 /**
  * 头像生成和处理工具函数
  */
@@ -50,13 +52,16 @@ export const generateAvatar = (name, size = 40) => {
  * @param {number} size - 头像尺寸，默认40
  * @returns {string} 头像URL
  */
-export const getUserAvatarUrl = (user, size = 40) => {
-  // 优先使用用户上传的头像
-  if (user?.attributes?.picture && user.attributes.picture !== '') {
-    return user.attributes.picture;
+export const getUserAvatarUrl = async (user, size = 40) => {
+  if (user?.attributes?.avatarKey) {
+    try {
+      const url = await getAvatarUrl(user?.userId || user?.attributes?.sub);
+      if (url) return url;
+    } catch (error) {
+      console.error('获取头像URL失败:', error);
+    }
   }
 
-  // 获取用户名，优先使用Cognito的nickname，然后是name，最后是email的用户名部分
   const userName = user?.attributes?.nickname ||
     user?.attributes?.name ||
     user?.attributes?.preferred_username ||
