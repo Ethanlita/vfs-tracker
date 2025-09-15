@@ -282,7 +282,7 @@ def create_formant_chart(formant_low, formant_high):
         return create_placeholder_chart('F1-F2 Vowel Space', 'Formant data incomplete.')
 
 
-def create_formant_spl_chart(spectrum_low, spectrum_high):
+def create_formant_spl_chart(spectrum_low, spectrum_high, spectrum_sustained=None):
     """Creates a Formant-SPL (LPC Spectrum) chart."""
     logger.info("Creating Formant-SPL Spectrum chart")
     try:
@@ -295,6 +295,10 @@ def create_formant_spl_chart(spectrum_low, spectrum_high):
         # Plot spectrum for the highest note
         if spectrum_high and 'frequencies' in spectrum_high and 'spl_values' in spectrum_high:
             ax.plot(spectrum_high['frequencies'], spectrum_high['spl_values'], color='red', label='Highest Note Spectrum')
+
+        # Plot spectrum for the sustained vowel
+        if spectrum_sustained and 'frequencies' in spectrum_sustained and 'spl_values' in spectrum_sustained:
+            ax.plot(spectrum_sustained['frequencies'], spectrum_sustained['spl_values'], color='green', linestyle='--', label='Sustained Vowel Spectrum')
 
         ax.set_xlabel('Frequency (Hz)')
         ax.set_ylabel('SPL (dB)')

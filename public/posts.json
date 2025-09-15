@@ -1,5 +1,15 @@
 [
   {
+    "name": "Gemini知识库",
+    "type": "folder",
+    "children": []
+  },
+  {
+    "name": "VFS Tracker是什么.md",
+    "type": "file",
+    "path": "VFS Tracker是什么.md"
+  },
+  {
     "name": "tutorial",
     "type": "folder",
     "children": [
@@ -24,11 +34,6 @@
         "path": "tutorial/音阶练习使用指南.md"
       }
     ]
-  },
-  {
-    "name": "VFS Tracker是什么.md",
-    "type": "file",
-    "path": "VFS Tracker是什么.md"
   },
   {
     "name": "使用协议.md",

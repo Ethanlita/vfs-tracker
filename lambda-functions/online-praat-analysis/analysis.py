@@ -16,12 +16,18 @@ logger.setLevel(logging.INFO)
 
 def analyze_sustained_wav(file_path, f0min=75, f0max=600):
     """分析持续元音录音，提取基频、抖动、闪烁、HNR、估计 SPL 等指标。
-    修复：避免对 PointProcess 调用不存在的 \"Get mean\"，改用 Pitch 对象获取 f0 均值。
+    修复：避免对 PointProcess 调用不存在的 "Get mean"，改用 Pitch 对象获取 f0 均值。
+    更新：MPT(mpt_s) 现在计算的是有效发声时长，而非文件总长。
     返回 dict（失败返回 None）。"""
     logger.info(f"Analyzing sustained vowel at {file_path} with F0 range {f0min}-{f0max} Hz")
     try:
         sound = parselmouth.Sound(file_path)
-        duration = sound.get_total_duration()
+
+        # Load with librosa to calculate voiced duration for MPT
+        y, sr = librosa.load(file_path, sr=None)
+        non_silent_intervals = librosa.effects.split(y, top_db=40)
+        voiced_duration = sum([(end - start) / sr for start, end in non_silent_intervals])
+
         pitch_obj = sound.to_pitch(pitch_floor=f0min, pitch_ceiling=f0max)
         try:
             f0_mean = call(pitch_obj, "Get mean", 0, 0, "Hertz")
@@ -41,12 +47,11 @@ def analyze_sustained_wav(file_path, f0min=75, f0max=600):
         harmonicity = call(sound, "To Harmonicity (cc)", 0.01, f0min, 0.1, 1.0)
         hnr_db = call(harmonicity, "Get mean", 0, 0)
 
-        y, sr = librosa.load(file_path, sr=None)
         rms = np.sqrt(np.mean(y**2) + 1e-12)
         spl_dbA_est = 20 * np.log10(rms / 1.0) + 94
 
         metrics = {
-            'mpt_s': round(float(duration), 2),
+            'mpt_s': round(float(voiced_duration), 2),
             'f0_mean': round(float(f0_mean), 2) if not np.isnan(f0_mean) else 0,
             'f0_sd': round(float(f0_sd), 2),
             'jitter_local_percent': round(float(jitter_local), 2) if not np.isnan(jitter_local) else 0,
@@ -188,28 +193,146 @@ def analyze_glide_files(local_paths):
         'bins': bins
     }
 
+def _get_robust_formants(
+    sound: parselmouth.Sound,
+    f0min: int = 75,
+    f0max: int = 1200,
+    max_formant: int = 5500,
+    time_step: float = 0.01,
+    window_length: float = 0.025,
+    pre_emphasis_from: float = 50.0,
+    intensity_threshold_db: float = -25.0,
+    hnr_threshold_db: float = 2.0,
+    min_continuous_frames: int = 10
+) -> Dict:
+    """
+    A robust method to extract F1, F2, F3 formants and the stable segment time.
+    """
+    try:
+        pitch = sound.to_pitch(time_step=time_step, pitch_floor=f0min, pitch_ceiling=f0max)
+        all_times = pitch.xs()
+
+        frame_results = []
+        for i, t in enumerate(all_times):
+            # To be robust, lazily calculate intensity/HNR only when needed
+            is_voiced = call(pitch, "Get value at time", t, "Hertz", "Linear") > 0
+            if not is_voiced:
+                frame_results.append(None)
+                continue
+
+            # Lazily create these objects only once
+            if 'intensity' not in locals():
+                intensity = sound.to_intensity(minimum_pitch=f0min, time_step=time_step)
+                max_intensity = call(intensity, "Get maximum", 0, 0, "parabolic")
+                min_intensity_db = max_intensity + intensity_threshold_db
+            if 'harmonicity' not in locals():
+                harmonicity = sound.to_harmonicity_cc(time_step=time_step, minimum_pitch=f0min)
+
+            intensity_db = call(intensity, "Get value at time", t, "Cubic")
+            hnr = call(harmonicity, "Get value at time", t, "Linear")
+
+            if not (hnr >= hnr_threshold_db and intensity_db >= min_intensity_db):
+                frame_results.append(None)
+                continue
+
+            frame_sound = sound.extract_part(from_time=t - window_length/2, to_time=t + window_length/2, preserve_times=False)
+            if frame_sound.get_total_duration() == 0:
+                frame_results.append(None)
+                continue
+
+            formants = frame_sound.to_formant_burg(max_number_of_formants=5, maximum_formant=max_formant, window_length=window_length, pre_emphasis_from=pre_emphasis_from)
+            frame_f = [0.0] * 3
+            for j in range(1, 4):
+                f = call(formants, "Get value at time", j, 0, 'Hertz', 'Linear')
+                bw = call(formants, "Get bandwidth at time", j, 0, 'Hertz', 'Linear')
+                if 50 < bw < 700:
+                    frame_f[j-1] = f
+
+            f1, f2, f3 = frame_f
+            if f1 > 0 and f2 > 0 and f1 < f2 and (f2 - f1) >= 150:
+                if f3 > 0 and (f2 >= f3 or (f3 - f2) < 200):
+                    f3 = 0.0
+                frame_results.append({'f1': f1, 'f2': f2, 'f3': f3, 'frame_index': i})
+            else:
+                frame_results.append(None)
+
+    except Exception as e:
+        logger.warning(f"Exception during formant frame analysis: {e}")
+        return {'error': 'Exception in formant analysis'}
+
+    longest_segment_info = {'start_index': -1, 'end_index': -1, 'length': 0}
+    current_segment_start = -1
+    for i, result in enumerate(frame_results):
+        if result is not None:
+            if current_segment_start == -1:
+                current_segment_start = i
+            # Check if this is the last frame
+            if i == len(frame_results) - 1 or frame_results[i+1] is None:
+                current_length = i - current_segment_start + 1
+                if current_length > longest_segment_info['length']:
+                    longest_segment_info.update(start_index=current_segment_start, end_index=i, length=current_length)
+                current_segment_start = -1
+
+    if longest_segment_info['length'] < min_continuous_frames:
+        return {'error': f'No stable segment of {min_continuous_frames * time_step * 1000:.0f}ms found'}
+
+    start_idx, end_idx = longest_segment_info['start_index'], longest_segment_info['end_index']
+    # Correctly slice the results to get only the frames from the longest stable segment
+    stable_segment_frames = [res for res in frame_results[start_idx:end_idx+1] if res]
+
+    final_results = {
+        'segment_start_s': all_times[start_idx],
+        'segment_end_s': all_times[end_idx]
+    }
+    for i in range(1, 4):
+        fn = f'f{i}'
+        # Calculate median ONLY from the frames in the identified stable segment
+        track = np.array([frame[fn] for frame in stable_segment_frames if frame.get(fn, 0) > 0])
+        final_results[f'F{i}'] = round(float(np.median(track)), 2) if len(track) > 0 else 0.0
+
+    return final_results
+
 def analyze_note_file(path, f0min=75, f0max=1200):
     try:
         snd = parselmouth.Sound(path)
-        total_dur = snd.get_total_duration()
-        mid_start = total_dur * 0.33
-        mid_end = total_dur * 0.66
-        segment = snd.extract_part(from_time=mid_start, to_time=mid_end, preserve_times=False)
-        pitch = segment.to_pitch(time_step=0.01, pitch_floor=f0min, pitch_ceiling=f0max)
+
+        # New robust formant analysis, returns formants and stable segment times
+        analysis_results = _get_robust_formants(snd, f0min=f0min, f0max=f0max)
+
+        if 'error' in analysis_results:
+            return {'F1': 0, 'F2': 0, 'F3': 0, 'f0_mean': 0, 'spl_dbA_est': 0, 'error_details': analysis_results['error']}
+
+        f1 = analysis_results.get('F1', 0.0)
+        f2 = analysis_results.get('F2', 0.0)
+        f3 = analysis_results.get('F3', 0.0)
+
+        # Calculate F0 and SPL on the *same stable segment* used for formants
+        start_s = analysis_results.get('segment_start_s')
+        end_s = analysis_results.get('segment_end_s')
+
+        if end_s <= start_s:
+            # Fallback to whole audio if segment is invalid
+            segment_for_f0 = snd
+            y, sr = _load_mono(path)
+        else:
+            segment_for_f0 = snd.extract_part(from_time=start_s, to_time=end_s, preserve_times=False)
+            y, sr = snd.as_array()
+            start_sample, end_sample = int(start_s * sr), int(end_s * sr)
+            y = y[start_sample:end_sample]
+
+        pitch = segment_for_f0.to_pitch(time_step=0.01, pitch_floor=f0min, pitch_ceiling=f0max)
         f0_vals = pitch.selected_array['frequency']
-        f0_vals = f0_vals[(f0_vals>0) & np.isfinite(f0_vals)]
-        f0_mean = float(np.median(f0_vals)) if f0_vals.size else 0.0
-        formant = segment.to_formant_burg()
-        tmid = segment.get_total_duration()/2
-        def get_form(n):
-            try: return float(call(formant, "Get value at time", n, tmid, 'Hertz', 'Linear'))
-            except Exception: return 0.0
-        f1,f2,f3 = get_form(1),get_form(2),get_form(3)
-        y, sr = _load_mono(path)
+        f0_vals = f0_vals[(f0_vals > 0) & np.isfinite(f0_vals)]
+        f0_mean = round(float(np.median(f0_vals)), 2) if f0_vals.size else 0.0
+
+        # SPL of the segment
         spl = _rms_spl(y)
-        return {'f0_mean': f0_mean, 'F1': f1, 'F2': f2, 'F3': f3, 'spl_dbA_est': spl}
+
+        result = {'f0_mean': f0_mean, 'F1': f1, 'F2': f2, 'F3': f3, 'spl_dbA_est': spl}
+        return result
+
     except Exception as e:
-        logger.error(f'analyze_note_file failed for {path}: {e}')
+        logger.error(f'analyze_note_file failed for {path}: {e}', exc_info=True)
         return {'error': str(e)}
 
 def get_lpc_spectrum(file_path: str):
