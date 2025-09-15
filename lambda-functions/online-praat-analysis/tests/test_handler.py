@@ -143,10 +143,9 @@ def test_end_to_end_with_known_audio(mocked_aws_services, tmp_path_factory):
     assert sustained_metrics.get('jitter_local_percent', 100) < 1.0
     assert sustained_metrics.get('shimmer_local_percent', 100) < 5.0
 
-    # NOTE: The robust formant detection algorithm correctly identifies that the
-    # synthetic audio for the 'note' file is not stable. This assertion
-    # verifies that the handler correctly flags this failure and does not
-    # add the 'formants_low' key to the final metrics. This confirms the
-    # error handling path works as expected.
-    formant_metrics = sustained_metrics.get('formants_low')
-    assert formant_metrics is None
+    # With the bugs in the formant analysis fixed, it should now pass.
+    formant_metrics = sustained_metrics.get('formants_low', {})
+    assert 'error' not in formant_metrics and 'error_details' not in formant_metrics
+    assert abs(formant_metrics.get('f0_mean', 0) - known_f0) < 10
+    assert abs(formant_metrics.get('F1', 0) - known_f1) < 75
+    assert abs(formant_metrics.get('F2', 0) - known_f2) < 75

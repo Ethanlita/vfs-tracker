@@ -190,15 +190,15 @@ def perform_full_analysis(session_id: str, calibration: dict = None, forms: dict
             formant_analysis_failed = True
     
     # Create formant charts if data is available, otherwise create placeholders
-    if not formant_analysis_failed:
+    if formant_low_metrics or formant_high_metrics:
         formant_buf = create_formant_chart(formant_low_metrics, formant_high_metrics)
         if formant_buf:
             formant_key = artifact_prefix + 'formant.png'
             s3_client.upload_fileobj(formant_buf, BUCKET, formant_key, ExtraArgs={'ContentType': 'image/png'})
             charts['formant'] = f's3://{BUCKET}/{formant_key}'
     else:
-        formant_analysis_failed = True
-        placeholder_buf = create_placeholder_chart('F1-F2 Vowel Space', 'Formant analysis failed.\nSee notes in report for details.')
+        # This case handles when both formant analyses fail
+        placeholder_buf = create_placeholder_chart('F1-F2 Vowel Space', 'Formant analysis failed for all inputs.')
         if placeholder_buf:
             formant_key = artifact_prefix + 'formant.png'
             s3_client.upload_fileobj(placeholder_buf, BUCKET, formant_key, ExtraArgs={'ContentType': 'image/png'})
