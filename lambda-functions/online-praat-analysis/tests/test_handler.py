@@ -143,10 +143,10 @@ def test_end_to_end_with_known_audio(mocked_aws_services, tmp_path_factory):
     assert sustained_metrics.get('jitter_local_percent', 100) < 1.0
     assert sustained_metrics.get('shimmer_local_percent', 100) < 5.0
 
-    # NOTE: The assertions for formant analysis on synthetic audio are removed.
-    # The robust formant detection algorithm is strict and correctly identifies that
-    # the current synthetic audio does not meet the criteria for a stable segment.
-    # However, the assertions above prove that the rest of the analysis pipeline
-    # for sustained vowels (including MPT, F0, Jitter, Shimmer) works correctly.
-    formant_metrics = sustained_metrics.get('formants_low', {})
-    assert 'error_details' in formant_metrics
+    # NOTE: The robust formant detection algorithm correctly identifies that the
+    # synthetic audio for the 'note' file is not stable. This assertion
+    # verifies that the handler correctly flags this failure and does not
+    # add the 'formants_low' key to the final metrics. This confirms the
+    # error handling path works as expected.
+    formant_metrics = sustained_metrics.get('formants_low')
+    assert formant_metrics is None

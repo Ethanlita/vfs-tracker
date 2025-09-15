@@ -151,6 +151,12 @@ def perform_full_analysis(session_id: str, calibration: dict = None, forms: dict
     if chosen_sustained:
         # Use the metrics from the best file, no need to re-analyze
         metrics['sustained'] = best_metrics
+
+        # Also perform formant analysis on the sustained vowel for the report
+        formant_sustained_metrics = analyze_note_file(chosen_sustained)
+        if formant_sustained_metrics and 'error' not in formant_sustained_metrics and 'error_details' not in formant_sustained_metrics:
+            metrics['sustained']['formants_sustained'] = formant_sustained_metrics
+
         spectrum_sustained = get_lpc_spectrum(chosen_sustained)
         buf = create_time_series_chart(chosen_sustained)
         if buf:
@@ -169,18 +175,22 @@ def perform_full_analysis(session_id: str, calibration: dict = None, forms: dict
 
     if len(note_local) >= 1:
         formant_low_metrics = analyze_note_file(note_local[0])
-        if formant_low_metrics and 'error' not in formant_low_metrics:
+        if formant_low_metrics and 'error' not in formant_low_metrics and 'error_details' not in formant_low_metrics:
             metrics.setdefault('sustained', {})['formants_low'] = formant_low_metrics
-        spectrum_low = get_lpc_spectrum(note_local[0])
+            spectrum_low = get_lpc_spectrum(note_local[0])
+        else:
+            formant_analysis_failed = True
 
     if len(note_local) >= 2:
         formant_high_metrics = analyze_note_file(note_local[1])
-        if formant_high_metrics and 'error' not in formant_high_metrics:
+        if formant_high_metrics and 'error' not in formant_high_metrics and 'error_details' not in formant_high_metrics:
             metrics.setdefault('sustained', {})['formants_high'] = formant_high_metrics
-        spectrum_high = get_lpc_spectrum(note_local[1])
+            spectrum_high = get_lpc_spectrum(note_local[1])
+        else:
+            formant_analysis_failed = True
     
     # Create formant charts if data is available, otherwise create placeholders
-    if formant_low_metrics and formant_high_metrics and 'error' not in formant_low_metrics and 'error' not in formant_high_metrics:
+    if not formant_analysis_failed:
         formant_buf = create_formant_chart(formant_low_metrics, formant_high_metrics)
         if formant_buf:
             formant_key = artifact_prefix + 'formant.png'
@@ -195,7 +205,7 @@ def perform_full_analysis(session_id: str, calibration: dict = None, forms: dict
             charts['formant'] = f's3://{BUCKET}/{formant_key}'
 
     if spectrum_low or spectrum_high or spectrum_sustained:
-        formant_spl_buf = create_formant_spl_chart(spectrum_low, spectrum_high, spectrum_sustained=spectrum_sustained)
+        formant_spl_buf = create_formant_spl_chart(spectrum_low, spectrum_high, spectrum_sustained)
         if formant_spl_buf:
             formant_spl_key = artifact_prefix + 'formant_spl_spectrum.png'
             s3_client.upload_fileobj(formant_spl_buf, BUCKET, formant_spl_key, ExtraArgs={'ContentType': 'image/png'})

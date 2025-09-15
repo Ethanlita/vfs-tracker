@@ -6,13 +6,12 @@ from scipy.signal import lfilter
 def generate_vowel_sound(
     path,
     samplerate=44100,
-    duration=3.0,
+    duration=4.0, # Increased duration
     f0=150.0,
     formants=None
 ):
     """
-    Generates a synthetic vowel sound with specified formants and saves it as a WAV file.
-    This is used for testing the formant analysis specifically.
+    Generates a simple, clean synthetic vowel sound.
     """
     if formants is None:
         formants = [(500, 80), (1500, 100), (2500, 120)]
@@ -30,18 +29,6 @@ def generate_vowel_sound(
         a = [1, -2 * r * np.cos(theta), r**2]
         b = [1]
         signal = lfilter(b, a, signal)
-
-    fade_len = int(samplerate * 0.05)
-    if len(signal) > fade_len * 2:
-        fade_in = np.linspace(0, 1, fade_len)
-        fade_out = np.linspace(1, 0, fade_len)
-        signal[:fade_len] *= fade_in
-        signal[-fade_len:] *= fade_out
-
-    # Apply a high-pass filter to remove low-frequency noise/drift
-    from scipy.signal import butter, sosfilt
-    sos = butter(4, 80, 'hp', fs=samplerate, output='sos')
-    signal = sosfilt(sos, signal)
 
     max_amp = np.iinfo(np.int16).max
     signal = signal / np.max(np.abs(signal)) * (max_amp * 0.8)
