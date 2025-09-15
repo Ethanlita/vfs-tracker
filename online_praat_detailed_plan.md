@@ -131,7 +131,8 @@ A_est`。
             1.  从 S3 读取原始 `.wav` 文件 (`voice-tests/{userOr
 AnonId}/{sessionId}/raw/*.wav`)。
             2.  使用 `parselmouth` 和其他库执行声学分析：
-                *   `analyze_sustained_wav`: 计算稳定元音录音的 SPL, F0, Jitter, Shimmer, HNR, Formants, MPT。
+                *   `analyze_sustained_wav`: 为单个稳定元音录音计算声学指标（F0, Jitter, Shimmer, HNR, SPL）。**MPT（最长发声时）现在基于有效发声时长计算，而非文件总长。**
+                *   `analyze_note_file`: 对单个录音（如高/低音）进行**鲁棒的共振峰分析**。该方法通过逐帧预筛选（基于发声、HNR、强度）和时序稳定性检查来提取可靠的 F1, F2, F3。
 
                 *   `analyze_speech_flow`: 计算朗读和自由说话录音的时长、发声比例、停顿次数、F0 统计、SPL。
                 *   VRP 计算: 处理滑音录音以构建音域图。
@@ -497,8 +498,7 @@ ocal Range Profile - VRP)**
 *   **可选**: 列出用户对每个问卷问题的具体回答。
 
 5.  **高/低唱音 (High/Low Sustained Notes)**
-    *   **图表**: 稳态频谱图 + LPC 包络，叠加 F1/F2/F3 的竖线
-与数值标注。
+    *   **图表**: 稳态频谱图 + LPC 包络，叠加 F1/F2/F3 的竖线与数值标注。该图表现在同时展示**最低音、最高音和持续元音**的频谱，便于对比。
     *   **表格**: F1-F3 表格。
 
 6.  **额外 (Additional)**

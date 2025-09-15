@@ -126,20 +126,39 @@ def perform_full_analysis(session_id: str, calibration: dict = None, forms: dict
     charts = {}
     artifact_prefix = ARTIFACT_PREFIX_TEMPLATE.format(sessionId=session_id)
 
-    # Sustained Vowel (Step 2)
+    # Sustained Vowel (Step 2) - Selects the most stable recording based on Jitter + Shimmer
     sustained_keys = audio_groups.get('2', [])[:MAX_DOWNLOAD_FILES_PER_STEP]
-    sustained_local=[safe_download(k) for k in sustained_keys if k.endswith('.wav')]
-    chosen_sustained=pick_longest_file(sustained_local)
+    sustained_local = [safe_download(k) for k in sustained_keys if k.endswith('.wav')]
+
+    best_file = None
+    best_metrics = None
+    min_stability_score = float('inf')
+
+    for file_path in sustained_local:
+        if not file_path: continue
+        current_metrics = analyze_sustained_wav(file_path)
+        if current_metrics and 'error' not in current_metrics:
+            jitter = current_metrics.get('jitter_local_percent', float('inf'))
+            shimmer = current_metrics.get('shimmer_local_percent', float('inf'))
+            stability_score = jitter + shimmer
+            if stability_score < min_stability_score:
+                min_stability_score = stability_score
+                best_metrics = current_metrics
+                best_file = file_path
+
+    chosen_sustained = best_file
+    spectrum_sustained = None
     if chosen_sustained:
-        sus_metrics = analyze_sustained_wav(chosen_sustained) or {}
-        metrics['sustained']=sus_metrics
+        # Use the metrics from the best file, no need to re-analyze
+        metrics['sustained'] = best_metrics
+        spectrum_sustained = get_lpc_spectrum(chosen_sustained)
         buf = create_time_series_chart(chosen_sustained)
         if buf:
-            ts_key = artifact_prefix+'timeSeries.png'
+            ts_key = artifact_prefix + 'timeSeries.png'
             s3_client.upload_fileobj(buf, BUCKET, ts_key, ExtraArgs={'ContentType':'image/png'})
-            charts['timeSeries']=f's3://{BUCKET}/{ts_key}'
+            charts['timeSeries'] = f's3://{BUCKET}/{ts_key}'
     else:
-        metrics['sustained']={'error':'no_sustained_audio'}
+        metrics['sustained'] = {'error': 'no_sustained_audio_found_or_analyzed'}
 
     # Formant analysis from Step 4
     note_keys = audio_groups.get('4', [])[:MAX_DOWNLOAD_FILES_PER_STEP]
@@ -175,8 +194,8 @@ def perform_full_analysis(session_id: str, calibration: dict = None, forms: dict
             s3_client.upload_fileobj(placeholder_buf, BUCKET, formant_key, ExtraArgs={'ContentType': 'image/png'})
             charts['formant'] = f's3://{BUCKET}/{formant_key}'
 
-    if spectrum_low or spectrum_high:
-        formant_spl_buf = create_formant_spl_chart(spectrum_low, spectrum_high)
+    if spectrum_low or spectrum_high or spectrum_sustained:
+        formant_spl_buf = create_formant_spl_chart(spectrum_low, spectrum_high, spectrum_sustained=spectrum_sustained)
         if formant_spl_buf:
             formant_spl_key = artifact_prefix + 'formant_spl_spectrum.png'
             s3_client.upload_fileobj(formant_spl_buf, BUCKET, formant_spl_key, ExtraArgs={'ContentType': 'image/png'})

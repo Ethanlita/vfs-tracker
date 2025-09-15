@@ -52,7 +52,7 @@
 ### Step 2｜最长发声时 MPT + 稳定元音（Sustained Vowel）
 
 * **目标**：计算 MPT、F0、Jitter、Shimmer、HNR、F1–F3、SPL。
-* **录音**：/a/ 持续发声（3–10 s，**重复 2 次**，取最佳）。`mpt_a_1.wav`、`mpt_a_2.wav`。
+* **录音**：/a/ 持续发声（3–10 s，**重复 2 次**，取最稳定录音）。后端将基于 **Jitter 和 Shimmer 最低** 的原则选择最佳录音进行分析。`mpt_a_1.wav`、`mpt_a_2.wav`。
 
 ### Step 3｜音域测定：滑音（Glissando）
 
@@ -209,6 +209,9 @@ def a_weighting_db(samples, sr):
 
 # --- 指标计算（稳定元音） ---
 def analyze_sustained_wav(key: str):
+    """
+    此函数为示例。实际实现中，MPT、共振峰等计算会更鲁棒。
+    """
     samples, sr = read_wav_from_s3(key)
     snd = psm.Sound(samples, sampling_frequency=sr)
 
@@ -225,20 +228,18 @@ def analyze_sustained_wav(key: str):
     shimmer_local = float(call([snd, point_process], "Get shimmer (local)", 0, 0, 75, 800, 1.3, 1.6, 1.6) * 100)
     hnr = float(call(snd, "To Harmonicity (cc)", 0.01, 75, 0.1, 1.0).values.mean())
 
-    # Formants（Burg）
+    # Formants: 实际实现中会使用更鲁棒的逐帧分析法，此处为简化示例
+    # (详见 analysis.py 中的 _get_robust_formants)
     formants = call(snd, "To Formant (burg)", 0.01, 5.0, 5500, 0.025, 50)
-    # 取中点 0.5 处
     tmid = snd.xmax / 2
     F1 = float(call(formants, "Get value at time", 1, tmid, 'Hertz', 'Linear'))
     F2 = float(call(formants, "Get value at time", 2, tmid, 'Hertz', 'Linear'))
     F3 = float(call(formants, "Get value at time", 3, tmid, 'Hertz', 'Linear'))
 
-    # MPT：基于能量门限近似
-    thr = 0.02 * np.max(np.abs(samples))
-    voiced = np.where(np.abs(samples) > thr, 1, 0)
-    from itertools import groupby
-    runs = [sum(1 for _ in g) for k, g in groupby(voiced) if k==1]
-    mpt_s = (max(runs) / sr) if runs else 0.0
+    # MPT: 实际实现中使用 librosa.effects.split，基于能量分割计算发声时长
+    import librosa
+    non_silent_intervals = librosa.effects.split(samples, top_db=40)
+    mpt_s = sum([(end - start) / sr for start, end in non_silent_intervals])
 
     spl = a_weighting_db(samples, sr)
 
