@@ -13,7 +13,6 @@ import {
 import { Bar, Line } from 'react-chartjs-2';
 import { getAllEvents, getUserPublicProfile } from '../api';
 import { useAsync } from '../utils/useAsync.js';
-import { isProductionReady as globalIsProductionReady } from '../env.js';
 import EnhancedDataCharts from './EnhancedDataCharts.jsx';
 
 /**
@@ -34,6 +33,19 @@ ChartJS.register(
   Tooltip,
   Legend
 );
+
+// Helper function to calculate date difference in days
+const diffInDays = (date1, date2) => {
+  const d1 = new Date(date1);
+  const d2 = new Date(date2);
+  return Math.floor((d1 - d2) / (1000 * 60 * 60 * 24));
+};
+
+// Helper to safely parse numeric values
+const parseNumber = (value) => {
+  const num = Number(value);
+  return Number.isFinite(num) ? num : null;
+};
 
 const PublicDashboard = () => {
   const [selectedUserId, setSelectedUserId] = useState(null);
@@ -142,16 +154,18 @@ const PublicDashboard = () => {
     });
 
     const datasets = [];
-    Object.entries(userGroups).forEach(([userId, events], index) => {
+    Object.values(userGroups).forEach((events, index) => {
       const vfsEvent = events.find(e => e.type === 'surgery');
       if (!vfsEvent) return;
 
       const frequencyEvents = events
-        .filter(e => e.details?.fundamentalFrequency && typeof e.details.fundamentalFrequency === 'number')
-        .map(e => ({
-          x: diffInDays(e.date, vfsEvent.date),
-          y: e.details.fundamentalFrequency
-        }))
+        .map(e => {
+          const freq = parseNumber(e.details?.fundamentalFrequency);
+          return freq !== null
+            ? { x: diffInDays(e.date, vfsEvent.date), y: freq }
+            : null;
+        })
+        .filter(Boolean)
         .sort((a, b) => a.x - b.x);
 
       if (frequencyEvents.length > 0) {
@@ -184,9 +198,19 @@ const PublicDashboard = () => {
       const vfsEvent = events.find(e => e.type === 'surgery');
       if (!vfsEvent) return;
 
-      const frequencyEvents = events.filter(e => e.details?.fundamentalFrequency && typeof e.details.fundamentalFrequency === 'number');
-      const before = frequencyEvents.filter(e => diffInDays(e.date, vfsEvent.date) < 0).map(e => e.details.fundamentalFrequency);
-      const after = frequencyEvents.filter(e => diffInDays(e.date, vfsEvent.date) > 0).map(e => e.details.fundamentalFrequency);
+      const freqEvents = events
+        .map(e => {
+          const freq = parseNumber(e.details?.fundamentalFrequency);
+          return freq !== null ? { date: e.date, freq } : null;
+        })
+        .filter(Boolean);
+
+      const before = freqEvents
+        .filter(e => diffInDays(e.date, vfsEvent.date) < 0)
+        .map(e => e.freq);
+      const after = freqEvents
+        .filter(e => diffInDays(e.date, vfsEvent.date) > 0)
+        .map(e => e.freq);
 
       if (before.length && after.length) {
         const avgBefore = before.reduce((s, v) => s + v, 0) / before.length;
@@ -230,13 +254,22 @@ const PublicDashboard = () => {
     const firstDate = userEvents[0]?.date;
     const lastDate = userEvents[userEvents.length - 1]?.date;
     const vfsAnchor = userEvents.find((e) => e.type === 'surgery')?.date || null;
-    const frequencyEvents = userEvents.filter((e) => e.details?.fundamentalFrequency && typeof e.details.fundamentalFrequency === 'number');
+    const frequencyEvents = userEvents
+      .map(e => {
+        const freq = parseNumber(e.details?.fundamentalFrequency);
+        return freq !== null ? { date: e.date, freq } : null;
+      })
+      .filter(Boolean);
 
     let avgBefore = null;
     let avgAfter = null;
     if (vfsAnchor && frequencyEvents.length) {
-      const before = frequencyEvents.filter((e) => diffInDays(e.date, vfsAnchor) < 0).map((e) => e.details.fundamentalFrequency);
-      const after = frequencyEvents.filter((e) => diffInDays(e.date, vfsAnchor) > 0).map((e) => e.details.fundamentalFrequency);
+      const before = frequencyEvents
+        .filter((e) => diffInDays(e.date, vfsAnchor) < 0)
+        .map((e) => e.freq);
+      const after = frequencyEvents
+        .filter((e) => diffInDays(e.date, vfsAnchor) > 0)
+        .map((e) => e.freq);
       const mean = (arr) => (arr.length ? arr.reduce((s, v) => s + v, 0) / arr.length : null);
       avgBefore = mean(before);
       avgAfter = mean(after);
@@ -266,12 +299,6 @@ const PublicDashboard = () => {
     }
   };
 
-  // Helper function to calculate date difference
-  const diffInDays = (date1, date2) => {
-    const d1 = new Date(date1);
-    const d2 = new Date(date2);
-    return Math.floor((d1 - d2) / (1000 * 60 * 60 * 24));
-  };
 
   // --- RENDER ---
   if (isLoading) {
