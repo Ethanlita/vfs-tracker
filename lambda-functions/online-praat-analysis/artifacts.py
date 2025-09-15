@@ -672,10 +672,11 @@ def create_pdf_report(session_id, metrics, chart_urls, userInfo=None):
         sustained_metrics = metrics.get('sustained', {}) if isinstance(metrics.get('sustained'), dict) else {}
         formant_low = sustained_metrics.get('formants_low')
         formant_high = sustained_metrics.get('formants_high')
+        formant_sustained = sustained_metrics.get('formants_sustained') # Get new data
         formant_failed = sustained_metrics.get('formant_analysis_failed')
 
         formant_section = [Paragraph(_bilingual("Formant Analysis / 共振峰分析"), h2_style)]
-        if formant_failed:
+        if formant_failed and not formant_sustained:
             bullet = (
                 "Analysis failed. Common causes / 分析失败，常见原因：<br/>"
                 "- Very low volume or too soft / 音量过低或发声太轻；<br/>"
@@ -684,11 +685,12 @@ def create_pdf_report(session_id, metrics, chart_urls, userInfo=None):
             )
             formant_section.append(Paragraph(bullet, text_style))
         else:
-            if formant_low or formant_high:
+            if formant_low or formant_high or formant_sustained:
                 headers = [
                     Paragraph("", text_style),
                     Paragraph(_bilingual("Lowest Note / 最低音"), text_style),
                     Paragraph(_bilingual("Highest Note / 最高音"), text_style),
+                    Paragraph(_bilingual("Sustained Vowel / 持续元音"), text_style),
                 ]
                 rows = [headers]
                 formant_labels = [
@@ -703,8 +705,9 @@ def create_pdf_report(session_id, metrics, chart_urls, userInfo=None):
                         Paragraph(_bilingual(label), text_style),
                         Paragraph(_fmt((formant_low or {}).get(key, 0)), text_style),
                         Paragraph(_fmt((formant_high or {}).get(key, 0)), text_style),
+                        Paragraph(_fmt((formant_sustained or {}).get(key, 0)), text_style),
                     ])
-                ft = Table(rows, colWidths=[2.2*inch, 1.2*inch, 1.2*inch])
+                ft = Table(rows, colWidths=[2.2*inch, 1.2*inch, 1.2*inch, 1.2*inch])
                 ft.setStyle(TableStyle([
                     ('FONT', (0,0), (-1,-1), _FONT, 10),
                     ('ROWBACKGROUNDS', (0,0), (-1,-1), [LIGHT_PINK, LIGHT_GRAY]),
@@ -713,23 +716,26 @@ def create_pdf_report(session_id, metrics, chart_urls, userInfo=None):
                 ]))
                 formant_section.append(ft)
                 formant_section.append(Spacer(1, 6))
-                formant_section.append(
-                    embed_chart(
-                        'formant',
-                        'F1-F2 Vowel Space / F1-F2 元音空间',
-                        'Based on lowest & highest note / 基于最低与最高音',
-                        max_height=3.0*inch,
+
+                # Only show charts if the primary low/high note analysis was successful
+                if not formant_failed:
+                    formant_section.append(
+                        embed_chart(
+                            'formant',
+                            'F1-F2 Vowel Space / F1-F2 元音空间',
+                            'Based on lowest & highest note / 基于最低与最高音',
+                            max_height=3.0*inch,
+                        )
                     )
-                )
-                formant_section.append(Spacer(1, 4))
-                formant_section.append(
-                    embed_chart(
-                        'formant_spl_spectrum',
-                        'Formant-SPL Spectrum (LPC) / 共振峰-声压谱（LPC）',
-                        'Based on lowest & highest note / 基于最低与最高音',
-                        max_height=3.0*inch,
+                    formant_section.append(Spacer(1, 4))
+                    formant_section.append(
+                        embed_chart(
+                            'formant_spl_spectrum',
+                            'Formant-SPL Spectrum (LPC) / 共振峰-声压谱（LPC）',
+                            'Based on lowest, highest, and sustained note / 基于最低、最高和持续元音',
+                            max_height=3.0*inch,
+                        )
                     )
-                )
         formant_section.append(Spacer(1, 6))
         story.append(KeepTogether(formant_section))
 
