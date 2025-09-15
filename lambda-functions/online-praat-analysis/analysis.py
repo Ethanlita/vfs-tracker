@@ -212,21 +212,18 @@ def _get_robust_formants(
         pitch = sound.to_pitch(time_step=time_step, pitch_floor=f0min, pitch_ceiling=f0max)
         all_times = pitch.xs()
 
+        # Initialize analysis objects outside the loop
+        intensity = sound.to_intensity(minimum_pitch=f0min, time_step=time_step)
+        max_intensity = call(intensity, "Get maximum", 0, 0, "parabolic")
+        min_intensity_db = max_intensity + intensity_threshold_db
+        harmonicity = sound.to_harmonicity_cc(time_step=time_step, minimum_pitch=f0min)
+
         frame_results = []
         for i, t in enumerate(all_times):
-            # To be robust, lazily calculate intensity/HNR only when needed
             is_voiced = call(pitch, "Get value at time", t, "Hertz", "Linear") > 0
             if not is_voiced:
                 frame_results.append(None)
                 continue
-
-            # Lazily create these objects only once
-            if 'intensity' not in locals():
-                intensity = sound.to_intensity(minimum_pitch=f0min, time_step=time_step)
-                max_intensity = call(intensity, "Get maximum", 0, 0, "parabolic")
-                min_intensity_db = max_intensity + intensity_threshold_db
-            if 'harmonicity' not in locals():
-                harmonicity = sound.to_harmonicity_cc(time_step=time_step, minimum_pitch=f0min)
 
             intensity_db = call(intensity, "Get value at time", t, "Cubic")
             hnr = call(harmonicity, "Get value at time", t, "Linear")
@@ -252,7 +249,7 @@ def _get_robust_formants(
             if f1 > 0 and f2 > 0 and f1 < f2 and (f2 - f1) >= 150:
                 if f3 > 0 and (f2 >= f3 or (f3 - f2) < 200):
                     f3 = 0.0
-                frame_results.append({'f1': f1, 'f2': f2, 'f3': f3, 'frame_index': i})
+                frame_results.append({'f1': f1, 'f2': f2, 'f3': f3})
             else:
                 frame_results.append(None)
 
@@ -260,24 +257,29 @@ def _get_robust_formants(
         logger.warning(f"Exception during formant frame analysis: {e}")
         return {'error': 'Exception in formant analysis'}
 
+    # Find the longest continuous segment of valid frames
     longest_segment_info = {'start_index': -1, 'end_index': -1, 'length': 0}
     current_segment_start = -1
     for i, result in enumerate(frame_results):
         if result is not None:
             if current_segment_start == -1:
                 current_segment_start = i
-            # Check if this is the last frame
-            if i == len(frame_results) - 1 or frame_results[i+1] is None:
-                current_length = i - current_segment_start + 1
-                if current_length > longest_segment_info['length']:
-                    longest_segment_info.update(start_index=current_segment_start, end_index=i, length=current_length)
-                current_segment_start = -1
+        elif current_segment_start != -1:
+            current_length = i - current_segment_start
+            if current_length > longest_segment_info['length']:
+                longest_segment_info.update(start_index=current_segment_start, end_index=i - 1, length=current_length)
+            current_segment_start = -1
+
+    # Final check in case the longest segment is at the very end of the file
+    if current_segment_start != -1:
+        current_length = len(frame_results) - current_segment_start
+        if current_length > longest_segment_info['length']:
+            longest_segment_info.update(start_index=current_segment_start, end_index=len(frame_results) - 1, length=current_length)
 
     if longest_segment_info['length'] < min_continuous_frames:
         return {'error': f'No stable segment of {min_continuous_frames * time_step * 1000:.0f}ms found'}
 
     start_idx, end_idx = longest_segment_info['start_index'], longest_segment_info['end_index']
-    # Correctly slice the results to get only the frames from the longest stable segment
     stable_segment_frames = [res for res in frame_results[start_idx:end_idx+1] if res]
 
     final_results = {
@@ -286,7 +288,6 @@ def _get_robust_formants(
     }
     for i in range(1, 4):
         fn = f'f{i}'
-        # Calculate median ONLY from the frames in the identified stable segment
         track = np.array([frame[fn] for frame in stable_segment_frames if frame.get(fn, 0) > 0])
         final_results[f'F{i}'] = round(float(np.median(track)), 2) if len(track) > 0 else 0.0
 
