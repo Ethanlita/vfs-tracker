@@ -5,12 +5,64 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 import pytest
 import numpy as np
 import soundfile as sf
-from scipy.signal import lfilter
-from analysis import analyze_sustained_wav, analyze_speech_flow, analyze_note_file
+from analysis import analyze_sustained_vowel, analyze_speech_flow, analyze_note_file_robust
 
-def test_analyze_sustained_wav_handles_error():
-    """Tests if the function returns None for a non-existent file."""
-    assert analyze_sustained_wav("non_existent_file.wav") is None
+# Helper to create a test vowel sound
+def create_test_vowel(path, f0, jitter, shimmer, duration=2, sr=44100):
+    t = np.linspace(0., duration, int(sr * duration), endpoint=False)
+    # Add jitter
+    phase = 2 * np.pi * f0 * t
+    if jitter > 0:
+        phase += jitter * np.random.randn(len(t))
+    wav = np.sin(phase)
+    # Add shimmer
+    if shimmer > 0:
+        wav *= (1 + shimmer * np.random.randn(len(t)))
+    # Add some harmonics to make it more realistic for formant analysis
+    wav += 0.5 * np.sin(2 * np.pi * (f0*2) * t)
+    wav += 0.25 * np.sin(2 * np.pi * (f0*3) * t)
+    sf.write(path, wav / np.max(np.abs(wav)), sr, 'PCM_16')
+
+def test_analyze_sustained_vowel_selects_best_file(tmp_path):
+    """
+    Tests that analyze_sustained_vowel correctly selects the more stable file
+    and returns a full analysis dictionary.
+    """
+    stable_file = tmp_path / "stable.wav"
+    unstable_file = tmp_path / "unstable.wav"
+
+    # Create a stable sound (low jitter/shimmer) and an unstable one
+    create_test_vowel(stable_file, f0=150, jitter=0.001, shimmer=0.01)
+    create_test_vowel(unstable_file, f0=150, jitter=0.05, shimmer=0.5)
+
+    results = analyze_sustained_vowel([str(stable_file), str(unstable_file)])
+
+    assert 'metrics' in results
+    assert 'chosen_file' in results
+    assert 'lpc_spectrum' in results
+
+    # Check that the more stable file was chosen
+    assert results['chosen_file'] == str(stable_file)
+
+    # Check that the metrics dictionary is well-formed
+    metrics = results['metrics']
+    assert 'error' not in metrics
+    assert 'mpt_s' in metrics
+    assert 'jitter_local_percent' in metrics
+    assert 'formants_sustained' in metrics
+    assert isinstance(metrics['formants_sustained'], dict)
+
+def test_analyze_sustained_vowel_handles_no_valid_files():
+    """
+    Tests that analyze_sustained_vowel returns an error when no valid files are provided.
+    """
+    results = analyze_sustained_vowel([])
+    assert 'metrics' in results
+    assert 'error' in results['metrics']
+
+    results_nonexistent = analyze_sustained_vowel(["non_existent_file.wav"])
+    assert 'metrics' in results_nonexistent
+    assert 'error' in results_nonexistent['metrics']
 
 def test_analyze_speech_flow_returns_dict(dummy_wav_files):
     """Tests if analyze_speech_flow returns a dictionary with expected structure."""
@@ -37,7 +89,7 @@ def test_robust_formant_detection_returns_zero_for_unvoiced(tmp_path):
     noise = np.random.normal(0, 0.5, int(sr * duration))
     sf.write(str(test_file), noise, sr, subtype='PCM_16')
 
-    results = analyze_note_file(str(test_file))
+    results = analyze_note_file_robust(str(test_file))
 
     assert results is not None
     assert results.get('F1', -1) == 0.0

@@ -708,6 +708,26 @@ def create_pdf_report(session_id, metrics, chart_urls, userInfo=None):
             ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
         ]))
         formant_section.append(ft)
+
+        # Display failure reasons if they exist
+        reasons = []
+        reason_low = sustained_metrics.get('formant_analysis_reason_low')
+        if reason_low:
+            reasons.append(f"<b>Lowest Note:</b> {reason_low}")
+
+        reason_high = sustained_metrics.get('formant_analysis_reason_high')
+        if reason_high:
+            reasons.append(f"<b>Highest Note:</b> {reason_high}")
+
+        reason_sustained = sustained_metrics.get('formant_analysis_reason_sustained')
+        if reason_sustained:
+            reasons.append(f"<b>Sustained Vowel:</b> {reason_sustained}")
+
+        if reasons:
+            reason_text = "<br/>".join(reasons)
+            formant_section.append(Spacer(1, 4))
+            formant_section.append(Paragraph(f"<i><b>Note:</b> {reason_text}</i>", small_style))
+
         formant_section.append(Spacer(1, 6))
 
         # Only show charts if the primary low/high note analysis was successful
