@@ -181,16 +181,14 @@ def perform_full_analysis(session_id: str, calibration: dict = None, forms: dict
     if len(note_local) >= 1:
         formant_low_metrics = analyze_note_file_robust(note_local[0])
         metrics.setdefault('sustained', {})['formants_low'] = formant_low_metrics
-        if formant_low_metrics.get('reason'):
-            metrics.setdefault('sustained', {})['formant_analysis_reason_low'] = formant_low_metrics['reason']
+        if 'error_details' in formant_low_metrics:
             formant_analysis_failed = True
         spectrum_low = get_lpc_spectrum(note_local[0])
 
     if len(note_local) >= 2:
         formant_high_metrics = analyze_note_file_robust(note_local[1])
         metrics.setdefault('sustained', {})['formants_high'] = formant_high_metrics
-        if formant_high_metrics.get('reason'):
-            metrics.setdefault('sustained', {})['formant_analysis_reason_high'] = formant_high_metrics['reason']
+        if 'error_details' in formant_high_metrics:
             formant_analysis_failed = True
         spectrum_high = get_lpc_spectrum(note_local[1])
 

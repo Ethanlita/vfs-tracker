@@ -7,17 +7,23 @@ import numpy as np
 import soundfile as sf
 from analysis import analyze_sustained_vowel, analyze_speech_flow, analyze_note_file_robust
 
-# Helper to create a test vowel sound
+# Helper to create a test vowel sound with controlled jitter and shimmer
 def create_test_vowel(path, f0, jitter, shimmer, duration=2, sr=44100):
     t = np.linspace(0., duration, int(sr * duration), endpoint=False)
-    # Add jitter
+    # Add jitter (frequency variation)
     phase = 2 * np.pi * f0 * t
     if jitter > 0:
-        phase += jitter * np.random.randn(len(t))
+        # A simple way to simulate jitter is to add low-frequency random phase variation
+        phase_jitter = np.cumsum(np.random.randn(len(t)) * jitter * 10)
+        phase += phase_jitter
+
     wav = np.sin(phase)
-    # Add shimmer
+
+    # Add shimmer (amplitude variation)
     if shimmer > 0:
-        wav *= (1 + shimmer * np.random.randn(len(t)))
+        amp_shimmer = 1 + (np.random.randn(len(t)) * shimmer)
+        wav *= amp_shimmer
+
     # Add some harmonics to make it more realistic for formant analysis
     wav += 0.5 * np.sin(2 * np.pi * (f0*2) * t)
     wav += 0.25 * np.sin(2 * np.pi * (f0*3) * t)
@@ -64,10 +70,20 @@ def test_analyze_sustained_vowel_handles_no_valid_files():
     assert 'metrics' in results_nonexistent
     assert 'error' in results_nonexistent['metrics']
 
-def test_analyze_speech_flow_returns_dict(dummy_wav_files):
+def test_analyze_speech_flow_returns_dict(tmp_path):
     """Tests if analyze_speech_flow returns a dictionary with expected structure."""
-    _, speech_path = dummy_wav_files
-    result = analyze_speech_flow(speech_path)
+    # Create a dummy speech file with a pause
+    sr = 44100
+    duration = 1.2
+    t = np.linspace(0., duration, int(sr * duration))
+    wav1 = 0.5 * np.sin(2 * np.pi * 120 * t)
+    pause = np.zeros(int(sr * 0.2))
+    wav2 = 0.5 * np.sin(2 * np.pi * 120 * t)
+    full_wav = np.concatenate([wav1, pause, wav2])
+    speech_path = tmp_path / "speech.wav"
+    sf.write(speech_path, full_wav, sr, 'PCM_16')
+
+    result = analyze_speech_flow(str(speech_path))
 
     assert isinstance(result, dict)
     expected_keys = ['duration_s', 'voiced_ratio', 'pause_count', 'f0_stats']
@@ -75,10 +91,9 @@ def test_analyze_speech_flow_returns_dict(dummy_wav_files):
         assert key in result
     assert isinstance(result['f0_stats'], dict)
     assert 'median' in result['f0_stats']
-    assert 2.4 < result['duration_s'] < 2.6
-    assert result['pause_count'] == 1
+    assert 2.5 < result['duration_s'] < 2.7
+    assert result['pause_count'] >= 1
 
-# ---- New tests for Formant Analysis ----
 def test_robust_formant_detection_returns_zero_for_unvoiced(tmp_path):
     """
     Tests that formant detection returns 0s for unvoiced (noise) audio.

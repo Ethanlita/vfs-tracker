@@ -125,6 +125,12 @@ def test_end_to_end_with_known_audio(mocked_aws_services, tmp_path_factory):
     assert results_item is not None
     assert results_item['status'] == 'done'
 
+    # Check that the SPL chart was created even on failure
+    artifact_prefix = f"voice-tests/{session_id}/artifacts/"
+    s3_objects = s3_client.list_objects_v2(Bucket=handler.BUCKET, Prefix=artifact_prefix)
+    artifact_keys = [obj['Key'] for obj in s3_objects.get('Contents', [])]
+    assert (artifact_prefix + 'formant_spl_spectrum.png') in artifact_keys
+
     metrics = _from_dynamo(results_item['metrics'])
 
     sustained_metrics = metrics.get('sustained', {})
@@ -137,7 +143,9 @@ def test_end_to_end_with_known_audio(mocked_aws_services, tmp_path_factory):
     # as it doesn't have the features of a real human voice.
     # So, we now assert that it correctly identifies this and returns an error.
     assert 'error_details' in formant_metrics
-    assert formant_metrics.get('reason') == 'Failed to find formants even with multiple parameter sets.'
+    assert formant_metrics.get('reason') == 'Could not find any stable, high-confidence formant tracks.'
+    assert 'details' in formant_metrics
+    assert 'Frames processed' in formant_metrics['details']
 
     # Since the analysis fails, we expect the other metrics to be 0.
     assert formant_metrics.get('f0_mean', -1) == 0

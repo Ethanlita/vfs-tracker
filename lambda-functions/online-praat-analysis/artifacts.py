@@ -709,24 +709,30 @@ def create_pdf_report(session_id, metrics, chart_urls, userInfo=None):
         ]))
         formant_section.append(ft)
 
-        # Display failure reasons if they exist
-        reasons = []
-        reason_low = sustained_metrics.get('formant_analysis_reason_low')
-        if reason_low:
-            reasons.append(f"<b>Lowest Note:</b> {reason_low}")
+        # Display failure reasons and details if they exist
+        notes = []
+        if formant_low and formant_low.get('reason'):
+            note = f"<b>Lowest Note Analysis:</b> {formant_low['reason']}"
+            if formant_low.get('details'):
+                note += f"<br/><i>Details: {formant_low['details']}</i>"
+            notes.append(note)
 
-        reason_high = sustained_metrics.get('formant_analysis_reason_high')
-        if reason_high:
-            reasons.append(f"<b>Highest Note:</b> {reason_high}")
+        if formant_high and formant_high.get('reason'):
+            note = f"<b>Highest Note Analysis:</b> {formant_high['reason']}"
+            if formant_high.get('details'):
+                note += f"<br/><i>Details: {formant_high['details']}</i>"
+            notes.append(note)
 
-        reason_sustained = sustained_metrics.get('formant_analysis_reason_sustained')
-        if reason_sustained:
-            reasons.append(f"<b>Sustained Vowel:</b> {reason_sustained}")
+        if formant_sustained and formant_sustained.get('reason'):
+            note = f"<b>Sustained Vowel Analysis:</b> {formant_sustained['reason']}"
+            if formant_sustained.get('details'):
+                note += f"<br/><i>Details: {formant_sustained['details']}</i>"
+            notes.append(note)
 
-        if reasons:
-            reason_text = "<br/>".join(reasons)
+        if notes:
+            full_note_text = "<br/><br/>".join(notes)
             formant_section.append(Spacer(1, 4))
-            formant_section.append(Paragraph(f"<i><b>Note:</b> {reason_text}</i>", small_style))
+            formant_section.append(Paragraph(f"<b>Analysis Notes:</b><br/>{full_note_text}", small_style))
 
         formant_section.append(Spacer(1, 6))
 
