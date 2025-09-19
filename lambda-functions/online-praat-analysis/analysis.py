@@ -10,11 +10,6 @@ import os
 import tempfile
 
 try:
-    from scipy.signal import find_peaks
-except ImportError:
-    find_peaks = None
-
-try:
     from scipy import signal as scisignal
 except ImportError:
     scisignal = None
@@ -141,7 +136,12 @@ def _analyze_formant_structure(
             final_formants[f'F{i}'] = round(float(np.median(high_conf_values)), 2)
 
     if all(v == 0.0 for v in final_formants.values()):
-        return {'error': 'Analysis failed', 'reason': 'Could not find any stable, high-confidence formant tracks.'}
+        details = (
+            f"Frames processed: {len(pitch.xs())}. "
+            f"Voiced frames found: {len([t for t in pitch.xs() if call(pitch, 'Get value at time', t, 'Hertz', 'Linear') > 0])}. "
+            f"A stable track requires at least {min_continuous_frames} high-confidence frames."
+        )
+        return {'error': 'Analysis failed', 'reason': 'Could not find any stable, high-confidence formant tracks.', 'details': details}
 
     return final_formants
 
@@ -155,15 +155,21 @@ def analyze_note_file_robust(path: str, f0min: int = 75, f0max: int = 1200) -> D
     ]
 
     final_results = {}
+    last_failure_result = {}
     for params in param_sets:
         logger.info(f"Attempting formant analysis with params: {params}")
         results = _analyze_formant_structure(sound, f0min, f0max, **params)
         if 'error' not in results:
             final_results = results
             break
+        else:
+            last_failure_result = results  # Store the latest failure details
 
     if not final_results or 'error' in final_results:
-        return {'F1': 0, 'F2': 0, 'F3': 0, 'f0_mean': 0, 'spl_dbA_est': 0, 'error_details': 'Analysis failed', 'reason': 'Failed to find formants even with multiple parameter sets.'}
+        # Preserve the detailed reason from the last failed attempt
+        reason = last_failure_result.get('reason', 'Failed to find formants even with multiple parameter sets.')
+        details = last_failure_result.get('details', 'No further details available.')
+        return {'F1': 0, 'F2': 0, 'F3': 0, 'f0_mean': 0, 'spl_dbA_est': 0, 'error_details': 'Analysis failed', 'reason': reason, 'details': details}
 
     y, sr = _load_mono(path)
     spl = _rms_spl(y)
@@ -334,32 +340,36 @@ def analyze_glide_files(local_paths):
 
 def get_lpc_spectrum(file_path: str, max_formant: int = 5500):
     """
-    Get a spectrum of an audio file for plotting.
-    NOTE: This returns a standard FFT spectrum, not an LPC spectrum,
-    due to persistent issues with robust LPC generation in this environment.
-    This is a pragmatic choice to prevent crashes and ensure a chart is always generated.
+    Get a spectrum of an audio file for plotting. This is a defensive function
+    that returns a standard FFT spectrum to ensure a chart can always be generated.
     """
-    logger.info(f"Getting FFT spectrum for {file_path} (fallback method)")
+    logger.info(f"Getting FFT spectrum for {file_path}")
     try:
         sound = parselmouth.Sound(file_path)
-        # Analyze the middle 100ms of the sound
         from_time = sound.duration / 2 - 0.05
         to_time = sound.duration / 2 + 0.05
         if from_time < 0: from_time = 0
         if to_time > sound.duration: to_time = sound.duration
 
         if from_time >= to_time:
-             logger.warning(f"Sound duration for spectrum is too short for {file_path}")
-             return None
+            logger.warning(f"Sound duration for spectrum is too short for {file_path}")
+            return None
 
         sound_part = sound.extract_part(from_time=from_time, to_time=to_time, preserve_times=False)
-
         spectrum = sound_part.to_spectrum()
 
         freqs = spectrum.xs()
-        # spectrum.values is a 2D numpy array (n_frames, n_freq_bins).
-        # For a single frame spectrum from an extracted sound, we take the first row.
-        spl_values = spectrum.values[0, :]
+        values = spectrum.values
+        logger.debug(f"Spectrum values shape: {values.shape}, dtype: {values.dtype}")
+
+        # Ensure values is a 1D array of real numbers
+        if values.ndim > 1:
+            values = values[0, :]
+        spl_values = np.abs(values)
+
+        if len(freqs) != len(spl_values):
+            logger.error(f"Spectrum shape mismatch! Freqs: {len(freqs)}, SPL values: {len(spl_values)}")
+            return None
 
         if max_formant:
             valid_indices = freqs <= max_formant
@@ -367,7 +377,6 @@ def get_lpc_spectrum(file_path: str, max_formant: int = 5500):
             spl_values = spl_values[valid_indices]
 
         return {"frequencies": freqs.tolist(), "spl_values": spl_values.tolist()}
-
     except Exception as e:
         logger.error(f"Could not get spectrum for {file_path}: {e}", exc_info=True)
         return None
