@@ -327,56 +327,60 @@ def create_formant_spl_chart(spectrum_low, spectrum_high, spectrum_sustained=Non
 
 def create_diagnostic_charts(debug_info: dict, title: str):
     """Creates a multi-panel chart with diagnostic data from the analysis."""
-    if not debug_info or not isinstance(debug_info, dict):
-        return create_placeholder_chart(f"Diagnostics: {title}", "No debug data available.")
+    frames = debug_info.get('frames', [])
+    if not frames:
+        return create_placeholder_chart(f"Diagnostics: {title}", "No frame data available for diagnostics.")
 
     try:
-        times = debug_info.get('times', [])
-        if len(times) == 0:
-            return create_placeholder_chart(f"Diagnostics: {title}", "No time-series data found.")
-
+        times = [f['time'] for f in frames]
         fig, axes = plt.subplots(5, 1, figsize=(10, 15), sharex=True)
         fig.suptitle(f"Analysis Diagnostics: {title}", fontsize=16)
 
-        # 1. F0 Plot
-        axes[0].plot(times, debug_info.get('f0_hz', []), 'o-', label='F0', markersize=2)
-        axes[0].set_ylabel('F0 (Hz)')
-        axes[0].legend()
+        # 1. F0 and HNR Plot
+        axes[0].plot(times, [f.get('f0') for f in frames], 'o-', label='F0 (Hz)', markersize=2, color='blue')
+        ax0_twin = axes[0].twinx()
+        ax0_twin.plot(times, [f.get('hnr') for f in frames], 'o-', label='HNR (dB)', markersize=2, color='green')
+        axes[0].set_ylabel('F0 (Hz)', color='blue')
+        ax0_twin.set_ylabel('HNR (dB)', color='green')
+        axes[0].legend(loc='upper left')
+        ax0_twin.legend(loc='upper right')
         axes[0].grid(True, linestyle='--')
 
-        # 2. HNR Plot
-        axes[1].plot(times, debug_info.get('hnr', []), 'o-', label='HNR', color='green', markersize=2)
-        axes[1].set_ylabel('HNR (dB)')
+        # 2. Formant Frequencies
+        axes[1].plot(times, [f.get('f1') for f in frames], 'o', label='F1', markersize=2, color='#3498db')
+        axes[1].plot(times, [f.get('f2') for f in frames], 'o', label='F2', markersize=2, color='#e74c3c')
+        axes[1].plot(times, [f.get('f3') for f in frames], 'o', label='F3', markersize=2, color='#2ecc71')
+        axes[1].set_ylabel('Formant Freq (Hz)')
         axes[1].legend()
         axes[1].grid(True, linestyle='--')
 
-        formant_tracks = debug_info.get('formant_tracks', {})
-        colors = ['#3498db', '#e74c3c', '#2ecc71']
-
-        # 3. Formant Frequency Plot
-        for i in range(1, 4):
-            track = formant_tracks.get(i, [])
-            if track:
-                track_times, freqs, _ = zip(*track)
-                axes[2].plot(track_times, freqs, 'o', label=f'F{i} Freq', color=colors[i-1], markersize=3)
-        axes[2].set_ylabel('Formant Freq (Hz)')
+        # 3. Formant Bandwidths
+        axes[2].plot(times, [f.get('b1') for f in frames], 'o', label='B1', markersize=2, color='#3498db')
+        axes[2].plot(times, [f.get('b2') for f in frames], 'o', label='B2', markersize=2, color='#e74c3c')
+        axes[2].set_ylabel('Formant BW (Hz)')
         axes[2].legend()
         axes[2].grid(True, linestyle='--')
 
-        # 4. Formant Confidence Plot
-        for i in range(1, 4):
-            track = formant_tracks.get(i, [])
-            if track:
-                track_times, _, confs = zip(*track)
-                axes[3].plot(track_times, confs, 'o-', label=f'F{i} Confidence', color=colors[i-1], markersize=2)
-        axes[3].set_ylabel('Confidence Score')
+        # 4. Confidence Scores (F1)
+        axes[3].plot(times, [f.get('c1_p_score') for f in frames], 'o-', label='Periodicity Score', markersize=2)
+        axes[3].plot(times, [f.get('c1_hnr_score') for f in frames], 'o-', label='HNR Score', markersize=2)
+        axes[3].plot(times, [f.get('c1_bw_score') for f in frames], 'o-', label='Bandwidth Score', markersize=2)
+        axes[3].plot(times, [f.get('conf1') for f in frames], 'k-', label='Total Confidence F1', linewidth=2)
+        axes[3].set_ylabel('F1 Confidence')
+        axes[3].set_ylim(0, 1.1)
         axes[3].legend()
         axes[3].grid(True, linestyle='--')
 
-        # 5. (Placeholder for future use, e.g. bandwidth)
-        axes[4].text(0.5, 0.5, 'Reserved for future diagnostics', ha='center', va='center', color='lightgrey')
-        axes[4].set_yticks([])
+        # 5. Confidence Scores (F2)
+        axes[4].plot(times, [f.get('c2_p_score') for f in frames], 'o-', label='Periodicity Score', markersize=2)
+        axes[4].plot(times, [f.get('c2_hnr_score') for f in frames], 'o-', label='HNR Score', markersize=2)
+        axes[4].plot(times, [f.get('c2_bw_score') for f in frames], 'o-', label='Bandwidth Score', markersize=2)
+        axes[4].plot(times, [f.get('conf2') for f in frames], 'k-', label='Total Confidence F2', linewidth=2)
+        axes[4].set_ylabel('F2 Confidence')
+        axes[4].set_ylim(0, 1.1)
         axes[4].set_xlabel('Time (s)')
+        axes[4].legend()
+        axes[4].grid(True, linestyle='--')
 
         plt.tight_layout(rect=[0, 0.03, 1, 0.97])
         buf = BytesIO()
@@ -389,7 +393,7 @@ def create_diagnostic_charts(debug_info: dict, title: str):
         return create_placeholder_chart(f"Diagnostics: {title}", f"Chart generation failed:\n{e}")
 
 
-def create_pdf_report(session_id, metrics, chart_urls, debug_info=None, userInfo=None):
+def create_pdf_report(session_id, metrics, chart_urls, userInfo=None):
     """
     Generates a PDF report from the analysis results with embedded charts and user info.
 
@@ -397,7 +401,6 @@ def create_pdf_report(session_id, metrics, chart_urls, debug_info=None, userInfo
         session_id (str): The session ID for the report.
         metrics (dict): The dictionary of calculated metrics.
         chart_urls (dict): A dictionary of S3 URLs for the generated charts.
-        debug_info (dict): A dictionary containing debug data for diagnostic charts.
         userInfo (dict): A dictionary containing user information (userId, userName).
 
     Returns:
@@ -519,6 +522,9 @@ def create_pdf_report(session_id, metrics, chart_urls, debug_info=None, userInfo
             'spl_min': 'Lowest SPL (P10) / 最低声压级（P10）',
             'spl_max': 'Highest SPL (P90) / 最高声压级（P90）',
             'source_file': 'Source File / 分析源文件',
+            'B1': 'F1 Bandwidth (Hz) / F1带宽（Hz）',
+            'B2': 'F2 Bandwidth (Hz) / F2带宽（Hz）',
+            'B3': 'F3 Bandwidth (Hz) / F3带宽（Hz）',
         }
 
         # 分类标题映射
@@ -535,7 +541,7 @@ def create_pdf_report(session_id, metrics, chart_urls, debug_info=None, userInfo
                 return
             rows = []
             for k, v in data.items():
-                if k in ['formants_low', 'formants_high', 'bins', 'formant_analysis_failed', 'formants_sustained']:
+                if k in ['formants_low', 'formants_high', 'bins', 'formant_analysis_failed', 'formants_sustained', 'best_segment_time']:
                     continue
                 if isinstance(v, dict):
                     # 展开二级
@@ -744,7 +750,6 @@ def create_pdf_report(session_id, metrics, chart_urls, debug_info=None, userInfo
 
         formant_section = [Paragraph(_bilingual("Formant Analysis / 共振峰分析"), h2_style)]
 
-        # This table is now always rendered. The _fmt function handles missing data by showing 0.
         headers = [
             Paragraph("", text_style),
             Paragraph(_bilingual("Lowest Note / 最低音"), text_style),
@@ -754,9 +759,9 @@ def create_pdf_report(session_id, metrics, chart_urls, debug_info=None, userInfo
         rows = [headers]
         formant_labels = [
             ('f0_mean', 'Mean F0 (Hz) / 平均基频（Hz）'),
-            ('F1', 'F1 (Hz) / F1（Hz）'),
-            ('F2', 'F2 (Hz) / F2（Hz）'),
-            ('F3', 'F3 (Hz) / F3（Hz）'),
+            ('F1', 'F1 (Hz) / F1（Hz）'), ('B1', 'B1 (Hz) / B1 带宽（Hz）'),
+            ('F2', 'F2 (Hz) / F2（Hz）'), ('B2', 'B2 (Hz) / B2 带宽（Hz）'),
+            ('F3', 'F3 (Hz) / F3（Hz）'), ('B3', 'B3 (Hz) / B3 带宽（Hz）'),
             ('spl_dbA_est', 'SPL dB(A) / 声压级 dB(A)'),
         ]
         for key, label in formant_labels:
@@ -775,25 +780,13 @@ def create_pdf_report(session_id, metrics, chart_urls, debug_info=None, userInfo
         ]))
         formant_section.append(ft)
 
-        # Display failure reasons and details if they exist
         notes = []
         if formant_low and formant_low.get('reason'):
-            note = f"<b>Lowest Note Analysis:</b> {formant_low['reason']}"
-            if formant_low.get('details'):
-                note += f"<br/><i>Details: {formant_low['details']}</i>"
-            notes.append(note)
-
+            notes.append(f"<b>Lowest Note Analysis:</b> {formant_low['reason']}")
         if formant_high and formant_high.get('reason'):
-            note = f"<b>Highest Note Analysis:</b> {formant_high['reason']}"
-            if formant_high.get('details'):
-                note += f"<br/><i>Details: {formant_high['details']}</i>"
-            notes.append(note)
-
+            notes.append(f"<b>Highest Note Analysis:</b> {formant_high['reason']}")
         if formant_sustained and formant_sustained.get('reason'):
-            note = f"<b>Sustained Vowel Analysis:</b> {formant_sustained['reason']}"
-            if formant_sustained.get('details'):
-                note += f"<br/><i>Details: {formant_sustained['details']}</i>"
-            notes.append(note)
+            notes.append(f"<b>Sustained Vowel Analysis:</b> {formant_sustained['reason']}")
 
         if notes:
             full_note_text = "<br/><br/>".join(notes)
@@ -802,7 +795,6 @@ def create_pdf_report(session_id, metrics, chart_urls, debug_info=None, userInfo
 
         formant_section.append(Spacer(1, 6))
 
-        # F1-F2 chart is only useful if analysis succeeds
         if not formant_failed:
             formant_section.append(
                 embed_chart(
@@ -814,7 +806,6 @@ def create_pdf_report(session_id, metrics, chart_urls, debug_info=None, userInfo
             )
 
         formant_section.append(Spacer(1, 4))
-        # Formant-SPL chart should always be shown to see the spectrum
         formant_section.append(
             embed_chart(
                 'formant_spl_spectrum',
@@ -826,30 +817,6 @@ def create_pdf_report(session_id, metrics, chart_urls, debug_info=None, userInfo
         formant_section.append(Spacer(1, 6))
         story.append(KeepTogether(formant_section))
 
-        # --- Diagnostics Page ---
-        if debug_info:
-            story.append(PageBreak())
-            story.append(Paragraph(_bilingual("Analysis Diagnostics / 分析诊断信息"), title_style))
-            story.append(Spacer(1, 12))
-
-            diag_charts = []
-            if debug_info.get('sustained'):
-                diag_charts.append(create_diagnostic_charts(debug_info['sustained'], 'Sustained Vowel'))
-            if debug_info.get('low_note'):
-                diag_charts.append(create_diagnostic_charts(debug_info['low_note'], 'Lowest Note'))
-            if debug_info.get('high_note'):
-                diag_charts.append(create_diagnostic_charts(debug_info['high_note'], 'Highest Note'))
-
-            for chart_buf in diag_charts:
-                if chart_buf:
-                    img = RLImage(chart_buf)
-                    img.hAlign = 'CENTER'
-                    iw, ih = img.imageWidth, img.imageHeight
-                    scale = min(doc.width / iw, (doc.height / 3) / ih, 1.0)
-                    img.drawWidth, img.drawHeight = iw * scale, ih * scale
-                    story.append(img)
-                    story.append(Spacer(1, 12))
-
         # 构建 PDF
         doc.build(story, onFirstPage=on_page, onLaterPages=on_page)
         buf.seek(0)
@@ -857,5 +824,5 @@ def create_pdf_report(session_id, metrics, chart_urls, debug_info=None, userInfo
         return buf
 
     except Exception as e:
-        logger.error(f"Could not create PDF report for {session_id}. Error: {e}")
+        logger.error(f"Could not create PDF report for {session_id}. Error: {e}", exc_info=True)
         return None

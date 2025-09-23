@@ -1,40 +1,45 @@
 import pytest
 import numpy as np
 import soundfile as sf
-from scipy.signal import lfilter
 
-def generate_vowel_sound(
-    path,
-    samplerate=44100,
-    duration=4.0, # Increased duration
-    f0=150.0,
-    formants=None
-):
+def generate_realistic_vowel(path, f0, duration=2, sr=44100, jitter=0.005, shimmer=0.05, formants=None):
     """
-    Generates a simple, clean synthetic vowel sound.
+    Generates a more realistic synthetic vowel with some noise, jitter, and shimmer.
+    This is more likely to be successfully analyzed by pitch detection algorithms.
     """
-    if formants is None:
-        formants = [(500, 80), (1500, 100), (2500, 120)]
+    t = np.linspace(0., duration, int(sr * duration), endpoint=False)
 
-    num_samples = int(samplerate * duration)
-    t = np.linspace(0, duration, num_samples, endpoint=False)
-    pulse_period = int(samplerate / f0)
-    source_signal = np.zeros(num_samples)
-    source_signal[::pulse_period] = 1.0
+    # Source signal with jitter
+    phase = 2 * np.pi * f0 * t
+    if jitter > 0:
+        phase_jitter = np.cumsum(np.random.randn(len(t)) * jitter * 10)
+        phase += phase_jitter
+    wav = np.sin(phase)
 
-    signal = source_signal
-    for freq, bw in formants:
-        r = np.exp(-np.pi * bw / samplerate)
-        theta = 2 * np.pi * freq / samplerate
-        a = [1, -2 * r * np.cos(theta), r**2]
-        b = [1]
-        signal = lfilter(b, a, signal)
+    # Add shimmer
+    if shimmer > 0:
+        wav *= (1 + (np.random.randn(len(t)) * shimmer))
 
-    max_amp = np.iinfo(np.int16).max
-    signal = signal / np.max(np.abs(signal)) * (max_amp * 0.8)
-    sf.write(path, signal.astype(np.int16), samplerate)
+    # Add harmonics
+    wav += 0.5 * np.sin(2 * np.pi * (f0*2) * t)
+    wav += 0.25 * np.sin(2 * np.pi * (f0*3) * t)
+
+    # Apply formants if specified (simple filtering)
+    if formants:
+        from scipy.signal import lfilter
+        signal = wav
+        for freq, bw in formants:
+            r = np.exp(-np.pi * bw / sr)
+            theta = 2 * np.pi * freq / sr
+            a = [1, -2 * r * np.cos(theta), r**2]
+            b = [1]
+            signal = lfilter(b, a, signal)
+        wav = signal
+
+    # Normalize and write to file
+    wav = wav / np.max(np.abs(wav)) * 0.9
+    sf.write(path, wav, sr, 'PCM_16')
     return path
-
 
 @pytest.fixture(scope="session")
 def dummy_wav_files(tmp_path_factory):
