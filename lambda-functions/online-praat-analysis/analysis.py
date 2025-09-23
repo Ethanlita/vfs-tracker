@@ -17,170 +17,91 @@ except ImportError:
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
-# --- Start of New Robust Formant Analysis Implementation ---
+# --- Start of Simplified "Stable Segment" Formant Analysis ---
 
-def _calculate_confidence(f0_hz: float, hnr: float, bandwidth: float) -> float:
-    """Calculates a confidence score for a single formant candidate."""
-    periodicity_score = 1.0 if f0_hz > 0 else 0.0
-    hnr_score = min(1.0, max(0.0, (hnr - 5) / 20)) # HNR values from 5-25 are good
-    if 80 <= bandwidth <= 500: # Slightly wider acceptance for bandwidth
-        bw_score = 1.0
-    else:
-        deviation = min(abs(bandwidth - 80), abs(bandwidth - 500))
-        bw_score = max(0.0, 1.0 - deviation / 500)
-
-    # Re-weighted without prominence. Periodicity and HNR are most important.
-    confidence = (
-        0.50 * periodicity_score + 0.35 * hnr_score +
-        0.15 * bw_score
-    )
-    return confidence
-
-
-def _get_formant_candidates(
-    sound_frame: parselmouth.Sound, params: Dict, f0_hz: float, hnr: float
-) -> List[Tuple[float, float, float]]:
-    """
-    Extracts formant candidates from a sound frame using parselmouth's high-level functions.
-    The 'confidence' score is now the third element in the returned tuple.
-    """
-    candidates = []
-    try:
-        # Use the object-oriented method, which is more robust.
-        # time_step=None means we analyze the whole sound_frame as a single window.
-        formants = sound_frame.to_formant_burg(
-            time_step=None,
-            max_number_of_formants=5,
-            maximum_formant=params['max_formant'],
-            pre_emphasis_from=50.0
-        )
-
-        # We analyze at the center of the frame
-        frame_center_time = sound_frame.duration / 2.0
-        num_formants_found = formants.get_number_of_formants_at_time(frame_center_time)
-
-        for i in range(1, num_formants_found + 1):
-            freq = formants.get_value_at_time(formant_number=i, time=frame_center_time)
-            if np.isnan(freq) or freq == 0 or freq > params['max_formant']:
-                continue
-
-            bw = formants.get_bandwidth_at_time(formant_number=i, time=frame_center_time)
-            if np.isnan(bw):
-                continue
-
-            confidence = _calculate_confidence(f0_hz, hnr, bw)
-            logger.debug(f"  - Candidate F{i}: freq={freq:.2f}, bw={bw:.2f}, conf={confidence:.3f}")
-
-            # The third element was prominence, now it's confidence
-            candidates.append((freq, bw, confidence))
-
-        return sorted(candidates)  # Sort by frequency
-
-    except Exception as e:
-        # This can happen if a frame is unvoiced or too short
-        logger.debug(f"Could not get formant candidates for frame: {e}")
-        return []
-
-
-def _analyze_formant_structure(
-    sound: parselmouth.Sound, f0min: int, f0max: int,
-    max_formant: int
-) -> Dict:
-    """Core analysis function with frame-by-frame analysis and confidence scoring."""
-    time_step = 0.01
-    window_length = 0.025
-    min_continuous_frames = 5
-
-    pitch = sound.to_pitch(time_step=time_step, pitch_floor=f0min, pitch_ceiling=f0max)
-    harmonicity = sound.to_harmonicity_cc(time_step=time_step, minimum_pitch=f0min)
-
-    formant_tracks = {1: [], 2: [], 3: []}
-
-    for t in pitch.xs():
-        f0_hz = call(pitch, "Get value at time", t, "Hertz", "Linear")
-        if f0_hz == 0 or np.isnan(f0_hz): continue
-
-        hnr = call(harmonicity, "Get value at time", t, "Linear")
-        frame_sound = sound.extract_part(from_time=t - window_length/2, to_time=t + window_length/2, preserve_times=False)
-        if frame_sound.get_total_duration() < window_length * 0.9: continue
-
-        candidates = _get_formant_candidates(frame_sound, {'max_formant': max_formant}, f0_hz, hnr)
-
-        formants_found = {}
-        last_freq = 0
-        # Unpack freq, bandwidth, and the new confidence score
-        for freq, bw, confidence in candidates:
-            if len(formants_found) >= 3: break
-            # Basic check to ensure formants are in ascending order
-            if freq <= last_freq: continue
-
-            if confidence > 0.3: # Use the confidence score directly (more relaxed threshold)
-                formant_num = len(formants_found) + 1
-                formants_found[formant_num] = (freq, confidence)
-                last_freq = freq
-
-        for i in range(1, 4):
-            if i in formants_found:
-                formant_tracks[i].append((t, formants_found[i][0], formants_found[i][1]))
-
-    final_formants = {}
-    for i in range(1, 4):
-        track = formant_tracks[i]
-        if len(track) < min_continuous_frames:
-            final_formants[f'F{i}'] = 0.0
-            continue
-
-        high_conf_values = [val for t, val, conf in track if conf >= 0.5]
-        if not high_conf_values or len(high_conf_values) < min_continuous_frames:
-            final_formants[f'F{i}'] = 0.0
-        else:
-            final_formants[f'F{i}'] = round(float(np.median(high_conf_values)), 2)
-
-    # Package debug info for plotting
-    debug_info = {
-        'times': pitch.xs(),
-        'f0_hz': [call(pitch, "Get value at time", t, "Hertz", "Linear") for t in pitch.xs()],
-        'hnr': [call(harmonicity, "Get value at time", t, "Linear") for t in pitch.xs()],
-        'formant_tracks': formant_tracks
+def _calculate_confidence(f0, hnr, bw):
+    """Computes a confidence score for a formant candidate."""
+    p_score = 1.0 if f0 > 0 else 0.0
+    hnr_score = min(1.0, max(0.0, (hnr - 5) / 20))
+    bw_dev = min(abs(bw - 80), abs(bw - 500))
+    bw_score = max(0.0, 1.0 - bw_dev / 500)
+    confidence = 0.5 * p_score + 0.35 * hnr_score + 0.15 * bw_score
+    return {
+        "confidence": confidence, "p_score": p_score, "hnr_score": hnr_score, "bw_score": bw_score
     }
 
-    if all(v == 0.0 for v in final_formants.values()):
-        details = (
-            f"Frames processed: {len(pitch.xs())}. "
-            f"Voiced frames found: {len([t for t in pitch.xs() if call(pitch, 'Get value at time', t, 'Hertz', 'Linear') > 0])}. "
-            f"A stable track requires at least {min_continuous_frames} high-confidence frames."
-        )
-        return {'error': 'Analysis failed', 'reason': 'Could not find any stable, high-confidence formant tracks.', 'details': details, 'debug_info': debug_info}
-
-    final_formants['debug_info'] = debug_info
-    return final_formants
-
 def analyze_note_file_robust(path: str, f0min: int = 75, f0max: int = 1200) -> Dict:
-    """Controller function for robust formant analysis with fallback for gliding notes."""
-    sound = parselmouth.Sound(path)
-    param_sets = [
-        {'max_formant': 5500},
-        {'max_formant': 5000},
-        {'max_formant': 6000},
-    ]
+    """
+    Analyzes all voiced segments, calculates confidence for each frame, and returns
+    the data from the frame with the highest confidence.
+    """
+    try:
+        sound = parselmouth.Sound(path)
+        y, sr = _load_mono(path)
 
-    final_results = {}
-    last_failure_result = {}
-    for params in param_sets:
-        logger.info(f"Attempting formant analysis with params: {params}")
-        results = _analyze_formant_structure(sound, f0min, f0max, **params)
-        if 'error' not in results:
-            final_results = results
-            break
-        else:
-            last_failure_result = results  # Store the latest failure details
+        voiced_intervals = librosa.effects.split(y, top_db=40, frame_length=2048, hop_length=512)
+        if voiced_intervals.size == 0:
+            raise ValueError("No voiced segments detected.")
 
-    if not final_results or 'error' in final_results:
-        # Preserve the detailed reason and debug_info from the last failed attempt
-        reason = last_failure_result.get('reason', 'Failed to find formants even with multiple parameter sets.')
-        details = last_failure_result.get('details', 'No further details available.')
-        debug_info = last_failure_result.get('debug_info')
-        return {'F1': 0, 'F2': 0, 'F3': 0, 'f0_mean': 0, 'spl_dbA_est': 0, 'error_details': 'Analysis failed', 'reason': reason, 'details': details, 'debug_info': debug_info}
+        all_frames_data = []
+        harmonicity = sound.to_harmonicity_cc(time_step=0.01, minimum_pitch=f0min)
+
+        for start_sample, end_sample in voiced_intervals:
+            start_time, end_time = start_sample / sr, end_sample / sr
+            if (end_time - start_time) < 0.05: continue
+
+            segment = sound.extract_part(from_time=start_time, to_time=end_time, preserve_times=False)
+            formants = segment.to_formant_burg(time_step=0.01, max_number_of_formants=5, maximum_formant=5500, window_length=0.025, pre_emphasis_from=50.0)
+            pitch = segment.to_pitch(time_step=0.01, pitch_floor=f0min, pitch_ceiling=f0max)
+
+            for t in pitch.xs():
+                f0 = pitch.get_value_at_time(t)
+                if np.isnan(f0) or f0 <= 0: continue
+
+                hnr = harmonicity.get_value(time=start_time + t)
+                if np.isnan(hnr): continue
+
+                frame_data = {'time': start_time + t, 'f0': f0, 'hnr': hnr}
+
+                f1 = formants.get_value_at_time(1, t)
+                b1 = formants.get_bandwidth_at_time(1, t)
+                if not np.isnan(f1) and not np.isnan(b1):
+                    conf_data = _calculate_confidence(f0, hnr, b1)
+                    frame_data.update({'f1': f1, 'b1': b1, 'conf1': conf_data['confidence'], **{f'c1_{k}': v for k,v in conf_data.items()}})
+
+                f2 = formants.get_value_at_time(2, t)
+                b2 = formants.get_bandwidth_at_time(2, t)
+                if not np.isnan(f2) and not np.isnan(b2):
+                    conf_data = _calculate_confidence(f0, hnr, b2)
+                    frame_data.update({'f2': f2, 'b2': b2, 'conf2': conf_data['confidence'], **{f'c2_{k}': v for k,v in conf_data.items()}})
+
+                f3 = formants.get_value_at_time(3, t)
+                b3 = formants.get_bandwidth_at_time(3, t)
+                if not np.isnan(f3) and not np.isnan(b3):
+                    frame_data.update({'f3': f3, 'b3': b3})
+
+                all_frames_data.append(frame_data)
+
+        if not all_frames_data:
+            raise ValueError("No valid analysis frames found.")
+
+        # Find the frame with the highest combined confidence for F1 and F2
+        best_frame = max(all_frames_data, key=lambda x: x.get('conf1', 0) + x.get('conf2', 0))
+
+        spl = _rms_spl(y)
+
+        return {
+            'F1': round(float(best_frame.get('f1', 0)), 2), 'B1': round(float(best_frame.get('b1', 0)), 2),
+            'F2': round(float(best_frame.get('f2', 0)), 2), 'B2': round(float(best_frame.get('b2', 0)), 2),
+            'F3': round(float(best_frame.get('f3', 0)), 2), 'B3': round(float(best_frame.get('b3', 0)), 2),
+            'f0_mean': round(float(best_frame.get('f0', 0)), 2), # Note: this is F0 of the best frame, not mean
+            'spl_dbA_est': spl,
+            'best_segment_time': best_frame.get('time', 0)
+        }
+
+    except Exception as e:
+        logger.error(f"Robust analysis failed for {path}: {e}", exc_info=True)
+        return {'F1': 0, 'F2': 0, 'F3': 0, 'f0_mean': 0, 'spl_dbA_est': 0, 'error_details': 'Analysis failed', 'reason': str(e), 'best_segment_time': None}
 
     y, sr = _load_mono(path)
     spl = _rms_spl(y)
@@ -253,14 +174,16 @@ def analyze_sustained_vowel(local_paths: list, f0_min: int = 75, f0_max: int = 8
             'shimmer_local_percent': round(float(shimmer_local), 2) if not np.isnan(shimmer_local) else 0,
             'hnr_db': round(float(hnr_db), 2) if not np.isnan(hnr_db) else 0,
             'spl_dbA_est': round(float(_rms_spl(y)), 2),
-            'formants_sustained': formant_results,
+            'formants_sustained': formant_results, # This now contains B1, B2, etc.
         }
         if formant_results.get('reason'):
             metrics['formant_analysis_reason_sustained'] = formant_results['reason']
 
-        # Get LPC Spectrum
-        lpc_spectrum = get_lpc_spectrum(best_file)
-        debug_info = formant_results.pop('debug_info', None) # Extract debug info
+        best_segment_time = formant_results.get('best_segment_time')
+        lpc_spectrum = get_lpc_spectrum(best_file, analysis_time=best_segment_time)
+
+        # Pass the debug info up for potential use in PDF generation
+        debug_info = formant_results.pop('debug_info', None)
 
         return {
             'metrics': metrics,
@@ -351,40 +274,63 @@ def analyze_glide_files(local_paths):
         if sel.size: bins.append({'semi': n, 'f0_center_hz': float(440.0 * 2 ** ((n - 69)/12)), 'spl_min': float(np.min(sel)), 'spl_max': float(np.max(sel)), 'spl_mean': float(np.mean(sel)), 'count': int(sel.size)})
     return {'f0_min': float(np.percentile(f0s, 10)), 'f0_max': float(np.percentile(f0s, 90)), 'spl_min': float(np.percentile(spls, 10)), 'spl_max': float(np.percentile(spls, 90)), 'bins': bins}
 
-def get_lpc_spectrum(file_path: str, max_formant: int = 5500):
+def _find_loudest_segment(sound: parselmouth.Sound, duration: float = 0.1) -> parselmouth.Sound:
+    """Finds the segment of a sound with the highest energy (RMS)."""
+    if sound.duration < duration:
+        return sound
+
+    best_segment = None
+    max_rms = -1.0
+
+    # Iterate through the sound in steps of `duration / 2`
+    step = duration / 2
+    current_time = 0.0
+    while current_time + duration <= sound.duration:
+        segment = sound.extract_part(from_time=current_time, to_time=current_time + duration, preserve_times=False)
+        rms = segment.get_rms()
+        if rms > max_rms:
+            max_rms = rms
+            best_segment = segment
+        current_time += step
+
+    return best_segment if best_segment is not None else sound.extract_part(from_time=0, to_time=duration, preserve_times=False)
+
+
+def get_lpc_spectrum(file_path: str, max_formant: int = 5500, analysis_time: Optional[float] = None):
     """
-    Get a spectrum of an audio file for plotting. This is a defensive function
-    that returns a standard FFT spectrum to ensure a chart can always be generated.
+    Get a spectrum of an audio file for plotting.
+    If analysis_time is provided, it generates the spectrum from that specific time.
+    Otherwise, it finds the loudest 100ms segment as a fallback.
     """
     logger.info(f"Getting FFT spectrum for {file_path}")
     try:
         sound = parselmouth.Sound(file_path)
-        from_time = sound.duration / 2 - 0.05
-        to_time = sound.duration / 2 + 0.05
-        if from_time < 0: from_time = 0
-        if to_time > sound.duration: to_time = sound.duration
-
-        if from_time >= to_time:
-            logger.warning(f"Sound duration for spectrum is too short for {file_path}")
+        if sound.duration == 0:
+            logger.warning(f"Sound is empty: {file_path}")
             return None
 
-        sound_part = sound.extract_part(from_time=from_time, to_time=to_time, preserve_times=False)
-        logger.info(f"Analyzing spectrum for {os.path.basename(file_path)}, RMS: {sound_part.get_rms()}")
+        sound_part = None
+        if analysis_time is not None:
+            logger.info(f"Generating spectrum from successful analysis time: {analysis_time:.3f}s")
+            from_time = analysis_time - 0.05
+            to_time = analysis_time + 0.05
+            if from_time < 0: from_time = 0
+            if to_time > sound.duration: to_time = sound.duration
+            sound_part = sound.extract_part(from_time=from_time, to_time=to_time, preserve_times=False)
+        else:
+            logger.info("Formant analysis failed, finding loudest segment for spectrum.")
+            sound_part = _find_loudest_segment(sound, duration=0.1)
 
+        logger.info(f"Analyzing spectrum for {os.path.basename(file_path)}, RMS: {sound_part.get_rms()}")
         spectrum = sound_part.to_spectrum()
 
         freqs = spectrum.xs()
-        values = spectrum.values
-        logger.debug(f"Spectrum values shape: {values.shape}, dtype: {values.dtype}")
+        values = spectrum.values[0,:] # It's a 2D array with one row
 
-        # Ensure values is a 1D array of real numbers
-        if values.ndim > 1:
-            values = values[0, :]
-        spl_values = np.abs(values)
-
-        if len(freqs) != len(spl_values):
-            logger.error(f"Spectrum shape mismatch! Freqs: {len(freqs)}, SPL values: {len(spl_values)}")
-            return None
+        # The 'values' array is twice the length of 'freqs' (complex FFT).
+        # We only need the first half, corresponding to the positive frequencies.
+        num_freqs = len(freqs)
+        spl_values = 10 * np.log10(np.abs(values[:num_freqs])**2)
 
         if max_formant:
             valid_indices = freqs <= max_formant

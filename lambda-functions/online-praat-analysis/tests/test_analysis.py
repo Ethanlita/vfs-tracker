@@ -7,27 +7,7 @@ import numpy as np
 import soundfile as sf
 from analysis import analyze_sustained_vowel, analyze_speech_flow, analyze_note_file_robust
 
-# Helper to create a test vowel sound with controlled jitter and shimmer
-def create_test_vowel(path, f0, jitter, shimmer, duration=2, sr=44100):
-    t = np.linspace(0., duration, int(sr * duration), endpoint=False)
-    # Add jitter (frequency variation)
-    phase = 2 * np.pi * f0 * t
-    if jitter > 0:
-        # A simple way to simulate jitter is to add low-frequency random phase variation
-        phase_jitter = np.cumsum(np.random.randn(len(t)) * jitter * 10)
-        phase += phase_jitter
-
-    wav = np.sin(phase)
-
-    # Add shimmer (amplitude variation)
-    if shimmer > 0:
-        amp_shimmer = 1 + (np.random.randn(len(t)) * shimmer)
-        wav *= amp_shimmer
-
-    # Add some harmonics to make it more realistic for formant analysis
-    wav += 0.5 * np.sin(2 * np.pi * (f0*2) * t)
-    wav += 0.25 * np.sin(2 * np.pi * (f0*3) * t)
-    sf.write(path, wav / np.max(np.abs(wav)), sr, 'PCM_16')
+from .conftest import generate_realistic_vowel
 
 def test_analyze_sustained_vowel_selects_best_file(tmp_path):
     """
@@ -38,8 +18,8 @@ def test_analyze_sustained_vowel_selects_best_file(tmp_path):
     unstable_file = tmp_path / "unstable.wav"
 
     # Create a stable sound (low jitter/shimmer) and an unstable one
-    create_test_vowel(stable_file, f0=150, jitter=0.001, shimmer=0.01)
-    create_test_vowel(unstable_file, f0=150, jitter=0.05, shimmer=0.5)
+    generate_realistic_vowel(str(stable_file), f0=150, jitter=0.001, shimmer=0.01)
+    generate_realistic_vowel(str(unstable_file), f0=150, jitter=0.05, shimmer=0.5)
 
     results = analyze_sustained_vowel([str(stable_file), str(unstable_file)])
 

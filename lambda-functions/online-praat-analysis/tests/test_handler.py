@@ -94,7 +94,7 @@ def test_handle_get_upload_url(mocked_aws_services, mock_api_gateway_event):
     assert 'putUrl' in body
 
 def test_end_to_end_with_known_audio(mocked_aws_services, tmp_path_factory):
-    from .conftest import generate_vowel_sound
+    from .conftest import generate_realistic_vowel
     tmp_path = tmp_path_factory.mktemp("e2e_audio")
     known_f0 = 150.0
     known_f1, known_f2 = 500, 1500
@@ -102,8 +102,8 @@ def test_end_to_end_with_known_audio(mocked_aws_services, tmp_path_factory):
 
     formant_audio_path = tmp_path / "formant_note.wav"
     sustained_audio_path = tmp_path / "sustained_vowel.wav"
-    generate_vowel_sound(str(formant_audio_path), f0=known_f0, formants=formant_specs)
-    generate_vowel_sound(str(sustained_audio_path), f0=200.0, duration=4.0)
+    generate_realistic_vowel(str(formant_audio_path), f0=known_f0, formants=formant_specs)
+    generate_realistic_vowel(str(sustained_audio_path), f0=200.0, duration=4.0)
 
     s3_client, _ = mocked_aws_services
     session_id = 'e2e-test-session'
@@ -139,15 +139,9 @@ def test_end_to_end_with_known_audio(mocked_aws_services, tmp_path_factory):
     assert abs(sustained_metrics.get('f0_mean', 0) - 200.0) < 10
 
     formant_metrics = sustained_metrics.get('formants_low', {})
-    # The new robust analysis is expected to fail on the simple synthetic audio,
-    # as it doesn't have the features of a real human voice.
-    # So, we now assert that it correctly identifies this and returns an error.
-    assert 'error_details' in formant_metrics
-    assert formant_metrics.get('reason') == 'Could not find any stable, high-confidence formant tracks.'
-    assert 'details' in formant_metrics
-    assert 'Frames processed' in formant_metrics['details']
+    assert 'error' not in formant_metrics and 'error_details' not in formant_metrics, \
+        f"Formant analysis failed unexpectedly: {formant_metrics.get('reason')}"
 
-    # Since the analysis fails, we expect the other metrics to be 0.
-    assert formant_metrics.get('f0_mean', -1) == 0
-    assert formant_metrics.get('F1', -1) == 0
-    assert formant_metrics.get('F2', -1) == 0
+    assert abs(formant_metrics.get('f0_mean', 0) - known_f0) < 10
+    assert abs(formant_metrics.get('F1', 0) - known_f1) < 75
+    assert abs(formant_metrics.get('F2', 0) - known_f2) < 100 # Widen tolerance
