@@ -325,7 +325,71 @@ def create_formant_spl_chart(spectrum_low, spectrum_high, spectrum_sustained=Non
         return create_placeholder_chart('Formant-SPL Spectrum (LPC)', 'Spectrum data unavailable.')
 
 
-def create_pdf_report(session_id, metrics, chart_urls, userInfo=None):
+def create_diagnostic_charts(debug_info: dict, title: str):
+    """Creates a multi-panel chart with diagnostic data from the analysis."""
+    if not debug_info or not isinstance(debug_info, dict):
+        return create_placeholder_chart(f"Diagnostics: {title}", "No debug data available.")
+
+    try:
+        times = debug_info.get('times', [])
+        if len(times) == 0:
+            return create_placeholder_chart(f"Diagnostics: {title}", "No time-series data found.")
+
+        fig, axes = plt.subplots(5, 1, figsize=(10, 15), sharex=True)
+        fig.suptitle(f"Analysis Diagnostics: {title}", fontsize=16)
+
+        # 1. F0 Plot
+        axes[0].plot(times, debug_info.get('f0_hz', []), 'o-', label='F0', markersize=2)
+        axes[0].set_ylabel('F0 (Hz)')
+        axes[0].legend()
+        axes[0].grid(True, linestyle='--')
+
+        # 2. HNR Plot
+        axes[1].plot(times, debug_info.get('hnr', []), 'o-', label='HNR', color='green', markersize=2)
+        axes[1].set_ylabel('HNR (dB)')
+        axes[1].legend()
+        axes[1].grid(True, linestyle='--')
+
+        formant_tracks = debug_info.get('formant_tracks', {})
+        colors = ['#3498db', '#e74c3c', '#2ecc71']
+
+        # 3. Formant Frequency Plot
+        for i in range(1, 4):
+            track = formant_tracks.get(i, [])
+            if track:
+                track_times, freqs, _ = zip(*track)
+                axes[2].plot(track_times, freqs, 'o', label=f'F{i} Freq', color=colors[i-1], markersize=3)
+        axes[2].set_ylabel('Formant Freq (Hz)')
+        axes[2].legend()
+        axes[2].grid(True, linestyle='--')
+
+        # 4. Formant Confidence Plot
+        for i in range(1, 4):
+            track = formant_tracks.get(i, [])
+            if track:
+                track_times, _, confs = zip(*track)
+                axes[3].plot(track_times, confs, 'o-', label=f'F{i} Confidence', color=colors[i-1], markersize=2)
+        axes[3].set_ylabel('Confidence Score')
+        axes[3].legend()
+        axes[3].grid(True, linestyle='--')
+
+        # 5. (Placeholder for future use, e.g. bandwidth)
+        axes[4].text(0.5, 0.5, 'Reserved for future diagnostics', ha='center', va='center', color='lightgrey')
+        axes[4].set_yticks([])
+        axes[4].set_xlabel('Time (s)')
+
+        plt.tight_layout(rect=[0, 0.03, 1, 0.97])
+        buf = BytesIO()
+        plt.savefig(buf, format='png')
+        buf.seek(0)
+        plt.close(fig)
+        return buf
+    except Exception as e:
+        logger.error(f"Could not create diagnostic chart for {title}: {e}", exc_info=True)
+        return create_placeholder_chart(f"Diagnostics: {title}", f"Chart generation failed:\n{e}")
+
+
+def create_pdf_report(session_id, metrics, chart_urls, debug_info=None, userInfo=None):
     """
     Generates a PDF report from the analysis results with embedded charts and user info.
 
@@ -333,6 +397,7 @@ def create_pdf_report(session_id, metrics, chart_urls, userInfo=None):
         session_id (str): The session ID for the report.
         metrics (dict): The dictionary of calculated metrics.
         chart_urls (dict): A dictionary of S3 URLs for the generated charts.
+        debug_info (dict): A dictionary containing debug data for diagnostic charts.
         userInfo (dict): A dictionary containing user information (userId, userName).
 
     Returns:
@@ -760,6 +825,30 @@ def create_pdf_report(session_id, metrics, chart_urls, userInfo=None):
         )
         formant_section.append(Spacer(1, 6))
         story.append(KeepTogether(formant_section))
+
+        # --- Diagnostics Page ---
+        if debug_info:
+            story.append(PageBreak())
+            story.append(Paragraph(_bilingual("Analysis Diagnostics / 分析诊断信息"), title_style))
+            story.append(Spacer(1, 12))
+
+            diag_charts = []
+            if debug_info.get('sustained'):
+                diag_charts.append(create_diagnostic_charts(debug_info['sustained'], 'Sustained Vowel'))
+            if debug_info.get('low_note'):
+                diag_charts.append(create_diagnostic_charts(debug_info['low_note'], 'Lowest Note'))
+            if debug_info.get('high_note'):
+                diag_charts.append(create_diagnostic_charts(debug_info['high_note'], 'Highest Note'))
+
+            for chart_buf in diag_charts:
+                if chart_buf:
+                    img = RLImage(chart_buf)
+                    img.hAlign = 'CENTER'
+                    iw, ih = img.imageWidth, img.imageHeight
+                    scale = min(doc.width / iw, (doc.height / 3) / ih, 1.0)
+                    img.drawWidth, img.drawHeight = iw * scale, ih * scale
+                    story.append(img)
+                    story.append(Spacer(1, 12))
 
         # 构建 PDF
         doc.build(story, onFirstPage=on_page, onLaterPages=on_page)

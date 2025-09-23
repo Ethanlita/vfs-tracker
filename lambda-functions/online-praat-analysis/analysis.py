@@ -136,14 +136,23 @@ def _analyze_formant_structure(
         else:
             final_formants[f'F{i}'] = round(float(np.median(high_conf_values)), 2)
 
+    # Package debug info for plotting
+    debug_info = {
+        'times': pitch.xs(),
+        'f0_hz': [call(pitch, "Get value at time", t, "Hertz", "Linear") for t in pitch.xs()],
+        'hnr': [call(harmonicity, "Get value at time", t, "Linear") for t in pitch.xs()],
+        'formant_tracks': formant_tracks
+    }
+
     if all(v == 0.0 for v in final_formants.values()):
         details = (
             f"Frames processed: {len(pitch.xs())}. "
             f"Voiced frames found: {len([t for t in pitch.xs() if call(pitch, 'Get value at time', t, 'Hertz', 'Linear') > 0])}. "
             f"A stable track requires at least {min_continuous_frames} high-confidence frames."
         )
-        return {'error': 'Analysis failed', 'reason': 'Could not find any stable, high-confidence formant tracks.', 'details': details}
+        return {'error': 'Analysis failed', 'reason': 'Could not find any stable, high-confidence formant tracks.', 'details': details, 'debug_info': debug_info}
 
+    final_formants['debug_info'] = debug_info
     return final_formants
 
 def analyze_note_file_robust(path: str, f0min: int = 75, f0max: int = 1200) -> Dict:
@@ -167,10 +176,11 @@ def analyze_note_file_robust(path: str, f0min: int = 75, f0max: int = 1200) -> D
             last_failure_result = results  # Store the latest failure details
 
     if not final_results or 'error' in final_results:
-        # Preserve the detailed reason from the last failed attempt
+        # Preserve the detailed reason and debug_info from the last failed attempt
         reason = last_failure_result.get('reason', 'Failed to find formants even with multiple parameter sets.')
         details = last_failure_result.get('details', 'No further details available.')
-        return {'F1': 0, 'F2': 0, 'F3': 0, 'f0_mean': 0, 'spl_dbA_est': 0, 'error_details': 'Analysis failed', 'reason': reason, 'details': details}
+        debug_info = last_failure_result.get('debug_info')
+        return {'F1': 0, 'F2': 0, 'F3': 0, 'f0_mean': 0, 'spl_dbA_est': 0, 'error_details': 'Analysis failed', 'reason': reason, 'details': details, 'debug_info': debug_info}
 
     y, sr = _load_mono(path)
     spl = _rms_spl(y)
@@ -250,11 +260,13 @@ def analyze_sustained_vowel(local_paths: list, f0_min: int = 75, f0_max: int = 8
 
         # Get LPC Spectrum
         lpc_spectrum = get_lpc_spectrum(best_file)
+        debug_info = formant_results.pop('debug_info', None) # Extract debug info
 
         return {
             'metrics': metrics,
             'chosen_file': best_file,
-            'lpc_spectrum': lpc_spectrum
+            'lpc_spectrum': lpc_spectrum,
+            'debug_info': debug_info
         }
 
     except Exception as e:
