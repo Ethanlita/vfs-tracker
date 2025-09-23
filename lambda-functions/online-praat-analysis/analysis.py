@@ -69,6 +69,7 @@ def _get_formant_candidates(
                 continue
 
             confidence = _calculate_confidence(f0_hz, hnr, bw)
+            logger.debug(f"  - Candidate F{i}: freq={freq:.2f}, bw={bw:.2f}, conf={confidence:.3f}")
 
             # The third element was prominence, now it's confidence
             candidates.append((freq, bw, confidence))
@@ -113,7 +114,7 @@ def _analyze_formant_structure(
             # Basic check to ensure formants are in ascending order
             if freq <= last_freq: continue
 
-            if confidence > 0.35: # Use the confidence score directly (relaxed threshold)
+            if confidence > 0.3: # Use the confidence score directly (more relaxed threshold)
                 formant_num = len(formants_found) + 1
                 formants_found[formant_num] = (freq, confidence)
                 last_freq = freq
@@ -129,7 +130,7 @@ def _analyze_formant_structure(
             final_formants[f'F{i}'] = 0.0
             continue
 
-        high_conf_values = [val for t, val, conf in track if conf >= 0.6]
+        high_conf_values = [val for t, val, conf in track if conf >= 0.5]
         if not high_conf_values or len(high_conf_values) < min_continuous_frames:
             final_formants[f'F{i}'] = 0.0
         else:
@@ -356,6 +357,8 @@ def get_lpc_spectrum(file_path: str, max_formant: int = 5500):
             return None
 
         sound_part = sound.extract_part(from_time=from_time, to_time=to_time, preserve_times=False)
+        logger.info(f"Analyzing spectrum for {os.path.basename(file_path)}, RMS: {sound_part.get_rms()}")
+
         spectrum = sound_part.to_spectrum()
 
         freqs = spectrum.xs()
