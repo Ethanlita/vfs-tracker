@@ -453,6 +453,7 @@ def create_pdf_report(session_id, metrics, chart_urls, userInfo=None):
             'f0_max': 'Highest F0 (P90) / 最高基频（P90）',
             'spl_min': 'Lowest SPL (P10) / 最低声压级（P10）',
             'spl_max': 'Highest SPL (P90) / 最高声压级（P90）',
+            'source_file': 'Source File / 分析源文件',
         }
 
         # 分类标题映射
@@ -469,7 +470,7 @@ def create_pdf_report(session_id, metrics, chart_urls, userInfo=None):
                 return
             rows = []
             for k, v in data.items():
-                if k in ['formants_low', 'formants_high', 'bins', 'formant_analysis_failed']:
+                if k in ['formants_low', 'formants_high', 'bins', 'formant_analysis_failed', 'formants_sustained']:
                     continue
                 if isinstance(v, dict):
                     # 展开二级
@@ -736,7 +737,7 @@ def create_pdf_report(session_id, metrics, chart_urls, userInfo=None):
 
         formant_section.append(Spacer(1, 6))
 
-        # Only show charts if the primary low/high note analysis was successful
+        # F1-F2 chart is only useful if analysis succeeds
         if not formant_failed:
             formant_section.append(
                 embed_chart(
@@ -746,15 +747,17 @@ def create_pdf_report(session_id, metrics, chart_urls, userInfo=None):
                     max_height=3.0*inch,
                 )
             )
-            formant_section.append(Spacer(1, 4))
-            formant_section.append(
-                embed_chart(
-                    'formant_spl_spectrum',
-                    'Formant-SPL Spectrum (LPC) / 共振峰-声压谱（LPC）',
-                    'Based on lowest, highest, and sustained note / 基于最低、最高和持续元音',
-                    max_height=3.0*inch,
-                )
+
+        formant_section.append(Spacer(1, 4))
+        # Formant-SPL chart should always be shown to see the spectrum
+        formant_section.append(
+            embed_chart(
+                'formant_spl_spectrum',
+                'Formant-SPL Spectrum / 共振峰-声压谱',
+                'Based on lowest, highest, and sustained note / 基于最低、最高和持续元音',
+                max_height=3.0*inch,
             )
+        )
         formant_section.append(Spacer(1, 6))
         story.append(KeepTogether(formant_section))
 

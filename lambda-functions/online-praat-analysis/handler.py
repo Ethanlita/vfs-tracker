@@ -163,6 +163,8 @@ def perform_full_analysis(session_id: str, calibration: dict = None, forms: dict
     metrics['sustained'] = sustained_analysis_results.get('metrics', {'error': 'Analysis failed for all sustained vowel recordings.'})
     spectrum_sustained = sustained_analysis_results.get('lpc_spectrum')
     chosen_sustained_path = sustained_analysis_results.get('chosen_file')
+    if chosen_sustained_path:
+        metrics['sustained']['source_file'] = os.path.basename(chosen_sustained_path)
 
     if chosen_sustained_path:
         buf = create_time_series_chart(chosen_sustained_path)
