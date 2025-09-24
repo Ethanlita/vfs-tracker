@@ -164,6 +164,7 @@ def perform_full_analysis(session_id: str, calibration: dict = None, forms: dict
     metrics['sustained'] = sustained_analysis_results.get('metrics', {'error': 'Analysis failed for all sustained vowel recordings.'})
     spectrum_sustained = sustained_analysis_results.get('lpc_spectrum')
     chosen_sustained_path = sustained_analysis_results.get('chosen_file')
+    debug_info_collection['sustained'] = sustained_analysis_results.get('debug_info')
     if chosen_sustained_path:
         metrics['sustained']['source_file'] = os.path.basename(chosen_sustained_path)
 
@@ -183,6 +184,7 @@ def perform_full_analysis(session_id: str, calibration: dict = None, forms: dict
 
     if len(note_local) >= 1:
         formant_low_metrics = analyze_note_file_robust(note_local[0])
+        debug_info_collection['low_note'] = formant_low_metrics.pop('debug_info', None)
         metrics.setdefault('sustained', {})['formants_low'] = formant_low_metrics
         if 'error_details' in formant_low_metrics:
             formant_analysis_failed = True
@@ -190,6 +192,7 @@ def perform_full_analysis(session_id: str, calibration: dict = None, forms: dict
 
     if len(note_local) >= 2:
         formant_high_metrics = analyze_note_file_robust(note_local[1])
+        debug_info_collection['high_note'] = formant_high_metrics.pop('debug_info', None)
         metrics.setdefault('sustained', {})['formants_high'] = formant_high_metrics
         if 'error_details' in formant_high_metrics:
             formant_analysis_failed = True
@@ -283,7 +286,7 @@ def perform_full_analysis(session_id: str, calibration: dict = None, forms: dict
 
     # PDF Report
     report_key = REPORT_KEY_TEMPLATE.format(sessionId=session_id)
-    pdf_buf = create_pdf_report(session_id, metrics, charts, userInfo=userInfo)
+    pdf_buf = create_pdf_report(session_id, metrics, charts, debug_info=debug_info_collection, userInfo=userInfo)
     if pdf_buf:
         get_s3_client().upload_fileobj(pdf_buf, BUCKET, report_key, ExtraArgs={'ContentType': 'application/pdf'})
     report_url = f's3://{BUCKET}/{report_key}'

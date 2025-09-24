@@ -393,7 +393,7 @@ def create_diagnostic_charts(debug_info: dict, title: str):
         return create_placeholder_chart(f"Diagnostics: {title}", f"Chart generation failed:\n{e}")
 
 
-def create_pdf_report(session_id, metrics, chart_urls, userInfo=None):
+def create_pdf_report(session_id, metrics, chart_urls, debug_info=None, userInfo=None):
     """
     Generates a PDF report from the analysis results with embedded charts and user info.
 
@@ -401,6 +401,7 @@ def create_pdf_report(session_id, metrics, chart_urls, userInfo=None):
         session_id (str): The session ID for the report.
         metrics (dict): The dictionary of calculated metrics.
         chart_urls (dict): A dictionary of S3 URLs for the generated charts.
+        debug_info (dict): A dictionary containing debug data for diagnostic charts.
         userInfo (dict): A dictionary containing user information (userId, userName).
 
     Returns:
@@ -409,6 +410,8 @@ def create_pdf_report(session_id, metrics, chart_urls, userInfo=None):
     logger.info(f"Creating PDF report for session {session_id}")
     if userInfo is None:
         userInfo = {}
+    if debug_info is None:
+        debug_info = {}
 
     try:
         # 文档与样式
@@ -743,9 +746,10 @@ def create_pdf_report(session_id, metrics, chart_urls, userInfo=None):
 
         # ---- Formant Analysis ----
         sustained_metrics = metrics.get('sustained', {}) if isinstance(metrics.get('sustained'), dict) else {}
-        formant_low = sustained_metrics.get('formants_low')
-        formant_high = sustained_metrics.get('formants_high')
-        formant_sustained = sustained_metrics.get('formants_sustained') # Get new data
+        # Ensure formant data are dictionaries to prevent errors on .get()
+        formant_low = sustained_metrics.get('formants_low') or {}
+        formant_high = sustained_metrics.get('formants_high') or {}
+        formant_sustained = sustained_metrics.get('formants_sustained') or {}
         formant_failed = sustained_metrics.get('formant_analysis_failed')
 
         formant_section = [Paragraph(_bilingual("Formant Analysis / 共振峰分析"), h2_style)]
@@ -816,6 +820,25 @@ def create_pdf_report(session_id, metrics, chart_urls, userInfo=None):
         )
         formant_section.append(Spacer(1, 6))
         story.append(KeepTogether(formant_section))
+
+        # --- Diagnostics Page ---
+        if debug_info:
+            story.append(PageBreak())
+            story.append(Paragraph(_bilingual("Analysis Diagnostics / 分析诊断信息"), title_style))
+            story.append(Spacer(1, 12))
+
+            for key, data in debug_info.items():
+                if not data or not data.get('frames'): continue
+                title_map = {'sustained': 'Sustained Vowel', 'low_note': 'Lowest Note', 'high_note': 'Highest Note'}
+                chart_buf = create_diagnostic_charts(data, title_map.get(key, key.replace('_', ' ').title()))
+                if chart_buf:
+                    img = RLImage(chart_buf)
+                    img.hAlign = 'CENTER'
+                    iw, ih = img.imageWidth, img.imageHeight
+                    scale = min(doc.width / iw, (doc.height / 2.5) / ih, 1.0) # Allow slightly more height
+                    img.drawWidth, img.drawHeight = iw * scale, ih * scale
+                    story.append(img)
+                    story.append(Spacer(1, 12))
 
         # 构建 PDF
         doc.build(story, onFirstPage=on_page, onLaterPages=on_page)
