@@ -90,3 +90,27 @@ def test_robust_formant_detection_returns_zero_for_unvoiced(tmp_path):
     assert results.get('F1', -1) == 0.0
     assert results.get('F2', -1) == 0.0
     assert results.get('F3', -1) == 0.0
+
+def test_analyze_sustained_vowel_selects_longest_voiced_time(tmp_path):
+    """
+    Tests that analyze_sustained_vowel selects the file with the longest
+    *voiced* duration, not the longest *total* duration.
+    """
+    from .conftest import create_test_vowel_with_silence
+
+    # File 1: Short total duration, but all voiced
+    short_but_voiced_file = tmp_path / "short_voiced.wav"
+    create_test_vowel_with_silence(short_but_voiced_file, f0=150, voiced_duration=2.0) # 2s voiced
+
+    # File 2: Long total duration, but mostly silence
+    long_but_silent_file = tmp_path / "long_silent.wav"
+    create_test_vowel_with_silence(long_but_silent_file, f0=150, voiced_duration=1.0, silence_before=1.5, silence_after=1.5) # 1s voiced, 4s total
+
+    results = analyze_sustained_vowel([str(short_but_voiced_file), str(long_but_silent_file)])
+
+    assert 'chosen_file' in results
+    assert results['chosen_file'] == str(short_but_voiced_file)
+
+    # Check that the MPT is calculated from the chosen file's voiced duration
+    assert 'mpt_s' in results['metrics']
+    assert 1.9 < results['metrics']['mpt_s'] < 2.1

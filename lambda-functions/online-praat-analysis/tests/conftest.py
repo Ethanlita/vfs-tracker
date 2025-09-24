@@ -72,3 +72,22 @@ def dummy_wav_files(tmp_path_factory):
     sf.write(str(speech_file_path), speech_data.astype(np.int16), sr)
 
     return str(sustained_file_path), str(speech_file_path)
+
+
+def create_test_vowel_with_silence(path, f0, voiced_duration, silence_before=0, silence_after=0, sr=44100):
+    """
+    Creates a test vowel with specified voiced duration surrounded by silence.
+    """
+    t = np.linspace(0., voiced_duration, int(sr * voiced_duration), endpoint=False)
+    wav = 0.5 * np.sin(2 * np.pi * f0 * t)
+
+    # Add harmonics to make it more 'voiced' for librosa.effects.split
+    wav += 0.25 * np.sin(2 * np.pi * (f0*2) * t)
+
+    silence1 = np.zeros(int(sr * silence_before))
+    silence2 = np.zeros(int(sr * silence_after))
+
+    full_wav = np.concatenate([silence1, wav, silence2])
+
+    sf.write(path, full_wav, sr, 'PCM_16')
+    return path
