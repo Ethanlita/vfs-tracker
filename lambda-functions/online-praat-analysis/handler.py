@@ -175,28 +175,38 @@ def perform_full_analysis(session_id: str, calibration: dict = None, forms: dict
             get_s3_client().upload_fileobj(buf, BUCKET, ts_key, ExtraArgs={'ContentType': 'image/png'})
             charts['timeSeries'] = f's3://{BUCKET}/{ts_key}'
 
-    # Formant analysis from Step 4
-    note_keys = audio_groups.get('4', [])[:MAX_DOWNLOAD_FILES_PER_STEP]
-    note_local = [safe_download(k) for k in note_keys if k.endswith('.wav')]
+    # Formant analysis for low note (Step 4) and high note (Step 8)
     formant_low_metrics, formant_high_metrics = None, None
     spectrum_low, spectrum_high = None, None
-    formant_analysis_failed = False
+    formant_analysis_failed = False # Track if any formant step fails
 
-    if len(note_local) >= 1:
-        formant_low_metrics = analyze_note_file_robust(note_local[0])
+    # Low Note (Step 4)
+    low_note_keys = audio_groups.get('4', [])[:MAX_DOWNLOAD_FILES_PER_STEP]
+    low_note_local = [safe_download(k) for k in low_note_keys if k.endswith('.wav')]
+    best_low_note_file = _select_best_audio_by_jitter(low_note_local)
+
+    if best_low_note_file:
+        formant_low_metrics = analyze_note_file_robust(best_low_note_file)
         debug_info_collection['low_note'] = formant_low_metrics.pop('debug_info', None)
         metrics.setdefault('sustained', {})['formants_low'] = formant_low_metrics
         if 'error_details' in formant_low_metrics:
             formant_analysis_failed = True
-        spectrum_low = get_lpc_spectrum(note_local[0], analysis_time=formant_low_metrics.get('best_segment_time'))
+        spectrum_low = get_lpc_spectrum(best_low_note_file, analysis_time=formant_low_metrics.get('best_segment_time'))
+        metrics['sustained']['formants_low']['source_file'] = os.path.basename(best_low_note_file)
 
-    if len(note_local) >= 2:
-        formant_high_metrics = analyze_note_file_robust(note_local[1])
+    # High Note (Step 8)
+    high_note_keys = audio_groups.get('8', [])[:MAX_DOWNLOAD_FILES_PER_STEP]
+    high_note_local = [safe_download(k) for k in high_note_keys if k.endswith('.wav')]
+    best_high_note_file = _select_best_audio_by_jitter(high_note_local)
+
+    if best_high_note_file:
+        formant_high_metrics = analyze_note_file_robust(best_high_note_file)
         debug_info_collection['high_note'] = formant_high_metrics.pop('debug_info', None)
         metrics.setdefault('sustained', {})['formants_high'] = formant_high_metrics
         if 'error_details' in formant_high_metrics:
             formant_analysis_failed = True
-        spectrum_high = get_lpc_spectrum(note_local[1], analysis_time=formant_high_metrics.get('best_segment_time'))
+        spectrum_high = get_lpc_spectrum(best_high_note_file, analysis_time=formant_high_metrics.get('best_segment_time'))
+        metrics['sustained']['formants_high']['source_file'] = os.path.basename(best_high_note_file)
 
     # Create formant charts if data is available, otherwise create placeholders
     if formant_low_metrics or formant_high_metrics:
@@ -292,6 +302,42 @@ def perform_full_analysis(session_id: str, calibration: dict = None, forms: dict
     report_url = f's3://{BUCKET}/{report_key}'
 
     return metrics, charts, report_url
+
+def _select_best_audio_by_jitter(local_paths: list, f0_min: int = 75, f0_max: int = 1200) -> Optional[str]:
+    """
+    Selects the best audio file from a list based on the lowest jitter.
+    """
+    # This import is local to the function to avoid loading it for all invocations.
+    import parselmouth
+    from parselmouth.praat import call
+    import numpy as np
+
+    best_file = None
+    min_jitter = float('inf')
+
+    for file_path in local_paths:
+        if not file_path or not os.path.exists(file_path):
+            continue
+        try:
+            sound = parselmouth.Sound(file_path)
+            # Use a wider pitch range for jitter calculation to be safe.
+            point_process = call(sound, "To PointProcess (periodic, cc)", 75, 1200)
+            jitter = call(point_process, "Get jitter (local)", 0, 0, 0.0001, 0.02, 1.3)
+
+            # Praat can return nan if jitter can't be calculated.
+            if not np.isnan(jitter) and jitter < min_jitter:
+                min_jitter = jitter
+                best_file = file_path
+        except Exception as e:
+            logger.warning(f"Could not calculate jitter for {file_path}: {e}")
+            continue
+
+    if best_file:
+        logger.info(f"Selected file '{os.path.basename(best_file)}' with lowest jitter: {min_jitter:.4f}")
+    else:
+        logger.warning(f"Could not select a best file by jitter from provided paths: {local_paths}")
+
+    return best_file
 
 # ---------- API Handlers ----------
 def handle_create_session(event):

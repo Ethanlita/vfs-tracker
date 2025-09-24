@@ -145,3 +145,32 @@ def test_end_to_end_with_known_audio(mocked_aws_services, tmp_path_factory):
     assert abs(formant_metrics.get('f0_mean', 0) - known_f0) < 10
     assert abs(formant_metrics.get('F1', 0) - known_f1) < 75
     assert abs(formant_metrics.get('F2', 0) - known_f2) < 100 # Widen tolerance
+
+
+def test_select_best_audio_by_jitter(tmp_path):
+    """
+    Tests the _select_best_audio_by_jitter helper function to ensure it
+    selects the file with the lowest jitter.
+    """
+    from .conftest import generate_realistic_vowel
+
+    # File 1: Low jitter (more stable)
+    low_jitter_file = tmp_path / "low_jitter.wav"
+    generate_realistic_vowel(str(low_jitter_file), f0=150, jitter=0.001)
+
+    # File 2: High jitter (less stable)
+    high_jitter_file = tmp_path / "high_jitter.wav"
+    generate_realistic_vowel(str(high_jitter_file), f0=150, jitter=0.05)
+
+    # The helper function is what we're testing
+    chosen_file = handler._select_best_audio_by_jitter([str(low_jitter_file), str(high_jitter_file)])
+
+    assert chosen_file == str(low_jitter_file)
+
+    # Test with one invalid path
+    chosen_file_2 = handler._select_best_audio_by_jitter([str(low_jitter_file), "nonexistent.wav"])
+    assert chosen_file_2 == str(low_jitter_file)
+
+    # Test with no valid paths
+    chosen_file_3 = handler._select_best_audio_by_jitter(["nonexistent.wav", "another_nonexistent.wav"])
+    assert chosen_file_3 is None

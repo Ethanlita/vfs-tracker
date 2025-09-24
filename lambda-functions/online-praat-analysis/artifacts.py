@@ -752,74 +752,79 @@ def create_pdf_report(session_id, metrics, chart_urls, debug_info=None, userInfo
         formant_sustained = sustained_metrics.get('formants_sustained') or {}
         formant_failed = sustained_metrics.get('formant_analysis_failed')
 
-        formant_section = [Paragraph(_bilingual("Formant Analysis / 共振峰分析"), h2_style)]
+        try:
+            formant_section = [Paragraph(_bilingual("Formant Analysis / 共振峰分析"), h2_style)]
 
-        headers = [
-            Paragraph("", text_style),
-            Paragraph(_bilingual("Lowest Note / 最低音"), text_style),
-            Paragraph(_bilingual("Highest Note / 最高音"), text_style),
-            Paragraph(_bilingual("Sustained Vowel / 持续元音"), text_style),
-        ]
-        rows = [headers]
-        formant_labels = [
-            ('f0_mean', 'Mean F0 (Hz) / 平均基频（Hz）'),
-            ('F1', 'F1 (Hz) / F1（Hz）'), ('B1', 'B1 (Hz) / B1 带宽（Hz）'),
-            ('F2', 'F2 (Hz) / F2（Hz）'), ('B2', 'B2 (Hz) / B2 带宽（Hz）'),
-            ('F3', 'F3 (Hz) / F3（Hz）'), ('B3', 'B3 (Hz) / B3 带宽（Hz）'),
-            ('spl_dbA_est', 'SPL dB(A) / 声压级 dB(A)'),
-        ]
-        for key, label in formant_labels:
-            rows.append([
-                Paragraph(_bilingual(label), text_style),
-                Paragraph(_fmt((formant_low or {}).get(key, 0)), text_style),
-                Paragraph(_fmt((formant_high or {}).get(key, 0)), text_style),
-                Paragraph(_fmt((formant_sustained or {}).get(key, 0)), text_style),
-            ])
-        ft = Table(rows, colWidths=[2.2*inch, 1.2*inch, 1.2*inch, 1.2*inch])
-        ft.setStyle(TableStyle([
-            ('FONT', (0,0), (-1,-1), _FONT, 10),
-            ('ROWBACKGROUNDS', (0,0), (-1,-1), [LIGHT_PINK, LIGHT_GRAY]),
-            ('GRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
-            ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-        ]))
-        formant_section.append(ft)
+            headers = [
+                Paragraph("", text_style),
+                Paragraph(_bilingual("Lowest Note / 最低音"), text_style),
+                Paragraph(_bilingual("Highest Note / 最高音"), text_style),
+                Paragraph(_bilingual("Sustained Vowel / 持续元音"), text_style),
+            ]
+            rows = [headers]
+            formant_labels = [
+                ('f0_mean', 'Mean F0 (Hz) / 平均基频（Hz）'),
+                ('F1', 'F1 (Hz) / F1（Hz）'), ('B1', 'B1 (Hz) / B1 带宽（Hz）'),
+                ('F2', 'F2 (Hz) / F2（Hz）'), ('B2', 'B2 (Hz) / B2 带宽（Hz）'),
+                ('F3', 'F3 (Hz) / F3（Hz）'), ('B3', 'B3 (Hz) / B3 带宽（Hz）'),
+                ('spl_dbA_est', 'SPL dB(A) / 声压级 dB(A)'),
+            ]
+            for key, label in formant_labels:
+                rows.append([
+                    Paragraph(_bilingual(label), text_style),
+                    Paragraph(_fmt((formant_low or {}).get(key, 0)), text_style),
+                    Paragraph(_fmt((formant_high or {}).get(key, 0)), text_style),
+                    Paragraph(_fmt((formant_sustained or {}).get(key, 0)), text_style),
+                ])
+            ft = Table(rows, colWidths=[2.2*inch, 1.2*inch, 1.2*inch, 1.2*inch])
+            ft.setStyle(TableStyle([
+                ('FONT', (0,0), (-1,-1), _FONT, 10),
+                ('ROWBACKGROUNDS', (0,0), (-1,-1), [LIGHT_PINK, LIGHT_GRAY]),
+                ('GRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
+                ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+            ]))
+            formant_section.append(ft)
 
-        notes = []
-        if formant_low and formant_low.get('reason'):
-            notes.append(f"<b>Lowest Note Analysis:</b> {formant_low['reason']}")
-        if formant_high and formant_high.get('reason'):
-            notes.append(f"<b>Highest Note Analysis:</b> {formant_high['reason']}")
-        if formant_sustained and formant_sustained.get('reason'):
-            notes.append(f"<b>Sustained Vowel Analysis:</b> {formant_sustained['reason']}")
+            notes = []
+            if formant_low and formant_low.get('reason'):
+                notes.append(f"<b>Lowest Note Analysis:</b> {formant_low['reason']}")
+            if formant_high and formant_high.get('reason'):
+                notes.append(f"<b>Highest Note Analysis:</b> {formant_high['reason']}")
+            if formant_sustained and formant_sustained.get('reason'):
+                notes.append(f"<b>Sustained Vowel Analysis:</b> {formant_sustained['reason']}")
 
-        if notes:
-            full_note_text = "<br/><br/>".join(notes)
+            if notes:
+                full_note_text = "<br/><br/>".join(notes)
+                formant_section.append(Spacer(1, 4))
+                formant_section.append(Paragraph(f"<b>Analysis Notes:</b><br/>{full_note_text}", small_style))
+
+            formant_section.append(Spacer(1, 6))
+
+            if not formant_failed:
+                formant_section.append(
+                    embed_chart(
+                        'formant',
+                        'F1-F2 Vowel Space / F1-F2 元音空间',
+                        'Based on lowest & highest note / 基于最低与最高音',
+                        max_height=3.0*inch,
+                    )
+                )
+
             formant_section.append(Spacer(1, 4))
-            formant_section.append(Paragraph(f"<b>Analysis Notes:</b><br/>{full_note_text}", small_style))
-
-        formant_section.append(Spacer(1, 6))
-
-        if not formant_failed:
             formant_section.append(
                 embed_chart(
-                    'formant',
-                    'F1-F2 Vowel Space / F1-F2 元音空间',
-                    'Based on lowest & highest note / 基于最低与最高音',
+                    'formant_spl_spectrum',
+                    'Formant-SPL Spectrum / 共振峰-声压谱',
+                    'Based on lowest, highest, and sustained note / 基于最低、最高和持续元音',
                     max_height=3.0*inch,
                 )
             )
-
-        formant_section.append(Spacer(1, 4))
-        formant_section.append(
-            embed_chart(
-                'formant_spl_spectrum',
-                'Formant-SPL Spectrum / 共振峰-声压谱',
-                'Based on lowest, highest, and sustained note / 基于最低、最高和持续元音',
-                max_height=3.0*inch,
-            )
-        )
-        formant_section.append(Spacer(1, 6))
-        story.append(KeepTogether(formant_section))
+            formant_section.append(Spacer(1, 6))
+            story.append(KeepTogether(formant_section))
+        except Exception as e:
+            logger.error(f"Failed to render formant analysis section: {e}", exc_info=True)
+            story.append(Paragraph("<b>Formant Analysis / 共振峰分析</b>", h2_style))
+            story.append(Paragraph("An unexpected error occurred while generating the formant table and charts.", text_style))
 
         # --- Diagnostics Page ---
         if debug_info:

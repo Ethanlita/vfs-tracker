@@ -122,26 +122,22 @@ def analyze_sustained_vowel(local_paths: list, f0_min: int = 75, f0_max: int = 8
     and returns a comprehensive analysis dictionary.
     """
     best_file = None
-    min_stability_score = float('inf')
+    max_voiced_duration = -1.0
 
-    # First, find the most stable file
+    # First, find the file with the longest VOICED duration, which is the correct metric for MPT.
     for file_path in local_paths:
         if not file_path or not os.path.exists(file_path):
             continue
         try:
-            sound = parselmouth.Sound(file_path)
-            point_process = call(sound, "To PointProcess (periodic, cc)", f0_min, f0_max)
-            jitter = call(point_process, "Get jitter (local)", 0, 0, 0.0001, 0.02, 1.3)
-            shimmer = call([sound, point_process], "Get shimmer (local)", 0, 0, 0.0001, 0.02, 1.3, 1.6)
-            # Use a simple stability score; lower is better. Penalize NaN.
-            stability_score = (jitter * 100 if not np.isnan(jitter) else 100) + \
-                              (shimmer * 100 if not np.isnan(shimmer) else 100)
+            y, sr = librosa.load(file_path, sr=None, mono=True)
+            non_silent_intervals = librosa.effects.split(y, top_db=40)
+            voiced_duration = sum([(end - start) / sr for start, end in non_silent_intervals])
 
-            if stability_score < min_stability_score:
-                min_stability_score = stability_score
+            if voiced_duration > max_voiced_duration:
+                max_voiced_duration = voiced_duration
                 best_file = file_path
         except Exception as e:
-            logger.warning(f"Could not perform stability check on {file_path}: {e}")
+            logger.warning(f"Could not calculate voiced duration for {file_path}: {e}")
             continue
 
     if not best_file:
@@ -303,15 +299,14 @@ def get_lpc_spectrum(file_path: str, max_formant: int = 5500, analysis_time: Opt
     If analysis_time is provided, it generates the spectrum from that specific time.
     Otherwise, it finds the loudest 100ms segment as a fallback.
     """
-    logger.info(f"Getting LPC spectrum for {file_path}")
+    logger.info(f"Attempting to generate LPC spectrum for {file_path}")
     try:
         sound = parselmouth.Sound(file_path)
-        if sound.duration == 0:
-            logger.warning(f"Sound is empty: {file_path}")
+        if sound.duration < 0.025:
+            logger.warning(f"Sound too short for LPC analysis: {file_path}")
             return None
 
         sound_part = None
-        # Ensure analysis_time is valid
         if analysis_time and 0 < analysis_time < sound.duration:
             logger.info(f"Generating spectrum from successful analysis time: {analysis_time:.3f}s")
             from_time = analysis_time - 0.025
@@ -320,47 +315,47 @@ def get_lpc_spectrum(file_path: str, max_formant: int = 5500, analysis_time: Opt
             if to_time > sound.duration: to_time = sound.duration
             sound_part = sound.extract_part(from_time=from_time, to_time=to_time, preserve_times=False)
         else:
-            logger.info("No valid analysis time provided, finding loudest segment for spectrum.")
+            logger.info("No valid analysis time, finding loudest segment for spectrum.")
             sound_part = _find_loudest_segment(sound, duration=0.1)
 
         if not isinstance(sound_part, parselmouth.Sound) or sound_part.duration < 0.025:
-             logger.warning(f"Could not extract a valid sound part for LPC analysis from {file_path}")
-             return None
+            logger.warning(f"Could not extract a valid sound part for LPC analysis from {file_path}")
+            return None
 
-        # This creates a single LPC object from the sound part.
-        lpc = call(sound_part, "To LPC (burg)", 12, 0.025, 0.0, 50.0)
-
-        # This converts the single LPC object to a plottable spectrum.
-        spectrum = call(lpc, "To Spectrum", 50.0)
+        # Correctly create an LPC object from the sound part
+        lpc = sound_part.to_lpc_burg(max_formant=max_formant)
+        # Convert the LPC object to a plottable spectrum
+        spectrum = lpc.to_spectrum()
 
         freqs = spectrum.xs()
         spl_values = spectrum.values.flatten()
 
-        # Filter to max_formant
         if max_formant:
             valid_indices = freqs <= max_formant
-            freqs = freqs[valid_indices].tolist()
-            spl_values = spl_values[valid_indices].tolist()
-        else:
-            freqs = freqs.tolist()
-            spl_values = spl_values.tolist()
+            freqs = freqs[valid_indices]
+            spl_values = spl_values[valid_indices]
 
-        return {"frequencies": freqs, "spl_values": spl_values}
+        logger.info("Successfully generated LPC spectrum.")
+        return {"frequencies": freqs.tolist(), "spl_values": spl_values.tolist()}
 
     except Exception as e:
         logger.error(f"Could not get LPC spectrum for {file_path}: {e}", exc_info=True)
         # Fallback to a simple FFT spectrum if LPC fails for any reason
-        logger.warning("LPC failed, falling back to FFT spectrum.")
+        logger.warning("LPC generation failed, falling back to standard FFT spectrum.")
         try:
             sound = parselmouth.Sound(file_path)
-            spectrum = sound.to_spectrum()
+            sound_part = _find_loudest_segment(sound, duration=0.1) if analysis_time is None else sound.extract_part(from_time=max(0, analysis_time - 0.05), to_time=min(sound.duration, analysis_time + 0.05))
+            spectrum = sound_part.to_spectrum()
             freqs = spectrum.xs()
-            spl_values = 10 * np.log10(np.abs(spectrum.values[0,:len(freqs)])**2)
+            # Correctly handle complex FFT output for SPL calculation
+            spl_values = 20 * np.log10(np.abs(spectrum.values[0, :]))
+
             if max_formant:
                 valid_indices = freqs <= max_formant
                 freqs = freqs[valid_indices]
                 spl_values = spl_values[valid_indices]
-            return {"frequencies": freqs.tolist(), "spl_values": spl_values.tolist()}
+
+            return {"frequencies": freqs.tolist(), "spl_values": spl_values.tolist(), "is_fallback": True}
         except Exception as fft_e:
-            logger.error(f"FFT fallback also failed for {file_path}: {fft_e}")
+            logger.error(f"FFT fallback also failed for {file_path}: {fft_e}", exc_info=True)
             return None
