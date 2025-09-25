@@ -4,27 +4,60 @@ import soundfile as sf
 
 def generate_realistic_vowel(path, f0, duration=2, sr=44100, jitter=0.005, shimmer=0.05, formants=None):
     """
-    Generates a more realistic synthetic vowel with some noise, jitter, and shimmer.
-    This is more likely to be successfully analyzed by pitch detection algorithms.
+    Generates a more realistic synthetic vowel using the Klatt synthesizer model,
+    which provides more control and produces a more natural sound.
     """
-    t = np.linspace(0., duration, int(sr * duration), endpoint=False)
+    try:
+        from pysptk.synthesis import Klatt
+    except ImportError:
+        # Fallback to simple generator if pysptk is not installed
+        return generate_simple_vowel(path, f0, duration, sr, jitter, shimmer, formants)
 
-    # Source signal with jitter
+    # Klatt synthesizer setup
+    frame_length = 1024
+    hop_length = 80
+    n_frames = int(duration * sr / hop_length)
+
+    # Synthesizer instance
+    synthesizer = Klatt(frame_length, hop_length)
+
+    # Parameters over time
+    f0_contour = np.full(n_frames, f0)
+    if jitter > 0:
+        f0_contour += np.random.randn(n_frames) * (f0 * jitter * 5)
+
+    # Default formants if none provided
+    if formants is None:
+        formants = [(500, 80), (1500, 120), (2500, 150)] # F1, F2, F3 with bandwidths
+
+    formant_freqs = np.zeros((n_frames, 10))
+    formant_bws = np.full((n_frames, 10), 100.0) # Default bandwidth
+
+    for i, (freq, bw) in enumerate(formants):
+        if i < 10:
+            formant_freqs[:, i] = freq
+            formant_bws[:, i] = bw
+
+    # Generate waveform
+    wav = synthesizer.synthesis(f0=f0_contour, formant_freqs=formant_freqs, formant_bws=formant_bws)
+
+    # Normalize and write to file
+    wav = wav / np.max(np.abs(wav)) * 0.9
+    sf.write(path, wav, sr, 'PCM_16')
+    return path
+
+def generate_simple_vowel(path, f0, duration, sr, jitter, shimmer, formants):
+    """Original simple generator as a fallback."""
+    t = np.linspace(0., duration, int(sr * duration), endpoint=False)
     phase = 2 * np.pi * f0 * t
     if jitter > 0:
         phase_jitter = np.cumsum(np.random.randn(len(t)) * jitter * 10)
         phase += phase_jitter
     wav = np.sin(phase)
-
-    # Add shimmer
     if shimmer > 0:
         wav *= (1 + (np.random.randn(len(t)) * shimmer))
-
-    # Add harmonics
     wav += 0.5 * np.sin(2 * np.pi * (f0*2) * t)
     wav += 0.25 * np.sin(2 * np.pi * (f0*3) * t)
-
-    # Apply formants if specified (simple filtering)
     if formants:
         from scipy.signal import lfilter
         signal = wav
@@ -35,8 +68,6 @@ def generate_realistic_vowel(path, f0, duration=2, sr=44100, jitter=0.005, shimm
             b = [1]
             signal = lfilter(b, a, signal)
         wav = signal
-
-    # Normalize and write to file
     wav = wav / np.max(np.abs(wav)) * 0.9
     sf.write(path, wav, sr, 'PCM_16')
     return path

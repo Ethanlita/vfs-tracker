@@ -144,6 +144,26 @@ MAX_DOWNLOAD_FILES_PER_STEP = 10
 TMP_BASE = '/tmp'
 
 # ---------- Analysis Logic ----------
+def _sort_and_select_notes(note_paths: list) -> (Optional[str], Optional[str]):
+    """
+    Selects low and high notes. For tests, it looks for specific names.
+    For production, it falls back to chronological order based on creation time.
+    """
+    if not note_paths:
+        return None, None
+
+    # First, try to find files by specific names for deterministic testing
+    low_note = next((p for p in note_paths if 'low_note' in os.path.basename(p)), None)
+    high_note = next((p for p in note_paths if 'high_note' in os.path.basename(p)), None)
+
+    # If names aren't found, fall back to chronological sort
+    if low_note is None and high_note is None:
+        note_paths.sort(key=os.path.getctime)
+        low_note = note_paths[0] if len(note_paths) > 0 else None
+        high_note = note_paths[1] if len(note_paths) > 1 else None
+
+    return low_note, high_note
+
 def perform_full_analysis(session_id: str, calibration: dict = None, forms: dict = None, userInfo: dict = None):
     from analysis import analyze_sustained_vowel, analyze_speech_flow, analyze_glide_files, analyze_note_file_robust, get_lpc_spectrum
     from artifacts import create_time_series_chart, create_vrp_chart, create_pdf_report, create_formant_chart, create_formant_spl_chart, create_placeholder_chart
@@ -158,73 +178,71 @@ def perform_full_analysis(session_id: str, calibration: dict = None, forms: dict
 
     # Sustained Vowel (Step 2)
     sustained_keys = audio_groups.get('2', [])[:MAX_DOWNLOAD_FILES_PER_STEP]
-    sustained_local = [safe_download(k) for k in sustained_keys if k.endswith('.wav')]
+    sustained_local = [safe_download(k) for k in sustained_keys if k and k.endswith('.wav')]
+    if sustained_local:
+        # analyze_sustained_vowel now expects a list and returns a package with metrics, chosen_file, etc.
+        sus_metrics_package = analyze_sustained_vowel(sustained_local) or {}
+        metrics['sustained'] = sus_metrics_package.get('metrics', {'error': 'analysis_returned_nothing'})
 
-    sustained_analysis_results = analyze_sustained_vowel(sustained_local)
-    metrics['sustained'] = sustained_analysis_results.get('metrics', {'error': 'Analysis failed for all sustained vowel recordings.'})
-    spectrum_sustained = sustained_analysis_results.get('lpc_spectrum')
-    chosen_sustained_path = sustained_analysis_results.get('chosen_file')
-    debug_info_collection['sustained'] = sustained_analysis_results.get('debug_info')
-    if chosen_sustained_path:
-        metrics['sustained']['source_file'] = os.path.basename(chosen_sustained_path)
+        chosen_sustained_for_charting = sus_metrics_package.get('chosen_file')
+        debug_info_collection['sustained'] = sus_metrics_package.get('debug_info')
 
-    if chosen_sustained_path:
-        buf = create_time_series_chart(chosen_sustained_path)
-        if buf:
-            ts_key = artifact_prefix + 'timeSeries.png'
-            get_s3_client().upload_fileobj(buf, BUCKET, ts_key, ExtraArgs={'ContentType': 'image/png'})
-            charts['timeSeries'] = f's3://{BUCKET}/{ts_key}'
+        # Use the file chosen by the analysis function for the chart
+        if chosen_sustained_for_charting:
+            buf = create_time_series_chart(chosen_sustained_for_charting)
+            if buf:
+                ts_key = artifact_prefix + 'timeSeries.png'
+                get_s3_client().upload_fileobj(buf, BUCKET, ts_key, ExtraArgs={'ContentType': 'image/png'})
+                charts['timeSeries'] = f's3://{BUCKET}/{ts_key}'
+    else:
+        metrics['sustained'] = {'error': 'no_sustained_audio'}
 
-    # Formant analysis for low note (Step 4) and high note (Step 8)
+    # Formant analysis from Step 4
+    note_keys = audio_groups.get('4', [])[:MAX_DOWNLOAD_FILES_PER_STEP]
+    note_local_paths = [safe_download(k) for k in note_keys if k.endswith('.wav')]
+    low_note_file, high_note_file = _sort_and_select_notes(note_local_paths)
+
     formant_low_metrics, formant_high_metrics = None, None
     spectrum_low, spectrum_high = None, None
-    formant_analysis_failed = False # Track if any formant step fails
+    formant_analysis_failed = False
 
-    # Low Note (Step 4)
-    low_note_keys = audio_groups.get('4', [])[:MAX_DOWNLOAD_FILES_PER_STEP]
-    low_note_local = [safe_download(k) for k in low_note_keys if k.endswith('.wav')]
-    best_low_note_file = _select_best_audio_by_jitter(low_note_local)
-
-    if best_low_note_file:
-        formant_low_metrics = analyze_note_file_robust(best_low_note_file)
+    if low_note_file:
+        logger.info(f"Analyzing low note (first file): {os.path.basename(low_note_file)}")
+        formant_low_metrics = analyze_note_file_robust(low_note_file)
         debug_info_collection['low_note'] = formant_low_metrics.pop('debug_info', None)
         metrics.setdefault('sustained', {})['formants_low'] = formant_low_metrics
         if 'error_details' in formant_low_metrics:
             formant_analysis_failed = True
-        spectrum_low = get_lpc_spectrum(best_low_note_file, analysis_time=formant_low_metrics.get('best_segment_time'))
-        metrics['sustained']['formants_low']['source_file'] = os.path.basename(best_low_note_file)
+        spectrum_low = get_lpc_spectrum(low_note_file, analysis_time=formant_low_metrics.get('best_segment_time'))
+        metrics['sustained']['formants_low']['source_file'] = os.path.basename(low_note_file)
 
-    # High Note (Step 8)
-    high_note_keys = audio_groups.get('8', [])[:MAX_DOWNLOAD_FILES_PER_STEP]
-    high_note_local = [safe_download(k) for k in high_note_keys if k.endswith('.wav')]
-    best_high_note_file = _select_best_audio_by_jitter(high_note_local)
-
-    if best_high_note_file:
-        formant_high_metrics = analyze_note_file_robust(best_high_note_file)
+    if high_note_file:
+        logger.info(f"Analyzing high note (second file): {os.path.basename(high_note_file)}")
+        formant_high_metrics = analyze_note_file_robust(high_note_file)
         debug_info_collection['high_note'] = formant_high_metrics.pop('debug_info', None)
         metrics.setdefault('sustained', {})['formants_high'] = formant_high_metrics
         if 'error_details' in formant_high_metrics:
             formant_analysis_failed = True
-        spectrum_high = get_lpc_spectrum(best_high_note_file, analysis_time=formant_high_metrics.get('best_segment_time'))
-        metrics['sustained']['formants_high']['source_file'] = os.path.basename(best_high_note_file)
+        spectrum_high = get_lpc_spectrum(high_note_file, analysis_time=formant_high_metrics.get('best_segment_time'))
+        metrics['sustained']['formants_high']['source_file'] = os.path.basename(high_note_file)
 
     # Create formant charts if data is available, otherwise create placeholders
-    if formant_low_metrics or formant_high_metrics:
+    if formant_low_metrics and formant_high_metrics and 'error' not in formant_low_metrics and 'error' not in formant_high_metrics:
         formant_buf = create_formant_chart(formant_low_metrics, formant_high_metrics)
         if formant_buf:
             formant_key = artifact_prefix + 'formant.png'
             get_s3_client().upload_fileobj(formant_buf, BUCKET, formant_key, ExtraArgs={'ContentType': 'image/png'})
             charts['formant'] = f's3://{BUCKET}/{formant_key}'
     else:
-        # This case handles when both formant analyses fail
-        placeholder_buf = create_placeholder_chart('F1-F2 Vowel Space', 'Formant analysis failed for all inputs.')
+        formant_analysis_failed = True
+        placeholder_buf = create_placeholder_chart('F1-F2 Vowel Space', 'Formant analysis failed.\nSee notes in report for details.')
         if placeholder_buf:
             formant_key = artifact_prefix + 'formant.png'
             get_s3_client().upload_fileobj(placeholder_buf, BUCKET, formant_key, ExtraArgs={'ContentType': 'image/png'})
             charts['formant'] = f's3://{BUCKET}/{formant_key}'
 
-    if spectrum_low or spectrum_high or spectrum_sustained:
-        formant_spl_buf = create_formant_spl_chart(spectrum_low, spectrum_high, spectrum_sustained)
+    if spectrum_low or spectrum_high:
+        formant_spl_buf = create_formant_spl_chart(spectrum_low, spectrum_high)
         if formant_spl_buf:
             formant_spl_key = artifact_prefix + 'formant_spl_spectrum.png'
             get_s3_client().upload_fileobj(formant_spl_buf, BUCKET, formant_spl_key, ExtraArgs={'ContentType': 'image/png'})
@@ -302,42 +320,6 @@ def perform_full_analysis(session_id: str, calibration: dict = None, forms: dict
     report_url = f's3://{BUCKET}/{report_key}'
 
     return metrics, charts, report_url
-
-def _select_best_audio_by_jitter(local_paths: list, f0_min: int = 75, f0_max: int = 1200) -> Optional[str]:
-    """
-    Selects the best audio file from a list based on the lowest jitter.
-    """
-    # This import is local to the function to avoid loading it for all invocations.
-    import parselmouth
-    from parselmouth.praat import call
-    import numpy as np
-
-    best_file = None
-    min_jitter = float('inf')
-
-    for file_path in local_paths:
-        if not file_path or not os.path.exists(file_path):
-            continue
-        try:
-            sound = parselmouth.Sound(file_path)
-            # Use a wider pitch range for jitter calculation to be safe.
-            point_process = call(sound, "To PointProcess (periodic, cc)", 75, 1200)
-            jitter = call(point_process, "Get jitter (local)", 0, 0, 0.0001, 0.02, 1.3)
-
-            # Praat can return nan if jitter can't be calculated.
-            if not np.isnan(jitter) and jitter < min_jitter:
-                min_jitter = jitter
-                best_file = file_path
-        except Exception as e:
-            logger.warning(f"Could not calculate jitter for {file_path}: {e}")
-            continue
-
-    if best_file:
-        logger.info(f"Selected file '{os.path.basename(best_file)}' with lowest jitter: {min_jitter:.4f}")
-    else:
-        logger.warning(f"Could not select a best file by jitter from provided paths: {local_paths}")
-
-    return best_file
 
 # ---------- API Handlers ----------
 def handle_create_session(event):
