@@ -63,14 +63,21 @@ def true_envelope_db(frame: np.ndarray, sr: int, lifter_ms: float = 2.8):
     freqs = np.fft.rfftfreq(nfft, d=1.0 / sr)
     return env_db, freqs
 
-def peak_prominence_db(env_db: np.ndarray, idx: int, left: int = 20, right: int = 20) -> float:
-    """Calculates the prominence of a peak in dB."""
-    if idx <= left or idx >= len(env_db) - right: return 0.0
+def peak_prominence_db(env_db: np.ndarray, idx: int, freq_bins: Optional[np.ndarray], win_hz: float = 150.0) -> float:
+    if idx <= 1 or idx >= len(env_db) - 2:
+        return 0.0
+    if freq_bins is None or len(freq_bins) < 2:
+        left_bins = right_bins = 20
+    else:
+        bin_hz = max(1e-9, freq_bins[1] - freq_bins[0])
+        k = max(1, int(win_hz / bin_hz))
+        left_bins = right_bins = k
+    l0 = max(0, idx - left_bins)
+    r0 = min(len(env_db), idx + right_bins + 1)
     peak = env_db[idx]
     try:
-        valley = max(np.min(env_db[max(0, idx-left):idx]),
-                     np.min(env_db[idx+1: min(len(env_db), idx+right)]))
-        return peak - valley
+        valley = max(np.min(env_db[l0:idx]), np.min(env_db[idx+1:r0]))
+        return float(peak - valley)
     except ValueError:
         return 0.0
 
@@ -92,7 +99,7 @@ def _calculate_confidence(
     prom_db = 0.0
     if true_envelope is not None and freq_bins is not None:
         idx = np.argmin(np.abs(freq_bins - freq_hz))
-        prom_db = peak_prominence_db(true_envelope, idx)
+        prom_db = peak_prominence_db(true_envelope, idx, freq_bins, win_hz=150.0)
         prom_score = 1.0 if prom_db >= 6 else (0.0 if prom_db < 3 else (prom_db - 3) / 3)
 
     # Harmonic proximity penalty
@@ -146,19 +153,35 @@ def analyze_note_file_robust(path: str, f0min: int = 75, f0max: int = 1200) -> D
             harm = segment.to_harmonicity_cc(time_step=0.01, minimum_pitch=f0min)
 
             # 段级真谱包络（一次即可）
-            env_db, freqs = true_envelope_db(seg_arr, seg_sr)
+            q_ms = 2.8
+            if f0_median > 0:
+                q_ms = min(3.0, 0.8 * (1000.0 / f0_median))  # 0.8*T0, 上限 3 ms
+            env_db, freqs = true_envelope_db(seg_arr, seg_sr, lifter_ms=q_ms)
             # Praat(Burg)
+            max_formant_eff = min(max_formant_freq, 0.9 * seg_sr / 2.0)  # Nyquist 安全
             formants = segment.to_formant_burg(
                 time_step=0.01, max_number_of_formants=5,
-                maximum_formant=max_formant_freq,
+                maximum_formant=max_formant_eff,
                 window_length=window_length, pre_emphasis_from=50.0
             )
 
+            strengths = None
+            try:
+                strengths = pitch.selected_array.get('strength', None)
+            except Exception:
+                strengths = None
+
             times = pitch.xs()
-            for t in times:
+            for k, t in enumerate(times):
                 f0 = pitch.get_value_at_time(t)
                 if not (np.isfinite(f0) and f0 > 0):
                     continue
+
+                if strengths is not None:
+                    s = strengths[k] if k < len(strengths) and np.isfinite(strengths[k]) else 1.0
+                    if s < 0.6:   # 经验阈值，可调
+                        continue
+
                 hnr = harm.get_value(time=t)
                 if not (np.isfinite(hnr) and hnr >= 8.0):   # <== 有声稳定帧 gating
                     continue
@@ -230,17 +253,36 @@ def analyze_note_file_robust(path: str, f0min: int = 75, f0max: int = 1200) -> D
         best_time = float(np.median([f['time'] for f in best_window])) if best_window else None
         spl = _rms_spl(y)
 
-        # 结果打包（与现有接口兼容）
-        return {
+        def median_conf(key):
+            vv = [f[key] for f in best_window if key in f and np.isfinite(f[key])]
+            return float(np.median(vv)) if vv else 0.0
+
+        conf1_med = median_conf('conf1')
+        conf2_med = median_conf('conf2')
+
+        result = {
             'F1': round(F1, 2), 'B1': round(B1, 2),
             'F2': round(F2, 2), 'B2': round(B2, 2),
             'F3': round(F3, 2), 'B3': round(B3, 2),
             'f0_mean': round(f0_mean, 2),
             'spl_dbA_est': spl,
             'best_segment_time': best_time,
-            'debug_info': {'best_window_frames': best_window[:100]},  # 控制长度，避免爆表
+            'debug_info': {'best_window_frames': best_window[:100]},
             'is_high_pitch': bool(is_high_pitch)
         }
+        # 仅当需要时才暴露可用性/原因码（不会破坏旧字段）
+        if F1 == 0.0 or conf1_med < 0.5:
+            result['F1_available'] = False
+            result.setdefault('reason', 'LOW_PROMINENCE')
+        else:
+            result['F1_available'] = True
+        if F2 == 0.0 or conf2_med < 0.5:
+            result['F2_available'] = False
+            result.setdefault('reason', 'LOW_PROMINENCE')
+        else:
+            result['F2_available'] = True
+
+        return result
 
     except Exception as e:
         logger.error(f"Robust analysis failed for {path}: {e}", exc_info=True)
