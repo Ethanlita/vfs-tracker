@@ -17,16 +17,80 @@ except ImportError:
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
-def _calculate_confidence(f0, hnr, bw):
-    """Computes a confidence score for a formant candidate."""
-    p_score = 1.0 if f0 > 0 else 0.0
-    hnr_score = min(1.0, max(0.0, (hnr - 5) / 20))
-    bw_dev = min(abs(bw - 80), abs(bw - 500))
-    bw_score = max(0.0, 1.0 - bw_dev / 500)
-    confidence = 0.5 * p_score + 0.35 * hnr_score + 0.15 * bw_score
-    return {
-        "confidence": confidence, "p_score": p_score, "hnr_score": hnr_score, "bw_score": bw_score
-    }
+# --- New Robust Analysis Helper Functions (based on user guidance) ---
+
+def pick_params(f0_median: float) -> (int, float):
+    """Selects analysis parameters based on the voice's F0."""
+    if f0_median < 220:
+        max_formant = 5000
+        win_len = 0.025
+    elif f0_median < 280:
+        max_formant = 5500
+        win_len = 0.03
+    else:
+        max_formant = 5500
+        win_len = 0.035
+    return max_formant, win_len
+
+def is_voiced_enough(pitch_confidence: float, hnr: float) -> bool:
+    """Checks if a frame is reliably voiced."""
+    return pitch_confidence >= 0.7 and hnr >= 8.0
+
+def true_envelope_db(frame: np.ndarray, sr: int, lifter_ms: float = 2.8):
+    """Calculates the true spectral envelope using cepstral liftering."""
+    if scisignal is None: return None
+    nfft = int(2 ** np.ceil(np.log2(len(frame)) + 1))
+    S = np.abs(np.fft.rfft(frame, n=nfft)) + 1e-12
+    logS = np.log(S)
+    ceps = np.fft.irfft(logS)
+    q_cut = int((lifter_ms * 1e-3) * sr)
+    ceps[q_cut+1:] = 0.0
+    env = np.exp(np.fft.rfft(ceps))
+    return 20 * np.log10(env)
+
+def peak_prominence_db(env_db: np.ndarray, idx: int, left: int = 20, right: int = 20) -> float:
+    """Calculates the prominence of a peak in dB."""
+    if idx <= left or idx >= len(env_db) - right: return 0.0
+    peak = env_db[idx]
+    try:
+        valley = max(np.min(env_db[max(0, idx-left):idx]),
+                     np.min(env_db[idx+1: min(len(env_db), idx+right)]))
+        return peak - valley
+    except ValueError:
+        return 0.0
+
+def _calculate_confidence(
+    freq_hz: float, bw_hz: float, f0: float,
+    lpc_spectrum: Optional[np.ndarray] = None,
+    true_envelope: Optional[np.ndarray] = None,
+    freq_bins: Optional[np.ndarray] = None
+) -> (float, float):
+    """
+    Calculates a robust confidence score for a formant candidate,
+    incorporating bandwidth, peak prominence, and harmonic proximity.
+    """
+    # Bandwidth score
+    bw_score = 1.0 if 80 <= bw_hz <= 600 else max(0.0, 1.0 - (abs(bw_hz - 340) / 500))
+
+    # Prominence score from true envelope
+    prom_score = 0.5 # Default if no true envelope is provided
+    prom_db = 0.0
+    if true_envelope is not None and freq_bins is not None:
+        idx = np.argmin(np.abs(freq_bins - freq_hz))
+        prom_db = peak_prominence_db(true_envelope, idx)
+        prom_score = 1.0 if prom_db >= 6 else (0.0 if prom_db < 3 else (prom_db - 3) / 3)
+
+    # Harmonic proximity penalty
+    harm_penalty = 0.0
+    if f0 > 0:
+        harm = round(freq_hz / f0)
+        harm_dist_rel = abs(freq_hz - harm * f0) / freq_hz
+        if harm_dist_rel < 0.03 and prom_db < 6: # It's very close to a harmonic and not very prominent
+            harm_penalty = 0.2
+
+    # Final weighted score
+    score = 0.6 * prom_score + 0.4 * bw_score - harm_penalty
+    return max(0.0, score), prom_db
 
 def analyze_note_file_robust(path: str, f0min: int = 75, f0max: int = 1200) -> Dict:
     """
@@ -58,7 +122,7 @@ def analyze_note_file_robust(path: str, f0min: int = 75, f0max: int = 1200) -> D
             segment = sound.extract_part(from_time=start_time, to_time=end_time, preserve_times=False)
             logger.info(f"Analyzing segment from {start_time:.3f}s to {end_time:.3f}s (duration: {segment.duration:.3f}s, RMS: {segment.get_rms():.4f})")
 
-            window_length = 0.01 if is_high_pitch else 0.025
+            window_length = 0.01 if is_high_pitch else 0.04 # Increased window for low pitch
             formants = segment.to_formant_burg(time_step=0.01, max_number_of_formants=5, maximum_formant=max_formant_freq, window_length=window_length, pre_emphasis_from=50.0)
             pitch = segment.to_pitch(time_step=0.01, pitch_floor=f0min, pitch_ceiling=f0max)
 
@@ -74,14 +138,14 @@ def analyze_note_file_robust(path: str, f0min: int = 75, f0max: int = 1200) -> D
                 f1 = formants.get_value_at_time(1, t)
                 b1 = formants.get_bandwidth_at_time(1, t)
                 if not np.isnan(f1) and not np.isnan(b1):
-                    conf_data = _calculate_confidence(f0, hnr, b1)
-                    frame_data.update({'f1': f1, 'b1': b1, 'conf1': conf_data['confidence'], **{f'c1_{k}': v for k,v in conf_data.items()}})
+                    score, prom_db = _calculate_confidence(f1, b1, f0)
+                    frame_data.update({'f1': f1, 'b1': b1, 'conf1': score, 'prom1_db': prom_db})
 
                 f2 = formants.get_value_at_time(2, t)
                 b2 = formants.get_bandwidth_at_time(2, t)
                 if not np.isnan(f2) and not np.isnan(b2):
-                    conf_data = _calculate_confidence(f0, hnr, b2)
-                    frame_data.update({'f2': f2, 'b2': b2, 'conf2': conf_data['confidence'], **{f'c2_{k}': v for k,v in conf_data.items()}})
+                    score, prom_db = _calculate_confidence(f2, b2, f0)
+                    frame_data.update({'f2': f2, 'b2': b2, 'conf2': score, 'prom2_db': prom_db})
 
                 f3 = formants.get_value_at_time(3, t)
                 b3 = formants.get_bandwidth_at_time(3, t)
@@ -96,19 +160,27 @@ def analyze_note_file_robust(path: str, f0min: int = 75, f0max: int = 1200) -> D
         if not all_frames_data:
             raise ValueError("No valid analysis frames found.")
 
-        # Reverting to the simpler "single best frame" logic.
-        best_frame = max(all_frames_data, key=lambda x: x.get('conf1', 0) + x.get('conf2', 0))
+        # Take the median of the top 5 most confident frames to get a stable result
+        all_frames_data.sort(key=lambda x: x.get('conf1', 0) + x.get('conf2', 0), reverse=True)
+        top_frames = all_frames_data[:5]
+
+        if not top_frames:
+            raise ValueError("No confident analysis frames found.")
+
+        def get_median(key):
+            vals = [f[key] for f in top_frames if key in f]
+            return float(np.median(vals)) if vals else 0.0
 
         spl = _rms_spl(y)
 
         return {
-            'F1': round(float(best_frame.get('f1', 0)), 2), 'B1': round(float(best_frame.get('b1', 0)), 2),
-            'F2': round(float(best_frame.get('f2', 0)), 2), 'B2': round(float(best_frame.get('b2', 0)), 2),
-            'F3': round(float(best_frame.get('f3', 0)), 2), 'B3': round(float(best_frame.get('b3', 0)), 2),
-            'f0_mean': round(float(best_frame.get('f0', 0)), 2),
+            'F1': round(get_median('f1'), 2), 'B1': round(get_median('b1'), 2),
+            'F2': round(get_median('f2'), 2), 'B2': round(get_median('b2'), 2),
+            'F3': round(get_median('f3'), 2), 'B3': round(get_median('b3'), 2),
+            'f0_mean': round(get_median('f0'), 2),
             'spl_dbA_est': spl,
-            'best_segment_time': best_frame.get('time', 0),
-            'debug_info': {'frames': all_frames_data, 'best_frame': best_frame},
+            'best_segment_time': get_median('time'),
+            'debug_info': {'frames': all_frames_data, 'best_frame': top_frames[0] if top_frames else None},
             'is_high_pitch': bool(is_high_pitch)
         }
 
