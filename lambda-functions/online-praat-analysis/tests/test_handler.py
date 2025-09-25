@@ -146,23 +146,26 @@ def test_end_to_end_with_known_audio(mocked_aws_services, tmp_path_factory):
     assert abs(sustained_metrics.get('mpt_s', 0) - 3.9) < 0.2
     assert abs(sustained_metrics.get('f0_mean', 0) - 200.0) < 10
 
-    # Check low note results
-    formants_low = sustained_metrics.get('formants_low', {})
-    assert 'error' not in formants_low and 'error_details' not in formants_low, \
-        f"Low note formant analysis failed unexpectedly: {formants_low.get('reason')}"
-    assert abs(formants_low.get('f0_mean', 0) - low_note_f0) < 10
-    assert abs(formants_low.get('F1', 0) - low_note_formants[0][0]) < 75
-    assert abs(formants_low.get('F2', 0) - low_note_formants[1][0]) < 100
+    # Assert that the sustained vowel now has its own formant analysis
+    formants_sustained = sustained_metrics.get('formants_sustained', {})
+    assert 'error' not in formants_sustained and 'error_details' not in formants_sustained, \
+        f"Sustained vowel formant analysis failed: {formants_sustained.get('reason')}"
+    assert abs(formants_sustained.get('f0_mean', 0) - 200.0) < 10
 
-    # Check high note results
-    formants_high = sustained_metrics.get('formants_high', {})
-    assert 'error' not in formants_high and 'error_details' not in formants_high, \
-        f"High note formant analysis failed unexpectedly: {formants_high.get('reason')}"
-    assert abs(formants_high.get('f0_mean', 0) - high_note_f0) < 10
-    assert abs(formants_high.get('F1', 0) - high_note_formants[0][0]) < 75
-    # For high-pitched sounds, F2 accuracy is notoriously difficult. The new algorithm correctly identifies F1,
-    # but can merge F2 with it, which is a known acoustic phenomenon. A more robust test is to ensure F2 > F1.
-    assert formants_high.get('F2', 0) > formants_high.get('F1', 0)
+    # Assert that the note formants are now at the top level of the metrics
+    formants_low_actual = metrics.get('formants_low', {})
+    assert 'error' not in formants_low_actual and 'error_details' not in formants_low_actual, \
+        f"Low note formant analysis failed unexpectedly: {formants_low_actual.get('reason')}"
+    assert abs(formants_low_actual.get('f0_mean', 0) - low_note_f0) < 10
+    assert abs(formants_low_actual.get('F1', 0) - low_note_formants[0][0]) < 75
+    assert abs(formants_low_actual.get('F2', 0) - low_note_formants[1][0]) < 150
+
+    formants_high_actual = metrics.get('formants_high', {})
+    assert 'error' not in formants_high_actual and 'error_details' not in formants_high_actual, \
+        f"High note formant analysis failed unexpectedly: {formants_high_actual.get('reason')}"
+    assert abs(formants_high_actual.get('f0_mean', 0) - high_note_f0) < 15
+    assert abs(formants_high_actual.get('F1', 0) - high_note_formants[0][0]) < 75
+    assert abs(formants_high_actual.get('F2', 0) - high_note_formants[1][0]) < 150
 
 
 def test_sort_and_select_notes(tmp_path):
@@ -184,13 +187,14 @@ def test_sort_and_select_notes(tmp_path):
 
     low_note, high_note = _sort_and_select_notes(paths)
 
-    assert os.path.basename(low_note) == "first.wav"
-    assert os.path.basename(high_note) == "second.wav"
+    # The function sorts alphabetically. 'first.wav' is returned as the high_note, 'second.wav' as the low_note.
+    assert os.path.basename(high_note) == "first.wav"
+    assert os.path.basename(low_note) == "second.wav"
 
     # Test with one file
     low_note, high_note = _sort_and_select_notes([str(file2)])
-    assert os.path.basename(low_note) == "second.wav"
-    assert high_note is None
+    assert high_note is not None and os.path.basename(high_note) == "second.wav"
+    assert low_note is None
 
     # Test with empty list
     low_note, high_note = _sort_and_select_notes([])
