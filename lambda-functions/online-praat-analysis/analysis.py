@@ -17,8 +17,6 @@ except ImportError:
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
-# --- Start of Simplified "Stable Segment" Formant Analysis ---
-
 def _calculate_confidence(f0, hnr, bw):
     """Computes a confidence score for a formant candidate."""
     p_score = 1.0 if f0 > 0 else 0.0
@@ -39,6 +37,13 @@ def analyze_note_file_robust(path: str, f0min: int = 75, f0max: int = 1200) -> D
         sound = parselmouth.Sound(path)
         y, sr = _load_mono(path)
 
+        pitch_for_f0_check = sound.to_pitch()
+        f0_median_values = [f for f in pitch_for_f0_check.selected_array['frequency'] if f > 0]
+        f0_median = np.median(f0_median_values) if f0_median_values else 0
+        is_high_pitch = f0_median > 175.0
+        max_formant_freq = 8000 if is_high_pitch else 5500
+        logger.info(f"Analyzing note with F0 median={f0_median:.2f} Hz. High pitch mode: {is_high_pitch}. Max formant: {max_formant_freq} Hz.")
+
         voiced_intervals = librosa.effects.split(y, top_db=40, frame_length=2048, hop_length=512)
         if voiced_intervals.size == 0:
             raise ValueError("No voiced segments detected.")
@@ -51,7 +56,10 @@ def analyze_note_file_robust(path: str, f0min: int = 75, f0max: int = 1200) -> D
             if (end_time - start_time) < 0.05: continue
 
             segment = sound.extract_part(from_time=start_time, to_time=end_time, preserve_times=False)
-            formants = segment.to_formant_burg(time_step=0.01, max_number_of_formants=5, maximum_formant=5500, window_length=0.025, pre_emphasis_from=50.0)
+            logger.info(f"Analyzing segment from {start_time:.3f}s to {end_time:.3f}s (duration: {segment.duration:.3f}s, RMS: {segment.get_rms():.4f})")
+
+            window_length = 0.01 if is_high_pitch else 0.025
+            formants = segment.to_formant_burg(time_step=0.01, max_number_of_formants=5, maximum_formant=max_formant_freq, window_length=window_length, pre_emphasis_from=50.0)
             pitch = segment.to_pitch(time_step=0.01, pitch_floor=f0min, pitch_ceiling=f0max)
 
             for t in pitch.xs():
@@ -85,7 +93,6 @@ def analyze_note_file_robust(path: str, f0min: int = 75, f0max: int = 1200) -> D
         if not all_frames_data:
             raise ValueError("No valid analysis frames found.")
 
-        # Find the frame with the highest combined confidence for F1 and F2
         best_frame = max(all_frames_data, key=lambda x: x.get('conf1', 0) + x.get('conf2', 0))
 
         spl = _rms_spl(y)
@@ -94,7 +101,7 @@ def analyze_note_file_robust(path: str, f0min: int = 75, f0max: int = 1200) -> D
             'F1': round(float(best_frame.get('f1', 0)), 2), 'B1': round(float(best_frame.get('b1', 0)), 2),
             'F2': round(float(best_frame.get('f2', 0)), 2), 'B2': round(float(best_frame.get('b2', 0)), 2),
             'F3': round(float(best_frame.get('f3', 0)), 2), 'B3': round(float(best_frame.get('b3', 0)), 2),
-            'f0_mean': round(float(best_frame.get('f0', 0)), 2), # Note: this is F0 of the best frame, not mean
+            'f0_mean': round(float(best_frame.get('f0', 0)), 2),
             'spl_dbA_est': spl,
             'best_segment_time': best_frame.get('time', 0),
             'debug_info': {'frames': all_frames_data}
@@ -104,32 +111,16 @@ def analyze_note_file_robust(path: str, f0min: int = 75, f0max: int = 1200) -> D
         logger.error(f"Robust analysis failed for {path}: {e}", exc_info=True)
         return {'F1': 0, 'F2': 0, 'F3': 0, 'f0_mean': 0, 'spl_dbA_est': 0, 'error_details': 'Analysis failed', 'reason': str(e), 'best_segment_time': None}
 
-    y, sr = _load_mono(path)
-    spl = _rms_spl(y)
-    pitch = sound.to_pitch(time_step=0.01, pitch_floor=f0min, pitch_ceiling=f0max)
-    f0_vals = pitch.selected_array['frequency']
-    f0_vals = f0_vals[(f0_vals > 0) & np.isfinite(f0_vals)]
-    f0_mean = round(float(np.median(f0_vals)), 2) if f0_vals.size else 0.0
-
-    final_results['f0_mean'] = f0_mean
-    final_results['spl_dbA_est'] = spl
-
-    return final_results
 
 def analyze_sustained_vowel(local_paths: list, f0_min: int = 75, f0_max: int = 800) -> Dict:
-    """
-    Analyzes a list of sustained vowel recordings, picks the best one based on stability,
-    and returns a comprehensive analysis dictionary.
-    """
     best_file = None
     max_voiced_duration = -1.0
 
-    # First, find the file with the longest VOICED duration, which is the correct metric for MPT.
     for file_path in local_paths:
-        if not file_path or not os.path.exists(file_path):
+        if not file_path or not os.path.exists(file_path) or not file_path.endswith('.wav'):
             continue
         try:
-            y, sr = librosa.load(file_path, sr=None, mono=True)
+            y, sr = _load_mono(file_path)
             non_silent_intervals = librosa.effects.split(y, top_db=40)
             voiced_duration = sum([(end - start) / sr for start, end in non_silent_intervals])
 
@@ -143,16 +134,13 @@ def analyze_sustained_vowel(local_paths: list, f0_min: int = 75, f0_max: int = 8
     if not best_file:
         return {'metrics': {'error': 'No suitable sustained vowel file found for analysis.'}}
 
-    # Now, perform a full analysis on the best file
     try:
         sound = parselmouth.Sound(best_file)
         y, sr = librosa.load(best_file, sr=None, mono=True)
 
-        # MPT based on voiced segments
         non_silent_intervals = librosa.effects.split(y, top_db=40)
         voiced_duration = sum([(end - start) / sr for start, end in non_silent_intervals])
 
-        # Standard metrics
         pitch = sound.to_pitch(pitch_floor=f0_min, pitch_ceiling=f0_max)
         f0_mean = call(pitch, "Get mean", 0, 0, "Hertz")
         point_process = call(sound, "To PointProcess (periodic, cc)", f0_min, f0_max)
@@ -161,7 +149,6 @@ def analyze_sustained_vowel(local_paths: list, f0_min: int = 75, f0_max: int = 8
         harmonicity = sound.to_harmonicity_cc(0.01, f0_min, 0.1, 1.0)
         hnr_db = call(harmonicity, "Get mean", 0, 0)
 
-        # Formant analysis
         formant_results = analyze_note_file_robust(best_file, f0min=f0_min, f0max=f0_max)
 
         metrics = {
@@ -171,7 +158,7 @@ def analyze_sustained_vowel(local_paths: list, f0_min: int = 75, f0_max: int = 8
             'shimmer_local_percent': round(float(shimmer_local), 2) if not np.isnan(shimmer_local) else 0,
             'hnr_db': round(float(hnr_db), 2) if not np.isnan(hnr_db) else 0,
             'spl_dbA_est': round(float(_rms_spl(y)), 2),
-            'formants_sustained': formant_results, # This now contains B1, B2, etc.
+            'formants_sustained': formant_results,
         }
         if formant_results.get('reason'):
             metrics['formant_analysis_reason_sustained'] = formant_results['reason']
@@ -179,7 +166,6 @@ def analyze_sustained_vowel(local_paths: list, f0_min: int = 75, f0_max: int = 8
         best_segment_time = formant_results.get('best_segment_time')
         lpc_spectrum = get_lpc_spectrum(best_file, analysis_time=best_segment_time)
 
-        # Pass the debug info up for potential use in PDF generation
         debug_info = formant_results.pop('debug_info', None)
 
         return {
@@ -279,7 +265,6 @@ def _find_loudest_segment(sound: parselmouth.Sound, duration: float = 0.1) -> pa
     best_segment = None
     max_rms = -1.0
 
-    # Iterate through the sound in steps of `duration / 2`
     step = duration / 2
     current_time = 0.0
     while current_time + duration <= sound.duration:
@@ -292,70 +277,57 @@ def _find_loudest_segment(sound: parselmouth.Sound, duration: float = 0.1) -> pa
 
     return best_segment if best_segment is not None else sound.extract_part(from_time=0, to_time=duration, preserve_times=False)
 
-
 def get_lpc_spectrum(file_path: str, max_formant: int = 5500, analysis_time: Optional[float] = None):
     """
     Get a smooth LPC (Linear Predictive Coding) spectrum of an audio file.
-    If analysis_time is provided, it generates the spectrum from that specific time.
-    Otherwise, it finds the loudest 100ms segment as a fallback.
+    This version uses librosa and scipy, which is more stable than the parselmouth LPC methods.
     """
-    logger.info(f"Attempting to generate LPC spectrum for {file_path}")
+    logger.info(f"Getting LPC spectrum for {file_path}")
     try:
-        sound = parselmouth.Sound(file_path)
-        if sound.duration < 0.025:
-            logger.warning(f"Sound too short for LPC analysis: {file_path}")
+        y, sr = librosa.load(file_path, sr=None, mono=True)
+        if y is None or y.size == 0:
             return None
 
-        sound_part = None
-        if analysis_time and 0 < analysis_time < sound.duration:
-            logger.info(f"Generating spectrum from successful analysis time: {analysis_time:.3f}s")
-            from_time = analysis_time - 0.025
-            to_time = analysis_time + 0.025
-            if from_time < 0: from_time = 0
-            if to_time > sound.duration: to_time = sound.duration
-            sound_part = sound.extract_part(from_time=from_time, to_time=to_time, preserve_times=False)
-        else:
-            logger.info("No valid analysis time, finding loudest segment for spectrum.")
-            sound_part = _find_loudest_segment(sound, duration=0.1)
+        n = len(y)
+        seg = None
+        if analysis_time and 0 < analysis_time * sr < n:
+            center_sample = int(analysis_time * sr)
+            win_len_sample = int(0.1 * sr)
+            start = max(0, center_sample - win_len_sample // 2)
+            end = min(n, center_sample + win_len_sample // 2)
+            if end > start:
+                seg = y[start:end]
 
-        if not isinstance(sound_part, parselmouth.Sound) or sound_part.duration < 0.025:
-            logger.warning(f"Could not extract a valid sound part for LPC analysis from {file_path}")
+        if seg is None or len(seg) < int(0.05 * sr):
+            start, end = int(n * 0.33), int(n * 0.66)
+            if end <= start: start, end = 0, n
+            seg = y[start:end]
+
+        if seg.size < int(0.05 * sr):
+            logger.warning(f"Segment too short for LPC analysis: {seg.size} samples")
             return None
 
-        # Correctly create an LPC object from the sound part
-        lpc = sound_part.to_lpc_burg(max_formant=max_formant)
-        # Convert the LPC object to a plottable spectrum
-        spectrum = lpc.to_spectrum()
+        pre_emph = 0.97
+        seg = np.append(seg[0], seg[1:] - pre_emph * seg[:-1])
 
-        freqs = spectrum.xs()
-        spl_values = spectrum.values.flatten()
+        order = max(8, int(2 + 2 * (sr / 1000)))
+        if np.allclose(np.std(seg), 0.0): return None
 
-        if max_formant:
-            valid_indices = freqs <= max_formant
-            freqs = freqs[valid_indices]
-            spl_values = spl_values[valid_indices]
+        a = librosa.lpc(seg, order=order)
+        if scisignal is None:
+            logger.error("scipy.signal not found, cannot generate LPC spectrum.")
+            return None
+        w, h = scisignal.freqz(b=[1.0], a=a, worN=4096, fs=sr)
 
-        logger.info("Successfully generated LPC spectrum.")
-        return {"frequencies": freqs.tolist(), "spl_values": spl_values.tolist()}
+        mag = np.abs(h)
+        mag[mag <= 1e-12] = 1e-12
+        spl_db = 20.0 * np.log10(mag)
 
+        mask = w <= max_formant
+        return {
+            "frequencies": w[mask].astype(float).tolist(),
+            "spl_values": spl_db[mask].astype(float).tolist()
+        }
     except Exception as e:
-        logger.error(f"Could not get LPC spectrum for {file_path}: {e}", exc_info=True)
-        # Fallback to a simple FFT spectrum if LPC fails for any reason
-        logger.warning("LPC generation failed, falling back to standard FFT spectrum.")
-        try:
-            sound = parselmouth.Sound(file_path)
-            sound_part = _find_loudest_segment(sound, duration=0.1) if analysis_time is None else sound.extract_part(from_time=max(0, analysis_time - 0.05), to_time=min(sound.duration, analysis_time + 0.05))
-            spectrum = sound_part.to_spectrum()
-            freqs = spectrum.xs()
-            # Correctly handle complex FFT output for SPL calculation
-            spl_values = 20 * np.log10(np.abs(spectrum.values[0, :]))
-
-            if max_formant:
-                valid_indices = freqs <= max_formant
-                freqs = freqs[valid_indices]
-                spl_values = spl_values[valid_indices]
-
-            return {"frequencies": freqs.tolist(), "spl_values": spl_values.tolist(), "is_fallback": True}
-        except Exception as fft_e:
-            logger.error(f"FFT fallback also failed for {file_path}: {fft_e}", exc_info=True)
-            return None
+        logger.error(f"Could not get LPC spectrum for {file_path}. Error: {e}", exc_info=True)
+        return None
