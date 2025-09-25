@@ -37,16 +37,31 @@ def is_voiced_enough(pitch_confidence: float, hnr: float) -> bool:
     return pitch_confidence >= 0.7 and hnr >= 8.0
 
 def true_envelope_db(frame: np.ndarray, sr: int, lifter_ms: float = 2.8):
-    """Calculates the true spectral envelope using cepstral liftering."""
-    if scisignal is None: return None
-    nfft = int(2 ** np.ceil(np.log2(len(frame)) + 1))
-    S = np.abs(np.fft.rfft(frame, n=nfft)) + 1e-12
+    """
+    用倒谱低 quefrency 截断得到平滑的“真谱包络”（dB）以及对应频率刻度。
+    仅依赖 numpy，不需要 scipy。
+    """
+    x = np.asarray(frame, dtype=np.float64)
+    if x.size == 0:
+        return None, None
+    # 汉宁窗以减小泄漏
+    win = np.hanning(x.size)
+    xw = x * win
+
+    # NFFT：留出冗余提高频率分辨率
+    nfft = int(2 ** np.ceil(np.log2(xw.size) + 1))
+    S = np.abs(np.fft.rfft(xw, n=nfft)) + 1e-12
     logS = np.log(S)
-    ceps = np.fft.irfft(logS)
+    ceps = np.fft.irfft(logS, n=nfft)
+
+    # 低倒谱 liftering（< lifter_ms）
     q_cut = int((lifter_ms * 1e-3) * sr)
-    ceps[q_cut+1:] = 0.0
-    env = np.exp(np.fft.rfft(ceps))
-    return 20 * np.log10(env)
+    ceps[q_cut + 1:] = 0.0
+
+    env = np.exp(np.fft.rfft(ceps, n=nfft))
+    env_db = 20.0 * np.log10(np.maximum(env, 1e-12))
+    freqs = np.fft.rfftfreq(nfft, d=1.0 / sr)
+    return env_db, freqs
 
 def peak_prominence_db(env_db: np.ndarray, idx: int, left: int = 20, right: int = 20) -> float:
     """Calculates the prominence of a peak in dB."""
@@ -94,99 +109,147 @@ def _calculate_confidence(
 
 def analyze_note_file_robust(path: str, f0min: int = 75, f0max: int = 1200) -> Dict:
     """
-    Analyzes all voiced segments, calculates confidence for each frame, and returns
-    the data from the frame with the highest confidence.
+    稳健版：遍历所有发声片段 → 帧级筛选（F0/HNR）→ Praat(Burg) + 真谱包络联合评分
+          → 非交叉/最小间距约束 → 在最佳时间窗口内取中位数。
+    返回结构保持兼容，新增 best_segment_time / is_high_pitch / debug_info。
     """
     try:
         sound = parselmouth.Sound(path)
         y, sr = _load_mono(path)
 
-        pitch_for_f0_check = sound.to_pitch()
-        f0_median_values = [f for f in pitch_for_f0_check.selected_array['frequency'] if f > 0]
-        f0_median = np.median(f0_median_values) if f0_median_values else 0
-        is_high_pitch = f0_median > 175.0
-        max_formant_freq = 8000 if is_high_pitch else 5500
-        logger.info(f"Analyzing note with F0 median={f0_median:.2f} Hz. High pitch mode: {is_high_pitch}. Max formant: {max_formant_freq} Hz.")
+        # 全局 F0 中位数，选择 Praat 参数
+        pitch_global = sound.to_pitch(time_step=0.01, pitch_floor=f0min, pitch_ceiling=f0max)
+        f0_vals_g = pitch_global.selected_array['frequency']
+        f0_median = float(np.median(f0_vals_g[f0_vals_g > 0])) if np.any(f0_vals_g > 0) else 0.0
+        max_formant_freq, window_length = pick_params(f0_median)   # <== 用你的函数
+        is_high_pitch = f0_median >= 280.0  # 仅用于 debug/explain
 
+        logger.info(f"[robust] F0_median={f0_median:.1f} Hz, max_formant={max_formant_freq}, win_len={window_length}")
+
+        # 能量门限切分（近似“有声区”），随后还会用HNR再筛
         voiced_intervals = librosa.effects.split(y, top_db=40, frame_length=2048, hop_length=512)
         if voiced_intervals.size == 0:
             raise ValueError("No voiced segments detected.")
 
-        all_frames_data = []
-        harmonicity = sound.to_harmonicity_cc(time_step=0.01, minimum_pitch=f0min)
-
+        all_frames = []
         for start_sample, end_sample in voiced_intervals:
             start_time, end_time = start_sample / sr, end_sample / sr
-            if (end_time - start_time) < 0.05: continue
+            if (end_time - start_time) < 0.08:  # 片段太短跳过
+                continue
 
             segment = sound.extract_part(from_time=start_time, to_time=end_time, preserve_times=False)
-            logger.info(f"Analyzing segment from {start_time:.3f}s to {end_time:.3f}s (duration: {segment.duration:.3f}s, RMS: {segment.get_rms():.4f})")
+            seg_sr = int(segment.sampling_frequency)
+            seg_arr = segment.as_array().astype(np.float64).ravel()
 
-            window_length = 0.01 if is_high_pitch else 0.04 # Increased window for low pitch
-            formants = segment.to_formant_burg(time_step=0.01, max_number_of_formants=5, maximum_formant=max_formant_freq, window_length=window_length, pre_emphasis_from=50.0)
+            # 段内 Pitch/HNR（帧时长 10ms）
             pitch = segment.to_pitch(time_step=0.01, pitch_floor=f0min, pitch_ceiling=f0max)
+            harm = segment.to_harmonicity_cc(time_step=0.01, minimum_pitch=f0min)
 
-            for t in pitch.xs():
+            # 段级真谱包络（一次即可）
+            env_db, freqs = true_envelope_db(seg_arr, seg_sr)
+            # Praat(Burg)
+            formants = segment.to_formant_burg(
+                time_step=0.01, max_number_of_formants=5,
+                maximum_formant=max_formant_freq,
+                window_length=window_length, pre_emphasis_from=50.0
+            )
+
+            times = pitch.xs()
+            for t in times:
                 f0 = pitch.get_value_at_time(t)
-                if np.isnan(f0) or f0 <= 0: continue
+                if not (np.isfinite(f0) and f0 > 0):
+                    continue
+                hnr = harm.get_value(time=t)
+                if not (np.isfinite(hnr) and hnr >= 8.0):   # <== 有声稳定帧 gating
+                    continue
 
-                hnr = harmonicity.get_value(time=start_time + t)
-                if np.isnan(hnr): continue
+                # 读取共振峰
+                f1 = formants.get_value_at_time(1, t); b1 = formants.get_bandwidth_at_time(1, t)
+                f2 = formants.get_value_at_time(2, t); b2 = formants.get_bandwidth_at_time(2, t)
+                f3 = formants.get_value_at_time(3, t); b3 = formants.get_bandwidth_at_time(3, t)
 
-                frame_data = {'time': start_time + t, 'f0': f0, 'hnr': hnr}
+                fr = {'time': start_time + t, 'f0': float(f0), 'hnr': float(hnr)}
 
-                f1 = formants.get_value_at_time(1, t)
-                b1 = formants.get_bandwidth_at_time(1, t)
-                if not np.isnan(f1) and not np.isnan(b1):
-                    score, prom_db = _calculate_confidence(f1, b1, f0)
-                    frame_data.update({'f1': f1, 'b1': b1, 'conf1': score, 'prom1_db': prom_db})
+                # 为 F1/F2 计算联合置信度（包络参与 + 谐波邻近惩罚 + 带宽）
+                if np.isfinite(f1) and not np.iscomplexobj(f1) and np.isfinite(b1) and not np.iscomplexobj(b1):
+                    s1, p1 = _calculate_confidence(f1, b1, f0, true_envelope=env_db, freq_bins=freqs)
+                    fr.update({'f1': float(f1), 'b1': float(b1), 'conf1': float(s1), 'prom1_db': float(p1)})
+                if np.isfinite(f2) and not np.iscomplexobj(f2) and np.isfinite(b2) and not np.iscomplexobj(b2):
+                    s2, p2 = _calculate_confidence(f2, b2, f0, true_envelope=env_db, freq_bins=freqs)
+                    fr.update({'f2': float(f2), 'b2': float(b2), 'conf2': float(s2), 'prom2_db': float(p2)})
+                if np.isfinite(f3) and not np.iscomplexobj(f3) and np.isfinite(b3) and not np.iscomplexobj(b3):
+                    fr.update({'f3': float(f3), 'b3': float(b3)})
 
-                f2 = formants.get_value_at_time(2, t)
-                b2 = formants.get_bandwidth_at_time(2, t)
-                if not np.isnan(f2) and not np.isnan(b2):
-                    score, prom_db = _calculate_confidence(f2, b2, f0)
-                    frame_data.update({'f2': f2, 'b2': b2, 'conf2': score, 'prom2_db': prom_db})
+                # 轻量“非交叉/最小间距”约束（若同时有F1/F2）
+                if 'f1' in fr and 'f2' in fr:
+                    if not (fr['f1'] < fr['f2'] and (fr['f2'] - fr['f1'] >= 150.0)):
+                        # 若不满足，给很低的合分，避免进Top窗口
+                        fr['conf1'] = fr.get('conf1', 0.0) * 0.2
+                        fr['conf2'] = fr.get('conf2', 0.0) * 0.2
 
-                f3 = formants.get_value_at_time(3, t)
-                b3 = formants.get_bandwidth_at_time(3, t)
-                if not np.isnan(f3) and not np.isnan(b3):
-                    frame_data.update({'f3': f3, 'b3': b3})
+                # 带宽硬阈（异常大带宽剔除）
+                if ('b1' in fr and fr['b1'] > 700) or ('b2' in fr and fr['b2'] > 700):
+                    # 依然保留记录用于 debug，但不作为候选
+                    fr['conf1'] = fr.get('conf1', 0.0) * 0.2
+                    fr['conf2'] = fr.get('conf2', 0.0) * 0.2
 
-                all_frames_data.append(frame_data)
+                all_frames.append(fr)
 
-        if not all_frames_data:
+        if not all_frames:
             raise ValueError("No valid analysis frames found.")
 
-        if not all_frames_data:
-            raise ValueError("No valid analysis frames found.")
+        # 选“最佳时间窗口”：窗口宽 W，最大化 Σ(conf1+conf2) 与帧数
+        frames = sorted(all_frames, key=lambda x: x['time'])
+        W = 0.25  # 250 ms 窗口
+        best_sum, best_i, best_j = -1.0, 0, 0
+        n = len(frames)
+        j = 0
+        for i in range(n):
+            t0 = frames[i]['time']
+            while j < n and frames[j]['time'] - t0 <= W:
+                j += 1
+            window = frames[i:j]
+            score_sum = sum(f.get('conf1', 0.0) + f.get('conf2', 0.0) for f in window)
+            # 简单组合目标：得分优先，其次窗口内帧数
+            if (score_sum > best_sum) or (math.isclose(score_sum, best_sum) and (j - i) > (best_j - best_i)):
+                best_sum, best_i, best_j = score_sum, i, j
 
-        # Take the median of the top 5 most confident frames to get a stable result
-        all_frames_data.sort(key=lambda x: x.get('conf1', 0) + x.get('conf2', 0), reverse=True)
-        top_frames = all_frames_data[:5]
+        best_window = frames[best_i:best_j] if best_j > best_i else frames
 
-        if not top_frames:
-            raise ValueError("No confident analysis frames found.")
-
-        def get_median(key):
-            vals = [f[key] for f in top_frames if key in f]
+        def median_or_zero(key):
+            vals = [f[key] for f in best_window if key in f and np.isfinite(f[key])]
             return float(np.median(vals)) if vals else 0.0
 
+        F1 = median_or_zero('f1')
+        F2 = median_or_zero('f2')
+        F3 = median_or_zero('f3')
+        B1 = median_or_zero('b1')
+        B2 = median_or_zero('b2')
+        B3 = median_or_zero('b3')
+        f0_mean = median_or_zero('f0')
+        best_time = float(np.median([f['time'] for f in best_window])) if best_window else None
         spl = _rms_spl(y)
 
+        # 结果打包（与现有接口兼容）
         return {
-            'F1': round(get_median('f1'), 2), 'B1': round(get_median('b1'), 2),
-            'F2': round(get_median('f2'), 2), 'B2': round(get_median('b2'), 2),
-            'F3': round(get_median('f3'), 2), 'B3': round(get_median('b3'), 2),
-            'f0_mean': round(get_median('f0'), 2),
+            'F1': round(F1, 2), 'B1': round(B1, 2),
+            'F2': round(F2, 2), 'B2': round(B2, 2),
+            'F3': round(F3, 2), 'B3': round(B3, 2),
+            'f0_mean': round(f0_mean, 2),
             'spl_dbA_est': spl,
-            'best_segment_time': get_median('time'),
-            'debug_info': {'frames': all_frames_data, 'best_frame': top_frames[0] if top_frames else None},
+            'best_segment_time': best_time,
+            'debug_info': {'best_window_frames': best_window[:100]},  # 控制长度，避免爆表
             'is_high_pitch': bool(is_high_pitch)
         }
 
     except Exception as e:
         logger.error(f"Robust analysis failed for {path}: {e}", exc_info=True)
-        return {'F1': 0, 'F2': 0, 'F3': 0, 'f0_mean': 0, 'spl_dbA_est': 0, 'error_details': 'Analysis failed', 'reason': str(e), 'best_segment_time': None, 'is_high_pitch': False}
+        return {
+            'F1': 0, 'F2': 0, 'F3': 0, 'B1': 0, 'B2': 0, 'B3': 0,
+            'f0_mean': 0, 'spl_dbA_est': 0,
+            'error_details': 'Analysis failed', 'reason': str(e),
+            'best_segment_time': None, 'is_high_pitch': False
+        }
 
 
 def analyze_sustained_vowel(local_paths: list, f0_min: int = 75, f0_max: int = 800) -> Dict:
