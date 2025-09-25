@@ -146,21 +146,18 @@ TMP_BASE = '/tmp'
 # ---------- Analysis Logic ----------
 def _sort_and_select_notes(note_paths: list) -> (Optional[str], Optional[str]):
     """
-    Selects low and high notes. For tests, it looks for specific names.
-    For production, it falls back to chronological order based on creation time.
+    Sorts notes alphabetically by filename and returns the high and low notes.
+    It assumes that the file with the name that comes first alphabetically is the 'high' note,
+    and the second is the 'low' note. This is based on the S3 key ordering.
     """
     if not note_paths:
         return None, None
 
-    # First, try to find files by specific names for deterministic testing
-    low_note = next((p for p in note_paths if 'low_note' in os.path.basename(p)), None)
-    high_note = next((p for p in note_paths if 'high_note' in os.path.basename(p)), None)
+    note_paths.sort(key=os.path.basename)
 
-    # If names aren't found, fall back to chronological sort
-    if low_note is None and high_note is None:
-        note_paths.sort(key=os.path.getctime)
-        low_note = note_paths[0] if len(note_paths) > 0 else None
-        high_note = note_paths[1] if len(note_paths) > 1 else None
+    # Based on S3's alphabetical sorting, 'high_note.wav' will be first.
+    high_note = note_paths[0] if len(note_paths) > 0 else None
+    low_note = note_paths[1] if len(note_paths) > 1 else None
 
     return low_note, high_note
 
@@ -206,25 +203,37 @@ def perform_full_analysis(session_id: str, calibration: dict = None, forms: dict
     spectrum_low, spectrum_high = None, None
     formant_analysis_failed = False
 
+    # The file identified as 'low_note_file' (alphabetically second) is processed first
     if low_note_file:
-        logger.info(f"Analyzing low note (first file): {os.path.basename(low_note_file)}")
+        logger.info(f"Analyzing low note (file: {os.path.basename(low_note_file)})")
         formant_low_metrics = analyze_note_file_robust(low_note_file)
         debug_info_collection['low_note'] = formant_low_metrics.pop('debug_info', None)
-        metrics.setdefault('sustained', {})['formants_low'] = formant_low_metrics
+        # Store at the top level of metrics
+        metrics['formants_low'] = formant_low_metrics
         if 'error_details' in formant_low_metrics:
             formant_analysis_failed = True
-        spectrum_low = get_lpc_spectrum(low_note_file, analysis_time=formant_low_metrics.get('best_segment_time'))
-        metrics['sustained']['formants_low']['source_file'] = os.path.basename(low_note_file)
+        spectrum_low = get_lpc_spectrum(
+            low_note_file,
+            analysis_time=formant_low_metrics.get('best_segment_time'),
+            is_high_pitch=formant_low_metrics.get('is_high_pitch', False)
+        )
+        metrics['formants_low']['source_file'] = os.path.basename(low_note_file)
 
+    # The file identified as 'high_note_file' (alphabetically first) is processed second
     if high_note_file:
-        logger.info(f"Analyzing high note (second file): {os.path.basename(high_note_file)}")
+        logger.info(f"Analyzing high note (file: {os.path.basename(high_note_file)})")
         formant_high_metrics = analyze_note_file_robust(high_note_file)
         debug_info_collection['high_note'] = formant_high_metrics.pop('debug_info', None)
-        metrics.setdefault('sustained', {})['formants_high'] = formant_high_metrics
+        # Store at the top level of metrics
+        metrics['formants_high'] = formant_high_metrics
         if 'error_details' in formant_high_metrics:
             formant_analysis_failed = True
-        spectrum_high = get_lpc_spectrum(high_note_file, analysis_time=formant_high_metrics.get('best_segment_time'))
-        metrics['sustained']['formants_high']['source_file'] = os.path.basename(high_note_file)
+        spectrum_high = get_lpc_spectrum(
+            high_note_file,
+            analysis_time=formant_high_metrics.get('best_segment_time'),
+            is_high_pitch=formant_high_metrics.get('is_high_pitch', True) # Default to True for high note
+        )
+        metrics['formants_high']['source_file'] = os.path.basename(high_note_file)
 
     # Create formant charts if data is available, otherwise create placeholders
     if formant_low_metrics and formant_high_metrics and 'error' not in formant_low_metrics and 'error' not in formant_high_metrics:

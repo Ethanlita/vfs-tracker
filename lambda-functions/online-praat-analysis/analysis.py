@@ -93,6 +93,10 @@ def analyze_note_file_robust(path: str, f0min: int = 75, f0max: int = 1200) -> D
         if not all_frames_data:
             raise ValueError("No valid analysis frames found.")
 
+        if not all_frames_data:
+            raise ValueError("No valid analysis frames found.")
+
+        # Reverting to the simpler "single best frame" logic.
         best_frame = max(all_frames_data, key=lambda x: x.get('conf1', 0) + x.get('conf2', 0))
 
         spl = _rms_spl(y)
@@ -104,15 +108,20 @@ def analyze_note_file_robust(path: str, f0min: int = 75, f0max: int = 1200) -> D
             'f0_mean': round(float(best_frame.get('f0', 0)), 2),
             'spl_dbA_est': spl,
             'best_segment_time': best_frame.get('time', 0),
-            'debug_info': {'frames': all_frames_data}
+            'debug_info': {'frames': all_frames_data, 'best_frame': best_frame},
+            'is_high_pitch': bool(is_high_pitch)
         }
 
     except Exception as e:
         logger.error(f"Robust analysis failed for {path}: {e}", exc_info=True)
-        return {'F1': 0, 'F2': 0, 'F3': 0, 'f0_mean': 0, 'spl_dbA_est': 0, 'error_details': 'Analysis failed', 'reason': str(e), 'best_segment_time': None}
+        return {'F1': 0, 'F2': 0, 'F3': 0, 'f0_mean': 0, 'spl_dbA_est': 0, 'error_details': 'Analysis failed', 'reason': str(e), 'best_segment_time': None, 'is_high_pitch': False}
 
 
 def analyze_sustained_vowel(local_paths: list, f0_min: int = 75, f0_max: int = 800) -> Dict:
+    """
+    Analyzes a list of sustained vowel recordings, picks the best one based on MPT,
+    and returns a comprehensive analysis dictionary including its own formant analysis.
+    """
     best_file = None
     max_voiced_duration = -1.0
 
@@ -149,6 +158,7 @@ def analyze_sustained_vowel(local_paths: list, f0_min: int = 75, f0_max: int = 8
         harmonicity = sound.to_harmonicity_cc(0.01, f0_min, 0.1, 1.0)
         hnr_db = call(harmonicity, "Get mean", 0, 0)
 
+        # Restore independent formant analysis for the sustained vowel
         formant_results = analyze_note_file_robust(best_file, f0min=f0_min, f0max=f0_max)
 
         metrics = {
@@ -158,13 +168,15 @@ def analyze_sustained_vowel(local_paths: list, f0_min: int = 75, f0_max: int = 8
             'shimmer_local_percent': round(float(shimmer_local), 2) if not np.isnan(shimmer_local) else 0,
             'hnr_db': round(float(hnr_db), 2) if not np.isnan(hnr_db) else 0,
             'spl_dbA_est': round(float(_rms_spl(y)), 2),
-            'formants_sustained': formant_results,
+            'formants_sustained': formant_results, # Correctly store under its own key
         }
         if formant_results.get('reason'):
             metrics['formant_analysis_reason_sustained'] = formant_results['reason']
 
+        # Get LPC for the sustained vowel itself for plotting
         best_segment_time = formant_results.get('best_segment_time')
-        lpc_spectrum = get_lpc_spectrum(best_file, analysis_time=best_segment_time)
+        is_high_pitch = formant_results.get('is_high_pitch', False)
+        lpc_spectrum = get_lpc_spectrum(best_file, analysis_time=best_segment_time, is_high_pitch=is_high_pitch)
 
         debug_info = formant_results.pop('debug_info', None)
 
@@ -277,7 +289,7 @@ def _find_loudest_segment(sound: parselmouth.Sound, duration: float = 0.1) -> pa
 
     return best_segment if best_segment is not None else sound.extract_part(from_time=0, to_time=duration, preserve_times=False)
 
-def get_lpc_spectrum(file_path: str, max_formant: int = 5500, analysis_time: Optional[float] = None):
+def get_lpc_spectrum(file_path: str, max_formant: int = 5500, analysis_time: Optional[float] = None, is_high_pitch: bool = False):
     """
     Get a smooth LPC (Linear Predictive Coding) spectrum of an audio file.
     This version uses librosa and scipy, which is more stable than the parselmouth LPC methods.
@@ -310,7 +322,9 @@ def get_lpc_spectrum(file_path: str, max_formant: int = 5500, analysis_time: Opt
         pre_emph = 0.97
         seg = np.append(seg[0], seg[1:] - pre_emph * seg[:-1])
 
-        order = max(8, int(2 + 2 * (sr / 1000)))
+        # Reverting to a fixed order as the adaptive logic is not working correctly.
+        order = 16
+
         if np.allclose(np.std(seg), 0.0): return None
 
         a = librosa.lpc(seg, order=order)
