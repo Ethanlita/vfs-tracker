@@ -247,18 +247,19 @@ def create_vrp_chart(data):
 
 
 def create_formant_chart(formant_low, formant_high):
-    """Creates an F1-F2 vowel space chart."""
+    """Creates an F1-F2 vowel space chart, handling partial data."""
     logger.info("Creating F1-F2 Vowel Space chart")
     try:
         fig, ax = plt.subplots(figsize=(8, 6))
 
-        # Plot points
-        ax.plot(formant_low['F2'], formant_low['F1'], 'o', markersize=10, color='blue', label='Lowest Note')
-        ax.plot(formant_high['F2'], formant_high['F1'], 'o', markersize=10, color='red', label='Highest Note')
+        # Plot points only if data is valid
+        if formant_low and formant_low.get('F1') and formant_low.get('F2'):
+            ax.plot(formant_low['F2'], formant_low['F1'], 'o', markersize=10, color='blue', label='Lowest Note')
+            ax.text(formant_low['F2'] + 20, formant_low['F1'], 'Low')
 
-        # Annotate points
-        ax.text(formant_low['F2'] + 20, formant_low['F1'], 'Low')
-        ax.text(formant_high['F2'] + 20, formant_high['F1'], 'High')
+        if formant_high and formant_high.get('F1') and formant_high.get('F2'):
+            ax.plot(formant_high['F2'], formant_high['F1'], 'o', markersize=10, color='red', label='Highest Note')
+            ax.text(formant_high['F2'] + 20, formant_high['F1'], 'High')
 
         # Standard F1-F2 chart conventions
         ax.set_xlabel('F2 (Hz)')
@@ -282,7 +283,7 @@ def create_formant_chart(formant_low, formant_high):
         return create_placeholder_chart('F1-F2 Vowel Space', 'Formant data incomplete.')
 
 
-def create_formant_spl_chart(spectrum_low, spectrum_high):
+def create_formant_spl_chart(spectrum_low, spectrum_high, spectrum_sustained=None):
     """Creates a Formant-SPL (LPC Spectrum) chart."""
     logger.info("Creating Formant-SPL Spectrum chart")
     try:
@@ -295,6 +296,10 @@ def create_formant_spl_chart(spectrum_low, spectrum_high):
         # Plot spectrum for the highest note
         if spectrum_high and 'frequencies' in spectrum_high and 'spl_values' in spectrum_high:
             ax.plot(spectrum_high['frequencies'], spectrum_high['spl_values'], color='red', label='Highest Note Spectrum')
+
+        # Plot spectrum for the sustained vowel
+        if spectrum_sustained and 'frequencies' in spectrum_sustained and 'spl_values' in spectrum_sustained:
+            ax.plot(spectrum_sustained['frequencies'], spectrum_sustained['spl_values'], color='green', linestyle='--', label='Sustained Vowel Spectrum')
 
         ax.set_xlabel('Frequency (Hz)')
         ax.set_ylabel('SPL (dB)')
@@ -320,7 +325,78 @@ def create_formant_spl_chart(spectrum_low, spectrum_high):
         return create_placeholder_chart('Formant-SPL Spectrum (LPC)', 'Spectrum data unavailable.')
 
 
-def create_pdf_report(session_id, metrics, chart_urls, userInfo=None):
+def create_diagnostic_charts(debug_info: dict, title: str):
+    """Creates a multi-panel chart with diagnostic data from the analysis."""
+    frames = []
+    if isinstance(debug_info, dict):
+        frames = debug_info.get('frames') or debug_info.get('best_window_frames') or []
+    if not frames:
+        return create_placeholder_chart(f"Diagnostics: {title}", "No frame data available for diagnostics.")
+
+
+    try:
+        times = [f['time'] for f in frames]
+        fig, axes = plt.subplots(5, 1, figsize=(10, 15), sharex=True)
+        fig.suptitle(f"Analysis Diagnostics: {title}", fontsize=16)
+
+        # 1. F0 and HNR Plot
+        axes[0].plot(times, [f.get('f0') for f in frames], 'o-', label='F0 (Hz)', markersize=2, color='blue')
+        ax0_twin = axes[0].twinx()
+        ax0_twin.plot(times, [f.get('hnr') for f in frames], 'o-', label='HNR (dB)', markersize=2, color='green')
+        axes[0].set_ylabel('F0 (Hz)', color='blue')
+        ax0_twin.set_ylabel('HNR (dB)', color='green')
+        axes[0].legend(loc='upper left')
+        ax0_twin.legend(loc='upper right')
+        axes[0].grid(True, linestyle='--')
+
+        # 2. Formant Frequencies
+        axes[1].plot(times, [f.get('f1') for f in frames], 'o', label='F1', markersize=2, color='#3498db')
+        axes[1].plot(times, [f.get('f2') for f in frames], 'o', label='F2', markersize=2, color='#e74c3c')
+        axes[1].plot(times, [f.get('f3') for f in frames], 'o', label='F3', markersize=2, color='#2ecc71')
+        axes[1].set_ylabel('Formant Freq (Hz)')
+        axes[1].legend()
+        axes[1].grid(True, linestyle='--')
+
+        # 3. Formant Bandwidths
+        axes[2].plot(times, [f.get('b1') for f in frames], 'o', label='B1', markersize=2, color='#3498db')
+        axes[2].plot(times, [f.get('b2') for f in frames], 'o', label='B2', markersize=2, color='#e74c3c')
+        axes[2].set_ylabel('Formant BW (Hz)')
+        axes[2].legend()
+        axes[2].grid(True, linestyle='--')
+
+        # 4. Confidence Scores (F1)
+        axes[3].plot(times, [f.get('c1_p_score') for f in frames], 'o-', label='Periodicity Score', markersize=2)
+        axes[3].plot(times, [f.get('c1_hnr_score') for f in frames], 'o-', label='HNR Score', markersize=2)
+        axes[3].plot(times, [f.get('c1_bw_score') for f in frames], 'o-', label='Bandwidth Score', markersize=2)
+        axes[3].plot(times, [f.get('conf1') for f in frames], 'k-', label='Total Confidence F1', linewidth=2)
+        axes[3].set_ylabel('F1 Confidence')
+        axes[3].set_ylim(0, 1.1)
+        axes[3].legend()
+        axes[3].grid(True, linestyle='--')
+
+        # 5. Confidence Scores (F2)
+        axes[4].plot(times, [f.get('c2_p_score') for f in frames], 'o-', label='Periodicity Score', markersize=2)
+        axes[4].plot(times, [f.get('c2_hnr_score') for f in frames], 'o-', label='HNR Score', markersize=2)
+        axes[4].plot(times, [f.get('c2_bw_score') for f in frames], 'o-', label='Bandwidth Score', markersize=2)
+        axes[4].plot(times, [f.get('conf2') for f in frames], 'k-', label='Total Confidence F2', linewidth=2)
+        axes[4].set_ylabel('F2 Confidence')
+        axes[4].set_ylim(0, 1.1)
+        axes[4].set_xlabel('Time (s)')
+        axes[4].legend()
+        axes[4].grid(True, linestyle='--')
+
+        plt.tight_layout(rect=[0, 0.03, 1, 0.97])
+        buf = BytesIO()
+        plt.savefig(buf, format='png')
+        buf.seek(0)
+        plt.close(fig)
+        return buf
+    except Exception as e:
+        logger.error(f"Could not create diagnostic chart for {title}: {e}", exc_info=True)
+        return create_placeholder_chart(f"Diagnostics: {title}", f"Chart generation failed:\n{e}")
+
+
+def create_pdf_report(session_id, metrics, chart_urls, debug_info=None, userInfo=None):
     """
     Generates a PDF report from the analysis results with embedded charts and user info.
 
@@ -328,6 +404,7 @@ def create_pdf_report(session_id, metrics, chart_urls, userInfo=None):
         session_id (str): The session ID for the report.
         metrics (dict): The dictionary of calculated metrics.
         chart_urls (dict): A dictionary of S3 URLs for the generated charts.
+        debug_info (dict): A dictionary containing debug data for diagnostic charts.
         userInfo (dict): A dictionary containing user information (userId, userName).
 
     Returns:
@@ -336,6 +413,8 @@ def create_pdf_report(session_id, metrics, chart_urls, userInfo=None):
     logger.info(f"Creating PDF report for session {session_id}")
     if userInfo is None:
         userInfo = {}
+    if debug_info is None:
+        debug_info = {}
 
     try:
         # 文档与样式
@@ -448,6 +527,10 @@ def create_pdf_report(session_id, metrics, chart_urls, userInfo=None):
             'f0_max': 'Highest F0 (P90) / 最高基频（P90）',
             'spl_min': 'Lowest SPL (P10) / 最低声压级（P10）',
             'spl_max': 'Highest SPL (P90) / 最高声压级（P90）',
+            'source_file': 'Source File / 分析源文件',
+            'B1': 'F1 Bandwidth (Hz) / F1带宽（Hz）',
+            'B2': 'F2 Bandwidth (Hz) / F2带宽（Hz）',
+            'B3': 'F3 Bandwidth (Hz) / F3带宽（Hz）',
         }
 
         # 分类标题映射
@@ -464,7 +547,7 @@ def create_pdf_report(session_id, metrics, chart_urls, userInfo=None):
                 return
             rows = []
             for k, v in data.items():
-                if k in ['formants_low', 'formants_high', 'bins', 'formant_analysis_failed']:
+                if k in ['formants_low', 'formants_high', 'bins', 'formant_analysis_failed', 'formants_sustained', 'best_segment_time']:
                     continue
                 if isinstance(v, dict):
                     # 展开二级
@@ -665,50 +748,65 @@ def create_pdf_report(session_id, metrics, chart_urls, userInfo=None):
             story.append(PageBreak())
 
         # ---- Formant Analysis ----
+        # 顶层：最低/最高音；sustained 节点：持续元音
         sustained_metrics = metrics.get('sustained', {}) if isinstance(metrics.get('sustained'), dict) else {}
-        formant_low = sustained_metrics.get('formants_low')
-        formant_high = sustained_metrics.get('formants_high')
+
+        formant_low = metrics.get('formants_low') or {}
+        formant_high = metrics.get('formants_high') or {}
+        formant_sustained = sustained_metrics.get('formants_sustained') or {}
+
+        # formant_analysis_failed 的标记是在 sustained 节点里设的（沿用你的逻辑）
         formant_failed = sustained_metrics.get('formant_analysis_failed')
 
-        formant_section = [Paragraph(_bilingual("Formant Analysis / 共振峰分析"), h2_style)]
-        if formant_failed:
-            bullet = (
-                "Analysis failed. Common causes / 分析失败，常见原因：<br/>"
-                "- Very low volume or too soft / 音量过低或发声太轻；<br/>"
-                "- Excessive noise, coughing, throat clearing / 背景噪声、咳嗽或清嗓；<br/>"
-                "- Not holding a stable /a/ vowel / /a/ 元音不稳定。"
-            )
-            formant_section.append(Paragraph(bullet, text_style))
-        else:
-            if formant_low or formant_high:
-                headers = [
-                    Paragraph("", text_style),
-                    Paragraph(_bilingual("Lowest Note / 最低音"), text_style),
-                    Paragraph(_bilingual("Highest Note / 最高音"), text_style),
-                ]
-                rows = [headers]
-                formant_labels = [
-                    ('f0_mean', 'Mean F0 (Hz) / 平均基频（Hz）'),
-                    ('F1', 'F1 (Hz) / F1（Hz）'),
-                    ('F2', 'F2 (Hz) / F2（Hz）'),
-                    ('F3', 'F3 (Hz) / F3（Hz）'),
-                    ('spl_dbA_est', 'SPL dB(A) / 声压级 dB(A)'),
-                ]
-                for key, label in formant_labels:
-                    rows.append([
-                        Paragraph(_bilingual(label), text_style),
-                        Paragraph(_fmt((formant_low or {}).get(key, 0)), text_style),
-                        Paragraph(_fmt((formant_high or {}).get(key, 0)), text_style),
-                    ])
-                ft = Table(rows, colWidths=[2.2*inch, 1.2*inch, 1.2*inch])
-                ft.setStyle(TableStyle([
-                    ('FONT', (0,0), (-1,-1), _FONT, 10),
-                    ('ROWBACKGROUNDS', (0,0), (-1,-1), [LIGHT_PINK, LIGHT_GRAY]),
-                    ('GRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
-                    ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
-                ]))
-                formant_section.append(ft)
-                formant_section.append(Spacer(1, 6))
+        try:
+            formant_section = [Paragraph(_bilingual("Formant Analysis / 共振峰分析"), h2_style)]
+
+            headers = [
+                Paragraph("", text_style),
+                Paragraph(_bilingual("Lowest Note / 最低音"), text_style),
+                Paragraph(_bilingual("Highest Note / 最高音"), text_style),
+                Paragraph(_bilingual("Sustained Vowel / 持续元音"), text_style),
+            ]
+            rows = [headers]
+            formant_labels = [
+                ('f0_mean', 'Mean F0 (Hz) / 平均基频（Hz）'),
+                ('F1', 'F1 (Hz) / F1（Hz）'), ('B1', 'B1 (Hz) / B1 带宽（Hz）'),
+                ('F2', 'F2 (Hz) / F2（Hz）'), ('B2', 'B2 (Hz) / B2 带宽（Hz）'),
+                ('F3', 'F3 (Hz) / F3（Hz）'), ('B3', 'B3 (Hz) / B3 带宽（Hz）'),
+                ('spl_dbA_est', 'SPL dB(A) / 声压级 dB(A)'),
+            ]
+            for key, label in formant_labels:
+                rows.append([
+                    Paragraph(_bilingual(label), text_style),
+                    Paragraph(_fmt((formant_low or {}).get(key, 0)), text_style),
+                    Paragraph(_fmt((formant_high or {}).get(key, 0)), text_style),
+                    Paragraph(_fmt((formant_sustained or {}).get(key, 0)), text_style),
+                ])
+            ft = Table(rows, colWidths=[2.2*inch, 1.2*inch, 1.2*inch, 1.2*inch])
+            ft.setStyle(TableStyle([
+                ('FONT', (0,0), (-1,-1), _FONT, 10),
+                ('ROWBACKGROUNDS', (0,0), (-1,-1), [LIGHT_PINK, LIGHT_GRAY]),
+                ('GRID', (0,0), (-1,-1), 0.25, colors.lightgrey),
+                ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+            ]))
+            formant_section.append(ft)
+
+            notes = []
+            if formant_low and formant_low.get('reason'):
+                notes.append(f"<b>Lowest Note Analysis:</b> {formant_low['reason']}")
+            if formant_high and formant_high.get('reason'):
+                notes.append(f"<b>Highest Note Analysis:</b> {formant_high['reason']}")
+            if formant_sustained and formant_sustained.get('reason'):
+                notes.append(f"<b>Sustained Vowel Analysis:</b> {formant_sustained['reason']}")
+
+            if notes:
+                full_note_text = "<br/><br/>".join(notes)
+                formant_section.append(Spacer(1, 4))
+                formant_section.append(Paragraph(f"<b>Analysis Notes:</b><br/>{full_note_text}", small_style))
+
+            formant_section.append(Spacer(1, 6))
+
+            if not formant_failed:
                 formant_section.append(
                     embed_chart(
                         'formant',
@@ -717,17 +815,41 @@ def create_pdf_report(session_id, metrics, chart_urls, userInfo=None):
                         max_height=3.0*inch,
                     )
                 )
-                formant_section.append(Spacer(1, 4))
-                formant_section.append(
-                    embed_chart(
-                        'formant_spl_spectrum',
-                        'Formant-SPL Spectrum (LPC) / 共振峰-声压谱（LPC）',
-                        'Based on lowest & highest note / 基于最低与最高音',
-                        max_height=3.0*inch,
-                    )
+
+            formant_section.append(Spacer(1, 4))
+            formant_section.append(
+                embed_chart(
+                    'formant_spl_spectrum',
+                    'Formant-SPL Spectrum / 共振峰-声压谱',
+                    'Based on lowest, highest, and sustained note / 基于最低、最高和持续元音',
+                    max_height=3.0*inch,
                 )
-        formant_section.append(Spacer(1, 6))
-        story.append(KeepTogether(formant_section))
+            )
+            formant_section.append(Spacer(1, 6))
+            story.append(KeepTogether(formant_section))
+        except Exception as e:
+            logger.error(f"Failed to render formant analysis section: {e}", exc_info=True)
+            story.append(Paragraph("<b>Formant Analysis / 共振峰分析</b>", h2_style))
+            story.append(Paragraph("An unexpected error occurred while generating the formant table and charts.", text_style))
+
+        # --- Diagnostics Page ---
+        if debug_info:
+            story.append(PageBreak())
+            story.append(Paragraph(_bilingual("Analysis Diagnostics / 分析诊断信息"), title_style))
+            story.append(Spacer(1, 12))
+
+            for key, data in debug_info.items():
+                if not data: continue  # 不再要求必须有 'frames'，create_diagnostic_charts 会兼容 'best_window_frames'
+                title_map = {'sustained': 'Sustained Vowel', 'low_note': 'Lowest Note', 'high_note': 'Highest Note'}
+                chart_buf = create_diagnostic_charts(data, title_map.get(key, key.replace('_', ' ').title()))
+                if chart_buf:
+                    img = RLImage(chart_buf)
+                    img.hAlign = 'CENTER'
+                    iw, ih = img.imageWidth, img.imageHeight
+                    scale = min(doc.width / iw, (doc.height / 2.5) / ih, 1.0) # Allow slightly more height
+                    img.drawWidth, img.drawHeight = iw * scale, ih * scale
+                    story.append(img)
+                    story.append(Spacer(1, 12))
 
         # 构建 PDF
         doc.build(story, onFirstPage=on_page, onLaterPages=on_page)
@@ -736,5 +858,5 @@ def create_pdf_report(session_id, metrics, chart_urls, userInfo=None):
         return buf
 
     except Exception as e:
-        logger.error(f"Could not create PDF report for {session_id}. Error: {e}")
+        logger.error(f"Could not create PDF report for {session_id}. Error: {e}", exc_info=True)
         return None

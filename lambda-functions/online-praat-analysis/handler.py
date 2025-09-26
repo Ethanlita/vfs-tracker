@@ -26,10 +26,12 @@ for d in ('/tmp/mplconfig', '/tmp/librosa_cache', '/tmp/numba_cache'):
 logger = logging.getLogger()
 logger.setLevel(os.environ['LOG_LEVEL'].upper())
 
-# ---- AWS Clients ----
-s3_client = boto3.client('s3')
-dynamodb = boto3.resource('dynamodb')
-lambda_client = boto3.client('lambda')
+# ---- AWS Clients & Globals ----
+_s3_client = None
+_dynamodb = None
+_lambda_client = None
+_table = None
+_events_table = None
 
 # ---- Environment Variables ----
 DDB_TABLE = os.environ.get('DDB_TABLE')
@@ -37,11 +39,38 @@ BUCKET = os.environ.get('BUCKET')
 EVENTS_TABLE = os.environ.get('EVENTS_TABLE', 'VoiceFemEvents')
 FUNCTION_NAME = os.environ.get('AWS_LAMBDA_FUNCTION_NAME')
 
-table = dynamodb.Table(DDB_TABLE) if DDB_TABLE else None
-events_table = dynamodb.Table(EVENTS_TABLE) if EVENTS_TABLE else None
+def get_s3_client():
+    global _s3_client
+    if _s3_client is None:
+        _s3_client = boto3.client('s3')
+    return _s3_client
+
+def get_dynamodb():
+    global _dynamodb
+    if _dynamodb is None:
+        _dynamodb = boto3.resource('dynamodb')
+    return _dynamodb
+
+def get_lambda_client():
+    global _lambda_client
+    if _lambda_client is None:
+        _lambda_client = boto3.client('lambda')
+    return _lambda_client
+
+def get_table():
+    global _table
+    if _table is None and DDB_TABLE:
+        _table = get_dynamodb().Table(DDB_TABLE)
+    return _table
+
+def get_events_table():
+    global _events_table
+    if _events_table is None and EVENTS_TABLE:
+        _events_table = get_dynamodb().Table(EVENTS_TABLE)
+    return _events_table
 
 CORS_HEADERS = {
-    'Access-Control-Allow-Origin': '*', 
+    'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token',
     'Access-Control-Allow-Methods': 'OPTIONS,POST,GET'
 }
@@ -79,7 +108,7 @@ def _from_dynamo(v):
 def extract_user_info(event) -> Dict[str, Optional[str]]:
     """Extracts user ID and username from JWT token."""
     info = {'userId': None, 'userName': 'Anonymous'}
-    
+
     # First try the easy way via API Gateway authorizer context
     rc = event.get('requestContext', {}) or {}
     claims = rc.get('authorizer', {}).get('jwt', {}).get('claims', {})
@@ -97,14 +126,14 @@ def extract_user_info(event) -> Dict[str, Optional[str]]:
             payload_b64 = token.split('.')[1]
             payload_b64 += '=' * (-len(payload_b64) % 4) # Add padding
             payload = json.loads(base64.urlsafe_b64decode(payload_b64.encode()).decode())
-            
+
             info['userId'] = payload.get('sub')
             info['userName'] = payload.get('username') or payload.get('name') or 'N/A'
         except Exception as e:
             logger.warning(f"Could not decode auth header manually: {e}")
             # Return default info with no userId
             return {'userId': None, 'userName': 'Anonymous'}
-            
+
     return info
 
 # ---------- Constants ----------
@@ -115,8 +144,25 @@ MAX_DOWNLOAD_FILES_PER_STEP = 10
 TMP_BASE = '/tmp'
 
 # ---------- Analysis Logic ----------
+def _sort_and_select_notes(note_paths: list) -> (Optional[str], Optional[str]):
+    """
+    Sorts notes alphabetically by filename and returns the high and low notes.
+    It assumes that the file with the name that comes first alphabetically is the 'high' note,
+    and the second is the 'low' note. This is based on the S3 key ordering.
+    """
+    if not note_paths:
+        return None, None
+
+    note_paths.sort(key=os.path.basename)
+
+    # Based on S3's alphabetical sorting, 'high_note.wav' will be first.
+    high_note = note_paths[0] if len(note_paths) > 0 else None
+    low_note = note_paths[1] if len(note_paths) > 1 else None
+
+    return low_note, high_note
+
 def perform_full_analysis(session_id: str, calibration: dict = None, forms: dict = None, userInfo: dict = None):
-    from analysis import analyze_sustained_wav, analyze_speech_flow, analyze_glide_files, analyze_note_file, get_lpc_spectrum
+    from analysis import analyze_sustained_vowel, analyze_speech_flow, analyze_glide_files, analyze_note_file_robust, get_lpc_spectrum
     from artifacts import create_time_series_chart, create_vrp_chart, create_pdf_report, create_formant_chart, create_formant_spl_chart, create_placeholder_chart
 
     audio_groups = list_session_audio_keys(session_id)
@@ -124,62 +170,95 @@ def perform_full_analysis(session_id: str, calibration: dict = None, forms: dict
 
     metrics = {}
     charts = {}
+    debug_info_collection = {}
     artifact_prefix = ARTIFACT_PREFIX_TEMPLATE.format(sessionId=session_id)
+    sustained_lpc = None  # 将持续元音的 LPC 光谱留到后面绘图
 
     # Sustained Vowel (Step 2)
     sustained_keys = audio_groups.get('2', [])[:MAX_DOWNLOAD_FILES_PER_STEP]
-    sustained_local=[safe_download(k) for k in sustained_keys if k.endswith('.wav')]
-    chosen_sustained=pick_longest_file(sustained_local)
-    if chosen_sustained:
-        sus_metrics = analyze_sustained_wav(chosen_sustained) or {}
-        metrics['sustained']=sus_metrics
-        buf = create_time_series_chart(chosen_sustained)
-        if buf:
-            ts_key = artifact_prefix+'timeSeries.png'
-            s3_client.upload_fileobj(buf, BUCKET, ts_key, ExtraArgs={'ContentType':'image/png'})
-            charts['timeSeries']=f's3://{BUCKET}/{ts_key}'
+    sustained_local = [safe_download(k) for k in sustained_keys if k and k.endswith('.wav')]
+    if sustained_local:
+        # analyze_sustained_vowel now expects a list and returns a package with metrics, chosen_file, etc.
+        sus_metrics_package = analyze_sustained_vowel(sustained_local) or {}
+        metrics['sustained'] = sus_metrics_package.get('metrics', {'error': 'analysis_returned_nothing'})
+
+        chosen_sustained_for_charting = sus_metrics_package.get('chosen_file')
+        debug_info_collection['sustained'] = sus_metrics_package.get('debug_info')
+
+        # 新增：提取持续元音的 LPC 光谱，作为第 3 条曲线
+        sustained_lpc = sus_metrics_package.get('lpc_spectrum')
+
+        # Use the file chosen by the analysis function for the chart
+        if chosen_sustained_for_charting:
+            buf = create_time_series_chart(chosen_sustained_for_charting)
+            if buf:
+                ts_key = artifact_prefix + 'timeSeries.png'
+                get_s3_client().upload_fileobj(buf, BUCKET, ts_key, ExtraArgs={'ContentType': 'image/png'})
+                charts['timeSeries'] = f's3://{BUCKET}/{ts_key}'
     else:
-        metrics['sustained']={'error':'no_sustained_audio'}
+        metrics['sustained'] = {'error': 'no_sustained_audio'}
 
     # Formant analysis from Step 4
     note_keys = audio_groups.get('4', [])[:MAX_DOWNLOAD_FILES_PER_STEP]
-    note_local = [safe_download(k) for k in note_keys if k.endswith('.wav')]
+    note_local_paths = [safe_download(k) for k in note_keys if k.endswith('.wav')]
+    low_note_file, high_note_file = _sort_and_select_notes(note_local_paths)
+
     formant_low_metrics, formant_high_metrics = None, None
     spectrum_low, spectrum_high = None, None
     formant_analysis_failed = False
 
-    if len(note_local) >= 1:
-        formant_low_metrics = analyze_note_file(note_local[0])
-        if formant_low_metrics and 'error' not in formant_low_metrics:
-            metrics.setdefault('sustained', {})['formants_low'] = formant_low_metrics
-        spectrum_low = get_lpc_spectrum(note_local[0])
+    # The file identified as 'low_note_file' (alphabetically second) is processed first
+    if low_note_file:
+        logger.info(f"Analyzing low note (file: {os.path.basename(low_note_file)})")
+        formant_low_metrics = analyze_note_file_robust(low_note_file)
+        debug_info_collection['low_note'] = formant_low_metrics.pop('debug_info', None)
+        # Store at the top level of metrics
+        metrics['formants_low'] = formant_low_metrics
+        if 'error_details' in formant_low_metrics:
+            formant_analysis_failed = True
+        spectrum_low = get_lpc_spectrum(
+            low_note_file,
+            analysis_time=formant_low_metrics.get('best_segment_time'),
+            is_high_pitch=formant_low_metrics.get('is_high_pitch', False)
+        )
+        metrics['formants_low']['source_file'] = os.path.basename(low_note_file)
 
-    if len(note_local) >= 2:
-        formant_high_metrics = analyze_note_file(note_local[1])
-        if formant_high_metrics and 'error' not in formant_high_metrics:
-            metrics.setdefault('sustained', {})['formants_high'] = formant_high_metrics
-        spectrum_high = get_lpc_spectrum(note_local[1])
-    
+    # The file identified as 'high_note_file' (alphabetically first) is processed second
+    if high_note_file:
+        logger.info(f"Analyzing high note (file: {os.path.basename(high_note_file)})")
+        formant_high_metrics = analyze_note_file_robust(high_note_file)
+        debug_info_collection['high_note'] = formant_high_metrics.pop('debug_info', None)
+        # Store at the top level of metrics
+        metrics['formants_high'] = formant_high_metrics
+        if 'error_details' in formant_high_metrics:
+            formant_analysis_failed = True
+        spectrum_high = get_lpc_spectrum(
+            high_note_file,
+            analysis_time=formant_high_metrics.get('best_segment_time'),
+            is_high_pitch=formant_high_metrics.get('is_high_pitch', True) # Default to True for high note
+        )
+        metrics['formants_high']['source_file'] = os.path.basename(high_note_file)
+
     # Create formant charts if data is available, otherwise create placeholders
     if formant_low_metrics and formant_high_metrics and 'error' not in formant_low_metrics and 'error' not in formant_high_metrics:
         formant_buf = create_formant_chart(formant_low_metrics, formant_high_metrics)
         if formant_buf:
             formant_key = artifact_prefix + 'formant.png'
-            s3_client.upload_fileobj(formant_buf, BUCKET, formant_key, ExtraArgs={'ContentType': 'image/png'})
+            get_s3_client().upload_fileobj(formant_buf, BUCKET, formant_key, ExtraArgs={'ContentType': 'image/png'})
             charts['formant'] = f's3://{BUCKET}/{formant_key}'
     else:
         formant_analysis_failed = True
         placeholder_buf = create_placeholder_chart('F1-F2 Vowel Space', 'Formant analysis failed.\nSee notes in report for details.')
         if placeholder_buf:
             formant_key = artifact_prefix + 'formant.png'
-            s3_client.upload_fileobj(placeholder_buf, BUCKET, formant_key, ExtraArgs={'ContentType': 'image/png'})
+            get_s3_client().upload_fileobj(placeholder_buf, BUCKET, formant_key, ExtraArgs={'ContentType': 'image/png'})
             charts['formant'] = f's3://{BUCKET}/{formant_key}'
 
-    if spectrum_low or spectrum_high:
-        formant_spl_buf = create_formant_spl_chart(spectrum_low, spectrum_high)
+    if spectrum_low or spectrum_high or sustained_lpc:
+        formant_spl_buf = create_formant_spl_chart(spectrum_low, spectrum_high, sustained_lpc)
         if formant_spl_buf:
             formant_spl_key = artifact_prefix + 'formant_spl_spectrum.png'
-            s3_client.upload_fileobj(formant_spl_buf, BUCKET, formant_spl_key, ExtraArgs={'ContentType': 'image/png'})
+            get_s3_client().upload_fileobj(formant_spl_buf, BUCKET, formant_spl_key, ExtraArgs={'ContentType': 'image/png'})
             charts['formant_spl_spectrum'] = f's3://{BUCKET}/{formant_spl_key}'
     else:
         # 无频谱数据时也必须生成占位图，避免PDF缺失该图表
@@ -187,7 +266,7 @@ def perform_full_analysis(session_id: str, calibration: dict = None, forms: dict
         placeholder_buf = create_placeholder_chart('Formant-SPL Spectrum (LPC)', reason_msg)
         if placeholder_buf:
             formant_spl_key = artifact_prefix + 'formant_spl_spectrum.png'
-            s3_client.upload_fileobj(placeholder_buf, BUCKET, formant_spl_key, ExtraArgs={'ContentType': 'image/png'})
+            get_s3_client().upload_fileobj(placeholder_buf, BUCKET, formant_spl_key, ExtraArgs={'ContentType': 'image/png'})
             charts['formant_spl_spectrum'] = f's3://{BUCKET}/{formant_spl_key}'
 
     if formant_analysis_failed:
@@ -215,7 +294,7 @@ def perform_full_analysis(session_id: str, calibration: dict = None, forms: dict
             vrp_buf = create_vrp_chart(vrp)
             if vrp_buf:
                 vrp_key = artifact_prefix+'vrp.png'
-                s3_client.upload_fileobj(vrp_buf, BUCKET, vrp_key, ExtraArgs={'ContentType':'image/png'})
+                get_s3_client().upload_fileobj(vrp_buf, BUCKET, vrp_key, ExtraArgs={'ContentType':'image/png'})
                 charts['vrp']=f's3://{BUCKET}/{vrp_key}'
     else:
         metrics['vrp']={'error':'no_glide_audio'}
@@ -226,7 +305,7 @@ def perform_full_analysis(session_id: str, calibration: dict = None, forms: dict
         rbh = forms.get('rbh')
         if rbh and isinstance(rbh, dict):
             processed_scores['RBH'] = {k: v for k, v in rbh.items() if v is not None}
-        
+
         ovhs9 = forms.get('ovhs9')
         if ovhs9 and isinstance(ovhs9, list):
             # OVHS-9: 9 questions, scale 0-4. Max score 36.
@@ -248,9 +327,9 @@ def perform_full_analysis(session_id: str, calibration: dict = None, forms: dict
 
     # PDF Report
     report_key = REPORT_KEY_TEMPLATE.format(sessionId=session_id)
-    pdf_buf = create_pdf_report(session_id, metrics, charts, userInfo=userInfo)
+    pdf_buf = create_pdf_report(session_id, metrics, charts, debug_info=debug_info_collection, userInfo=userInfo)
     if pdf_buf:
-        s3_client.upload_fileobj(pdf_buf, BUCKET, report_key, ExtraArgs={'ContentType': 'application/pdf'})
+        get_s3_client().upload_fileobj(pdf_buf, BUCKET, report_key, ExtraArgs={'ContentType': 'application/pdf'})
     report_url = f's3://{BUCKET}/{report_key}'
 
     return metrics, charts, report_url
@@ -263,7 +342,7 @@ def handle_create_session(event):
         return {'statusCode': 401, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'User not authenticated'})}
     session_id = str(uuid.uuid4())
     try:
-        table.put_item(Item={
+        get_table().put_item(Item={
             'sessionId': session_id,
             'userId': user_id,
             'status': 'created',
@@ -286,14 +365,14 @@ def handle_get_upload_url(event):
         return {'statusCode': 400, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Missing required parameters'})}
 
     try:
-        resp = table.get_item(Key={'sessionId': session_id})
+        resp = get_table().get_item(Key={'sessionId': session_id})
         item = resp.get('Item')
         if not item or item.get('userId') != user_id:
             logger.warning(f"Forbidden upload attempt: user {user_id} to session {session_id}")
             return {'statusCode': 403, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Forbidden'})}
 
         object_key = f"voice-tests/{session_id}/raw/{body['step']}/{body['fileName']}"
-        url = s3_client.generate_presigned_url('put_object', Params={
+        url = get_s3_client().generate_presigned_url('put_object', Params={
             'Bucket': BUCKET,
             'Key': object_key,
             'ContentType': body.get('contentType', 'audio/wav')
@@ -317,14 +396,14 @@ def handle_analyze_trigger(event):
     }
 
     try:
-        table.update_item(
+        get_table().update_item(
             Key={'sessionId': session_id},
             UpdateExpression='SET #st = :st, updatedAt = :u',
             ExpressionAttributeNames={'#st': 'status'},
             ExpressionAttributeValues={':st': 'processing', ':u': int(datetime.utcnow().timestamp())}
         )
 
-        lambda_client.invoke(
+        get_lambda_client().invoke(
             FunctionName=FUNCTION_NAME,
             InvocationType='Event',  # Asynchronous invocation
             Payload=json.dumps(async_payload)
@@ -341,7 +420,7 @@ def generate_presigned_url_from_s3_uri(s3_uri: str, expiration: int = 3600) -> O
         return None
     try:
         bucket_name, key = s3_uri[5:].split('/', 1)
-        url = s3_client.generate_presigned_url(
+        url = get_s3_client().generate_presigned_url(
             'get_object',
             Params={'Bucket': bucket_name, 'Key': key},
             ExpiresIn=expiration
@@ -362,7 +441,7 @@ def handle_get_results(event):
         return {'statusCode': 400, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Missing sessionId'})}
 
     try:
-        resp = table.get_item(Key={'sessionId': session_id})
+        resp = get_table().get_item(Key={'sessionId': session_id})
         item = resp.get('Item')
         if not item or item.get('userId') != user_id:
             logger.warning(f"Forbidden results access attempt: user {user_id} for session {session_id}")
@@ -373,7 +452,7 @@ def handle_get_results(event):
             if 'charts' in item and isinstance(item['charts'], dict):
                 for key, s3_uri in item['charts'].items():
                     item['charts'][key] = generate_presigned_url_from_s3_uri(s3_uri) or s3_uri
-            
+
             if 'reportPdf' in item and isinstance(item['reportPdf'], str):
                 item['reportPdf'] = generate_presigned_url_from_s3_uri(item['reportPdf']) or item['reportPdf']
 
@@ -392,13 +471,13 @@ def handle_analyze_task(event):
 
     try:
         metrics, charts, report_url = perform_full_analysis(
-            session_id, 
-            calibration=body.get('calibration'), 
+            session_id,
+            calibration=body.get('calibration'),
             forms=body.get('forms'),
             userInfo=userInfo
         )
 
-        table.update_item(
+        get_table().update_item(
             Key={'sessionId': session_id},
             UpdateExpression='SET #st=:st, #mt=:m, #ch=:c, reportPdf=:r, updatedAt=:u',
             ExpressionAttributeNames={'#st': 'status', '#mt': 'metrics', '#ch': 'charts'},
@@ -411,7 +490,7 @@ def handle_analyze_task(event):
             }
         )
 
-        if user_id and events_table:
+        if user_id and get_events_table():
             try:
                 event_id = str(uuid.uuid4())
                 now_iso = datetime.utcnow().isoformat() + 'Z'
@@ -427,7 +506,7 @@ def handle_analyze_task(event):
                 event_details = {
                     'notes': 'VFS Tracker Voice Analysis Tools 自动生成报告',
                     'appUsed': 'VFS Tracker Online Analysis',
-                    
+
                     # 修正：根据用户的精确要求，为顶层指标设置正确的数据源
                     'fundamentalFrequency': spontaneous_metrics.get('f0_mean'), # 来自自发语音
                     'jitter': sustained_metrics.get('jitter_local_percent'),     # 来自持续元音
@@ -436,7 +515,7 @@ def handle_analyze_task(event):
                 }
 
                 # 保持顶层 formants 对象的现有结构
-                formants_low = sustained_metrics.get('formants_low', {})
+                formants_low = metrics.get('formants_low', {})  # 顶层
                 if formants_low:
                     event_details['formants'] = {
                         'f1': formants_low.get('F1'),
@@ -454,7 +533,7 @@ def handle_analyze_task(event):
                 # 保持完整的 full_metrics 对象，以确保向后兼容
                 event_details['full_metrics'] = metrics
 
-                events_table.put_item(Item={
+                get_events_table().put_item(Item={
                     'userId': user_id,
                     'eventId': event_id,
                     'type': 'self_test',
@@ -471,7 +550,7 @@ def handle_analyze_task(event):
     except Exception as e:
         logger.error(f'handle_analyze_task failed: {e}', exc_info=True)
         try:
-            table.update_item(
+            get_table().update_item(
                 Key={'sessionId': session_id},
                 UpdateExpression='SET #st=:st, errorMessage=:e, updatedAt=:u',
                 ExpressionAttributeNames={'#st': 'status'},
@@ -488,7 +567,7 @@ def handler(event, context):
         handle_analyze_task(event)
         return {'status': 'ok', 'message': 'Analysis task finished.'}
 
-    if not all([DDB_TABLE, BUCKET, table, FUNCTION_NAME]):
+    if not all([DDB_TABLE, BUCKET, get_table(), FUNCTION_NAME]):
         logger.error("Server misconfiguration: Missing critical environment variables.")
         return {'statusCode': 500, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Server misconfiguration'})}
 
@@ -513,7 +592,7 @@ def handler(event, context):
 # Helper functions from original code that are still needed
 def list_session_audio_keys(session_id: str):
     prefix = RAW_PREFIX_TEMPLATE.format(sessionId=session_id)
-    paginator = s3_client.get_paginator('list_objects_v2')
+    paginator = get_s3_client().get_paginator('list_objects_v2')
     groups = {}
     for page in paginator.paginate(Bucket=BUCKET, Prefix=prefix):
         for obj in page.get('Contents', []) or []:
@@ -528,7 +607,7 @@ def list_session_audio_keys(session_id: str):
 def safe_download(key: str) -> str:
     local_path = os.path.join(TMP_BASE, key.replace('/', '_'))
     try:
-        s3_client.download_file(BUCKET, key, local_path)
+        get_s3_client().download_file(BUCKET, key, local_path)
         return local_path
     except Exception as e:
         logger.error(f'safe_download: Failed to download key={key} err={e}')
