@@ -124,7 +124,9 @@ export const handler = async (event) => {
             const parsed = new URL(signedUrl);
             parsed.host = cdnHost;
             signedUrl = parsed.toString();
-        } catch (err) {}
+        } catch (err) {
+            console.error('Error modifying signed URL host:', err);
+        }
 
         return createResponse(200, { url: signedUrl, expiresIn: 3600 });
 
