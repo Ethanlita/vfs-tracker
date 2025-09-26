@@ -59,7 +59,9 @@ export const handler = async (event) => {
             const parsed = new URL(signedUrl);
             parsed.host = cdnHost;
             signedUrl = parsed.toString();
-        } catch (err) {}
+        } catch (err) {
+            console.error('Failed to parse or modify signedUrl:', err);
+        }
 
         return {
             statusCode: 200,

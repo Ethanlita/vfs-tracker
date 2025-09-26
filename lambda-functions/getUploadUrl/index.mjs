@@ -107,7 +107,10 @@ export const handler = async (event) => {
       const parsed = new URL(uploadUrl);
       parsed.host = cdnHost;
       uploadUrl = parsed.toString();
-    } catch {}
+    } catch (e) {
+      // Failed to rewrite host; proceed with original uploadUrl
+      console.error('[getUploadUrl] Failed to rewrite uploadUrl host', e);
+    }
 
     return {
       statusCode: 200,
