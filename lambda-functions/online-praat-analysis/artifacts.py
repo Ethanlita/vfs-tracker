@@ -745,11 +745,14 @@ def create_pdf_report(session_id, metrics, chart_urls, debug_info=None, userInfo
             story.append(PageBreak())
 
         # ---- Formant Analysis ----
+        # 顶层：最低/最高音；sustained 节点：持续元音
         sustained_metrics = metrics.get('sustained', {}) if isinstance(metrics.get('sustained'), dict) else {}
-        # Ensure formant data are dictionaries to prevent errors on .get()
-        formant_low = sustained_metrics.get('formants_low') or {}
-        formant_high = sustained_metrics.get('formants_high') or {}
+
+        formant_low = metrics.get('formants_low') or {}
+        formant_high = metrics.get('formants_high') or {}
         formant_sustained = sustained_metrics.get('formants_sustained') or {}
+
+        # formant_analysis_failed 的标记是在 sustained 节点里设的（沿用你的逻辑）
         formant_failed = sustained_metrics.get('formant_analysis_failed')
 
         try:
@@ -833,7 +836,7 @@ def create_pdf_report(session_id, metrics, chart_urls, debug_info=None, userInfo
             story.append(Spacer(1, 12))
 
             for key, data in debug_info.items():
-                if not data or not data.get('frames'): continue
+                if not data: continue  # 不再要求必须有 'frames'，create_diagnostic_charts 会兼容 'best_window_frames'
                 title_map = {'sustained': 'Sustained Vowel', 'low_note': 'Lowest Note', 'high_note': 'Highest Note'}
                 chart_buf = create_diagnostic_charts(data, title_map.get(key, key.replace('_', ' ').title()))
                 if chart_buf:

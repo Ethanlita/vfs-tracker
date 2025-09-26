@@ -172,6 +172,7 @@ def perform_full_analysis(session_id: str, calibration: dict = None, forms: dict
     charts = {}
     debug_info_collection = {}
     artifact_prefix = ARTIFACT_PREFIX_TEMPLATE.format(sessionId=session_id)
+    sustained_lpc = None  # 将持续元音的 LPC 光谱留到后面绘图
 
     # Sustained Vowel (Step 2)
     sustained_keys = audio_groups.get('2', [])[:MAX_DOWNLOAD_FILES_PER_STEP]
@@ -183,6 +184,9 @@ def perform_full_analysis(session_id: str, calibration: dict = None, forms: dict
 
         chosen_sustained_for_charting = sus_metrics_package.get('chosen_file')
         debug_info_collection['sustained'] = sus_metrics_package.get('debug_info')
+
+        # 新增：提取持续元音的 LPC 光谱，作为第 3 条曲线
+        sustained_lpc = sus_metrics_package.get('lpc_spectrum')
 
         # Use the file chosen by the analysis function for the chart
         if chosen_sustained_for_charting:
@@ -250,8 +254,8 @@ def perform_full_analysis(session_id: str, calibration: dict = None, forms: dict
             get_s3_client().upload_fileobj(placeholder_buf, BUCKET, formant_key, ExtraArgs={'ContentType': 'image/png'})
             charts['formant'] = f's3://{BUCKET}/{formant_key}'
 
-    if spectrum_low or spectrum_high:
-        formant_spl_buf = create_formant_spl_chart(spectrum_low, spectrum_high)
+    if spectrum_low or spectrum_high or sustained_lpc:
+        formant_spl_buf = create_formant_spl_chart(spectrum_low, spectrum_high, sustained_lpc)
         if formant_spl_buf:
             formant_spl_key = artifact_prefix + 'formant_spl_spectrum.png'
             get_s3_client().upload_fileobj(formant_spl_buf, BUCKET, formant_spl_key, ExtraArgs={'ContentType': 'image/png'})
@@ -511,7 +515,7 @@ def handle_analyze_task(event):
                 }
 
                 # 保持顶层 formants 对象的现有结构
-                formants_low = sustained_metrics.get('formants_low', {})
+                formants_low = metrics.get('formants_low', {})  # 顶层
                 if formants_low:
                     event_details['formants'] = {
                         'f1': formants_low.get('F1'),
