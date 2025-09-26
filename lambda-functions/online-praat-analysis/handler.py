@@ -377,6 +377,22 @@ def handle_get_upload_url(event):
             'Key': object_key,
             'ContentType': body.get('contentType', 'audio/wav')
         }, ExpiresIn=3600)
+        headers = (event.get('headers') or {})
+        normalized_host = str(
+            headers.get('x-forwarded-host')
+            or headers.get('X-Forwarded-Host')
+            or headers.get('host')
+            or headers.get('Host')
+            or (event.get('requestContext') or {}).get('domainName')
+            or ''
+        ).lower()
+        cdn_host = 'storage.vfs-tracker.cn' if normalized_host.endswith('.cn') else 'storage.vfs-tracker.app'
+        try:
+            from urllib.parse import urlparse, urlunparse
+            parsed = urlparse(url)
+            url = urlunparse((parsed.scheme, cdn_host, parsed.path, parsed.params, parsed.query, parsed.fragment))
+        except Exception:
+            pass
         return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': json.dumps({'putUrl': url, 'objectKey': object_key})}
     except ClientError as e:
         logger.error(f'handle_get_upload_url error: {e}')
