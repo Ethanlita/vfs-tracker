@@ -32,9 +32,6 @@ def pick_params(f0_median: float) -> (int, float):
         win_len = 0.035
     return max_formant, win_len
 
-def is_voiced_enough(pitch_confidence: float, hnr: float) -> bool:
-    """Checks if a frame is reliably voiced."""
-    return pitch_confidence >= 0.7 and hnr >= 8.0
 
 def true_envelope_db(frame: np.ndarray, sr: int, lifter_ms: float = 2.8):
     """
@@ -50,6 +47,7 @@ def true_envelope_db(frame: np.ndarray, sr: int, lifter_ms: float = 2.8):
 
     # NFFT：留出冗余提高频率分辨率
     nfft = int(2 ** np.ceil(np.log2(xw.size) + 1))
+    nfft = min(nfft, 131072)  # cap，48kHz 下约 2.7s 音频也足够用了
     S = np.abs(np.fft.rfft(xw, n=nfft)) + 1e-12
     logS = np.log(S)
     ceps = np.fft.irfft(logS, n=nfft)
@@ -155,7 +153,7 @@ def analyze_note_file_robust(path: str, f0min: int = 75, f0max: int = 1200) -> D
             # 段级真谱包络（一次即可）
             q_ms = 2.8
             if f0_median > 0:
-                q_ms = min(3.0, 0.8 * (1000.0 / f0_median))  # 0.8*T0, 上限 3 ms
+                q_ms = min(3.0, max(1.5, 0.8 * (1000.0 / f0_median)))
             env_db, freqs = true_envelope_db(seg_arr, seg_sr, lifter_ms=q_ms)
             # Praat(Burg)
             max_formant_eff = min(max_formant_freq, 0.9 * seg_sr / 2.0)  # Nyquist 安全
@@ -216,6 +214,10 @@ def analyze_note_file_robust(path: str, f0min: int = 75, f0max: int = 1200) -> D
                     fr['conf1'] = fr.get('conf1', 0.0) * 0.2
                     fr['conf2'] = fr.get('conf2', 0.0) * 0.2
 
+                if 'f2' in fr and 'f3' in fr:
+                    if not (fr['f2'] < fr['f3'] and (fr['f3'] - fr['f2'] >= 200.0)):
+                        fr['conf2'] = fr.get('conf2', 0.0) * 0.2
+
                 all_frames.append(fr)
 
         if not all_frames:
@@ -224,6 +226,7 @@ def analyze_note_file_robust(path: str, f0min: int = 75, f0max: int = 1200) -> D
         # 选“最佳时间窗口”：窗口宽 W，最大化 Σ(conf1+conf2) 与帧数
         frames = sorted(all_frames, key=lambda x: x['time'])
         W = 0.25  # 250 ms 窗口
+        MIN_FRAMES = 8
         best_sum, best_i, best_j = -1.0, 0, 0
         n = len(frames)
         j = 0
@@ -233,8 +236,9 @@ def analyze_note_file_robust(path: str, f0min: int = 75, f0max: int = 1200) -> D
                 j += 1
             window = frames[i:j]
             score_sum = sum(f.get('conf1', 0.0) + f.get('conf2', 0.0) for f in window)
-            # 简单组合目标：得分优先，其次窗口内帧数
-            if (score_sum > best_sum) or (math.isclose(score_sum, best_sum) and (j - i) > (best_j - best_i)):
+            # 组合目标：得分优先，其次窗口内帧数，且要满足最少帧数
+            if (score_sum > best_sum and (j - i) >= MIN_FRAMES) or \
+               (math.isclose(score_sum, best_sum) and (j - i) > (best_j - best_i)):
                 best_sum, best_i, best_j = score_sum, i, j
 
         best_window = frames[best_i:best_j] if best_j > best_i else frames
