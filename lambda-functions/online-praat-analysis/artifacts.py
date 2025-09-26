@@ -327,9 +327,12 @@ def create_formant_spl_chart(spectrum_low, spectrum_high, spectrum_sustained=Non
 
 def create_diagnostic_charts(debug_info: dict, title: str):
     """Creates a multi-panel chart with diagnostic data from the analysis."""
-    frames = debug_info.get('frames', [])
+    frames = []
+    if isinstance(debug_info, dict):
+        frames = debug_info.get('frames') or debug_info.get('best_window_frames') or []
     if not frames:
         return create_placeholder_chart(f"Diagnostics: {title}", "No frame data available for diagnostics.")
+
 
     try:
         times = [f['time'] for f in frames]
