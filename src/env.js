@@ -12,7 +12,17 @@ export const isProductionReady = () => {
 
 // 统一获取规范化后的 API 基础地址（去掉末尾斜杠）
 export const getNormalizedApiBase = () => {
-  const base = import.meta.env.VITE_API_ENDPOINT || '';
+  const pickByWindow = () => {
+    if (typeof window !== 'undefined' && window.location?.hostname) {
+      const hn = window.location.hostname.toLowerCase();
+      return hn.endsWith('.cn')
+        ? 'https://api.vfs-tracker.cn'
+        : 'https://api.vfs-tracker.app';
+    }
+    return 'https://api.vfs-tracker.app';
+  };
+  const configured = import.meta.env.VITE_API_ENDPOINT || 'auto';
+  const base = (configured === 'auto') ? pickByWindow() : configured;
   return base.replace(/\/+$/, '');
 };
 
