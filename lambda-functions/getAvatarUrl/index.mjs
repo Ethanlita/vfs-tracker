@@ -43,7 +43,25 @@ export const handler = async (event) => {
         });
 
         // 头像URL有效期设置为24小时
-        const signedUrl = await getSignedUrl(s3Client, command, { expiresIn: 86400 });
+        let signedUrl = await getSignedUrl(s3Client, command, { expiresIn: 86400 });
+        const normalizedHost = String(
+            event.headers?.['x-forwarded-host'] ||
+            event.headers?.['X-Forwarded-Host'] ||
+            event.headers?.host ||
+            event.headers?.Host ||
+            event.requestContext?.domainName ||
+            ''
+        ).toLowerCase();
+        const cdnHost = normalizedHost.endsWith('.cn')
+            ? 'storage.vfs-tracker.cn'
+            : 'storage.vfs-tracker.app';
+        try {
+            const parsed = new URL(signedUrl);
+            parsed.host = cdnHost;
+            signedUrl = parsed.toString();
+        } catch (err) {
+            console.error('Failed to parse or modify signedUrl:', err);
+        }
 
         return {
             statusCode: 200,

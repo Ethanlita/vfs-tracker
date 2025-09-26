@@ -92,6 +92,26 @@ export const handler = async (event) => {
       return errorResponse(500, '生成预签名URL失败', { reason: e.message });
     }
 
+    const normalizedHost = String(
+      event.headers?.['x-forwarded-host'] ||
+      event.headers?.['X-Forwarded-Host'] ||
+      event.headers?.host ||
+      event.headers?.Host ||
+      event.requestContext?.domainName ||
+      ''
+    ).toLowerCase();
+    const cdnHost = normalizedHost.endsWith('.cn')
+      ? 'storage.vfs-tracker.cn'
+      : 'storage.vfs-tracker.app';
+    try {
+      const parsed = new URL(uploadUrl);
+      parsed.host = cdnHost;
+      uploadUrl = parsed.toString();
+    } catch (e) {
+      // Failed to rewrite host; proceed with original uploadUrl
+      console.error('[getUploadUrl] Failed to rewrite uploadUrl host', e);
+    }
+
     return {
       statusCode: 200,
       headers: CORS_HEADERS,

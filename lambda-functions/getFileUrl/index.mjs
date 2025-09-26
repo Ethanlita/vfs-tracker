@@ -108,7 +108,25 @@ export const handler = async (event) => {
             Bucket: BUCKET_NAME,
             Key: fileKey,
         });
-        const signedUrl = await getSignedUrl(s3Client, s3Command, { expiresIn: 3600 });
+        let signedUrl = await getSignedUrl(s3Client, s3Command, { expiresIn: 3600 });
+        const normalizedHost = String(
+            event.headers?.['x-forwarded-host'] ||
+            event.headers?.['X-Forwarded-Host'] ||
+            event.headers?.host ||
+            event.headers?.Host ||
+            event.requestContext?.domainName ||
+            ''
+        ).toLowerCase();
+        const cdnHost = normalizedHost.endsWith('.cn')
+            ? 'storage.vfs-tracker.cn'
+            : 'storage.vfs-tracker.app';
+        try {
+            const parsed = new URL(signedUrl);
+            parsed.host = cdnHost;
+            signedUrl = parsed.toString();
+        } catch (err) {
+            console.error('Error modifying signed URL host:', err);
+        }
 
         return createResponse(200, { url: signedUrl, expiresIn: 3600 });
 
