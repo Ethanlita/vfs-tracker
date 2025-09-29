@@ -7,6 +7,7 @@ import { useAsync } from '../utils/useAsync.js';
 import { isProductionReady as globalIsProductionReady } from '../env.js';
 import { getUserDisplayName } from '../utils/avatar.js';
 import { useAuth } from '../contexts/AuthContext.jsx';
+import PendingSyncButton from './PendingSyncButton.jsx';
 
 /**
  * @en The MyPage component serves as the user's personal dashboard. It fetches,
@@ -161,6 +162,7 @@ const MyPage = () => {
         >
           🎶 音阶练习
         </button>
+        <PendingSyncButton className="bg-gradient-to-r from-yellow-500 to-amber-600 text-white px-6 py-3 rounded-lg font-semibold shadow-lg hover:from-yellow-600 hover:to-amber-700 transition-all duration-300 transform hover:scale-105" />
       </div>
 
       {/* 错误处理 */}

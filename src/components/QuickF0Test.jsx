@@ -33,6 +33,8 @@ const CustomTooltip = ({ active, payload }) => {
   return null;
 };
 
+const OFFLINE_QUEUE_KEY = 'pendingEvents:v1';
+
 /**
  * @zh QuickF0Test 组件提供了一个用于快速测试基频(F0)的界面。
  * 用户可以录制自己的声音，查看实时的基频反馈，并选择将结果保存为一个新事件。
@@ -155,10 +157,30 @@ const QuickF0Test = () => {
     };
 
     try {
-      // 3. 使用相同的 addEvent API 进行调用
-      await addEvent(eventData);
-      alert('事件已成功保存！');
-      navigate('/mypage');
+      const isOnline = typeof navigator === 'undefined' ? true : navigator.onLine;
+
+      if (isOnline) {
+        await addEvent(eventData);
+        alert('事件已成功保存！');
+        navigate('/mypage');
+      } else {
+        try {
+          if (typeof localStorage === 'undefined') {
+            throw new Error('当前环境不支持离线存储');
+          }
+          const existing = JSON.parse(localStorage.getItem(OFFLINE_QUEUE_KEY) || '[]');
+          existing.push({ when: Date.now(), eventData });
+          localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(existing));
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new Event('pending-events-updated'));
+          }
+          alert('已离线保存，网络恢复后可在“我的页面”同步。');
+          navigate('/mypage');
+        } catch (storageError) {
+          console.error('离线保存失败:', storageError);
+          setError('离线保存失败，请检查浏览器存储权限或稍后再试。');
+        }
+      }
     } catch (err) {
       console.error("保存事件失败:", err);
       setError(err.message || '保存事件时发生未知错误。');

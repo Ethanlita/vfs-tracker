@@ -78,8 +78,8 @@ export const AuthProvider = ({ children }) => {
         const currentUser = await getCurrentUser();
         if (currentUser) {
           console.log('🔄 检测到现有认证会话:', currentUser);
-          // 关键修复1: 必须等待整个认证和用户资料加载流程完成
-          await handleAuthSuccess(currentUser);
+          // 认证和用户资料加载改为后台并行执行
+          handleAuthSuccess(currentUser);
         }
       } catch (error) {
         console.log('🔍 未检测到现有认证会话:', error.message);
@@ -131,6 +131,19 @@ export const AuthProvider = ({ children }) => {
   const loadUserProfile = async (userId) => {
     if (!userId) return;
 
+    const cacheKey = `userProfile:v1:${userId}`;
+    try {
+      const cached = localStorage.getItem(cacheKey);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed) {
+          setUserProfile(parsed);
+        }
+      }
+    } catch (error) {
+      console.warn('⚠️ 解析用户资料缓存失败，忽略本地缓存', error);
+    }
+
     setProfileLoading(true);
     try {
       console.log('🔍 正在检查用户是否存在于数据库中:', userId);
@@ -138,6 +151,14 @@ export const AuthProvider = ({ children }) => {
 
       console.log('✅ 用户存在于数据库中，加载用户资料:', profile);
       setUserProfile(profile);
+      try {
+        localStorage.setItem(cacheKey, JSON.stringify({
+          ...profile,
+          _cacheMeta: { t: Date.now(), userId }
+        }));
+      } catch (error) {
+        console.warn('⚠️ 无法写入用户资料缓存', error);
+      }
 
       // 检查资料是否完整 - 只根据资料内容判断，不考虑时间因素
       const isComplete = isUserProfileComplete(profile);
@@ -200,10 +221,11 @@ export const AuthProvider = ({ children }) => {
 
     try {
       // 使用Amplify v6标准API获取完整用户信息
-      console.log('📍 [验证点20] 调用 getCurrentUser()...');
-      const currentUser = await getCurrentUser();
-      console.log('📍 [验证点20] 调用 fetchUserAttributes()...');
-      const userAttributes = await fetchUserAttributes();
+      console.log('📍 [验证点20] 并行调用 getCurrentUser() 与 fetchUserAttributes()...');
+      const [currentUser, userAttributes] = await Promise.all([
+        getCurrentUser(),
+        fetchUserAttributes()
+      ]);
 
       console.log('🔍 AuthContext: Amplify v6 API获取的数据:', {
         currentUser,
@@ -242,8 +264,8 @@ export const AuthProvider = ({ children }) => {
 
       // 加载用户资料
       if (userData.userId) {
-        // 关键修复2: 等待用户资料加载完成
-        await loadUserProfile(userData.userId);
+        // 用户资料加载改为后台进行
+        loadUserProfile(userData.userId);
       } else {
         setNeedsProfileSetup(true);
         setUserProfile(null);
@@ -273,7 +295,10 @@ export const AuthProvider = ({ children }) => {
       setUser(basicUserData);
 
       if (basicUserData.userId) {
-        await loadUserProfile(basicUserData.userId);
+        loadUserProfile(basicUserData.userId);
+      } else {
+        setNeedsProfileSetup(true);
+        setUserProfile(null);
       }
     }
   };
