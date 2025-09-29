@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { getUserDisplayName } from '../utils/avatar.js';
 
@@ -41,6 +41,18 @@ function NavItem({ to, label, onClick }) {
 
 const Sidebar = ({ open, onClose, user, avatarUrl, docLink, AuthComponent }) => {
   const location = useLocation();
+
+  const navItems = useMemo(
+    () => [
+      { to: '/', label: '🏠 首页' },
+      { to: '/quick-f0-test', label: '⚡ 快速基频测试' },
+      { to: '/voice-test', label: '🎤 启动嗓音测试' },
+      { to: '/scale-practice', label: '🎹 音阶练习' },
+      { to: '/mypage', label: '👤 我的页面' },
+      { to: '/event-manager', label: '📅 事件管理' },
+    ],
+    []
+  );
 
   useEffect(() => {
     if (open) {
@@ -128,9 +140,17 @@ const Sidebar = ({ open, onClose, user, avatarUrl, docLink, AuthComponent }) => 
           </div>
         </div>
 
-        <nav className="px-3 py-4 space-y-1 overflow-y-auto">
+        <nav className="px-3 py-4 space-y-2 overflow-y-auto">
+          <div className="space-y-1">
+            {navItems.map((item) => (
+              <NavItem key={item.to} to={item.to} label={item.label} onClick={onClose} />
+            ))}
+          </div>
+
           {docLink ? (
-            <NavItem to={docLink.to} label={docLink.label} onClick={onClose} />
+            <div className="pt-3 border-t border-gray-100 mt-3">
+              <NavItem to={docLink.to} label={docLink.label} onClick={onClose} />
+            </div>
           ) : null}
         </nav>
 
