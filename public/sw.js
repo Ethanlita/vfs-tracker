@@ -8,41 +8,39 @@ const APP_SHELL = [
   '/manifest.json',
   '/favicon.ico',
   '/icons/icon-192x192.png',
-  '/icons/icon-512x512.png'
+  '/icons/icon-512x512.png',
 ];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(APP_CACHE).then((cache) => cache.addAll(APP_SHELL))
+    (async () => {
+      try {
+        const cache = await caches.open(APP_CACHE);
+        await cache.addAll(APP_SHELL);
+      } catch (error) {
+        console.warn('[sw] Failed to precache app shell', error);
+      }
+      self.skipWaiting();
+    })()
   );
-  self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(
+    (async () => {
+      const keys = await caches.keys();
+      await Promise.all(
         keys
           .filter((key) => key !== APP_CACHE && key !== RUNTIME_CACHE)
           .map((key) => caches.delete(key))
-      )
-    )
+      );
+      await self.clients.claim();
+    })()
   );
-  self.clients.claim();
 });
 
 self.addEventListener('fetch', (event) => {
   const { request } = event;
-
-  if (request.mode === 'navigate') {
-    event.respondWith(
-      caches.match('/index.html', { cacheName: APP_CACHE }).then((cached) => {
-        if (cached) return cached;
-        return fetch(request).catch(() => caches.match('/index.html', { cacheName: APP_CACHE }));
-      })
-    );
-    return;
-  }
 
   if (request.method !== 'GET') {
     return;
@@ -55,6 +53,27 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  if (request.mode === 'navigate') {
+    event.respondWith(
+      (async () => {
+        try {
+          const networkResponse = await fetch(request);
+          const cache = await caches.open(APP_CACHE);
+          cache.put('/index.html', networkResponse.clone());
+          return networkResponse;
+        } catch (error) {
+          const cache = await caches.open(APP_CACHE);
+          const cached = await cache.match('/index.html');
+          if (cached) {
+            return cached;
+          }
+          throw error;
+        }
+      })()
+    );
+    return;
+  }
+
   event.respondWith(
     (async () => {
       const cache = await caches.open(RUNTIME_CACHE);
@@ -62,7 +81,7 @@ self.addEventListener('fetch', (event) => {
       if (cached) {
         fetch(request)
           .then((response) => {
-            if (response && response.status === 200) {
+            if (response && response.ok) {
               cache.put(request, response.clone());
             }
           })
@@ -72,12 +91,15 @@ self.addEventListener('fetch', (event) => {
 
       try {
         const networkResponse = await fetch(request);
-        if (networkResponse && networkResponse.status === 200) {
+        if (networkResponse && networkResponse.ok) {
           cache.put(request, networkResponse.clone());
         }
         return networkResponse;
       } catch (error) {
-        return cached;
+        if (cached) {
+          return cached;
+        }
+        throw error;
       }
     })()
   );
