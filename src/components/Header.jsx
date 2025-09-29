@@ -1,21 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import Sidebar from './Sidebar.jsx';
-import PostsDropdown from './PostsDropdown.jsx';
 import { useAuth } from '../contexts/AuthContext.jsx';
 import { generateAvatarFromName, getUserAvatarUrl, getUserDisplayName } from '../utils/avatar.js';
 
-const navItems = [
-  { label: '首页', to: '/' },
-  { label: '公开数据面板', to: '/dashboard' },
-  { label: '快速基频测试', to: '/quick-f0-test' },
-  { label: '音阶练习', to: '/scale-practice' },
-  { label: '嗓音测试', to: '/voice-test' },
-  { label: '我的页面', to: '/mypage' },
-  { label: '资料设置向导', to: '/profile-setup-wizard' },
-];
-
-const Header = ({ ready, AuthComponent }) => {
+const Header = ({ AuthComponent }) => {
   const { user } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState('');
@@ -50,14 +39,7 @@ const Header = ({ ready, AuthComponent }) => {
     };
   }, [user, displayName]);
 
-  const docsItems = useMemo(
-    () => [
-      { label: '文档首页', to: '/posts' },
-      { label: '使用指南', to: '/docs?doc=getting-started.md' },
-      { label: '常见问题', to: '/docs?doc=faq.md' },
-    ],
-    []
-  );
+  const docLink = useMemo(() => ({ label: '文档', to: '/posts' }), []);
 
   return (
     <>
@@ -83,16 +65,7 @@ const Header = ({ ready, AuthComponent }) => {
               </NavLink>
 
               <div className="hidden lg:flex items-center gap-3 ml-6">
-                <TopNavLink to="/">首页</TopNavLink>
-                <TopNavLink to="/dashboard">公开数据面板</TopNavLink>
-                <TopNavLink to="/quick-f0-test">快速基频测试</TopNavLink>
-                <TopNavLink to="/scale-practice">音阶练习</TopNavLink>
-                <TopNavLink to="/voice-test">嗓音测试</TopNavLink>
-                <TopNavLink to="/mypage">我的页面</TopNavLink>
-                <PostsDropdown />
-                {!ready && (
-                  <span className="bg-orange-100 text-orange-700 px-2 py-1 rounded text-xs font-medium">开发模式</span>
-                )}
+                <TopNavLink to={docLink.to}>{docLink.label}</TopNavLink>
               </div>
             </div>
 
@@ -121,8 +94,7 @@ const Header = ({ ready, AuthComponent }) => {
         onClose={() => setSidebarOpen(false)}
         user={user}
         avatarUrl={avatarUrl}
-        navItems={navItems}
-        docsItems={docsItems}
+        docLink={docLink}
         AuthComponent={AuthComponent}
       />
     </>
