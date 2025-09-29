@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { getUserDisplayName } from '../utils/avatar.js';
 
@@ -41,6 +41,9 @@ function NavItem({ to, label, onClick }) {
 
 const Sidebar = ({ open, onClose, user, avatarUrl, docLink, AuthComponent }) => {
   const location = useLocation();
+
+  const [installPromptEvent, setInstallPromptEvent] = useState(null);
+  const [isStandalone, setIsStandalone] = useState(false);
 
   const navItems = useMemo(
     () => [
@@ -93,6 +96,69 @@ const Sidebar = ({ open, onClose, user, avatarUrl, docLink, AuthComponent }) => 
 
   const displayName = user ? getUserDisplayName(user) : '未登录用户';
   const userEmail = user?.attributes?.email || '';
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return undefined;
+    }
+
+    const checkStandalone = () => {
+      const matchStandalone = window.matchMedia
+        ? window.matchMedia('(display-mode: standalone)').matches
+        : false;
+      const navigatorStandalone = window.navigator?.standalone;
+      setIsStandalone(Boolean(matchStandalone || navigatorStandalone));
+    };
+
+    checkStandalone();
+
+    const handleBeforeInstallPrompt = (event) => {
+      event.preventDefault();
+      setInstallPromptEvent(event);
+    };
+
+    const handleAppInstalled = () => {
+      setIsStandalone(true);
+      setInstallPromptEvent(null);
+    };
+
+    const mediaQuery = window.matchMedia ? window.matchMedia('(display-mode: standalone)') : null;
+    const handleDisplayModeChange = (event) => {
+      setIsStandalone(event.matches);
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    window.addEventListener('appinstalled', handleAppInstalled);
+    if (mediaQuery) {
+      if (mediaQuery.addEventListener) {
+        mediaQuery.addEventListener('change', handleDisplayModeChange);
+      } else if (mediaQuery.addListener) {
+        mediaQuery.addListener(handleDisplayModeChange);
+      }
+    }
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      window.removeEventListener('appinstalled', handleAppInstalled);
+      if (mediaQuery) {
+        if (mediaQuery.removeEventListener) {
+          mediaQuery.removeEventListener('change', handleDisplayModeChange);
+        } else if (mediaQuery.removeListener) {
+          mediaQuery.removeListener(handleDisplayModeChange);
+        }
+      }
+    };
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (!installPromptEvent) return;
+    installPromptEvent.prompt();
+    try {
+      await installPromptEvent.userChoice;
+    } finally {
+      setInstallPromptEvent(null);
+    }
+  };
 
   return (
     <div
@@ -150,6 +216,24 @@ const Sidebar = ({ open, onClose, user, avatarUrl, docLink, AuthComponent }) => 
           {docLink ? (
             <div className="pt-3 border-t border-gray-100 mt-3">
               <NavItem to={docLink.to} label={docLink.label} onClick={onClose} />
+            </div>
+          ) : null}
+
+          {!isStandalone && installPromptEvent ? (
+            <div className="pt-3 border-t border-gray-100 mt-3 lg:hidden">
+              <button
+                type="button"
+                onClick={() => {
+                  handleInstallClick();
+                  onClose?.();
+                }}
+                className="w-full rounded-lg bg-pink-500 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-pink-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-pink-500"
+              >
+                📲 安装到手机
+              </button>
+              <p className="mt-2 text-xs text-gray-500">
+                安装后即可在主屏幕快速打开 VFS Tracker。
+              </p>
             </div>
           ) : null}
         </nav>
