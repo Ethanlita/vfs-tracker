@@ -31,7 +31,6 @@ const Layout = ({ children, AuthComponent, onProfileSetupClick }) => {
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                         <div className="flex flex-col gap-1">
                             <p>&copy; 2025 VFS Tracker. 一个开源项目。</p>
-                            <p>我们建议您暂时使用电脑访问以获得更好体验</p>
                         </div>
                         <div className="flex items-center gap-2 flex-shrink-0">
                             {ready ? (

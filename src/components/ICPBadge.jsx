@@ -7,7 +7,7 @@ const ICPBadge = () => {
     return null;
   }
 
-  const recordNo = '粤ICP备XXXXXXX号-1'; // TODO: 上线前替换为真实备案号
+  const recordNo = '桂ICP备2025072780号-1';
 
   return (
     <div className="w-full flex justify-center items-center py-4 border-t border-gray-200">
