@@ -32,6 +32,15 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Compute BUILD_ID
+        run: echo "BUILD_ID=$(git rev-parse --short HEAD)-${GITHUB_RUN_NUMBER}" >> $GITHUB_ENV
+
+      - name: Inject BUILD_ID into service worker
+        run: |
+          echo "Using BUILD_ID=$BUILD_ID"
+          sed -i.bak "s/__BUILD_ID__/${BUILD_ID}/g" public/sw.js
+          rm -f public/sw.js.bak
+
       - name: Build project
         run: npm run build
         env:

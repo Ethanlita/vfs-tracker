@@ -430,7 +430,7 @@ def handle_analyze_trigger(event):
         logger.error(f'handle_analyze_trigger failed: {e}')
         return {'statusCode': 500, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Failed to queue analysis'})}
 
-def generate_presigned_url_from_s3_uri(s3_uri: str, expiration: int = 3600) -> Optional[str]:
+def generate_presigned_url_from_s3_uri(s3_uri: str, event=None, expiration: int = 3600) -> Optional[str]:
     """Parses an S3 URI and generates a presigned GET URL."""
     if not s3_uri or not s3_uri.startswith('s3://'):
         return None
@@ -441,6 +441,23 @@ def generate_presigned_url_from_s3_uri(s3_uri: str, expiration: int = 3600) -> O
             Params={'Bucket': bucket_name, 'Key': key},
             ExpiresIn=expiration
         )
+        if event:
+            headers = (event.get('headers') if isinstance(event, dict) else {}) or {}
+            normalized_host = str(
+                headers.get('x-forwarded-host')
+                or headers.get('X-Forwarded-Host')
+                or headers.get('host')
+                or headers.get('Host')
+                or (event.get('requestContext') if isinstance(event, dict) else {}).get('domainName')
+                or ''
+            ).lower()
+            cdn_host = 'storage.vfs-tracker.cn' if normalized_host.endswith('.cn') else 'storage.vfs-tracker.app'
+            try:
+                from urllib.parse import urlparse, urlunparse
+                parsed = urlparse(url)
+                url = urlunparse((parsed.scheme, cdn_host, parsed.path, parsed.params, parsed.query, parsed.fragment))
+            except Exception:
+                pass
         return url
     except (ValueError, ClientError) as e:
         logger.error(f"Failed to generate presigned URL for {s3_uri}: {e}")
@@ -467,10 +484,10 @@ def handle_get_results(event):
         if item.get('status') == 'done':
             if 'charts' in item and isinstance(item['charts'], dict):
                 for key, s3_uri in item['charts'].items():
-                    item['charts'][key] = generate_presigned_url_from_s3_uri(s3_uri) or s3_uri
+                    item['charts'][key] = generate_presigned_url_from_s3_uri(s3_uri, event) or s3_uri
 
             if 'reportPdf' in item and isinstance(item['reportPdf'], str):
-                item['reportPdf'] = generate_presigned_url_from_s3_uri(item['reportPdf']) or item['reportPdf']
+                item['reportPdf'] = generate_presigned_url_from_s3_uri(item['reportPdf'], event) or item['reportPdf']
 
         return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': json.dumps(_from_dynamo(item), ensure_ascii=False)}
     except ClientError as e:
