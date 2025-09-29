@@ -61,6 +61,7 @@ const ScalePractice = () => {
   const [dotX, setDotX] = useState(0);
   const [indicatorRange, setIndicatorRange] = useState({ min: 0, max: 0 });
   const [ladderNotes, setLadderNotes] = useState([]);
+  const [showOfflineNotice, setShowOfflineNotice] = useState(false);
 
   // --- 练习结果 ---
   const [highestHz, setHighestHz] = useState(0);
@@ -137,8 +138,21 @@ const ScalePractice = () => {
     mediaStreamRef.current = stream;
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
     audioCtxRef.current = ctx;
-    // 加载钢琴音色
-    pianoRef.current = await Soundfont.instrument(ctx, 'acoustic_grand_piano');
+    let pianoLoaded = false;
+    if (typeof navigator !== 'undefined' && navigator.onLine) {
+      try {
+        pianoRef.current = await Soundfont.instrument(ctx, 'acoustic_grand_piano');
+        pianoLoaded = true;
+        setShowOfflineNotice(false);
+      } catch (instrumentError) {
+        console.warn('无法加载钢琴音色，使用振荡器兜底', instrumentError);
+      }
+    }
+
+    if (!pianoLoaded) {
+      pianoRef.current = null;
+      setShowOfflineNotice(true);
+    }
     const source = ctx.createMediaStreamSource(stream);
     const analyser = ctx.createAnalyser();
     analyser.fftSize = 2048;
@@ -153,7 +167,8 @@ const ScalePractice = () => {
   // 增大默认增益，使钢琴声音更清晰
   const playTone = (freq, duration = 700, usePiano = true, gainValue = 4) => {
     return new Promise(resolve => {
-      if (usePiano && pianoRef.current) {
+      const shouldUsePiano = usePiano && pianoRef.current;
+      if (shouldUsePiano) {
         // soundfont-player 需要音名或 MIDI 号，这里将频率转换为最近的音名
         const note = frequencyToNoteName(freq);
         pianoRef.current.play(note, audioCtxRef.current.currentTime, {
@@ -166,14 +181,16 @@ const ScalePractice = () => {
         const gain = audioCtxRef.current.createGain();
         osc.type = 'sine';
         osc.frequency.value = freq;
-        gain.gain.value = gainValue;
+        const now = audioCtxRef.current.currentTime;
+        const stopAt = now + duration / 1000;
         osc.connect(gain);
         gain.connect(audioCtxRef.current.destination);
-        osc.start();
-        setTimeout(() => {
-          osc.stop();
-          resolve();
-        }, duration);
+        gain.gain.setValueAtTime(0.0001, now);
+        gain.gain.exponentialRampToValueAtTime(0.35 * (gainValue / 4), now + 0.05);
+        gain.gain.exponentialRampToValueAtTime(0.0001, stopAt);
+        osc.start(now);
+        osc.stop(stopAt);
+        setTimeout(resolve, duration);
       }
     });
   };
@@ -571,6 +588,18 @@ const ScalePractice = () => {
 
       {error && (
         <div className="bg-red-100 text-red-700 p-4 rounded mb-4">{error}</div>
+      )}
+
+      {showOfflineNotice && (
+        <div className="bg-amber-50 border border-amber-200 text-amber-900 p-4 rounded-lg mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <span>当前未联网或音色资源加载失败，已切换为本地合成器（Oscillator），音色效果将不够理想。</span>
+          <button
+            onClick={() => setShowOfflineNotice(false)}
+            className="self-start sm:self-auto bg-amber-100 hover:bg-amber-200 text-amber-900 px-3 py-1 rounded-md text-sm font-medium transition-colors"
+          >
+            我知道了
+          </button>
+        </div>
       )}
 
       {step === 'permission' && (

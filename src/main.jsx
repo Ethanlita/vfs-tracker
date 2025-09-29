@@ -96,14 +96,41 @@ if (isProductionReady) {
 // 导入App组件（在Amplify配置完成后）
 import App from './App.jsx'
 
-// 注册 Service Worker
+// 注册 Service Worker 并在新版本激活后自动刷新一次
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').then(registration => {
-      console.log('Service Worker registered: ', registration);
-    }).catch(registrationError => {
-      console.log('Service Worker registration failed: ', registrationError);
+  try {
+    if (sessionStorage.getItem('sw-reloaded') === '1') {
+      sessionStorage.removeItem('sw-reloaded');
+    }
+  } catch (error) {
+    console.warn('无法重置 SW reload 标记', error);
+  }
+
+  const triggerReloadOnce = () => {
+    if (!sessionStorage.getItem('sw-reloaded')) {
+      sessionStorage.setItem('sw-reloaded', '1');
+      window.location.reload();
+    }
+  };
+
+  navigator.serviceWorker.register('/sw.js').then((registration) => {
+    console.log('Service Worker registered: ', registration);
+
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      triggerReloadOnce();
     });
+
+    registration.addEventListener('updatefound', () => {
+      const installing = registration.installing;
+      if (!installing) return;
+      installing.addEventListener('statechange', () => {
+        if (installing.state === 'activated' && navigator.serviceWorker.controller) {
+          triggerReloadOnce();
+        }
+      });
+    });
+  }).catch((registrationError) => {
+    console.log('Service Worker registration failed: ', registrationError);
   });
 }
 
