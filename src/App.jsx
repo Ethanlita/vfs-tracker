@@ -129,7 +129,7 @@ const AppContent = () => {
     <>
       <RegionSwitchBanner />
       <Layout
-        auth={<Auth />}
+        AuthComponent={Auth}
         onProfileSetupClick={handleProfileSetupClick}
       >
         <Routes>
