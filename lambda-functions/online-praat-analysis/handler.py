@@ -5,6 +5,7 @@ import uuid
 import base64
 from typing import Optional, Dict
 import boto3
+from botocore.config import Config
 from botocore.exceptions import ClientError
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -42,7 +43,7 @@ FUNCTION_NAME = os.environ.get('AWS_LAMBDA_FUNCTION_NAME')
 def get_s3_client():
     global _s3_client
     if _s3_client is None:
-        _s3_client = boto3.client('s3')
+        _s3_client = boto3.client('s3', config=Config(signature_version='s3v4'))
     return _s3_client
 
 def get_dynamodb():
