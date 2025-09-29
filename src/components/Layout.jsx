@@ -4,6 +4,7 @@ import PostsDropdown from './PostsDropdown';
 import ProfileCompletionBanner from './ProfileCompletionBanner';
 import { useAuth } from '../contexts/AuthContext';
 import { isProductionReady as globalIsProductionReady } from '../env.js';
+import ICPBadge from './ICPBadge.jsx';
 
 const Layout = ({ children, auth, onProfileSetupClick }) => {
     const navigate = useNavigate();
@@ -99,6 +100,7 @@ const Layout = ({ children, auth, onProfileSetupClick }) => {
                         </div>
                     </div>
                 </div>
+                <ICPBadge />
             </footer>
         </div>
     );

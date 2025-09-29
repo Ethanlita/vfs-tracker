@@ -24,6 +24,7 @@ import DevModeTest from './components/DevModeTest';
 import VoiceTestWizard from './components/VoiceTestWizard'; // 新增导入
 import QuickF0Test from './components/QuickF0Test'; // 新增导入
 import ScalePractice from './components/ScalePractice'; // 新增导入
+import RegionSwitchBanner from './components/RegionSwitchBanner.jsx';
 
 /**
  * @en A component to protect routes that require authentication in production mode.
@@ -124,20 +125,9 @@ const AppContent = () => {
     }
   }, [isAuthenticated, needsProfileSetup, profileLoading, location.pathname, navigate]);
 
-  // 如果是认证用户且正在加载资料，显示加载状态
-  if (isAuthenticated && profileLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500 mx-auto mb-4"></div>
-          <p className="text-gray-600">正在加载用户资料...</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <>
+      <RegionSwitchBanner />
       <Layout
         auth={<Auth />}
         onProfileSetupClick={handleProfileSetupClick}
