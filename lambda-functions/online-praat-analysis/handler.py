@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 import math
 import numpy as np
+from urllib.parse import urlparse, urlunparse
 
 # ---- Environment and Cache Setup ----
 os.environ.setdefault('LOG_LEVEL', 'INFO')
@@ -39,11 +40,24 @@ DDB_TABLE = os.environ.get('DDB_TABLE')
 BUCKET = os.environ.get('BUCKET')
 EVENTS_TABLE = os.environ.get('EVENTS_TABLE', 'VoiceFemEvents')
 FUNCTION_NAME = os.environ.get('AWS_LAMBDA_FUNCTION_NAME')
+AWS_REGION = os.getenv("AWS_REGION", "us-east-1")
+US_EAST_1_REGIONAL_ENDPOINT = os.getenv("US_EAST_1_REGIONAL_ENDPOINT", "regional")
 
 def get_s3_client():
     global _s3_client
     if _s3_client is None:
-        _s3_client = boto3.client('s3', config=Config(signature_version='s3v4'))
+        _s3_client = boto3.client(
+                         "s3",
+                         region_name=AWS_REGION,
+                         endpoint_url=f"https://s3.{AWS_REGION}.amazonaws.com",  # ← 区域端点（不要用 s3.amazonaws.com）
+                         config=Config(
+                             signature_version="s3v4",
+                             s3={
+                                 "addressing_style": "virtual",                   # ← host 里带 bucket
+                                 "us_east_1_regional_endpoint": US_EAST_1_REGIONAL_ENDPOINT,       # ← 强制 us-east-1 用区域端点
+                             },
+                         ),
+                     )
     return _s3_client
 
 def get_dynamodb():
@@ -375,9 +389,9 @@ def handle_get_upload_url(event):
         object_key = f"voice-tests/{session_id}/raw/{body['step']}/{body['fileName']}"
         url = get_s3_client().generate_presigned_url('put_object', Params={
             'Bucket': BUCKET,
-            'Key': object_key,
-            'ContentType': body.get('contentType', 'audio/wav')
+            'Key': object_key
         }, ExpiresIn=3600)
+        print("SIGNED_HOST =", urlparse(url).netloc)
         headers = (event.get('headers') or {})
         normalized_host = str(
             headers.get('x-forwarded-host')
@@ -389,7 +403,6 @@ def handle_get_upload_url(event):
         ).lower()
         cdn_host = 'storage.vfs-tracker.cn' if normalized_host.endswith('.cn') else 'storage.vfs-tracker.app'
         try:
-            from urllib.parse import urlparse, urlunparse
             parsed = urlparse(url)
             url = urlunparse((parsed.scheme, cdn_host, parsed.path, parsed.params, parsed.query, parsed.fragment))
         except Exception:
