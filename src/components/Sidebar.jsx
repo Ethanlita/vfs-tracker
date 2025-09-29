@@ -86,9 +86,18 @@ const Sidebar = ({
     return () => window.removeEventListener('keydown', handleKey);
   }, [open, onClose]);
 
+  const lastPathRef = React.useRef(location.pathname);
+
   useEffect(() => {
-    if (!open) return;
-    onClose?.();
+    if (!open) {
+      lastPathRef.current = location.pathname;
+      return;
+    }
+
+    if (lastPathRef.current !== location.pathname) {
+      lastPathRef.current = location.pathname;
+      onClose?.();
+    }
   }, [location.pathname, open, onClose]);
 
   const displayName = user ? getUserDisplayName(user) : '未登录用户';
