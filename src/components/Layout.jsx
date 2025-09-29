@@ -19,7 +19,7 @@ const Layout = ({ children, AuthComponent, onProfileSetupClick }) => {
                 <ProfileCompletionBanner onSetupClick={onProfileSetupClick} />
             )}
 
-            <Header ready={ready} AuthComponent={AuthComponent} />
+            <Header AuthComponent={AuthComponent} />
 
             {/* 主内容区域 */}
             <main className="flex-1">

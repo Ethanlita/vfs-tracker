@@ -1,11 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { getUserDisplayName } from '../utils/avatar.js';
-
-const defaultDocsItems = [
-  { label: '使用指南', to: '/posts' },
-  { label: 'FAQ', to: '/docs?doc=faq.md' },
-];
 
 function NavItem({ to, label, onClick }) {
   if (!to) {
@@ -44,24 +39,8 @@ function NavItem({ to, label, onClick }) {
   );
 }
 
-const Sidebar = ({
-  open,
-  onClose,
-  user,
-  avatarUrl,
-  navItems = [],
-  docsItems,
-  AuthComponent,
-}) => {
+const Sidebar = ({ open, onClose, user, avatarUrl, docLink, AuthComponent }) => {
   const location = useLocation();
-  const [docsOpen, setDocsOpen] = useState(true);
-
-  const docLinks = useMemo(() => {
-    if (docsItems && docsItems.length > 0) {
-      return docsItems;
-    }
-    return defaultDocsItems;
-  }, [docsItems]);
 
   useEffect(() => {
     if (open) {
@@ -150,36 +129,9 @@ const Sidebar = ({
         </div>
 
         <nav className="px-3 py-4 space-y-1 overflow-y-auto">
-          {navItems.map((item) => (
-            <NavItem key={item.to || item.label} to={item.to} label={item.label} onClick={onClose} />
-          ))}
-
-          <div className="mt-4">
-            <button
-              type="button"
-              onClick={() => setDocsOpen((value) => !value)}
-              className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm font-medium text-gray-700 hover:bg-gray-50"
-            >
-              <span>文档</span>
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 20 20"
-                fill="currentColor"
-                className={`${docsOpen ? 'rotate-180' : ''} transition-transform`}
-                aria-hidden="true"
-              >
-                <path d="M5 8l5 5 5-5" />
-              </svg>
-            </button>
-            {docsOpen && (
-              <div className="mt-2 ml-2 space-y-1">
-                {docLinks.map((doc) => (
-                  <NavItem key={doc.to || doc.label} to={doc.to} label={doc.label} onClick={onClose} />
-                ))}
-              </div>
-            )}
-          </div>
+          {docLink ? (
+            <NavItem to={docLink.to} label={docLink.label} onClick={onClose} />
+          ) : null}
         </nav>
 
         {AuthComponent && (
