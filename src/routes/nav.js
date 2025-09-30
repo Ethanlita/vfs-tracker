@@ -1,0 +1,12 @@
+export const SIDEBAR_ROUTES = [
+  { to: '/', label: '🏠 首页', offlineSafe: true },
+  { to: '/dashboard', label: '📊 仪表板', offlineSafe: true },
+  { to: '/posts', label: '📰 公告', offlineSafe: true },
+  { to: '/docs', label: '📚 文档中心', offlineSafe: true },
+  { to: '/mypage', label: '👤 我的页面', requiresAuth: true, offlineSafe: false },
+  { to: '/event-manager', label: '📅 事件管理', requiresAuth: true, offlineSafe: false },
+  { to: '/quick-f0-test', label: '⚡ 快速基频测试', requiresAuth: true, offlineSafe: true },
+  { to: '/voice-test', label: '🎤 启动嗓音测试', requiresAuth: true, offlineSafe: false },
+  { to: '/scale-practice', label: '🎹 音阶练习', requiresAuth: true, offlineSafe: true },
+  { to: '/profile-setup-wizard', label: '完善资料', requiresAuth: true, showInSidebar: false, offlineSafe: true }
+];
