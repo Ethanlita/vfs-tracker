@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { setupUserProfile } from '../api';
 
 const ProfileSetupWizard = ({ onComplete, canSkip = false }) => {
   const { user, refreshUserProfile } = useAuth();
+  const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -24,6 +26,16 @@ const ProfileSetupWizard = ({ onComplete, canSkip = false }) => {
   ];
 
   const totalSteps = 3;
+
+  const pendingProfileKey = 'pendingProfileSetup:v1';
+
+  const finishSetup = () => {
+    if (onComplete) {
+      onComplete();
+    } else {
+      navigate('/mypage', { replace: true });
+    }
+  };
 
   const handleInputChange = (field, value) => {
     setFormData(prev => ({
@@ -116,27 +128,37 @@ const ProfileSetupWizard = ({ onComplete, canSkip = false }) => {
     setLoading(true);
     setError('');
 
-    try {
-      // 修复：正确包装profile数据结构
-      await setupUserProfile({
-        profile: {
-          name: formData.name.trim(),
-          bio: '', // 添加bio字段的默认值
-          isNamePublic: formData.isNamePublic,
-          socials: formData.socials,
-          areSocialsPublic: formData.areSocialsPublic
-        }
-      });
-
-      await refreshUserProfile();
-
-      // 设置完成后，跳转到个人页面
-      if (onComplete) {
-        onComplete();
-      } else {
-        // 如果没有提供onComplete回调，默认跳转到个人页面
-        window.location.href = '/mypage';
+    const payload = {
+      profile: {
+        name: formData.name.trim(),
+        bio: '',
+        isNamePublic: formData.isNamePublic,
+        socials: formData.socials,
+        areSocialsPublic: formData.areSocialsPublic
       }
+    };
+
+    try {
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+        try {
+          localStorage.setItem(pendingProfileKey, JSON.stringify({
+            userId: user?.userId || user?.attributes?.sub || null,
+            payload,
+            savedAt: Date.now()
+          }));
+          if (typeof window !== 'undefined') {
+            window.alert?.('已离线保存，将在联网后尝试同步。');
+          }
+        } catch (storageError) {
+          console.warn('⚠️ 离线暂存用户资料失败', storageError);
+        }
+        finishSetup();
+        return;
+      }
+
+      await setupUserProfile(payload);
+      await refreshUserProfile();
+      finishSetup();
     } catch (error) {
       console.error('设置用户资料失败:', error);
       setError(error.message || '设置失败，请重试');
@@ -146,9 +168,8 @@ const ProfileSetupWizard = ({ onComplete, canSkip = false }) => {
   };
 
   const handleSkip = () => {
-    if (canSkip && onComplete) {
-      onComplete();
-    }
+    if (!canSkip) return;
+    finishSetup();
   };
 
   const renderStepContent = () => {

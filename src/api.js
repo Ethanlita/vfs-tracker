@@ -4,6 +4,8 @@ import { v4 as uuidv4 } from 'uuid';
 import mockData from './mock_data.json';
 import { isProductionReady as globalIsProductionReady, logEnvReadiness } from './env.js';
 
+export const PROFILE_CACHE_KEY = 'lastGoodUserProfile:v1';
+
 const isProductionReady = () => {
   const ready = globalIsProductionReady();
   logEnvReadiness('api');
@@ -454,8 +456,8 @@ export const getAvatarUrl = async (userId) => {
 
 export const isUserProfileComplete = (userProfile) => {
   if (!userProfile || !userProfile.profile) return false;
-  const profile = userProfile.profile;
-  const hasBasicInfo = profile.name !== undefined && profile.name !== null;
-  const hasPrivacySettings = typeof profile.isNamePublic === 'boolean' && typeof profile.areSocialsPublic === 'boolean';
-  return hasBasicInfo && hasPrivacySettings;
+  const { name, isNamePublic, areSocialsPublic } = userProfile.profile;
+  const hasNonEmptyName = typeof name === 'string' && name.trim().length > 0;
+  const hasPrivacySettings = typeof isNamePublic === 'boolean' && typeof areSocialsPublic === 'boolean';
+  return hasNonEmptyName && hasPrivacySettings;
 };
