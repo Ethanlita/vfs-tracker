@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
+import { useAuthenticator } from '@aws-amplify/ui-react';
+import { SIDEBAR_ROUTES } from '../routes/nav';
 import { getUserDisplayName } from '../utils/avatar.js';
 
 function NavItem({ to, label, onClick }) {
@@ -42,20 +44,46 @@ function NavItem({ to, label, onClick }) {
 const Sidebar = ({ open, onClose, user, avatarUrl, docLink, AuthComponent }) => {
   const location = useLocation();
 
+  const { authStatus } = useAuthenticator(context => [context.authStatus]);
+  const isAuthenticated = authStatus === 'authenticated';
   const [installPromptEvent, setInstallPromptEvent] = useState(null);
   const [isStandalone, setIsStandalone] = useState(false);
+  const [isOnline, setIsOnline] = useState(typeof navigator === 'undefined' ? true : navigator.onLine);
 
-  const navItems = useMemo(
-    () => [
-      { to: '/', label: '🏠 首页' },
-      { to: '/quick-f0-test', label: '⚡ 快速基频测试' },
-      { to: '/voice-test', label: '🎤 启动嗓音测试' },
-      { to: '/scale-practice', label: '🎹 音阶练习' },
-      { to: '/mypage', label: '👤 我的页面' },
-      { to: '/event-manager', label: '📅 事件管理' },
-    ],
-    []
-  );
+  const navItems = useMemo(() => {
+    return SIDEBAR_ROUTES.filter(item => {
+      if (item.showInSidebar === false) {
+        return false;
+      }
+
+      if (!isOnline) {
+        if (item.requiresAuth) {
+          return false;
+        }
+        return item.offlineSafe !== false;
+      }
+
+      if (item.requiresAuth && !isAuthenticated) {
+        return false;
+      }
+
+      return true;
+    });
+  }, [isAuthenticated, isOnline]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return undefined;
+    }
+
+    const updateStatus = () => setIsOnline(navigator.onLine);
+    window.addEventListener('online', updateStatus);
+    window.addEventListener('offline', updateStatus);
+    return () => {
+      window.removeEventListener('online', updateStatus);
+      window.removeEventListener('offline', updateStatus);
+    };
+  }, []);
 
   useEffect(() => {
     if (open) {
