@@ -97,24 +97,16 @@ if (isProductionReady) {
 import App from './App.jsx'
 
 // 注册 Service Worker 并在检测到新版本后提示用户刷新
-if ('serviceWorker' in navigator) {
-  const promptUserToRefresh = () => {
-    try {
-      const shouldReload = window.confirm('检测到有新的版本可用，是否立即刷新以加载最新内容？');
-      if (shouldReload) {
-        window.location.reload();
-      }
-    } catch (error) {
-      console.warn('无法显示更新提示，默认刷新页面', error);
-      window.location.reload();
-    }
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  const notifyUpdateReady = () => {
+    window.dispatchEvent(new CustomEvent('sw:update-available'));
   };
 
   navigator.serviceWorker.register('/sw.js').then((registration) => {
     console.log('Service Worker registered: ', registration);
 
     if (registration.waiting && navigator.serviceWorker.controller) {
-      promptUserToRefresh();
+      notifyUpdateReady();
     }
 
     registration.addEventListener('updatefound', () => {
@@ -122,7 +114,7 @@ if ('serviceWorker' in navigator) {
       if (!installing) return;
       installing.addEventListener('statechange', () => {
         if (installing.state === 'installed' && navigator.serviceWorker.controller) {
-          promptUserToRefresh();
+          notifyUpdateReady();
         }
       });
     });

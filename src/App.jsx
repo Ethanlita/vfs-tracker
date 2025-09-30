@@ -75,6 +75,58 @@ const ProtectedRoute = () => {
 };
 
 /**
+ * 当检测到有新的 Service Worker 版本准备就绪时，提示用户刷新
+ */
+const ServiceWorkerUpdateBanner = () => {
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const handleUpdateAvailable = () => {
+      setVisible(true);
+    };
+
+    window.addEventListener('sw:update-available', handleUpdateAvailable);
+    return () => {
+      window.removeEventListener('sw:update-available', handleUpdateAvailable);
+    };
+  }, []);
+
+  if (!visible) return null;
+
+  const handleReload = () => {
+    window.location.reload();
+  };
+
+  const handleDismiss = () => {
+    setVisible(false);
+  };
+
+  return (
+    <div className="fixed inset-x-0 bottom-4 flex justify-center z-[1000] pointer-events-none">
+      <div className="pointer-events-auto mx-4 sm:mx-0 bg-gray-900 text-white px-4 py-3 rounded-lg shadow-lg flex flex-col gap-3 sm:flex-row sm:items-center">
+        <span>检测到应用有新版本可用。</span>
+        <div className="flex gap-2 justify-end sm:justify-start">
+          <button
+            type="button"
+            className="px-3 py-1.5 rounded-md bg-white text-gray-900 font-medium hover:bg-gray-100 transition"
+            onClick={handleReload}
+          >
+            立即刷新
+          </button>
+          <button
+            type="button"
+            className="px-3 py-1.5 rounded-md border border-white/40 text-white hover:bg-white/10 transition"
+            onClick={handleDismiss}
+          >
+            稍后提醒
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/**
  * 资料设置模态窗口组件
  */
 const ProfileSetupModal = ({ isOpen, onClose }) => {
@@ -162,6 +214,7 @@ const AppContent = () => {
         isOpen={showProfileSetup}
         onClose={handleProfileSetupClose}
       />
+      <ServiceWorkerUpdateBanner />
     </>
   );
 };
