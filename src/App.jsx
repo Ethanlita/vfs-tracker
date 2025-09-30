@@ -32,8 +32,21 @@ import RegionSwitchBanner from './components/RegionSwitchBanner.jsx';
  */
 const ProductionProtectedRoute = () => {
   const { authStatus } = useAuthenticator(context => [context.authStatus]);
+  const { needsProfileSetup, profileLoading, authInitialized } = useAuth();
+  const [isOnline, setIsOnline] = useState(typeof navigator === 'undefined' ? true : navigator.onLine);
   const navigate = useNavigate();
   const location = useLocation();
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    const updateStatus = () => setIsOnline(navigator.onLine);
+    window.addEventListener('online', updateStatus);
+    window.addEventListener('offline', updateStatus);
+    return () => {
+      window.removeEventListener('online', updateStatus);
+      window.removeEventListener('offline', updateStatus);
+    };
+  }, []);
 
   // @en While Amplify is figuring out the auth status, show a loading indicator.
   // @zh 在 Amplify 确定身份验证状态时，显示加载指示器。
@@ -51,10 +64,14 @@ const ProductionProtectedRoute = () => {
   // @en If the user is authenticated, redirect to their profile page on first login
   // @zh 如果用户已认证，在首次登录时重定向到他们的个人页面
   useEffect(() => {
-    if (authStatus === 'authenticated' && location.pathname === '/') {
-      navigate('/mypage', { replace: true });
+    if (authStatus === 'authenticated' && location.pathname === '/' && authInitialized) {
+      if (!profileLoading && needsProfileSetup && isOnline) {
+        navigate('/profile-setup-wizard', { replace: true });
+      } else {
+        navigate('/mypage', { replace: true });
+      }
     }
-  }, [authStatus, location.pathname, navigate]);
+  }, [authStatus, location.pathname, navigate, needsProfileSetup, profileLoading, authInitialized, isOnline]);
 
   // @en If the user is not authenticated, redirect them to the home page.
   // @zh 如果用户未通过身份验证，则将他们重定向到主页。
@@ -154,10 +171,22 @@ const ProfileSetupModal = ({ isOpen, onClose }) => {
  * @returns {JSX.Element} The rendered application content with layout.
  */
 const AppContent = () => {
-  const { isAuthenticated, needsProfileSetup, profileLoading } = useAuth();
+  const { isAuthenticated, needsProfileSetup, profileLoading, authInitialized } = useAuth();
   const [showProfileSetup, setShowProfileSetup] = useState(false);
+  const [isOnline, setIsOnline] = useState(typeof navigator === 'undefined' ? true : navigator.onLine);
   const navigate = useNavigate();
   const location = useLocation();
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    const updateStatus = () => setIsOnline(navigator.onLine);
+    window.addEventListener('online', updateStatus);
+    window.addEventListener('offline', updateStatus);
+    return () => {
+      window.removeEventListener('online', updateStatus);
+      window.removeEventListener('offline', updateStatus);
+    };
+  }, []);
 
   // 处理资料设置按钮点击
   const handleProfileSetupClick = () => {
@@ -171,11 +200,18 @@ const AppContent = () => {
 
   // 自动跳转到ProfileSetupWizard的逻辑
   useEffect(() => {
-    if (isAuthenticated && needsProfileSetup && !profileLoading && location.pathname !== '/profile-setup-wizard') {
+    if (
+      authInitialized &&
+      isAuthenticated &&
+      needsProfileSetup &&
+      !profileLoading &&
+      isOnline &&
+      location.pathname !== '/profile-setup-wizard'
+    ) {
       console.log('🚀 检测到用户需要完善资料，自动跳转到引导页面');
       navigate('/profile-setup-wizard', { replace: true });
     }
-  }, [isAuthenticated, needsProfileSetup, profileLoading, location.pathname, navigate]);
+  }, [authInitialized, isAuthenticated, needsProfileSetup, profileLoading, isOnline, location.pathname, navigate]);
 
   return (
     <>
@@ -199,7 +235,7 @@ const AppContent = () => {
             <Route path="/event-manager" element={<EventManagerPage />} />
             <Route path="/api-test" element={<APITestPage />} /> {/* 新增的API测试页面路由 */}
             <Route path="/profile-manager" element={<UserProfileManager />} /> {/* 用户资料管理 */}
-            <Route path="/profile-setup-wizard" element={<ProfileSetupWizard />} /> {/* 用户引导设置 */}
+            <Route path="/profile-setup-wizard" element={<ProfileSetupWizard canSkip={!isOnline} />} /> {/* 用户引导设置 */}
             <Route path="/voice-test" element={<VoiceTestWizard />} /> {/* 新增嗓音测试路由 */}
             <Route path="/quick-f0-test" element={<QuickF0Test />} /> {/* 新增快速基频测试路由 */}
             <Route path="/scale-practice" element={<ScalePractice />} /> {/* 新增音阶练习路由 */}

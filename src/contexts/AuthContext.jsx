@@ -8,7 +8,7 @@ import {
   updatePassword,
   resendSignUpCode
 } from 'aws-amplify/auth';
-import { getUserProfile, isUserProfileComplete, setupUserProfile } from '../api.js';
+import { getUserProfile, isUserProfileComplete, setupUserProfile, PROFILE_CACHE_KEY } from '../api.js';
 import { isProductionReady as globalIsProductionReady } from '../env.js';
 
 const AuthContext = createContext();
@@ -152,10 +152,12 @@ export const AuthProvider = ({ children }) => {
       console.log('✅ 用户存在于数据库中，加载用户资料:', profile);
       setUserProfile(profile);
       try {
-        localStorage.setItem(cacheKey, JSON.stringify({
+        const cachedProfile = {
           ...profile,
           _cacheMeta: { t: Date.now(), userId }
-        }));
+        };
+        localStorage.setItem(cacheKey, JSON.stringify(cachedProfile));
+        localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify(cachedProfile));
       } catch (error) {
         console.warn('⚠️ 无法写入用户资料缓存', error);
       }
@@ -172,14 +174,35 @@ export const AuthProvider = ({ children }) => {
     } catch (error) {
       console.error('❌ 用户不存在于数据库中或加载失败:', error);
 
-      // 用户不在 VoiceFemUsers 表中，需要强制跳转到用户信息完善页面
-      console.log('🚨 用户未在数据库中找到，强制跳转到用户信息完善页面');
-      setNeedsProfileSetup(true);
-      setUserProfile(null);
+      const isOffline = typeof navigator !== 'undefined' && navigator && navigator.onLine === false;
+      if (isOffline) {
+        console.log('📴 当前处于离线状态，尝试使用缓存的用户资料');
+        const cacheCandidates = [cacheKey, PROFILE_CACHE_KEY];
+        for (const key of cacheCandidates) {
+          try {
+            const cached = localStorage.getItem(key);
+            if (cached) {
+              const parsed = JSON.parse(cached);
+              if (parsed) {
+                setUserProfile(parsed);
+                setNeedsProfileSetup(!isUserProfileComplete(parsed));
+                break;
+              }
+            }
+          } catch (cacheError) {
+            console.warn('⚠️ 解析用户资料缓存失败，忽略本地缓存', cacheError);
+          }
+        }
+      } else {
+        // 用户不在 VoiceFemUsers 表中，需要强制跳转到用户信息完善页面
+        console.log('🚨 用户未在数据库中找到，强制跳转到用户信息完善页面');
+        setNeedsProfileSetup(true);
+        setUserProfile(null);
 
-      // 注意：不在这里直接跳转，而是依赖 App.jsx 中的 useEffect 来处理跳转
-      // 这样可以避免跳转逻辑冲突
-      console.log('📍 设置 needsProfileSetup=true，等待 App.jsx 处理跳转');
+        // 注意：不在这里直接跳转，而是依赖 App.jsx 中的 useEffect 来处理跳转
+        // 这样可以避免跳转逻辑冲突
+        console.log('📍 设置 needsProfileSetup=true，等待 App.jsx 处理跳转');
+      }
     } finally {
       setProfileLoading(false);
     }
