@@ -96,36 +96,25 @@ if (isProductionReady) {
 // 导入App组件（在Amplify配置完成后）
 import App from './App.jsx'
 
-// 注册 Service Worker 并在新版本激活后自动刷新一次
-if ('serviceWorker' in navigator) {
-  try {
-    if (sessionStorage.getItem('sw-reloaded') === '1') {
-      sessionStorage.removeItem('sw-reloaded');
-    }
-  } catch (error) {
-    console.warn('无法重置 SW reload 标记', error);
-  }
-
-  const triggerReloadOnce = () => {
-    if (!sessionStorage.getItem('sw-reloaded')) {
-      sessionStorage.setItem('sw-reloaded', '1');
-      window.location.reload();
-    }
+// 注册 Service Worker 并在检测到新版本后提示用户刷新
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  const notifyUpdateReady = () => {
+    window.dispatchEvent(new CustomEvent('sw:update-available'));
   };
 
   navigator.serviceWorker.register('/sw.js').then((registration) => {
     console.log('Service Worker registered: ', registration);
 
-    navigator.serviceWorker.addEventListener('controllerchange', () => {
-      triggerReloadOnce();
-    });
+    if (registration.waiting && navigator.serviceWorker.controller) {
+      notifyUpdateReady();
+    }
 
     registration.addEventListener('updatefound', () => {
       const installing = registration.installing;
       if (!installing) return;
       installing.addEventListener('statechange', () => {
-        if (installing.state === 'activated' && navigator.serviceWorker.controller) {
-          triggerReloadOnce();
+        if (installing.state === 'installed' && navigator.serviceWorker.controller) {
+          notifyUpdateReady();
         }
       });
     });
