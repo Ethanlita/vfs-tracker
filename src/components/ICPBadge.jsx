@@ -7,7 +7,7 @@ const ICPBadge = () => {
     return null;
   }
 
-  const recordNo = '桂ICP备2025072780号-1';
+  const recordNo = '桂ICP备2025072780号-1 桂公网安备45010002451122号';
 
   return (
     <div className="w-full flex justify-center items-center py-4 border-t border-gray-200">
