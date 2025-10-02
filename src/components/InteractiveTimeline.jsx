@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
 import { createPortal } from 'react-dom';
 import { resolveAttachmentLinks } from '../utils/attachments.js';
 
