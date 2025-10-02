@@ -1,10 +1,12 @@
-﻿import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Authenticator, useAuthenticator } from '@aws-amplify/ui-react';
 import { Amplify } from 'aws-amplify';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { isProductionReady as globalIsProductionReady } from '../env.js';
 import { getUserAvatarUrl, getUserDisplayName } from '../utils/avatar.js';
+import { ApiErrorNotice } from './ApiErrorNotice.jsx';
+import { ensureAppError } from '../utils/apiError.js';
 
 const Auth = () => {
     const navigate = useNavigate();
@@ -239,58 +241,41 @@ const ProductionAuthStatus = ({ onShowLogin, navigate }) => {
 // 包装 Authenticator 的组件，用于隔离认证逻辑
 const AuthenticatorWrapper = ({ onAuthSuccess }) => {
     const [configReady, setConfigReady] = useState(false);
+    const [error, setError] = useState(null);
     const { handleAuthSuccess } = useAuth();
 
-    useEffect(() => {
-        // 在渲染 Authenticator 前再次确认配置
-        const checkConfig = async () => {
-            try {
-                // 强制等待一小段时间确保配置完全加载
-                await new Promise(resolve => setTimeout(resolve, 100));
+    const checkConfig = useCallback(async () => {
+        setError(null);
+        setConfigReady(false);
+        try {
+            await new Promise(resolve => setTimeout(resolve, 100));
+            const config = Amplify.getConfig();
+            console.log('[AuthenticatorWrapper] 检查配置:', config?.Auth);
 
-                const config = Amplify.getConfig();
-                console.log('[AuthenticatorWrapper] 检查配置:', config?.Auth);
-
-                if (config?.Auth?.Cognito?.userPoolId) {
-                    setConfigReady(true);
-                } else {
-                    console.error('[AuthenticatorWrapper] Cognito配置缺失');
-                    // 尝试重新配置
-                    const amplifyConfig = {
-                        Auth: {
-                            Cognito: {
-                                userPoolId: 'us-east-1_Bz6JC9ko9',
-                                userPoolClientId: '1nkup2vppbuk3n2d4575vbcoa0',
-                                region: 'us-east-1',
-                                loginWith: {
-                                    username: true,
-                                    email: true,
-                                    phone: false
-                                },
-                                signUpAttributes: ['email', 'nickname'], // 恢复nickname要求
-                                userAttributes: {
-                                    nickname: {
-                                        required: true
-                                    },
-                                    email: {
-                                        required: true
-                                    }
-                                }
-                            }
-                        }
-                    };
-                    Amplify.configure(amplifyConfig);
-                    console.log('[AuthenticatorWrapper] 重新配置完成');
-                    setConfigReady(true);
-                }
-            } catch (error) {
-                console.error('[AuthenticatorWrapper] 配置检查失败:', error);
-                setConfigReady(false);
+            if (config?.Auth?.Cognito?.userPoolId) {
+                setConfigReady(true);
+            } else {
+                throw new Error("Cognito user pool is not configured.");
             }
-        };
-
-        checkConfig();
+        } catch (err) {
+            console.error('[AuthenticatorWrapper] 配置检查失败:', err);
+            setError(ensureAppError(err, {
+                message: '认证服务配置加载失败，请刷新页面或联系管理员。'
+            }));
+        }
     }, []);
+
+    useEffect(() => {
+        checkConfig();
+    }, [checkConfig]);
+
+    if (error) {
+        return (
+            <div className="py-4">
+                <ApiErrorNotice error={error} onRetry={checkConfig} />
+            </div>
+        );
+    }
 
     if (!configReady) {
         return (
@@ -302,9 +287,7 @@ const AuthenticatorWrapper = ({ onAuthSuccess }) => {
     }
 
     return (
-        <Authenticator
-            hideSignUp={false}
-        >
+        <Authenticator hideSignUp={false}>
             {({ user }) => {
                 if (user) {
                     handleAuthSuccess(user);

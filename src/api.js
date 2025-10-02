@@ -3,7 +3,7 @@ import { fetchAuthSession } from 'aws-amplify/auth';
 import { v4 as uuidv4 } from 'uuid';
 import mockData from './mock_data.json';
 import { isProductionReady as globalIsProductionReady, logEnvReadiness } from './env.js';
-import { ApiError, AuthenticationError, ServiceError } from './utils/apiError.js';
+import { ApiError, AuthenticationError, ServiceError, UploadError } from './utils/apiError.js';
 
 export const PROFILE_CACHE_KEY = 'lastGoodUserProfile:v1';
 
@@ -184,29 +184,19 @@ export const addEvent = async (eventData) => {
     const mockItem = { userId: 'mock-user-id', eventId: uuidv4(), ...eventData, status: 'pending', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
     return Promise.resolve({ item: mockItem });
   }
-  try {
-    const requestBody = { type: eventData.type, date: eventData.date, details: eventData.details };
-    if (Array.isArray(eventData.attachments) && eventData.attachments.length) {
-      requestBody.attachments = eventData.attachments;
-    }
-    const resp = await authenticatedPost('/events', requestBody);
-    return resp;
-  } catch (error) {
-    console.error('Error adding event via API:', error);
-    throw error;
+  const requestBody = { type: eventData.type, date: eventData.date, details: eventData.details };
+  if (Array.isArray(eventData.attachments) && eventData.attachments.length) {
+    requestBody.attachments = eventData.attachments;
   }
+  return authenticatedPost('/events', requestBody);
 };
 
 export const getAllEvents = async () => {
   if (!isProductionReady() && !import.meta.env.VITE_FORCE_REAL) {
-    return Promise.resolve(mockData.events.map(({ attachments, ...rest }) => rest));
+    // eslint-disable-next-line no-unused-vars
+    return Promise.resolve(mockData.events.map(({ attachments: _attachments, ...rest }) => rest));
   }
-  try {
-    return await simpleGet('/all-events');
-  } catch (error) {
-    console.error('Error fetching all public events:', error);
-    throw error;
-  }
+  return simpleGet('/all-events');
 };
 
 export const getEventsByUserId = async (userId) => {
@@ -222,37 +212,25 @@ export const deleteEvent = async (eventId) => {
     return Promise.resolve({ message: "Event deleted successfully (mock)" });
   }
   console.log(`[deleteEvent] deleting event with ID: ${eventId}`);
-  try {
-    // FIX: Use the correct RESTful path /event/{eventId}
-    const result = await authenticatedDelete(`/event/${eventId}`);
-    console.log('✅ API: event deleted successfully', result);
-    return result;
-  } catch (error) {
-    console.error(`❌ API: Failed to delete event ${eventId}:`, error);
-    throw error;
-  }
+  // FIX: Use the correct RESTful path /event/{eventId}
+  return authenticatedDelete(`/event/${eventId}`);
 };
 
 export const callGeminiProxy = async (prompt) => {
   if (!isProductionReady() && !import.meta.env.VITE_FORCE_REAL) {
     return Promise.resolve("这是一个来自模拟代理的温暖鼓励！");
   }
-  try {
-    const result = await authenticatedPost('/gemini-proxy', { prompt });
-    if (result.success) {
-      return result.response;
-    }
-    throw new ServiceError(result.error || 'The Gemini proxy failed to process the request.', {
-      requestMethod: 'POST',
-      requestPath: '/gemini-proxy',
-      statusCode: result.statusCode ?? result.status,
-      details: { success: result.success },
-      serviceName: 'Gemini Proxy'
-    });
-  } catch (error) {
-    console.error('❌ Failed to call Gemini proxy API:', error);
-    throw error;
+  const result = await authenticatedPost('/gemini-proxy', { prompt });
+  if (result.success) {
+    return result.response;
   }
+  throw new ServiceError(result.error || 'The Gemini proxy failed to process the request.', {
+    requestMethod: 'POST',
+    requestPath: '/gemini-proxy',
+    statusCode: result.statusCode ?? result.status,
+    details: { success: result.success },
+    serviceName: 'Gemini Proxy'
+  });
 };
 
 export const getEncouragingMessage = async (userData) => {
@@ -299,22 +277,17 @@ export const getSongRecommendations = async ({ lowestNote, highestNote }) => {
     ]);
   }
 
-  try {
-    const result = await authenticatedPost('/recommend-songs', { lowestNote, highestNote });
-    if (result.success) {
-      return result.recommendations;
-    }
-    throw new ServiceError(result.error || 'The song recommendation service failed.', {
-      requestMethod: 'POST',
-      requestPath: '/recommend-songs',
-      statusCode: result.statusCode ?? result.status,
-      details: { success: result.success },
-      serviceName: 'Song Recommendation'
-    });
-  } catch (error) {
-    console.error('❌ Failed to call song recommendation API:', error);
-    throw error;
+  const result = await authenticatedPost('/recommend-songs', { lowestNote, highestNote });
+  if (result.success) {
+    return result.recommendations;
   }
+  throw new ServiceError(result.error || 'The song recommendation service failed.', {
+    requestMethod: 'POST',
+    requestPath: '/recommend-songs',
+    statusCode: result.statusCode ?? result.status,
+    details: { success: result.success },
+    serviceName: 'Song Recommendation'
+  });
 };
 
 export const getUserProfile = async (userId) => {
@@ -322,13 +295,7 @@ export const getUserProfile = async (userId) => {
     const mockUserProfile = { userId, email: 'mock-user@example.com', profile: { name: '模拟用户', isNamePublic: false, socials: [], areSocialsPublic: false }, createdAt: '2025-08-01T10:00:00.000Z', updatedAt: '2025-08-16T10:30:00.000Z' };
     return Promise.resolve(mockUserProfile);
   }
-  try {
-    const data = await authenticatedGet(`/user/${userId}`);
-    return data;
-  } catch (error) {
-    console.error('❌ API: 获取用户资料失败:', error);
-    throw error;
-  }
+  return authenticatedGet(`/user/${userId}`);
 };
 
 export const getUserPublicProfile = async (userId) => {
@@ -336,13 +303,7 @@ export const getUserPublicProfile = async (userId) => {
     const mockPublicProfile = { userId, profile: { name: '（非公开）', socials: [] } };
     return Promise.resolve(mockPublicProfile);
   }
-  try {
-    const data = await simpleGet(`/user/${userId}/public`);
-    return data;
-  } catch (error) {
-    console.error('❌ API: 获取用户公开资料失败:', error);
-    throw error;
-  }
+  return simpleGet(`/user/${userId}/public`);
 };
 
 export const updateUserProfile = async (userId, profileData) => {
@@ -350,14 +311,8 @@ export const updateUserProfile = async (userId, profileData) => {
     const mockUpdatedProfile = { message: 'User profile updated successfully', user: { userId, email: 'mock-user@example.com', profile: profileData.profile, createdAt: '2025-08-01T10:00:00.000Z', updatedAt: new Date().toISOString() } };
     return Promise.resolve(mockUpdatedProfile);
   }
-  try {
-    const requestBody = { profile: profileData.profile };
-    const data = await authenticatedPut(`/user/${userId}`, requestBody);
-    return data;
-  } catch (error) {
-    console.error('❌ API: 更新用户资料失败:', error);
-    throw error;
-  }
+  const requestBody = { profile: profileData.profile };
+  return authenticatedPut(`/user/${userId}`, requestBody);
 };
 
 export const setupUserProfile = async (profileData) => {
@@ -365,14 +320,8 @@ export const setupUserProfile = async (profileData) => {
     const mockSetupResponse = { message: 'User profile setup completed successfully', user: { userId: 'mock-new-user-id', email: 'newuser@example.com', profile: profileData.profile || { name: '', isNamePublic: false, socials: [], areSocialsPublic: false }, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() }, isNewUser: true };
     return Promise.resolve(mockSetupResponse);
   }
-  try {
-    const requestBody = { profile: profileData.profile || { name: '', isNamePublic: false, socials: [], areSocialsPublic: false } };
-    const data = await authenticatedPost('/user/profile-setup', requestBody);
-    return data;
-  } catch (error) {
-    console.error('❌ API: 用户资料设置失败:', error);
-    throw error;
-  }
+  const requestBody = { profile: profileData.profile || { name: '', isNamePublic: false, socials: [], areSocialsPublic: false } };
+  return authenticatedPost('/user/profile-setup', requestBody);
 };
 
 // New API functions for Voice Test
@@ -381,15 +330,9 @@ export const createVoiceTestSession = async (userId) => {
     console.log('[mock] createVoiceTestSession: Returning mock session ID');
     return Promise.resolve({ sessionId: uuidv4() });
   }
-  try {
-    const path = '/sessions';
-    const bodyData = userId ? { userId } : {};
-    const resp = await authenticatedPost(path, bodyData);
-    return resp;
-  } catch (error) {
-    console.error('❌ API: Failed to create voice test session:', error);
-    throw error;
-  }
+  const path = '/sessions';
+  const bodyData = userId ? { userId } : {};
+  return authenticatedPost(path, bodyData);
 };
 
 export const getVoiceTestUploadUrl = async (sessionId, step, fileName, contentType) => {
@@ -401,15 +344,9 @@ export const getVoiceTestUploadUrl = async (sessionId, step, fileName, contentTy
       objectKey: mockObjectKey
     });
   }
-  try {
-    const path = '/uploads';
-    const bodyData = { sessionId, step, fileName, contentType };
-    const resp = await authenticatedPost(path, bodyData);
-    return resp;
-  } catch (error) {
-    console.error('❌ API: Failed to get voice test upload URL:', error);
-    throw error;
-  }
+  const path = '/uploads';
+  const bodyData = { sessionId, step, fileName, contentType };
+  return authenticatedPost(path, bodyData);
 };
 
 export const uploadVoiceTestFileToS3 = async (putUrl, file) => {
@@ -426,20 +363,24 @@ export const uploadVoiceTestFileToS3 = async (putUrl, file) => {
       body: file
     });
     if (!response.ok) {
-      throw await ApiError.fromResponse(response, {
+      // Use the new UploadError and fromResponse method
+      throw await UploadError.fromResponse(response, {
         requestMethod: 'PUT',
-        requestPath: putUrl
+        requestPath: putUrl,
+        uploadUrl: putUrl,
       });
     }
     console.log('✅ S3: Voice test file uploaded successfully');
     return response;
   } catch (error) {
     console.error('❌ S3: Failed to upload voice test file:', error);
+    // Ensure any failure from this function is wrapped as an UploadError
     throw error instanceof ApiError
       ? error
-      : ApiError.from(error, {
+      : UploadError.from(error, {
         requestMethod: 'PUT',
         requestPath: putUrl,
+        uploadUrl: putUrl,
         statusCode: error?.$metadata?.httpStatusCode ?? error?.statusCode ?? error?.status
       });
   }
@@ -453,15 +394,9 @@ export const requestVoiceTestAnalyze = async (sessionId, calibration, forms) => 
     console.log('[mock] requestVoiceTestAnalyze: Returning mock queued status');
     return Promise.resolve({ status: 'queued', sessionId });
   }
-  try {
-    const path = '/analyze';
-    const bodyData = { sessionId, calibration, forms };
-    const resp = await authenticatedPost(path, bodyData);
-    return resp;
-  } catch (error) {
-    console.error('❌ API: Failed to request voice test analysis:', error);
-    throw error;
-  }
+  const path = '/analyze';
+  const bodyData = { sessionId, calibration, forms };
+  return authenticatedPost(path, bodyData);
 };
 
 export const getVoiceTestResults = async (sessionId) => {
@@ -477,55 +412,34 @@ export const getVoiceTestResults = async (sessionId) => {
       return Promise.resolve(mockData.voiceTestResults.done);
     }
   }
-  try {
-    const path = `/results/${sessionId}`;
-    const resp = await authenticatedGet(path);
-    return resp;
-  } catch (error) {
-    console.error('❌ API: Failed to get voice test results:', error);
-    throw error;
-  }
+  const path = `/results/${sessionId}`;
+  return authenticatedGet(path);
 };
 
 export const getUploadUrl = async (fileKey, contentType) => {
   if (!isProductionReady()) {
     return `https://mock-upload-url.s3.amazonaws.com/${fileKey}?mock=true`;
   }
-  try {
-    const requestBody = { fileKey, contentType };
-    const data = await authenticatedPost('/upload-url', requestBody);
-    return data.uploadUrl;
-  } catch (error) {
-    console.error('❌ 获取上传URL失败:', error);
-    throw error;
-  }
+  const requestBody = { fileKey, contentType };
+  const data = await authenticatedPost('/upload-url', requestBody);
+  return data.uploadUrl;
 };
 
 export const getFileUrl = async (fileKey) => {
   if (!isProductionReady()) {
     return `https://mock-file-url.s3.amazonaws.com/${fileKey}?mock=true`;
   }
-  try {
-    const requestBody = { fileKey };
-    const data = await authenticatedPost('/file-url', requestBody);
-    return data.url;
-  } catch (error) {
-    console.error('❌ 获取文件URL失败:', error);
-    throw error;
-  }
+  const requestBody = { fileKey };
+  const data = await authenticatedPost('/file-url', requestBody);
+  return data.url;
 };
 
 export const getAvatarUrl = async (userId) => {
   if (!isProductionReady()) {
     return `https://mock-avatar-url.s3.amazonaws.com/avatars/${userId}/avatar?mock=true`;
   }
-  try {
-    const data = await simpleGet(`/avatar/${userId}`);
-    return data.url;
-  } catch (error) {
-    console.error('❌ 获取头像URL失败:', error);
-    throw error;
-  }
+  const data = await simpleGet(`/avatar/${userId}`);
+  return data.url;
 };
 
 export const isUserProfileComplete = (userProfile) => {

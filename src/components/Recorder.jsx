@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import { PermissionError } from '../utils/apiError.js';
 
 /**
  * @en A reusable audio recorder component that uses the MediaRecorder API.
@@ -10,11 +11,12 @@ import React, { useState, useRef } from 'react';
  * @param {function(): void} [props.onStartRecording] - Optional callback for when recording starts.
  * @param {function(): void} [props.onStopRecording] - Optional callback for when recording stops.
  * @param {function(): void} [props.onDiscardRecording] - Optional callback when user chooses to stop and discard the current take (不会上传/回调 Blob)。
+ * @param {function(Error): void} [props.onError] - Optional callback for when an error occurs (e.g., permission denied).
  * @param {boolean} [props.isRecording] - Prop to externally control the recording state (e.g., disable the button).
  * @param {number} [props.maxDurationSec] - Optional maximum duration for recording in seconds. Default is 60 seconds.
  * @returns {JSX.Element} The rendered recorder component.
  */
-const Recorder = ({ onRecordingComplete, onStartRecording, onStopRecording, onDiscardRecording, isRecording: propIsRecording, maxDurationSec = 60 }) => {
+const Recorder = ({ onRecordingComplete, onStartRecording, onStopRecording, onDiscardRecording, onError, isRecording: propIsRecording, maxDurationSec = 60 }) => {
   const [isRecording, setIsRecording] = useState(false); // 内部真实录音状态，仅由 start/stop 控制
   const [isPaused, setIsPaused] = useState(false);
   const [levelDb, setLevelDb] = useState(null);
@@ -173,8 +175,25 @@ const Recorder = ({ onRecordingComplete, onStartRecording, onStopRecording, onDi
       console.log('录音开始...');
     } catch (err) {
       console.error('无法获取麦克风权限或启动录音:', err);
-      alert('无法启动录音：浏览器不支持或未授权麦克风。请检查权限或更换现代浏览器。');
-      cleanupAudio();
+      cleanupAudio(); // Ensure resources are released
+      let error;
+      if (err.name === 'NotAllowedError') {
+        error = new PermissionError('您已拒绝麦克风权限，无法开始录音。请在浏览器设置中允许访问麦克风。', {
+          permissionName: 'microphone',
+          cause: err
+        });
+      } else {
+        error = new PermissionError('无法访问麦克风。可能是设备未连接，或浏览器不支持此功能。', {
+          permissionName: 'microphone',
+          cause: err
+        });
+      }
+      if (onError) {
+        onError(error);
+      } else {
+        // Fallback for components that don't provide an onError handler
+        alert(error.message);
+      }
     }
   };
 

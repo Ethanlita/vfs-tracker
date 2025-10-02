@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { setupUserProfile } from '../api';
-import { ensureAppError } from '../utils/apiError.js';
+import { ensureAppError, ValidationError } from '../utils/apiError.js';
 import { ApiErrorNotice } from './ApiErrorNotice.jsx';
 
 const ProfileSetupWizard = ({ onComplete, canSkip = false }) => {
@@ -82,38 +82,49 @@ const ProfileSetupWizard = ({ onComplete, canSkip = false }) => {
   };
 
   const handleNext = () => {
-    if (currentStep === 1) {
-      if (!formData.name.trim()) {
-        setError('请输入您的昵称');
-        return;
+    try {
+      if (currentStep === 1) {
+        if (!formData.name.trim()) {
+          throw new ValidationError('请输入您的昵称。', {
+            fieldErrors: [{ field: 'name', message: '昵称不能为空。' }]
+          });
+        }
       }
-    }
 
-    // 在第2步，如果用户填写了社交账号信息但没有点击添加，自动添加
-    if (currentStep === 2) {
-      if (currentSocial.platform && currentSocial.handle.trim()) {
-        console.log('🔍 用户没有点击添加按钮，自动添加社交账号:', {
-          platform: currentSocial.platform,
-          handle: currentSocial.handle.trim()
-        });
+      // 在第2步，如果用户填写了社交账号信息但没有点击添加，自动添加
+      if (currentStep === 2) {
+        if (currentSocial.platform && currentSocial.handle.trim()) {
+          console.log('🔍 用户没有点击添加按钮，自动添加社交账号:', {
+            platform: currentSocial.platform,
+            handle: currentSocial.handle.trim()
+          });
 
-        // 自动添加当前填写的社交账号
-        setFormData(prev => {
-          const newSocials = [...prev.socials, { ...currentSocial, handle: currentSocial.handle.trim() }];
-          console.log('✅ 自动添加社交账号，新的socials数组:', newSocials);
-          return {
-            ...prev,
-            socials: newSocials
-          };
-        });
-        setCurrentSocial({ platform: '', handle: '' });
+          // 自动添加当前填写的社交账号
+          setFormData(prev => {
+            const newSocials = [...prev.socials, { ...currentSocial, handle: currentSocial.handle.trim() }];
+            console.log('✅ 自动添加社交账号，新的socials数组:', newSocials);
+            return {
+              ...prev,
+              socials: newSocials
+            };
+          });
+          setCurrentSocial({ platform: '', handle: '' });
+        }
       }
-    }
 
-    if (currentStep < totalSteps) {
-      setCurrentStep(prev => prev + 1);
-      setError('');
-      setApiError(null);
+      if (currentStep < totalSteps) {
+        setCurrentStep(prev => prev + 1);
+        setError('');
+        setApiError(null);
+      }
+    } catch (err) {
+      if (err instanceof ValidationError) {
+        setError(''); // Clear the old string error
+        setApiError(err);
+      } else {
+        // This part is unlikely to be hit, but for safety
+        setApiError(ensureAppError(err));
+      }
     }
   };
 
@@ -126,25 +137,27 @@ const ProfileSetupWizard = ({ onComplete, canSkip = false }) => {
   };
 
   const handleComplete = async () => {
-    if (!formData.name.trim()) {
-      setError('昵称不能为空');
-      return;
-    }
-
     setLoading(true);
     setError('');
-
-    const payload = {
-      profile: {
-        name: formData.name.trim(),
-        bio: '',
-        isNamePublic: formData.isNamePublic,
-        socials: formData.socials,
-        areSocialsPublic: formData.areSocialsPublic
-      }
-    };
+    setApiError(null);
 
     try {
+      if (!formData.name.trim()) {
+        throw new ValidationError('昵称不能为空，请返回上一步修改。', {
+          fieldErrors: [{ field: 'name', message: '昵称是必填项。' }]
+        });
+      }
+
+      const payload = {
+        profile: {
+          name: formData.name.trim(),
+          bio: '',
+          isNamePublic: formData.isNamePublic,
+          socials: formData.socials,
+          areSocialsPublic: formData.areSocialsPublic
+        }
+      };
+
       if (typeof navigator !== 'undefined' && navigator.onLine === false) {
         try {
           localStorage.setItem(pendingProfileKey, JSON.stringify({
@@ -168,11 +181,15 @@ const ProfileSetupWizard = ({ onComplete, canSkip = false }) => {
     } catch (error) {
       console.error('设置用户资料失败:', error);
       setError('');
-      setApiError(ensureAppError(error, {
-        message: error.message || '设置失败，请重试',
-        requestMethod: 'POST',
-        requestPath: '/user/profile-setup'
-      }));
+      if (error instanceof ValidationError) {
+        setApiError(error);
+      } else {
+        setApiError(ensureAppError(error, {
+          message: error.message || '设置失败，请重试',
+          requestMethod: 'POST',
+          requestPath: '/user/profile-setup'
+        }));
+      }
     } finally {
       setLoading(false);
     }

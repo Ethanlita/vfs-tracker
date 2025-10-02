@@ -8,7 +8,7 @@ import {
   gateByStability
 } from '../utils/pitchEval.js';
 import { getSongRecommendations } from '../api.js'; // Import the new API function
-import { ensureAppError } from '../utils/apiError.js';
+import { ensureAppError, PermissionError } from '../utils/apiError.js';
 import { ApiErrorNotice } from './ApiErrorNotice.jsx';
 
 /**
@@ -54,9 +54,8 @@ const ScalePractice = () => {
   // --- 向导步骤状态 ---
   const [step, setStep] = useState('permission');
   const [message, setMessage] = useState('');
+  const [error, setError] = useState(null); // Unified error state
   const [syllable, setSyllable] = useState('a');
-  const [permissionError, setPermissionError] = useState('');
-  const [permissionMsg, setPermissionMsg] = useState('');
   const [startOffset, setStartOffset] = useState(0); // 起始音相对C4的半音数
   const [beat, setBeat] = useState(0);
   const [beatLabel, setBeatLabel] = useState('');
@@ -243,15 +242,15 @@ const ScalePractice = () => {
 
   // --- Step0: 申请权限 ---
   const requestPermission = useCallback(async () => {
-    setPermissionMsg('正在申请麦克风权限...');
-    setPermissionError('');
+    setMessage('正在申请麦克风权限...');
+    setError(null);
     try {
       await initAudio();
-      setPermissionMsg('已成功获取麦克风权限，请戴上耳机');
+      setMessage('已成功获取麦克风权限，请戴上耳机');
     } catch (err) {
       console.error(err);
-      setPermissionMsg('');
-      setPermissionError('无法获取麦克风权限，请确认已授予浏览器麦克风访问权限。');
+      setMessage('');
+      setError(new PermissionError('无法获取麦克风权限，请在浏览器设置中允许本站访问您的麦克风。', { cause: err }));
     }
   }, [initAudio]);
 
@@ -594,21 +593,6 @@ const ScalePractice = () => {
         <h1 className="text-4xl font-bold text-pink-600">音阶练习</h1>
       </div>
 
-      {permissionError && (
-        <div className="mb-4 rounded-md border border-yellow-200 bg-yellow-50 p-4 text-sm text-yellow-900" role="alert">
-          <div className="font-semibold">{permissionError}</div>
-          <div className="mt-2 flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={requestPermission}
-              className="inline-flex items-center rounded bg-yellow-500 px-3 py-1 text-xs font-medium text-white hover:bg-yellow-400 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:ring-offset-1"
-            >
-              重新尝试获取权限
-            </button>
-          </div>
-        </div>
-      )}
-
       {showOfflineNotice && (
         <div className="bg-amber-50 border border-amber-200 text-amber-900 p-4 rounded-lg mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <span>当前未联网或音色资源加载失败，已切换为本地合成器（Oscillator），音色效果将不够理想。</span>
@@ -624,14 +608,20 @@ const ScalePractice = () => {
       {step === 'permission' && (
         <div className="bg-white p-6 rounded-xl shadow-md mb-6 text-center">
           <div className="text-6xl mb-4 animate-bounce">🎧</div>
-          <p className="text-gray-700 mb-4">{permissionMsg}</p>
-          {permissionMsg.includes('成功') && (
-            <button
-              onClick={handleHeadphoneCheck}
-              className="bg-pink-500 hover:bg-pink-600 text-white px-4 py-2 rounded-lg font-semibold"
-            >
-              进入耳机检测
-            </button>
+          {error ? (
+            <ApiErrorNotice error={error} onRetry={requestPermission} />
+          ) : (
+            <>
+              <p className="text-gray-700 mb-4">{message}</p>
+              {message.includes('成功') && (
+                <button
+                  onClick={handleHeadphoneCheck}
+                  className="bg-pink-500 hover:bg-pink-600 text-white px-4 py-2 rounded-lg font-semibold"
+                >
+                  进入耳机检测
+                </button>
+              )}
+            </>
           )}
         </div>
       )}

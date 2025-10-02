@@ -9,7 +9,7 @@ const isLikelyChinaLocale = () => {
     if (tz === 'Asia/Shanghai' || tz === 'Asia/Urumqi') {
       return true;
     }
-  } catch (error) {
+  } catch {
     // ignore
   }
 
@@ -21,7 +21,7 @@ const isLikelyChinaLocale = () => {
         return lower.startsWith('zh-cn') || lower.startsWith('zh-hans');
       });
     }
-  } catch (error) {
+  } catch {
     // ignore
   }
 
@@ -50,7 +50,7 @@ const RegionSwitchBanner = () => {
     let dismissed = false;
     try {
       dismissed = localStorage.getItem(DISMISS_KEY) === '1';
-    } catch (error) {
+    } catch {
       dismissed = false;
     }
 
@@ -65,7 +65,7 @@ const RegionSwitchBanner = () => {
   const handleClose = () => {
     try {
       localStorage.setItem(DISMISS_KEY, '1');
-    } catch (error) {
+    } catch {
       // ignore
     }
     setOpen(false);

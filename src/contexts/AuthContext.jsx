@@ -9,6 +9,7 @@ import {
   resendSignUpCode
 } from 'aws-amplify/auth';
 import { getUserProfile, isUserProfileComplete, setupUserProfile, PROFILE_CACHE_KEY } from '../api.js';
+import { StorageError } from '../utils/apiError.js';
 import { isProductionReady as globalIsProductionReady } from '../env.js';
 
 const AuthContext = createContext();
@@ -58,16 +59,33 @@ export const AuthProvider = ({ children }) => {
     const checkExistingAuth = async () => {
       if (!ready) {
         // 开发模式：检查本地存储的模拟用户
-        const savedUser = localStorage.getItem('dev-user');
-        if (savedUser) {
-          try {
-            const userData = JSON.parse(savedUser);
-            setUser(userData);
-            console.log('🔄 开发模式：恢复保存的用户会话', userData);
-          } catch (error) {
-            console.error('解析保存的用户数据失败:', error);
-            localStorage.removeItem('dev-user');
+        try {
+          const savedUser = localStorage.getItem('dev-user');
+          if (savedUser) {
+            try {
+              const userData = JSON.parse(savedUser);
+              setUser(userData);
+              console.log('🔄 开发模式：恢复保存的用户会话', userData);
+            } catch (error) {
+              console.error('解析保存的用户数据失败:', error);
+              try {
+                localStorage.removeItem('dev-user');
+              } catch (removeError) {
+                console.error(new StorageError('无法移除无效的开发模式用户会话。', {
+                  operation: 'remove',
+                  key: 'dev-user',
+                  cause: removeError
+                }));
+              }
+            }
           }
+        } catch (error) {
+          // Reading from storage can fail, e.g. if cookies are disabled in iframe
+          throw new StorageError('无法读取本地存储来检查开发模式会话。', {
+            operation: 'get',
+            key: 'dev-user',
+            cause: error
+          });
         }
         setAuthInitialized(true);
         return;
@@ -141,7 +159,11 @@ export const AuthProvider = ({ children }) => {
         }
       }
     } catch (error) {
-      console.warn('⚠️ 解析用户资料缓存失败，忽略本地缓存', error);
+      console.warn(new StorageError('读取用户资料缓存失败，将从网络获取。', {
+        operation: 'get',
+        key: cacheKey,
+        cause: error
+      }));
     }
 
     setProfileLoading(true);
@@ -159,7 +181,12 @@ export const AuthProvider = ({ children }) => {
         localStorage.setItem(cacheKey, JSON.stringify(cachedProfile));
         localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify(cachedProfile));
       } catch (error) {
-        console.warn('⚠️ 无法写入用户资料缓存', error);
+        console.warn(new StorageError('写入用户资料缓存失败。', {
+          operation: 'set',
+          key: cacheKey,
+          cause: error,
+          quotaExceeded: error.name === 'QuotaExceededError'
+        }));
       }
 
       // 检查资料是否完整 - 只根据资料内容判断，不考虑时间因素
@@ -186,11 +213,16 @@ export const AuthProvider = ({ children }) => {
               if (parsed) {
                 setUserProfile(parsed);
                 setNeedsProfileSetup(!isUserProfileComplete(parsed));
+                console.log(`📴 使用缓存 ${key} 成功恢复离线用户资料`);
                 break;
               }
             }
           } catch (cacheError) {
-            console.warn('⚠️ 解析用户资料缓存失败，忽略本地缓存', cacheError);
+            console.warn(new StorageError('离线模式下读取用户资料缓存失败。', {
+              operation: 'get',
+              key: key,
+              cause: cacheError
+            }));
           }
         }
       } else {
@@ -228,7 +260,16 @@ export const AuthProvider = ({ children }) => {
     setUser(userData);
     // 保存到本地存储
     if (!ready) {
-      localStorage.setItem('dev-user', JSON.stringify(userData));
+      try {
+        localStorage.setItem('dev-user', JSON.stringify(userData));
+      } catch (error) {
+        throw new StorageError('无法保存开发模式用户会话。', {
+          operation: 'set',
+          key: 'dev-user',
+          cause: error,
+          quotaExceeded: error.name === 'QuotaExceededError'
+        });
+      }
     }
 
     if (userData?.userId || userData?.attributes?.sub) {
@@ -463,7 +504,16 @@ export const AuthProvider = ({ children }) => {
     setNeedsProfileSetup(false);
     // 清除本地存储
     if (!ready) {
-      localStorage.removeItem('dev-user');
+      try {
+        localStorage.removeItem('dev-user');
+      } catch (error) {
+        // Non-critical, just log it
+        console.error(new StorageError('无法清除开发模式用户会话。', {
+          operation: 'remove',
+          key: 'dev-user',
+          cause: error
+        }));
+      }
     }
   };
 
