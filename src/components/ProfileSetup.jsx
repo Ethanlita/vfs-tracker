@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { ensureAppError } from '../utils/apiError.js';
+import { ApiErrorNotice } from './ApiErrorNotice.jsx';
 
 const ProfileSetup = ({ onComplete, onSkip }) => {
   const { completeProfileSetup, user } = useAuth();
@@ -10,7 +12,7 @@ const ProfileSetup = ({ onComplete, onSkip }) => {
     areSocialsPublic: false
   });
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState(null);
   const [currentSocial, setCurrentSocial] = useState({ platform: '', handle: '' });
 
   // 社交平台选项
@@ -46,14 +48,18 @@ const ProfileSetup = ({ onComplete, onSkip }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
-    setError('');
+    setError(null);
 
     try {
       await completeProfileSetup({ profile: formData });
       onComplete?.();
     } catch (err) {
-      setError('资料设置失败，请重试');
       console.error('Profile setup error:', err);
+      setError(ensureAppError(err, {
+        message: '资料设置失败，请重试',
+        requestMethod: 'POST',
+        requestPath: '/user/profile-setup'
+      }));
     } finally {
       setLoading(false);
     }
@@ -74,8 +80,12 @@ const ProfileSetup = ({ onComplete, onSkip }) => {
         onSkip?.();
       })
       .catch((err) => {
-        setError('跳过设置失败，请重试');
         console.error('Skip setup error:', err);
+        setError(ensureAppError(err, {
+          message: '跳过设置失败，请重试',
+          requestMethod: 'POST',
+          requestPath: '/user/profile-setup'
+        }));
       })
       .finally(() => {
         setLoading(false);
@@ -98,8 +108,8 @@ const ProfileSetup = ({ onComplete, onSkip }) => {
         </div>
 
         {error && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
-            {error}
+          <div className="mb-6">
+            <ApiErrorNotice error={error} />
           </div>
         )}
 

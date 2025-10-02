@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { getUploadUrl, getFileUrl, getAvatarUrl } from '../api';
 import { useAuth } from '../contexts/AuthContext';
 import { generateAvatar } from '../utils/avatar';
+import { ApiError, ensureAppError } from '../utils/apiError.js';
+import { ApiErrorNotice } from './ApiErrorNotice.jsx';
 
 const SecureFileUpload = ({
   fileType = 'avatar', // 'avatar', 'attachment', 'upload'
@@ -14,6 +16,7 @@ const SecureFileUpload = ({
   const { user } = useAuth();
   const [uploading, setUploading] = useState(false);
   const [previewUrl, setPreviewUrl] = useState(null);
+  const [errorState, setErrorState] = useState(null);
 
   // 根据文件类型确定存储路径
   const getStoragePath = (type) => {
@@ -28,6 +31,8 @@ const SecureFileUpload = ({
   const handleFileChange = async (event) => {
     const file = event.target.files[0];
     if (!file) return;
+
+    setErrorState(null);
 
     // 验证文件类型
     const isAllowedType = allowedTypes.some(type => {
@@ -56,13 +61,13 @@ const SecureFileUpload = ({
     }
 
     setUploading(true);
+    const storagePath = getStoragePath(fileType);
+    const timestamp = Date.now();
+    const fileKey = `${storagePath}/${user.userId}/${timestamp}_${file.name}`;
+    let uploadUrl;
     try {
-      const storagePath = getStoragePath(fileType);
-      const timestamp = Date.now();
-      const fileKey = `${storagePath}/${user.userId}/${timestamp}_${file.name}`;
-
       // 获取预签名上传URL
-      const uploadUrl = await getUploadUrl(fileKey, file.type);
+      uploadUrl = await getUploadUrl(fileKey, file.type);
 
       if (!uploadUrl) {
         throw new Error('无法获取上传URL');
@@ -78,7 +83,11 @@ const SecureFileUpload = ({
       });
 
       if (!uploadResponse.ok) {
-        throw new Error(`上传失败: ${uploadResponse.status} ${uploadResponse.statusText}`);
+        throw await ApiError.fromResponse(uploadResponse, {
+          requestMethod: 'PUT',
+          requestPath: uploadUrl,
+          details: { fileKey, fileType }
+        });
       }
 
       console.log(`${fileType}上传成功:`, fileKey);
@@ -114,14 +123,26 @@ const SecureFileUpload = ({
     } catch (error) {
       console.error(`${fileType}上传失败:`, error);
 
-      if (error.message?.includes('403') || error.message?.includes('Access Denied')) {
-        alert('权限不足，请联系管理员配置权限');
-      } else if (error.message?.includes('Network')) {
-        alert('网络错误，请检查网络连接后重试');
-      } else {
-        alert(`文件上传失败：${error.message}`);
+      const context = {
+        message: '文件上传失败，请稍后重试。',
+        requestMethod: 'PUT',
+        requestPath: uploadUrl || fileKey,
+        details: { fileKey, fileType, fileName: file?.name }
+      };
+
+      if (error?.message?.includes('403') || error?.message?.includes('Access Denied')) {
+        context.message = '权限不足，请联系管理员配置权限。';
+      } else if (error?.message?.includes('Network')) {
+        context.message = '网络错误，请检查网络连接后重试。';
+      } else if (error?.message?.includes('无法获取上传URL')) {
+        context.message = '无法获取上传URL，请稍后重试。';
       }
 
+      const normalizedError = error instanceof ApiError
+        ? error.applyContext(context)
+        : ensureAppError(error, context);
+
+      setErrorState(normalizedError);
       setPreviewUrl(null);
     } finally {
       setUploading(false);
@@ -131,38 +152,41 @@ const SecureFileUpload = ({
   const getDisplayComponent = () => {
     if (fileType === 'avatar') {
       return (
-        <div className="flex items-center space-x-4">
-          <div className="relative">
-            <div className="w-16 h-16 rounded-full overflow-hidden bg-gray-100 flex items-center justify-center">
-              <img
-                src={previewUrl || currentFileUrl || generateAvatar(user?.username || user?.email || 'User', 64)}
-                alt="头像"
-                className="w-full h-full object-cover"
-                onError={(e) => {
-                  e.target.src = generateAvatar(user?.username || user?.email || 'User', 64);
-                }}
-              />
-            </div>
-            {uploading && (
-              <div className="absolute inset-0 bg-black bg-opacity-50 rounded-full flex items-center justify-center">
-                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
-              </div>
-            )}
-          </div>
-          <div>
-            <p className="text-sm text-gray-500">头像</p>
-            <div className="flex items-center space-x-2 mt-1">
-              <label className="cursor-pointer bg-blue-600 text-white text-xs px-3 py-1 rounded-md hover:bg-blue-700 transition-colors">
-                {uploading ? '上传中...' : '更换头像'}
-                <input
-                  type="file"
-                  accept={allowedTypes.join(',')}
-                  onChange={handleFileChange}
-                  disabled={uploading}
-                  className="hidden"
+        <div className={`space-y-3 ${className}`}>
+          {errorState && <ApiErrorNotice error={errorState} compact />}
+          <div className="flex items-center space-x-4">
+            <div className="relative">
+              <div className="w-16 h-16 rounded-full overflow-hidden bg-gray-100 flex items-center justify-center">
+                <img
+                  src={previewUrl || currentFileUrl || generateAvatar(user?.username || user?.email || 'User', 64)}
+                  alt="头像"
+                  className="w-full h-full object-cover"
+                  onError={(e) => {
+                    e.target.src = generateAvatar(user?.username || user?.email || 'User', 64);
+                  }}
                 />
-              </label>
-              <span className="text-xs text-gray-500">最大{Math.round(maxSize / 1024 / 1024)}MB</span>
+              </div>
+              {uploading && (
+                <div className="absolute inset-0 bg-black bg-opacity-50 rounded-full flex items-center justify-center">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
+                </div>
+              )}
+            </div>
+            <div>
+              <p className="text-sm text-gray-500">头像</p>
+              <div className="flex items-center space-x-2 mt-1">
+                <label className="cursor-pointer bg-blue-600 text-white text-xs px-3 py-1 rounded-md hover:bg-blue-700 transition-colors">
+                  {uploading ? '上传中...' : '更换头像'}
+                  <input
+                    type="file"
+                    accept={allowedTypes.join(',')}
+                    onChange={handleFileChange}
+                    disabled={uploading}
+                    className="hidden"
+                  />
+                </label>
+                <span className="text-xs text-gray-500">最大{Math.round(maxSize / 1024 / 1024)}MB</span>
+              </div>
             </div>
           </div>
         </div>
@@ -172,6 +196,11 @@ const SecureFileUpload = ({
     // 其他文件类型的通用显示
     return (
       <div className={`border-2 border-dashed border-gray-300 rounded-lg p-4 text-center ${className}`}>
+        {errorState && (
+          <div className="mb-3">
+            <ApiErrorNotice error={errorState} compact />
+          </div>
+        )}
         {currentFileUrl && (
           <div className="mb-3 p-2 bg-gray-50 rounded">
             <p className="text-sm text-gray-600">当前文件已上传</p>

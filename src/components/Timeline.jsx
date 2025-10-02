@@ -15,6 +15,7 @@ import { useAsync } from '../utils/useAsync.js';
 import { useAuth } from '../contexts/AuthContext.jsx';
 import { isProductionReady } from '../env.js';
 import DevModeTest from './DevModeTest.jsx';
+import { ApiErrorNotice } from './ApiErrorNotice.jsx';
 
 ChartJS.register(
   CategoryScale,
@@ -330,7 +331,9 @@ const Timeline = () => {
 
   const handleRetry = () => {
     eventsAsync.execute();
-    aiAsync.reset();
+    if (typeof aiAsync.execute === 'function') {
+      aiAsync.execute();
+    }
   };
 
   // 生成时间轴数据
@@ -357,15 +360,8 @@ const Timeline = () => {
 
       {/* 错误提示 */}
       {anyError && (
-        <div className="mb-8 p-4 rounded-xl border border-red-200 bg-red-50 text-red-700">
-          <p className="font-semibold mb-2">数据加载失败</p>
-          <p className="text-sm mb-3">{anyError?.message || '未知错误'}</p>
-          <button
-            onClick={handleRetry}
-            className="px-4 py-2 rounded-lg bg-red-600 text-white text-sm hover:bg-red-500"
-          >
-            重试
-          </button>
+        <div className="mb-8">
+          <ApiErrorNotice error={anyError} onRetry={handleRetry} />
         </div>
       )}
 

@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useAsync } from '../utils/useAsync.js';
+import { ApiError } from '../utils/apiError.js';
+import { ApiErrorNotice } from './ApiErrorNotice.jsx';
 
 const PostList = () => {
   const [posts, setPosts] = useState([]);
@@ -10,7 +12,9 @@ const PostList = () => {
   // 使用 useAsync 统一数据获取
   const postsAsync = useAsync(async () => {
     const res = await fetch('/posts.json');
-    if (!res.ok) throw new Error('无法加载 posts.json');
+    if (!res.ok) {
+      throw await ApiError.fromResponse(res, { requestMethod: 'GET', requestPath: '/posts.json' });
+    }
     return await res.json();
   }, []);
 
@@ -101,9 +105,8 @@ const PostList = () => {
       <div className="container mx-auto p-4">
         {/* 错误与加载状态 */}
         {postsAsync.error && (
-          <div className="mb-4 p-3 rounded-md bg-red-50 border border-red-200 text-red-600 text-sm flex items-center justify-between">
-            <span>加载文档列表失败：{postsAsync.error.message}</span>
-            <button onClick={postsAsync.execute} className="px-2 py-1 text-xs bg-red-600 text-white rounded">重试</button>
+          <div className="mb-4">
+            <ApiErrorNotice error={postsAsync.error} onRetry={postsAsync.execute} />
           </div>
         )}
         {postsAsync.loading && (

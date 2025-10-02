@@ -2,6 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import { useAsync } from '../utils/useAsync.js';
+import { ApiError } from '../utils/apiError.js';
+import { formatApiError } from '../utils/formatApiError.js';
+import { ApiErrorNotice } from './ApiErrorNotice.jsx';
 
 const PostsDropdown = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -11,13 +14,16 @@ const PostsDropdown = () => {
 
   const postsAsync = useAsync(async () => {
     const res = await fetch('/posts.json');
-    if (!res.ok) throw new Error('无法加载 posts.json');
+    if (!res.ok) {
+      throw await ApiError.fromResponse(res, { requestMethod: 'GET', requestPath: '/posts.json' });
+    }
     return await res.json();
   }, []);
 
   const posts = postsAsync.value || [];
   const loading = postsAsync.loading;
   const error = postsAsync.error;
+  const formattedError = error ? formatApiError(error) : null;
 
   const renderMenuItems = (items, parentPath = '') => {
     return items.map((item) => {
@@ -119,7 +125,7 @@ const PostsDropdown = () => {
           >
             文档
             {loading && <span className="ml-2 text-xs text-gray-400">加载中...</span>}
-            {error && <span className="ml-2 text-xs text-red-500">错误</span>}
+            {error && <span className="ml-2 text-xs text-red-500">{formattedError?.summary || '加载失败'}</span>}
             <svg className="ml-1 h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
               <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a 1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
             </svg>
@@ -127,9 +133,16 @@ const PostsDropdown = () => {
         </DropdownMenu.Trigger>
         {/* 错误提示 */}
         {error && isOpen && (
-          <div className="absolute top-full mt-2 left-0 bg-red-50 text-red-600 text-xs px-3 py-2 rounded-md border border-red-200 shadow z-50 whitespace-nowrap">
-            加载失败 <button className="underline ml-1" onClick={(e)=>{e.stopPropagation();postsAsync.execute();}}>重试</button>
-          </div>
+          <ApiErrorNotice
+            error={error}
+            compact
+            className="absolute top-full left-0 mt-2 z-50 w-72 whitespace-normal"
+            onRetry={(event) => {
+              event?.stopPropagation?.();
+              event?.preventDefault?.();
+              postsAsync.execute();
+            }}
+          />
         )}
         <DropdownMenu.Portal>
           <DropdownMenu.Content
