@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { setupUserProfile } from '../api';
+import { ensureAppError } from '../utils/apiError.js';
+import { ApiErrorNotice } from './ApiErrorNotice.jsx';
 
 const ProfileSetupWizard = ({ onComplete, canSkip = false }) => {
   const { user, refreshUserProfile } = useAuth();
@@ -9,6 +11,7 @@ const ProfileSetupWizard = ({ onComplete, canSkip = false }) => {
   const [currentStep, setCurrentStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [apiError, setApiError] = useState(null);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -43,6 +46,7 @@ const ProfileSetupWizard = ({ onComplete, canSkip = false }) => {
       [field]: value
     }));
     setError('');
+    setApiError(null);
   };
 
   const addSocialAccount = () => {
@@ -109,6 +113,7 @@ const ProfileSetupWizard = ({ onComplete, canSkip = false }) => {
     if (currentStep < totalSteps) {
       setCurrentStep(prev => prev + 1);
       setError('');
+      setApiError(null);
     }
   };
 
@@ -116,6 +121,7 @@ const ProfileSetupWizard = ({ onComplete, canSkip = false }) => {
     if (currentStep > 1) {
       setCurrentStep(prev => prev - 1);
       setError('');
+      setApiError(null);
     }
   };
 
@@ -161,7 +167,12 @@ const ProfileSetupWizard = ({ onComplete, canSkip = false }) => {
       finishSetup();
     } catch (error) {
       console.error('设置用户资料失败:', error);
-      setError(error.message || '设置失败，请重试');
+      setError('');
+      setApiError(ensureAppError(error, {
+        message: error.message || '设置失败，请重试',
+        requestMethod: 'POST',
+        requestPath: '/user/profile-setup'
+      }));
     } finally {
       setLoading(false);
     }
@@ -424,6 +435,11 @@ const ProfileSetupWizard = ({ onComplete, canSkip = false }) => {
             </div>
 
             {/* 错误消息 */}
+            {apiError && (
+              <div className="mb-6">
+                <ApiErrorNotice error={apiError} />
+              </div>
+            )}
             {error && (
               <div className="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
                 {error}

@@ -14,6 +14,7 @@ import { Bar, Line } from 'react-chartjs-2';
 import { getAllEvents, getUserPublicProfile } from '../api';
 import { useAsync } from '../utils/useAsync.js';
 import EnhancedDataCharts from './EnhancedDataCharts.jsx';
+import { ApiErrorNotice } from './ApiErrorNotice.jsx';
 
 /**
  * @en The PublicDashboard component displays aggregated and anonymized data from all users.
@@ -323,9 +324,8 @@ const PublicDashboard = () => {
   // Error state
   if (error) {
     return (
-      <div className="p-10 text-center">
-        <p className="text-red-500 mb-4">加载公开仪表板失败：{error.message || '未知错误'}</p>
-        <button onClick={eventsAsync.execute} className="px-4 py-2 rounded-lg bg-pink-600 text-white hover:bg-pink-500">重试</button>
+      <div className="p-10">
+        <ApiErrorNotice error={error} onRetry={eventsAsync.execute} />
       </div>
     );
   }

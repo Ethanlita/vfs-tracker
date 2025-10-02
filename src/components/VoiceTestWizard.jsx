@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   createVoiceTestSession,
   getVoiceTestUploadUrl,
@@ -12,6 +12,8 @@ import SurveyRBH from './SurveyRBH';
 import SurveyOVHS9 from './SurveyOVHS9';
 import SurveyTVQG from './SurveyTVQG';
 import TestResultsDisplay from './TestResultsDisplay';
+import { ensureAppError, ServiceError } from '../utils/apiError.js';
+import { ApiErrorNotice } from './ApiErrorNotice.jsx';
 
 /**
  * @en Defines the structure and content for each step of the voice test wizard.
@@ -59,6 +61,7 @@ const VoiceTestWizard = () => {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState(null);
   const [discardInfo, setDiscardInfo] = useState(false); // 放弃提示状态
+  const [analysisError, setAnalysisError] = useState(null);
 
   const [formData, setFormData] = useState({
     rbh: { R: null, B: null, H: null },
@@ -77,26 +80,31 @@ const VoiceTestWizard = () => {
 
   const handleFormChange = (formName, values) => setFormData(prev => ({ ...prev, [formName]: values }));
 
+  const initializeSession = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      const response = await createVoiceTestSession(user?.userId);
+      setSessionId(response.sessionId);
+      setError(null);
+    } catch (err) {
+      setError(ensureAppError(err, {
+        message: '无法启动嗓音测试会话，请稍后重试。',
+        requestMethod: 'POST',
+        requestPath: '/sessions'
+      }));
+    } finally {
+      setIsLoading(false);
+    }
+  }, [user]);
+
   useEffect(() => {
-    // IIFE to handle async session start
-    (async () => {
-      try {
-        setIsLoading(true);
-        const response = await createVoiceTestSession(user?.userId);
-        setSessionId(response.sessionId);
-        setError(null);
-      } catch {
-        setError('无法启动嗓音测试会话，请稍后重试。');
-      } finally {
-        setIsLoading(false);
-      }
-    })();
+    initializeSession();
 
     return () => {
       clearInterval(pollingRef.current);
       cleanupAudio(); // Clean up audio player on component unmount
     };
-  }, [user]);
+  }, [initializeSession]);
 
   /**
    * @en Cleans up the audio player, pausing it and revoking the object URL.
@@ -171,12 +179,17 @@ const VoiceTestWizard = () => {
       setFormData({ rbh: { R: null, B: null, H: null }, ovhs9: Array(9).fill(null), tvqg: Array(12).fill(null) });
       setAnalysisStatus('idle');
       setAnalysisResults(null);
+      setAnalysisError(null);
       failedUploadRef.current = null;
       setUploadError(null);
       setIsUploading(false);
       setDiscardInfo(false);
-    } catch {
-      alert('重新开始失败，请稍后再试。');
+    } catch (err) {
+      setError(ensureAppError(err, {
+        message: '重新开始失败，请稍后再试。',
+        requestMethod: 'POST',
+        requestPath: '/sessions'
+      }));
     } finally {
       setIsLoading(false);
     }
@@ -196,11 +209,25 @@ const VoiceTestWizard = () => {
     const fileName = `${stepInfo.id}_${recordingIndex + 1}.wav`;
     try {
       const { putUrl, objectKey } = await getVoiceTestUploadUrl(sessionId, stepInfo.id, fileName, 'audio/wav');
-      await uploadVoiceTestFileToS3(putUrl, blob);
-      setRecordedBlobs(prev => ({ ...prev, [currentStep]: [...(prev[currentStep] || []), { blob, objectKey, fileName }] }));
+      try {
+        await uploadVoiceTestFileToS3(putUrl, blob);
+        setRecordedBlobs(prev => ({ ...prev, [currentStep]: [...(prev[currentStep] || []), { blob, objectKey, fileName }] }));
+      } catch (uploadErr) {
+        console.error('[VoiceTestWizard] 上传失败:', uploadErr);
+        setUploadError(ensureAppError(uploadErr, {
+          message: '上传失败，请点击下方“重试上传”。',
+          requestMethod: 'PUT',
+          requestPath: putUrl
+        }));
+        failedUploadRef.current = { blob, stepId: stepInfo.id, fileName };
+      }
     } catch (err) {
-      console.error('[VoiceTestWizard] 上传失败:', err);
-      setUploadError('上传失败，请点击下方“重试上传”。');
+      console.error('[VoiceTestWizard] 获取上传地址失败:', err);
+      setUploadError(ensureAppError(err, {
+        message: '获取上传地址失败，请稍后重试。',
+        requestMethod: 'POST',
+        requestPath: '/uploads'
+      }));
       failedUploadRef.current = { blob, stepId: stepInfo.id, fileName };
     } finally {
       setIsUploading(false);
@@ -227,12 +254,25 @@ const VoiceTestWizard = () => {
     setUploadError(null);
     try {
       const { putUrl, objectKey } = await getVoiceTestUploadUrl(sessionId, stepId, fileName, 'audio/wav');
-      await uploadVoiceTestFileToS3(putUrl, blob);
-      setRecordedBlobs(prev => ({ ...prev, [currentStep]: [...(prev[currentStep] || []), { blob, objectKey, fileName }] }));
-      failedUploadRef.current = null;
+      try {
+        await uploadVoiceTestFileToS3(putUrl, blob);
+        setRecordedBlobs(prev => ({ ...prev, [currentStep]: [...(prev[currentStep] || []), { blob, objectKey, fileName }] }));
+        failedUploadRef.current = null;
+      } catch (uploadErr) {
+        console.error('[VoiceTestWizard] 重试上传仍失败:', uploadErr);
+        setUploadError(ensureAppError(uploadErr, {
+          message: '重试上传仍失败，请检查网络或稍后再试。',
+          requestMethod: 'PUT',
+          requestPath: putUrl
+        }));
+      }
     } catch (e) {
-      console.error('[VoiceTestWizard] 重试上传仍失败:', e);
-      setUploadError('重试上传仍失败，请检查网络或稍后再试。');
+      console.error('[VoiceTestWizard] 重试上传请求失败:', e);
+      setUploadError(ensureAppError(e, {
+        message: '获取新的上传地址失败，请稍后再试。',
+        requestMethod: 'POST',
+        requestPath: '/uploads'
+      }));
     } finally {
       setIsUploading(false);
     }
@@ -244,6 +284,10 @@ const VoiceTestWizard = () => {
    */
   const handleGenerateReport = async () => {
     setAnalysisStatus('processing');
+    setAnalysisError(null);
+    if (pollingRef.current) {
+      clearInterval(pollingRef.current);
+    }
     try {
       await requestVoiceTestAnalyze(sessionId, { hasExternal: false }, formData);
       pollingRef.current = setInterval(async () => {
@@ -252,20 +296,43 @@ const VoiceTestWizard = () => {
           if (results.status === 'done') {
             setAnalysisStatus('done');
             setAnalysisResults(results);
+            setAnalysisError(null);
             clearInterval(pollingRef.current);
+            pollingRef.current = null;
           } else if (results.status === 'failed') {
             setAnalysisStatus('failed');
+            setAnalysisError(new ServiceError('分析任务失败，请稍后重试。', {
+              requestMethod: 'GET',
+              requestPath: sessionId ? `/results/${sessionId}` : '/results',
+              details: { status: results.status }
+            }));
             clearInterval(pollingRef.current);
+            pollingRef.current = null;
           }
         } catch (pollErr) {
           console.error('[VoiceTestWizard] 轮询失败:', pollErr);
           setAnalysisStatus('failed');
+          setAnalysisError(ensureAppError(pollErr, {
+            message: '获取分析结果失败，请稍后重试。',
+            requestMethod: 'GET',
+            requestPath: sessionId ? `/results/${sessionId}` : '/results'
+          }));
           clearInterval(pollingRef.current);
+          pollingRef.current = null;
         }
       }, 3000);
     } catch (err) {
       console.error('[VoiceTestWizard] 请求分析失败:', err);
       setAnalysisStatus('failed');
+      setAnalysisError(ensureAppError(err, {
+        message: '分析请求失败，请稍后重试。',
+        requestMethod: 'POST',
+        requestPath: '/analyze'
+      }));
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current);
+        pollingRef.current = null;
+      }
     }
   };
 
@@ -276,8 +343,13 @@ const VoiceTestWizard = () => {
   const handleRetryAnalysis = () => {
     if (!window.confirm('将重新发起分析，这可能再次消耗计算资源。继续吗？')) return;
     // 重新设为 idle 以触发重新生成按钮流转
+    if (pollingRef.current) {
+      clearInterval(pollingRef.current);
+      pollingRef.current = null;
+    }
     setAnalysisStatus('idle');
     setAnalysisResults(null);
+    setAnalysisError(null);
   };
 
   const handleNext = () => {
@@ -319,7 +391,11 @@ const VoiceTestWizard = () => {
         case 'failed':
           return (
             <div className="text-center space-y-4">
-              <p className="text-red-600">分析失败，请重试。</p>
+              {analysisError ? (
+                <ApiErrorNotice error={analysisError} onRetry={handleGenerateReport} />
+              ) : (
+                <p className="text-red-600">分析失败，请重试。</p>
+              )}
               <div className="flex flex-wrap gap-4 justify-center">
                 <button onClick={handleRetryAnalysis} className="px-6 py-3 bg-red-600 text-white rounded-lg font-semibold hover:bg-red-700 transition-colors">重试分析</button>
                 <button onClick={handleRestartWizard} className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg font-semibold hover:bg-gray-300 transition-colors">重新开始测试</button>
@@ -354,10 +430,15 @@ const VoiceTestWizard = () => {
           </div>
           {discardInfo && <div className="my-3 p-2 bg-gray-50 text-gray-600 rounded text-sm">已放弃刚才的录音，本次不计入进度。</div>}
           {isUploading && <p className="my-4 text-blue-600">正在上传...</p>}
-          {uploadError && <div className="my-4 p-3 bg-red-100 text-red-700 rounded-md space-y-2">
-            <p>{uploadError}</p>
-            {failedUploadRef.current && <button onClick={handleRetryUpload} className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors">重试上传</button>}
-          </div>}
+          {uploadError && (
+            <div className="my-4">
+              <ApiErrorNotice
+                error={uploadError}
+                onRetry={failedUploadRef.current ? handleRetryUpload : undefined}
+                compact
+              />
+            </div>
+          )}
           {allRecordingsDone && !isUploading && !uploadError && <div className="my-4 p-3 bg-green-100 text-green-800 rounded-lg"><p>✅ 本步骤所有录音已完成。</p></div>}
           <div className="mt-4">
             <Recorder key={`${currentStep}-${recordingsForStep.length}`} onRecordingComplete={handleRecordingComplete} onDiscardRecording={handleDiscardRecording} isRecording={isUploading || allRecordingsDone} />
@@ -403,7 +484,13 @@ const VoiceTestWizard = () => {
   };
 
   if (isLoading) return <div className="p-8 text-center"><p>正在初始化...</p></div>;
-  if (error) return <div className="p-8 text-center text-red-600"><p>{error}</p></div>;
+  if (error) {
+    return (
+      <div className="p-8">
+        <ApiErrorNotice error={error} onRetry={initializeSession} />
+      </div>
+    );
+  }
 
   const isFormsComplete = () => {
     const { rbh, ovhs9, tvqg } = formData;

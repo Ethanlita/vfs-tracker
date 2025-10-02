@@ -3,7 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { updateUserProfile } from '../api';
 import { getUserAvatarUrl } from '../utils/avatar';
+import { ensureAppError } from '../utils/apiError.js';
 import AvatarUpload from './AvatarUpload';
+import { ApiErrorNotice } from './ApiErrorNotice.jsx';
 
 const UserProfileManager = () => {
   const {
@@ -22,6 +24,7 @@ const UserProfileManager = () => {
   const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [apiError, setApiError] = useState(null);
   const [success, setSuccess] = useState('');
   const [editingCognito, setEditingCognito] = useState(false);
 
@@ -100,6 +103,7 @@ const UserProfileManager = () => {
   const handleUpdateCognitoInfo = async () => {
     setError('');
     setSuccess('');
+    setApiError(null);
 
     try {
       const updates = {};
@@ -145,7 +149,12 @@ const UserProfileManager = () => {
       }
     } catch (error) {
       console.error('更新Cognito用户信息失败:', error);
-      setError(error.message || '更新失败，请重试');
+      setError('');
+      setApiError(ensureAppError(error, {
+        message: error.message || '更新失败，请重试',
+        requestMethod: 'POST',
+        requestPath: '/cognito/profile'
+      }));
     }
   };
 
@@ -157,7 +166,12 @@ const UserProfileManager = () => {
         setSuccess(result.message);
       }
     } catch (error) {
-      setError(error.message || '重新发送验证邮件失败');
+      setError('');
+      setApiError(ensureAppError(error, {
+        message: error.message || '重新发送验证邮件失败',
+        requestMethod: 'POST',
+        requestPath: '/cognito/resend-verification'
+      }));
     }
   };
 
@@ -168,6 +182,7 @@ const UserProfileManager = () => {
     }));
     setError('');
     setSuccess('');
+    setApiError(null);
   };
 
   const handleCognitoInputChange = (field, value) => {
@@ -177,6 +192,7 @@ const UserProfileManager = () => {
     }));
     setError('');
     setSuccess('');
+    setApiError(null);
   };
 
   const addSocialAccount = () => {
@@ -199,12 +215,14 @@ const UserProfileManager = () => {
   const handleSave = async () => {
     if (!formData.name.trim()) {
       setError('昵称不能为空');
+      setApiError(null);
       return;
     }
 
     setLoading(true);
     setError('');
     setSuccess('');
+    setApiError(null);
 
     try {
       // 修复：正确传递 userId 和 profileData 参数
@@ -222,7 +240,12 @@ const UserProfileManager = () => {
       setSuccess('个人资料更新成功！');
     } catch (error) {
       console.error('更新个人资料失败:', error);
-      setError(error.message || '更新失败，请重试');
+      setError('');
+      setApiError(ensureAppError(error, {
+        message: error.message || '更新失败，请重试',
+        requestMethod: 'POST',
+        requestPath: '/user/profile'
+      }));
     } finally {
       setLoading(false);
     }
@@ -242,6 +265,7 @@ const UserProfileManager = () => {
     setEditing(false);
     setError('');
     setSuccess('');
+    setApiError(null);
   };
 
   // 处理头像更新
@@ -253,7 +277,12 @@ const UserProfileManager = () => {
         await refreshCognitoUserInfo();
       }
     } catch (error) {
-      setError('头像更新失败：' + error.message);
+      setError('');
+      setApiError(ensureAppError(error, {
+        message: '头像更新失败：' + (error.message || ''),
+        requestMethod: 'POST',
+        requestPath: '/cognito/avatar'
+      }));
     }
   };
 
@@ -289,6 +318,11 @@ const UserProfileManager = () => {
       </div>
 
       {/* 错误和成功消息 */}
+      {apiError && (
+        <div className="mb-4">
+          <ApiErrorNotice error={apiError} />
+        </div>
+      )}
       {error && (
         <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
           {error}

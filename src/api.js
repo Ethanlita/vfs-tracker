@@ -3,6 +3,7 @@ import { fetchAuthSession } from 'aws-amplify/auth';
 import { v4 as uuidv4 } from 'uuid';
 import mockData from './mock_data.json';
 import { isProductionReady as globalIsProductionReady, logEnvReadiness } from './env.js';
+import { ApiError, AuthenticationError, ServiceError } from './utils/apiError.js';
 
 export const PROFILE_CACHE_KEY = 'lastGoodUserProfile:v1';
 
@@ -14,16 +15,29 @@ const isProductionReady = () => {
 
 async function simpleGet(path) {
   console.log('[simpleGet] making public request to:', path);
-  const op = get({ apiName: 'api', path });
-  const { body } = await op.response;
-  return body.json();
+  try {
+    const op = get({ apiName: 'api', path });
+    const { body } = await op.response;
+    return body.json();
+  } catch (error) {
+    console.error(`[simpleGet] 请求失败: ${path}`, error);
+    throw ApiError.from(error, {
+      requestMethod: 'GET',
+      requestPath: path,
+      statusCode: error?.$metadata?.httpStatusCode ?? error?.statusCode ?? error?.status
+    });
+  }
 }
 
 async function authenticatedGet(path) {
   console.log('[authenticatedGet] making authenticated request to:', path);
   const session = await fetchAuthSession();
-  if (!session.tokens?.idToken) {
-    throw new Error('User not authenticated - no ID token');
+  const idToken = session.tokens?.idToken;
+  if (!idToken) {
+    throw new AuthenticationError('未检测到身份凭证，请登录后重试。', {
+      requestMethod: 'GET',
+      requestPath: path
+    });
   }
   try {
     const op = get({
@@ -31,7 +45,7 @@ async function authenticatedGet(path) {
       path,
       options: {
         headers: {
-          Authorization: `Bearer ${session.tokens.idToken}`,
+          Authorization: `Bearer ${idToken}`,
           'Content-Type': 'application/json'
         }
       }
@@ -43,12 +57,15 @@ async function authenticatedGet(path) {
       return result.data;
     } else if (result.events) {
       return result.events;
-    } else {
-      return result;
     }
+    return result;
   } catch (error) {
     console.error('❌ 使用ID token API调用失败:', error);
-    throw error;
+    throw ApiError.from(error, {
+      requestMethod: 'GET',
+      requestPath: path,
+      statusCode: error?.$metadata?.httpStatusCode ?? error?.statusCode ?? error?.status
+    });
   }
 }
 
@@ -59,22 +76,35 @@ async function authenticatedPost(path, bodyData) {
   const idToken = typeof idTokenRaw === 'string' ? idTokenRaw : idTokenRaw?.toString?.();
   if (!idToken) {
     console.error('[authenticatedPost] No ID token in session.tokens');
-    throw new Error('User not authenticated - no ID token');
+    throw new AuthenticationError('未检测到身份凭证，请登录后重试。', {
+      requestMethod: 'POST',
+      requestPath: path
+    });
   }
   console.debug('[authenticatedPost] ID Token preview (first 20 chars):', idToken.slice(0,20));
-  const op = post({
-    apiName: 'api',
-    path,
-    options: {
-      body: bodyData,
-      headers: {
-        Authorization: `Bearer ${idToken}`,
-        'Content-Type': 'application/json'
+  try {
+    const op = post({
+      apiName: 'api',
+      path,
+      options: {
+        body: bodyData,
+        headers: {
+          Authorization: `Bearer ${idToken}`,
+          'Content-Type': 'application/json'
+        }
       }
-    }
-  });
-  const { body } = await op.response;
-  return body.json();
+    });
+    const { body } = await op.response;
+    return body.json();
+  } catch (error) {
+    console.error(`[authenticatedPost] 请求失败: ${path}`, error);
+    throw ApiError.from(error, {
+      requestMethod: 'POST',
+      requestPath: path,
+      details: { body: bodyData },
+      statusCode: error?.$metadata?.httpStatusCode ?? error?.statusCode ?? error?.status
+    });
+  }
 }
 
 async function authenticatedPut(path, bodyData) {
@@ -83,21 +113,34 @@ async function authenticatedPut(path, bodyData) {
   const idTokenRaw = session.tokens?.idToken;
   const idToken = typeof idTokenRaw === 'string' ? idTokenRaw : idTokenRaw?.toString?.();
   if (!idToken) {
-    throw new Error('User not authenticated - no ID token');
+    throw new AuthenticationError('未检测到身份凭证，请登录后重试。', {
+      requestMethod: 'PUT',
+      requestPath: path
+    });
   }
-  const op = put({
-    apiName: 'api',
-    path,
-    options: {
-      body: bodyData,
-      headers: {
-        Authorization: `Bearer ${idToken}`,
-        'Content-Type': 'application/json'
+  try {
+    const op = put({
+      apiName: 'api',
+      path,
+      options: {
+        body: bodyData,
+        headers: {
+          Authorization: `Bearer ${idToken}`,
+          'Content-Type': 'application/json'
+        }
       }
-    }
-  });
-  const { body } = await op.response;
-  return body.json();
+    });
+    const { body } = await op.response;
+    return body.json();
+  } catch (error) {
+    console.error(`[authenticatedPut] 请求失败: ${path}`, error);
+    throw ApiError.from(error, {
+      requestMethod: 'PUT',
+      requestPath: path,
+      details: { body: bodyData },
+      statusCode: error?.$metadata?.httpStatusCode ?? error?.statusCode ?? error?.status
+    });
+  }
 }
 
 async function authenticatedDelete(path) {
@@ -106,20 +149,32 @@ async function authenticatedDelete(path) {
   const idTokenRaw = session.tokens?.idToken;
   const idToken = typeof idTokenRaw === 'string' ? idTokenRaw : idTokenRaw?.toString?.();
   if (!idToken) {
-    throw new Error('User not authenticated - no ID token');
+    throw new AuthenticationError('未检测到身份凭证，请登录后重试。', {
+      requestMethod: 'DELETE',
+      requestPath: path
+    });
   }
-  const op = del({
-    apiName: 'api',
-    path,
-    options: {
-      headers: {
-        Authorization: `Bearer ${idToken}`,
-        'Content-Type': 'application/json'
+  try {
+    const op = del({
+      apiName: 'api',
+      path,
+      options: {
+        headers: {
+          Authorization: `Bearer ${idToken}`,
+          'Content-Type': 'application/json'
+        }
       }
-    }
-  });
-  const { body } = await op.response;
-  return body.json();
+    });
+    const { body } = await op.response;
+    return body.json();
+  } catch (error) {
+    console.error(`[authenticatedDelete] 请求失败: ${path}`, error);
+    throw ApiError.from(error, {
+      requestMethod: 'DELETE',
+      requestPath: path,
+      statusCode: error?.$metadata?.httpStatusCode ?? error?.statusCode ?? error?.status
+    });
+  }
 }
 
 // ========== 核心API函数 ==========
@@ -186,9 +241,14 @@ export const callGeminiProxy = async (prompt) => {
     const result = await authenticatedPost('/gemini-proxy', { prompt });
     if (result.success) {
       return result.response;
-    } else {
-      throw new Error(result.error || 'The Gemini proxy failed to process the request.');
     }
+    throw new ServiceError(result.error || 'The Gemini proxy failed to process the request.', {
+      requestMethod: 'POST',
+      requestPath: '/gemini-proxy',
+      statusCode: result.statusCode ?? result.status,
+      details: { success: result.success },
+      serviceName: 'Gemini Proxy'
+    });
   } catch (error) {
     console.error('❌ Failed to call Gemini proxy API:', error);
     throw error;
@@ -243,9 +303,14 @@ export const getSongRecommendations = async ({ lowestNote, highestNote }) => {
     const result = await authenticatedPost('/recommend-songs', { lowestNote, highestNote });
     if (result.success) {
       return result.recommendations;
-    } else {
-      throw new Error(result.error || 'The song recommendation service failed.');
     }
+    throw new ServiceError(result.error || 'The song recommendation service failed.', {
+      requestMethod: 'POST',
+      requestPath: '/recommend-songs',
+      statusCode: result.statusCode ?? result.status,
+      details: { success: result.success },
+      serviceName: 'Song Recommendation'
+    });
   } catch (error) {
     console.error('❌ Failed to call song recommendation API:', error);
     throw error;
@@ -361,13 +426,22 @@ export const uploadVoiceTestFileToS3 = async (putUrl, file) => {
       body: file
     });
     if (!response.ok) {
-      throw new Error(`S3 upload failed: ${response.statusText}`);
+      throw await ApiError.fromResponse(response, {
+        requestMethod: 'PUT',
+        requestPath: putUrl
+      });
     }
     console.log('✅ S3: Voice test file uploaded successfully');
     return response;
   } catch (error) {
     console.error('❌ S3: Failed to upload voice test file:', error);
-    throw error;
+    throw error instanceof ApiError
+      ? error
+      : ApiError.from(error, {
+        requestMethod: 'PUT',
+        requestPath: putUrl,
+        statusCode: error?.$metadata?.httpStatusCode ?? error?.statusCode ?? error?.status
+      });
   }
 };
 

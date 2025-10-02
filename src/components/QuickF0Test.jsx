@@ -4,6 +4,8 @@ import { useAuth } from '../contexts/AuthContext.jsx';
 import { addEvent } from '../api'; // 导入 addEvent API
 import { PitchDetector } from 'pitchy'; // 导入 pitchy
 import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts'; // 导入 recharts
+import { ensureAppError } from '../utils/apiError.js';
+import { ApiErrorNotice } from './ApiErrorNotice.jsx';
 
 // --- 辅助函数 ---
 
@@ -46,6 +48,7 @@ const QuickF0Test = () => {
   // --- 状态管理 ---
   const [status, setStatus] = useState('idle'); // idle, recording, finished
   const [error, setError] = useState(null);
+  const [apiError, setApiError] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
   const [currentF0, setCurrentF0] = useState(0);
   const [f0History, setF0History] = useState([]);
@@ -112,6 +115,7 @@ const QuickF0Test = () => {
     } catch (err) {
       console.error('无法获取麦克风权限或启动音频分析:', err);
       setError('无法启动测试：请确认已授予麦克风权限。');
+      setApiError(null);
       setStatus('idle');
       cleanupAudio();
     }
@@ -139,6 +143,7 @@ const QuickF0Test = () => {
     }
     setIsSaving(true);
     setError(null);
+    setApiError(null);
 
     // 构建与 EventForm 中 'self_test' 类型完全一致的事件对象
     const eventData = {
@@ -179,11 +184,17 @@ const QuickF0Test = () => {
         } catch (storageError) {
           console.error('离线保存失败:', storageError);
           setError('离线保存失败，请检查浏览器存储权限或稍后再试。');
+          setApiError(null);
         }
       }
     } catch (err) {
       console.error("保存事件失败:", err);
       setError(err.message || '保存事件时发生未知错误。');
+      setApiError(ensureAppError(err, {
+        message: err.message || '保存事件时发生未知错误。',
+        requestMethod: 'POST',
+        requestPath: '/events'
+      }));
     } finally {
       setIsSaving(false);
     }
@@ -249,9 +260,24 @@ const QuickF0Test = () => {
         </div>
       )}
 
-      {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-8 text-center text-red-700">
-          {error}
+      {(error || apiError) && (
+        <div className="w-full mb-8 space-y-3">
+          {error && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-center text-red-700">
+              {error}
+            </div>
+          )}
+          {apiError && (
+            <ApiErrorNotice
+              error={apiError}
+              onRetry={() => {
+                if (status === 'finished' && !isSaving) {
+                  handleSave();
+                }
+              }}
+              retryLabel="重试保存"
+            />
+          )}
         </div>
       )}
 
