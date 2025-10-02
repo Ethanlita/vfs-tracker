@@ -200,7 +200,7 @@ const ProfileSetupWizard = ({ onComplete, canSkip = false }) => {
                 autoFocus
               />
               <p className="mt-2 text-sm text-gray-500">
-                建议使用真实姓名或常用昵称，这有助于其他用户识别您
+                建议不使用真实姓名。可使用常用昵称，这有助于其他用户识别您。
               </p>
             </div>
 
