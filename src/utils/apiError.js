@@ -14,7 +14,7 @@ function readHeaderValue(headers, keys) {
         return value;
       }
     }
-  } catch (err) {
+  } catch {
     // ignore header access errors
   }
   return undefined;
@@ -213,8 +213,9 @@ export class ApiError extends AppError {
   }
 
   static async fromResponse(response, context = {}) {
+    const Ctor = this; // Allow subclasses to instantiate themselves via this method
     if (!response) {
-      return new ApiError(context.message || FALLBACK_MESSAGE, context);
+      return new Ctor(context.message || FALLBACK_MESSAGE, context);
     }
 
     let responseBody;
@@ -228,20 +229,21 @@ export class ApiError extends AppError {
           responseBody = await cloned.text();
         }
       }
-    } catch (err) {
+  } catch {
       responseBody = undefined;
     }
 
-    return new ApiError(context.message || `请求失败，状态码 ${response.status}`, {
+    const finalContext = {
+      ...context,
       statusCode: response.status,
       requestMethod: context.requestMethod ?? response.request?.method ?? context.method,
       requestPath: context.requestPath ?? response.url ?? context.url,
       requestId: context.requestId ?? readHeaderValue(response.headers, headerNames),
       responseBody,
       originalError: context.originalError instanceof Error ? context.originalError : undefined,
-      errorCode: context.errorCode,
-      details: context.details
-    });
+    };
+
+    return new Ctor(context.message || `请求失败，状态码 ${response.status}`, finalContext);
   }
 }
 
@@ -279,6 +281,50 @@ export class ServiceError extends AppError {
     return this;
   }
 }
+
+// --- Client-Side Specific Errors ---
+
+export class ValidationError extends ClientError {
+  constructor(message = '提交的数据无效，请检查后重试。', context = {}) {
+    super(message, context);
+    this.name = 'ValidationError';
+    if (context.fieldErrors) {
+      this.fieldErrors = context.fieldErrors; // e.g., [{field: 'email', message: '格式不正确'}]
+    }
+  }
+}
+
+export class PermissionError extends ClientError {
+  constructor(message = '操作所需的权限被拒绝。', context = {}) {
+    super(message, context);
+    this.name = 'PermissionError';
+    if (context.permissionName) {
+      this.permissionName = context.permissionName; // e.g., 'microphone'
+    }
+  }
+}
+
+export class StorageError extends ClientError {
+  constructor(message = '本地存储操作失败。', context = {}) {
+    super(message, context);
+    this.name = 'StorageError';
+    if (context.operation) this.operation = context.operation; // 'get', 'set', 'remove'
+    if (context.key) this.key = context.key;
+    if (context.quotaExceeded) this.quotaExceeded = context.quotaExceeded; // boolean
+  }
+}
+
+// --- API/Network Specific Errors ---
+
+export class UploadError extends ApiError {
+  constructor(message = '文件上传失败。', context = {}) {
+    super(message, context);
+    this.name = 'UploadError';
+    if (context.objectKey) this.objectKey = context.objectKey;
+    if (context.uploadUrl) this.uploadUrl = context.uploadUrl;
+  }
+}
+
 
 export function ensureAppError(error, context) {
   return error instanceof AppError ? error.applyContext(context) : AppError.from(error, context);

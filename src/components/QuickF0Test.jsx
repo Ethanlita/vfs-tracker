@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext.jsx';
 import { addEvent } from '../api'; // 导入 addEvent API
 import { PitchDetector } from 'pitchy'; // 导入 pitchy
 import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts'; // 导入 recharts
-import { ensureAppError } from '../utils/apiError.js';
+import { ensureAppError, PermissionError, StorageError, ValidationError } from '../utils/apiError.js';
 import { ApiErrorNotice } from './ApiErrorNotice.jsx';
 
 // --- 辅助函数 ---
@@ -47,8 +47,8 @@ const QuickF0Test = () => {
 
   // --- 状态管理 ---
   const [status, setStatus] = useState('idle'); // idle, recording, finished
-  const [error, setError] = useState(null);
-  const [apiError, setApiError] = useState(null);
+  const [error, setError] = useState(null); // Unified error state
+  const [successMessage, setSuccessMessage] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [currentF0, setCurrentF0] = useState(0);
   const [f0History, setF0History] = useState([]);
@@ -96,6 +96,7 @@ const QuickF0Test = () => {
   const handleStart = useCallback(async () => {
     setStatus('recording');
     setError(null);
+    setSuccessMessage('');
     setF0History([]);
     setAverageF0(null);
     setCurrentF0(0);
@@ -114,8 +115,7 @@ const QuickF0Test = () => {
       pitchLoop(detector);
     } catch (err) {
       console.error('无法获取麦克风权限或启动音频分析:', err);
-      setError('无法启动测试：请确认已授予麦克风权限。');
-      setApiError(null);
+      setError(new PermissionError('无法启动测试，请确认已授予麦克风权限。', { cause: err }));
       setStatus('idle');
       cleanupAudio();
     }
@@ -138,26 +138,24 @@ const QuickF0Test = () => {
    */
   const handleSave = async () => {
     if (averageF0 === null || !user?.userId) {
-      setError('无法保存，因为没有有效的测试结果或用户信息。');
+      setError(new ValidationError('无法保存，因为没有有效的测试结果或用户信息。'));
       return;
     }
     setIsSaving(true);
     setError(null);
-    setApiError(null);
+    setSuccessMessage('');
 
-    // 构建与 EventForm 中 'self_test' 类型完全一致的事件对象
     const eventData = {
-      type: 'self_test', // 1. 事件类型设置为 'self_test'
+      type: 'self_test',
       date: new Date().toISOString(),
       details: {
-        // 2. 按照 EventForm 的结构填充 details 对象
-        appUsed: 'VFS Tracker Fast F0 Analysis Tool', // 要求的 App 名称
+        appUsed: 'VFS Tracker Fast F0 Analysis Tool',
         fundamentalFrequency: averageF0,
-        sound: ['其他'], // 满足必填项的默认值
-        customSoundDetail: '通过快速基频测试自动记录', // 对'其他'的说明
-        voicing: ['其他'], // 满足必填项的默认值
-        customVoicingDetail: '通过快速基频测试自动记录', // 对'其他'的说明
-        notes: `快速基频测试，平均F0: ${averageF0.toFixed(2)} Hz`, // 在备注中记录结果
+        sound: ['其他'],
+        customSoundDetail: '通过快速基频测试自动记录',
+        voicing: ['其他'],
+        customVoicingDetail: '通过快速基频测试自动记录',
+        notes: `快速基频测试，平均F0: ${averageF0.toFixed(2)} Hz`,
       },
     };
 
@@ -166,8 +164,8 @@ const QuickF0Test = () => {
 
       if (isOnline) {
         await addEvent(eventData);
-        alert('事件已成功保存！');
-        navigate('/mypage');
+        setSuccessMessage('事件已成功保存！2秒后将返回“我的”页面。');
+        setTimeout(() => navigate('/mypage'), 2000);
       } else {
         try {
           if (typeof localStorage === 'undefined') {
@@ -179,19 +177,16 @@ const QuickF0Test = () => {
           if (typeof window !== 'undefined') {
             window.dispatchEvent(new Event('pending-events-updated'));
           }
-          alert('已离线保存，网络恢复后可在“我的页面”同步。');
-          navigate('/mypage');
+          setSuccessMessage('已离线保存，网络恢复后可在“我的页面”同步。2秒后将返回。');
+          setTimeout(() => navigate('/mypage'), 2000);
         } catch (storageError) {
-          console.error('离线保存失败:', storageError);
-          setError('离线保存失败，请检查浏览器存储权限或稍后再试。');
-          setApiError(null);
+          setError(new StorageError('离线保存失败，请检查浏览器存储权限或稍后再试。', { cause: storageError }));
         }
       }
     } catch (err) {
       console.error("保存事件失败:", err);
-      setError(err.message || '保存事件时发生未知错误。');
-      setApiError(ensureAppError(err, {
-        message: err.message || '保存事件时发生未知错误。',
+      setError(ensureAppError(err, {
+        message: '保存事件时发生未知错误。',
         requestMethod: 'POST',
         requestPath: '/events'
       }));
@@ -260,22 +255,25 @@ const QuickF0Test = () => {
         </div>
       )}
 
-      {(error || apiError) && (
-        <div className="w-full mb-8 space-y-3">
-          {error && (
-            <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-center text-red-700">
-              {error}
+      {/* Unified Success and Error Display */}
+      {(successMessage || error) && (
+        <div className="w-full mb-8">
+          {successMessage && (
+            <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg text-center">
+              {successMessage}
             </div>
           )}
-          {apiError && (
+          {error && (
             <ApiErrorNotice
-              error={apiError}
+              error={error}
               onRetry={() => {
                 if (status === 'finished' && !isSaving) {
                   handleSave();
+                } else {
+                  setError(null); // Allow dismissing general errors
                 }
               }}
-              retryLabel="重试保存"
+              retryLabel={status === 'finished' ? '重试保存' : undefined}
             />
           )}
         </div>

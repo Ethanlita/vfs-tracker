@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { getUploadUrl, getFileUrl, getAvatarUrl } from '../api';
 import { useAuth } from '../contexts/AuthContext';
 import { generateAvatar } from '../utils/avatar';
-import { ApiError, ensureAppError } from '../utils/apiError.js';
+import { ApiError, UploadError, ValidationError } from '../utils/apiError.js';
 import { ApiErrorNotice } from './ApiErrorNotice.jsx';
 
 const SecureFileUpload = ({
@@ -42,48 +42,44 @@ const SecureFileUpload = ({
       return file.type === type;
     });
 
-    if (!isAllowedType) {
-      alert(`请选择允许的文件类型: ${allowedTypes.join(', ')}`);
-      return;
-    }
-
-    // 验证文件大小
-    if (file.size > maxSize) {
-      alert(`文件大小不能超过${Math.round(maxSize / 1024 / 1024)}MB`);
-      return;
-    }
-
-    // 为图片创建预览
-    if (file.type.startsWith('image/')) {
-      const reader = new FileReader();
-      reader.onload = (e) => setPreviewUrl(e.target.result);
-      reader.readAsDataURL(file);
-    }
-
-    setUploading(true);
-    const storagePath = getStoragePath(fileType);
-    const timestamp = Date.now();
-    const fileKey = `${storagePath}/${user.userId}/${timestamp}_${file.name}`;
-    let uploadUrl;
     try {
-      // 获取预签名上传URL
-      uploadUrl = await getUploadUrl(fileKey, file.type);
-
-      if (!uploadUrl) {
-        throw new Error('无法获取上传URL');
+      if (!isAllowedType) {
+        throw new ValidationError(`请选择允许的文件类型: ${allowedTypes.join(', ')}`, {
+          fieldErrors: [{ field: 'file', message: '文件类型不被允许' }]
+        });
       }
+
+      // 验证文件大小
+      if (file.size > maxSize) {
+        throw new ValidationError(`文件大小不能超过 ${Math.round(maxSize / 1024 / 1024)}MB`, {
+          fieldErrors: [{ field: 'file', message: '文件过大' }]
+        });
+      }
+
+      // 为图片创建预览
+      if (file.type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.onload = (e) => setPreviewUrl(e.target.result);
+        reader.readAsDataURL(file);
+      }
+
+      setUploading(true);
+      const storagePath = getStoragePath(fileType);
+      const timestamp = Date.now();
+      const fileKey = `${storagePath}/${user.userId}/${timestamp}_${file.name}`;
+
+      // 获取预签名上传URL
+      const uploadUrl = await getUploadUrl(fileKey, file.type);
 
       // 直接上传到S3
       const uploadResponse = await fetch(uploadUrl, {
         method: 'PUT',
         body: file,
-        headers: {
-          'Content-Type': file.type
-        }
+        headers: { 'Content-Type': file.type }
       });
 
       if (!uploadResponse.ok) {
-        throw await ApiError.fromResponse(uploadResponse, {
+        throw await UploadError.fromResponse(uploadResponse, {
           requestMethod: 'PUT',
           requestPath: uploadUrl,
           details: { fileKey, fileType }
@@ -94,12 +90,9 @@ const SecureFileUpload = ({
 
       // 获取文件的访问URL
       let fileUrl;
-
       if (fileType === 'avatar') {
-        // 头像可以通过公共API获取
         fileUrl = await getAvatarUrl(user.userId);
       } else {
-        // 其他文件通过预签名URL访问
         fileUrl = await getFileUrl(fileKey);
       }
 
@@ -116,33 +109,16 @@ const SecureFileUpload = ({
         };
         img.src = fileUrl;
       } else {
-        // 其他文件类型直接返回
         onFileUpdate(fileUrl, fileKey, { fileType: file.type, fileName: file.name });
       }
-
     } catch (error) {
       console.error(`${fileType}上传失败:`, error);
-
       const context = {
         message: '文件上传失败，请稍后重试。',
-        requestMethod: 'PUT',
-        requestPath: uploadUrl || fileKey,
-        details: { fileKey, fileType, fileName: file?.name }
+        details: { fileKey: file?.name, fileType: file?.type }
       };
-
-      if (error?.message?.includes('403') || error?.message?.includes('Access Denied')) {
-        context.message = '权限不足，请联系管理员配置权限。';
-      } else if (error?.message?.includes('Network')) {
-        context.message = '网络错误，请检查网络连接后重试。';
-      } else if (error?.message?.includes('无法获取上传URL')) {
-        context.message = '无法获取上传URL，请稍后重试。';
-      }
-
-      const normalizedError = error instanceof ApiError
-        ? error.applyContext(context)
-        : ensureAppError(error, context);
-
-      setErrorState(normalizedError);
+      // 统一包装为 UploadError
+      setErrorState(UploadError.from(error, context));
       setPreviewUrl(null);
     } finally {
       setUploading(false);

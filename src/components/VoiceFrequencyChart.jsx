@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
-import { motion, AnimatePresence } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 
 // --- SVG Icon Components (replacing lucide-react) ---
 const Lightbulb = ({ className, ...props }) => (
@@ -175,7 +175,7 @@ const ChartCard = ({ title, children }) => (
 
 // --- Main Component ---
 
-const VoiceFrequencyChart = ({ userId, events = [], compact = false }) => {
+const VoiceFrequencyChart = ({ events = [], compact = false }) => {
   const [selectedMetric, setSelectedMetric] = useState('f0');
   const [activeRange, setActiveRange] = useState('1m');
   const [showInsights, setShowInsights] = useState(false);
@@ -238,18 +238,21 @@ const VoiceFrequencyChart = ({ userId, events = [], compact = false }) => {
     return chartData.filter(item => {
       const itemDate = new Date(item.rawDate);
       switch (activeRange) {
-        case "1w":
+        case "1w": {
           const oneWeekAgo = new Date(now);
           oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
           return itemDate > oneWeekAgo;
-        case "1m":
+        }
+        case "1m": {
           const oneMonthAgo = new Date(now);
           oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
           return itemDate > oneMonthAgo;
-        case "3m":
+        }
+        case "3m": {
           const threeMonthsAgo = new Date(now);
           threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
           return itemDate > threeMonthsAgo;
+        }
         case "all":
           return true;
         default:

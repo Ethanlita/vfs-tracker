@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { updateUserProfile } from '../api';
 import { getUserAvatarUrl } from '../utils/avatar';
-import { ensureAppError } from '../utils/apiError.js';
+import { ensureAppError, ValidationError } from '../utils/apiError.js';
 import AvatarUpload from './AvatarUpload';
 import { ApiErrorNotice } from './ApiErrorNotice.jsx';
 
@@ -213,18 +213,18 @@ const UserProfileManager = () => {
   };
 
   const handleSave = async () => {
-    if (!formData.name.trim()) {
-      setError('昵称不能为空');
-      setApiError(null);
-      return;
-    }
-
     setLoading(true);
     setError('');
     setSuccess('');
     setApiError(null);
 
     try {
+      if (!formData.name.trim()) {
+        throw new ValidationError('昵称不能为空。', {
+          fieldErrors: [{ field: 'name', message: '昵称是必填项。' }]
+        });
+      }
+
       // 修复：正确传递 userId 和 profileData 参数
       await updateUserProfile(user.userId, {
         profile: {

@@ -4,7 +4,7 @@ import { ensureAppError } from '../utils/apiError.js';
 import { ApiErrorNotice } from './ApiErrorNotice.jsx';
 
 const ProfileSetup = ({ onComplete, onSkip }) => {
-  const { completeProfileSetup, user } = useAuth();
+  const { completeProfileSetup } = useAuth();
   const [formData, setFormData] = useState({
     name: '',
     isNamePublic: false,
