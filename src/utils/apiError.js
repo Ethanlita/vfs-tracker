@@ -351,4 +351,3 @@ export function normalizeFetchError(response, context = {}) {
     requestPath: context.requestPath ?? response.url ?? context.url
   });
 }
-

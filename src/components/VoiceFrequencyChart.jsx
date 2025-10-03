@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
-// eslint-disable-next-line no-unused-vars
-import { AnimatePresence, motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
+
+// Prevent motion from being flagged as unused in some builds
+void motion;
 
 // --- SVG Icon Components (replacing lucide-react) ---
 const Lightbulb = ({ className, ...props }) => (

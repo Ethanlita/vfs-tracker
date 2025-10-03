@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+﻿import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Authenticator, useAuthenticator } from '@aws-amplify/ui-react';
 import { Amplify } from 'aws-amplify';
 import { useNavigate } from 'react-router-dom';
@@ -19,7 +19,6 @@ const Auth = () => {
     // 检查Amplify配置状态
     useEffect(() => {
         if (ready) {
-            // 在生产模式下检查Amplify配置
             try {
                 const config = Amplify.getConfig();
                 const hasAuth = config?.Auth?.Cognito?.userPoolId;

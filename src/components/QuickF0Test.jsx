@@ -1,19 +1,12 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext.jsx';
-import { addEvent } from '../api'; // 导入 addEvent API
-import { PitchDetector } from 'pitchy'; // 导入 pitchy
-import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts'; // 导入 recharts
+import { addEvent } from '../api';
+import { PitchDetector } from 'pitchy';
+import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
 import { ensureAppError, PermissionError, StorageError, ValidationError } from '../utils/apiError.js';
 import { ApiErrorNotice } from './ApiErrorNotice.jsx';
 
-// --- 辅助函数 ---
-
-/**
- * @zh 将给定的频率（Hz）转换为最接近的音乐音名。
- * @param {number} frequency - 要转换的频率值。
- * @returns {string} 音乐音名，例如 "A4"。
- */
 const frequencyToNoteName = (frequency) => {
   if (!frequency || frequency <= 0) return '--';
   const A4 = 440;
@@ -37,30 +30,22 @@ const CustomTooltip = ({ active, payload }) => {
 
 const OFFLINE_QUEUE_KEY = 'pendingEvents:v1';
 
-/**
- * @zh QuickF0Test 组件提供了一个用于快速测试基频(F0)的界面。
- * 用户可以录制自己的声音，查看实时的基频反馈，并选择将结果保存为一个新事件。
- */
 const QuickF0Test = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
 
-  // --- 状态管理 ---
-  const [status, setStatus] = useState('idle'); // idle, recording, finished
-  const [error, setError] = useState(null); // Unified error state
+  const [status, setStatus] = useState('idle');
+  const [error, setError] = useState(null);
   const [successMessage, setSuccessMessage] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [currentF0, setCurrentF0] = useState(0);
   const [f0History, setF0History] = useState([]);
   const [averageF0, setAverageF0] = useState(null);
 
-  // --- 音频处理相关引用 ---
   const audioContextRef = useRef(null);
   const analyserNodeRef = useRef(null);
   const mediaStreamRef = useRef(null);
   const animationFrameRef = useRef(null);
-
-  // --- 核心逻辑处理 ---
 
   const cleanupAudio = useCallback(() => {
     if (animationFrameRef.current) {
@@ -133,9 +118,6 @@ const QuickF0Test = () => {
     }
   }, [f0History, cleanupAudio]);
 
-  /**
-   * @zh 保存事件，确保数据结构与 EventForm 一致。
-   */
   const handleSave = async () => {
     if (averageF0 === null || !user?.userId) {
       setError(new ValidationError('无法保存，因为没有有效的测试结果或用户信息。'));
@@ -195,15 +177,12 @@ const QuickF0Test = () => {
     }
   };
   
-  // 确保组件卸载时清理资源
   useEffect(() => {
     return () => cleanupAudio();
   }, [cleanupAudio]);
 
-  // 限制图表显示的数据点数量以提高性能
-  const chartHistory = f0History.slice(-200); // 只显示最近200个数据点
+  const chartHistory = f0History.slice(-200);
 
-  // --- UI 渲染 ---
   return (
     <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-6 max-w-4xl">
       <div className="relative mb-8 text-center">
@@ -255,7 +234,6 @@ const QuickF0Test = () => {
         </div>
       )}
 
-      {/* Unified Success and Error Display */}
       {(successMessage || error) && (
         <div className="w-full mb-8">
           {successMessage && (
@@ -270,7 +248,7 @@ const QuickF0Test = () => {
                 if (status === 'finished' && !isSaving) {
                   handleSave();
                 } else {
-                  setError(null); // Allow dismissing general errors
+                  setError(null);
                 }
               }}
               retryLabel={status === 'finished' ? '重试保存' : undefined}

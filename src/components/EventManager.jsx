@@ -1,13 +1,14 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { deleteEvent, getFileUrl } from '../api';
-import { ensureAppError } from '../utils/apiError.js';
-import { ApiErrorNotice } from './ApiErrorNotice.jsx';
 
-// Prevent unused variable error in some builds
+// 防止某些构建下 motion 被判定未使用
 void motion;
 
-// Moved outside component to be a stable constant
+/**
+ * @en Event management component for filtering, viewing, editing, and deleting events
+ * @zh 事件管理组件，用于筛选、查看、编辑和删除事件
+ */
 const eventTypeConfig = {
   'self_test': { label: '自我测试', icon: '🔍', color: 'green' },
   'hospital_test': { label: '医院检测', icon: '🏥', color: 'blue' },
@@ -17,11 +18,7 @@ const eventTypeConfig = {
   'feeling_log': { label: '感受记录', icon: '💭', color: 'yellow' }
 };
 
-/**
- * @en Event management component for filtering, viewing, editing, and deleting events
- * @zh 事件管理组件，用于筛选、查看、编辑和删除事件
- */
-const EventManager = ({ events, onEventDeleted }) => {
+const EventManager = ({ events, onEventDeleted }) => { // 移除未使用参数
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedType, setSelectedType] = useState('all');
   const [selectedDateRange, setSelectedDateRange] = useState('all');
@@ -29,9 +26,8 @@ const EventManager = ({ events, onEventDeleted }) => {
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [showDetails, setShowDetails] = useState(false);
   const [resolvedAtts, setResolvedAtts] = useState([]);
-  const [apiError, setApiError] = useState(null);
 
-  // Stabilized with useCallback
+  // 安全获取类型配置（兜底）
   const getTypeConfig = useCallback((type) => {
     if (!type) return { label: '未分类', icon: '📌', color: 'gray' };
     return eventTypeConfig[type] || { label: type, icon: '📌', color: 'gray' };
@@ -51,10 +47,12 @@ const EventManager = ({ events, onEventDeleted }) => {
     { value: 'type', label: '按类型排序' }
   ];
 
+  // 筛选和排序逻辑
   const filteredAndSortedEvents = useMemo(() => {
     if (!events) return [];
 
     let filtered = events.filter(event => {
+      // 搜索过滤
       const searchLower = searchTerm.toLowerCase();
       const matchesSearch = !searchTerm ||
         (event.type && event.type.toLowerCase().includes(searchLower)) ||
@@ -62,37 +60,53 @@ const EventManager = ({ events, onEventDeleted }) => {
         (event.details?.content && event.details.content.toLowerCase().includes(searchLower)) ||
         getTypeConfig(event.type).label.toLowerCase().includes(searchLower);
 
+      // 类型过滤
       const matchesType = selectedType === 'all' || event.type === selectedType;
+
+      // 日期范围过滤
       const eventDate = new Date(event.date || event.createdAt);
       const now = new Date();
       let matchesDateRange = true;
 
       if (selectedDateRange !== 'all') {
-        const daysAgo = { '1week': 7, '1month': 30, '3months': 90, '6months': 180 }[selectedDateRange];
+        const daysAgo = {
+          '1week': 7,
+          '1month': 30,
+          '3months': 90,
+          '6months': 180
+        }[selectedDateRange];
+
         const cutoffDate = new Date(now);
         cutoffDate.setDate(cutoffDate.getDate() - daysAgo);
         matchesDateRange = eventDate >= cutoffDate;
       }
+
       return matchesSearch && matchesType && matchesDateRange;
     });
 
+    // 排序
     filtered.sort((a, b) => {
       switch (sortBy) {
-        case 'newest': return new Date(b.date || b.createdAt) - new Date(a.date || a.createdAt);
-        case 'oldest': return new Date(a.date || a.createdAt) - new Date(b.date || b.createdAt);
-        case 'type': return (a.type || '').localeCompare(b.type || '');
-        default: return 0;
+        case 'newest':
+          return new Date(b.date || b.createdAt) - new Date(a.date || a.createdAt);
+        case 'oldest':
+          return new Date(a.date || a.createdAt) - new Date(b.date || b.createdAt);
+        case 'type':
+          return (a.type || '').localeCompare(b.type || '');
+        default:
+          return 0;
       }
     });
 
     return filtered;
   }, [events, searchTerm, selectedType, selectedDateRange, sortBy, getTypeConfig]);
 
+  // 事件统计（忽略无类型的）
   const eventStats = useMemo(() => {
     if (!events) return {};
     const stats = {};
     events.forEach(event => {
-      if (!event.type) return;
+      if (!event.type) return; // 跳过无类型
       stats[event.type] = (stats[event.type] || 0) + 1;
     });
     return stats;
@@ -101,25 +115,24 @@ const EventManager = ({ events, onEventDeleted }) => {
   useEffect(() => {
     const fetchAttachments = async () => {
       if (selectedEvent && selectedEvent.attachments) {
-        setResolvedAtts([]); // Reset on new event selection
         const urls = await Promise.all(
           selectedEvent.attachments.map(async (attachment) => {
             if (!attachment.fileUrl) return null;
+            // 如果 fileUrl 已经是可访问的 URL，则直接使用
             if (attachment.fileUrl.startsWith('http')) {
               return { ...attachment, signedUrl: attachment.fileUrl };
             }
+            // 否则，它是一个 S3 key，需要获取签名 URL
             try {
               const signedUrl = await getFileUrl(attachment.fileUrl);
               return { ...attachment, signedUrl };
             } catch (error) {
               console.error(`获取文件 ${attachment.fileName} 的签名URL失败:`, error);
-              return { ...attachment, signedUrl: null, error: true };
+              return { ...attachment, signedUrl: null, error: true }; // 标记错误
             }
           })
         );
         setResolvedAtts(urls.filter(Boolean));
-      } else {
-        setResolvedAtts([]);
       }
     };
     fetchAttachments();
@@ -128,29 +141,31 @@ const EventManager = ({ events, onEventDeleted }) => {
   const handleEventClick = (event) => {
     setSelectedEvent(event);
     setShowDetails(true);
-    setApiError(null);
   };
 
   const handleDeleteEvent = async (eventId) => {
     if (!window.confirm('确定要删除这个事件吗？此操作无法撤销。')) {
       return;
     }
-    setApiError(null);
 
     try {
+      // 调用真实的删除API，该函数已处理生产/开发模式
       await deleteEvent(eventId);
+
+      // 通知父组件更新UI，从列表中移除事件
       if (onEventDeleted) {
         onEventDeleted(eventId);
       }
+
+      // 关���详情弹窗
       setShowDetails(false);
+
+      // 提示用户成功
       alert('事件已成功删除。');
+
     } catch (error) {
       console.error('删除事件失败:', error);
-      setApiError(ensureAppError(error, {
-        message: '删除事件失败，请重试',
-        requestMethod: 'DELETE',
-        requestPath: `/event/${eventId}`
-      }));
+      alert(`删除事件失败: ${error.message}`);
     }
   };
 
@@ -158,7 +173,10 @@ const EventManager = ({ events, onEventDeleted }) => {
     const date = new Date(dateString);
     if (isNaN(date.getTime())) return '无日期';
     return date.toLocaleDateString('zh-CN', {
-      year: 'numeric', month: 'long', day: 'numeric', weekday: 'long'
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      weekday: 'long'
     });
   };
 
@@ -167,7 +185,9 @@ const EventManager = ({ events, onEventDeleted }) => {
     switch (type) {
       case 'self_test':
       case 'hospital_test':
-        return event.details?.fundamentalFrequency ? `基频: ${event.details.fundamentalFrequency}Hz` : '无参数数据';
+        return event.details?.fundamentalFrequency
+          ? `基频: ${event.details.fundamentalFrequency}Hz`
+          : '无参数数据';
       case 'voice_training':
         return event.details?.trainingContent?.substring(0, 50) + '...' || '无训练内容';
       case 'self_practice':
@@ -186,7 +206,9 @@ const EventManager = ({ events, onEventDeleted }) => {
       {/* 筛选和搜索控件 */}
       <div className="bg-white rounded-xl p-6 shadow-lg">
         <h3 className="text-lg font-semibold text-gray-800 mb-4">筛选条件</h3>
+
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* 搜索 */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">搜索</label>
             <input
@@ -197,24 +219,29 @@ const EventManager = ({ events, onEventDeleted }) => {
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
             />
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">事件类型</label>
-            <select
-              value={selectedType}
-              onChange={(e) => setSelectedType(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
-            >
-              <option value="all">全部类型</option>
-              {Object.entries(eventTypeConfig).map(([type, config]) => (
-                <option key={type} value={type}>
-                  {config.icon} {config.label}
-                </option>
-              ))}
-              {events?.some(ev => !ev.type) && (
-                <option value="__undefined">📌 未分类</option>
-              )}
-            </select>
-          </div>
+
+          {/* 事件类型 */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">事件类型</label>
+              <select
+                value={selectedType}
+                onChange={(e) => setSelectedType(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+              >
+                <option value="all">全部类型</option>
+                {Object.entries(eventTypeConfig).map(([type, config]) => (
+                  <option key={type} value={type}>
+                    {config.icon} {config.label}
+                  </option>
+                ))}
+                {/* 如果存在未分类事件，提供快捷过滤 */}
+                {events?.some(ev => !ev.type) && (
+                  <option value="__undefined">📌 未分类</option>
+                )}
+              </select>
+            </div>
+
+          {/* 日期范围 */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">时间范围</label>
             <select
@@ -229,6 +256,8 @@ const EventManager = ({ events, onEventDeleted }) => {
               ))}
             </select>
           </div>
+
+          {/* 排序 */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">排序方式</label>
             <select
@@ -244,6 +273,8 @@ const EventManager = ({ events, onEventDeleted }) => {
             </select>
           </div>
         </div>
+
+        {/* 统计信息 */}
         <div className="mt-4 flex flex-wrap gap-2">
           <span className="text-sm text-gray-600">
             显示 {filteredAndSortedEvents.length} / {events?.length || 0} 个事件
@@ -269,6 +300,7 @@ const EventManager = ({ events, onEventDeleted }) => {
         <div className="p-4 bg-gradient-to-r from-pink-50 to-purple-50 border-b">
           <h3 className="text-lg font-semibold text-gray-800">事件列表</h3>
         </div>
+
         <div className="divide-y divide-gray-200 max-h-96 overflow-y-auto">
           {filteredAndSortedEvents.length === 0 ? (
             <div className="p-8 text-center text-gray-500">
@@ -354,22 +386,18 @@ const EventManager = ({ events, onEventDeleted }) => {
               </div>
 
               <div className="space-y-4">
-                {apiError && (
-                  <div className="my-4">
-                    <ApiErrorNotice error={apiError} onRetry={() => handleDeleteEvent(selectedEvent.eventId)} />
-                  </div>
-                )}
                 <div>
                   <h4 className="font-medium text-gray-800 mb-1">事件日期</h4>
                   <p className="text-gray-600">{formatDate(selectedEvent.date || selectedEvent.createdAt)}</p>
                 </div>
 
+                {/* 根据事件类型显示详细信息 */}
                 {selectedEvent.details && (
                   <div>
                     <h4 className="font-medium text-gray-800 mb-2">详细信息</h4>
                     <div className="bg-gray-50 rounded-lg p-4 space-y-2">
                       {Object.entries(selectedEvent.details).map(([key, value]) => {
-                        if (!value || key === 'attachmentUrl') return null;
+                        if (!value || key === 'attachmentUrl') return null; // 旧字段忽略
                         return (
                           <div key={key} className="flex justify-between">
                             <span className="text-gray-600 capitalize">{key}:</span>
@@ -392,7 +420,7 @@ const EventManager = ({ events, onEventDeleted }) => {
                       {resolvedAtts.map((att, i) => (
                         <a
                           key={i}
-                          href={att.signedUrl}
+                          href={att.downloadUrl || att.fileUrl}
                           target="_blank" rel="noreferrer"
                           className="inline-flex items-center px-3 py-1.5 rounded-md bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200"
                         >

@@ -5,47 +5,6 @@ import {
   updateUserProfile,
   setupUserProfile
 } from '../api';
-import { ApiErrorNotice } from './ApiErrorNotice.jsx';
-import {
-  ApiError,
-  PermissionError,
-  ValidationError,
-  UploadError,
-  StorageError,
-  ServiceError
-} from '../utils/apiError.js';
-
-// --- Mock Error Instances for Showcase ---
-const mockErrors = {
-  permission: new PermissionError('您已拒绝麦克风权限，无法开始录音。请在浏览器设置中允许访问麦克风。', {
-    permissionName: 'microphone',
-  }),
-  validation: new ValidationError('提交的数据无效，请检查。', {
-    fieldErrors: [
-      { field: 'name', message: '昵称不能为空。' },
-      { field: 'email', message: '邮箱格式不正确。' }
-    ]
-  }),
-  upload: new UploadError('文件 "voice_sample.wav" 上传到S3失败。', {
-    objectKey: 'private/us-east-1:xxxx/voice-tests/session-123/raw/voice_sample.wav',
-    uploadUrl: 'https://s3-presigned-url.com/...'
-  }),
-  storage: new StorageError('无法保存用户会话，本地存储已满。', {
-    operation: 'set',
-    key: 'dev-user',
-    quotaExceeded: true
-  }),
-  apiDelete: new ApiError('删除事件失败，资源未找到。', {
-    statusCode: 404,
-    requestMethod: 'DELETE',
-    requestPath: '/event/evt_12345'
-  }),
-  service: new ServiceError('AI分析服务暂时不可用，请稍后再试。', {
-    serviceName: 'Gemini Proxy',
-    statusCode: 503
-  })
-};
-
 
 const APITestPage = () => {
   const [results, setResults] = useState({});
@@ -232,22 +191,6 @@ const APITestPage = () => {
         >
           🚀 运行所有测试
         </button>
-      </div>
-
-      {/* 错误组件陈列柜 */}
-      <div className="mt-12">
-        <h2 className="text-2xl font-bold text-gray-900 mb-4">错误组件陈列柜</h2>
-        <p className="text-gray-600 mb-6">
-          这里展示了所有自定义错误类型在 `ApiErrorNotice` 组件中的渲染效果。
-        </p>
-        <div className="space-y-4">
-          {Object.entries(mockErrors).map(([key, error]) => (
-            <div key={key} className="bg-white p-4 rounded-xl shadow-md border border-gray-200">
-              <h3 className="text-md font-semibold text-gray-800 mb-2 capitalize">{key} Error</h3>
-              <ApiErrorNotice error={error} includeResponseBody />
-            </div>
-          ))}
-        </div>
       </div>
     </div>
   );

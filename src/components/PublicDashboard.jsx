@@ -60,7 +60,7 @@ const PublicDashboard = () => {
 
   // 使用useAsync钩子获取所有公开事件
   const eventsAsync = useAsync(getAllEvents);
-  const allEventsState = eventsAsync.value || [];
+  const allEventsState = useMemo(() => eventsAsync.value || [], [eventsAsync.value]);
 
   // 计算用户列表和统计数据
   const { usersList, totalEvents, totalUsers } = useMemo(() => {
