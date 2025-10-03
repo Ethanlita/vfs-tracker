@@ -15,7 +15,6 @@ import Home from './components/Home';
 import PostList from './components/PostList';
 import PostViewer from './components/PostViewer';
 import TimelineTest from './components/TimelineTest';
-import ProfileSetup from './components/ProfileSetup';
 import APITestPage from './components/APITestPage';
 import ProfileSetupWizard from './components/ProfileSetupWizard';
 import UserProfileManager from './components/UserProfileManager';
@@ -144,27 +143,6 @@ const ServiceWorkerUpdateBanner = () => {
 };
 
 /**
- * 资料设置模态窗口组件
- */
-const ProfileSetupModal = ({ isOpen, onClose }) => {
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 z-50 overflow-y-auto">
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="fixed inset-0 bg-black opacity-50" onClick={onClose}></div>
-        <div className="relative z-10 w-full">
-          <ProfileSetup
-            onComplete={onClose}
-            onSkip={onClose}
-          />
-        </div>
-      </div>
-    </div>
-  );
-};
-
-/**
  * @en The main content container of the application. It wraps the router
  * with a consistent layout.
  * @zh 应用程序的主要内容容器。它用一个一致的布局来包裹路由器。
@@ -172,7 +150,6 @@ const ProfileSetupModal = ({ isOpen, onClose }) => {
  */
 const AppContent = () => {
   const { isAuthenticated, needsProfileSetup, profileLoading, authInitialized } = useAuth();
-  const [showProfileSetup, setShowProfileSetup] = useState(false);
   const [isOnline, setIsOnline] = useState(typeof navigator === 'undefined' ? true : navigator.onLine);
   const navigate = useNavigate();
   const location = useLocation();
@@ -188,14 +165,9 @@ const AppContent = () => {
     };
   }, []);
 
-  // 处理资料设置按钮点击
+  // 处理资料设置按钮点击（直接跳转向导页面）
   const handleProfileSetupClick = () => {
-    setShowProfileSetup(true);
-  };
-
-  // 处理资料设置完成
-  const handleProfileSetupClose = () => {
-    setShowProfileSetup(false);
+    navigate('/profile-setup-wizard', { replace: false });
   };
 
   // 自动跳转到ProfileSetupWizard的逻辑
@@ -235,7 +207,7 @@ const AppContent = () => {
             <Route path="/event-manager" element={<EventManagerPage />} />
             <Route path="/api-test" element={<APITestPage />} /> {/* 新增的API测试页面路由 */}
             <Route path="/profile-manager" element={<UserProfileManager />} /> {/* 用户资料管理 */}
-            <Route path="/profile-setup-wizard" element={<ProfileSetupWizard canSkip={!isOnline} />} /> {/* 用户引导设置 */}
+            <Route path="/profile-setup-wizard" element={<ProfileSetupWizard />} /> {/* 用户引导设置 */}
             <Route path="/voice-test" element={<VoiceTestWizard />} /> {/* 新增嗓音测试路由 */}
             <Route path="/quick-f0-test" element={<QuickF0Test />} /> {/* 新增快速基频测试路由 */}
             <Route path="/scale-practice" element={<ScalePractice />} /> {/* 新增音阶练习路由 */}
@@ -245,11 +217,6 @@ const AppContent = () => {
         </Routes>
       </Layout>
 
-      {/* 资料设置模态窗口 */}
-      <ProfileSetupModal
-        isOpen={showProfileSetup}
-        onClose={handleProfileSetupClose}
-      />
       <ServiceWorkerUpdateBanner />
     </>
   );
