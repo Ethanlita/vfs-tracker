@@ -1,10 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { setupUserProfile } from '../api';
-
-const ProfileSetupWizard = ({ onComplete, canSkip = false }) => {
-  const { user, refreshUserProfile } = useAuth();
+const ProfileSetupWizard = ({ onComplete }) => {
+  const { user, refreshUserProfile, completeProfileSetup } = useAuth();
   const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -156,7 +154,7 @@ const ProfileSetupWizard = ({ onComplete, canSkip = false }) => {
         return;
       }
 
-      await setupUserProfile(payload);
+      await completeProfileSetup(payload);
       await refreshUserProfile();
       finishSetup();
     } catch (error) {
@@ -167,9 +165,47 @@ const ProfileSetupWizard = ({ onComplete, canSkip = false }) => {
     }
   };
 
-  const handleSkip = () => {
-    if (!canSkip) return;
-    finishSetup();
+  const handleSkip = async () => {
+    setLoading(true);
+    setError('');
+
+    const payload = {
+      profile: {
+        name: '',
+        bio: '',
+        isNamePublic: false,
+        socials: [],
+        areSocialsPublic: false
+      }
+    };
+
+    try {
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+        try {
+          localStorage.setItem(pendingProfileKey, JSON.stringify({
+            userId: user?.userId || user?.attributes?.sub || null,
+            payload,
+            savedAt: Date.now()
+          }));
+          if (typeof window !== 'undefined') {
+            window.alert?.('已离线保存，将在联网后尝试同步。');
+          }
+        } catch (storageError) {
+          console.warn('⚠️ 离线暂存用户资料失败', storageError);
+        }
+        finishSetup();
+        return;
+      }
+
+      await completeProfileSetup(payload);
+      await refreshUserProfile();
+      finishSetup();
+    } catch (error) {
+      console.error('跳过并写入基础资料失败:', error);
+      setError(error.message || '跳过失败，请稍后重试');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const renderStepContent = () => {
@@ -444,14 +480,13 @@ const ProfileSetupWizard = ({ onComplete, canSkip = false }) => {
                     上一步
                   </button>
                 )}
-                {canSkip && (
-                  <button
-                    onClick={handleSkip}
-                    className="px-6 py-2 text-gray-600 hover:text-gray-800 transition-colors"
-                  >
-                    跳过设置
-                  </button>
-                )}
+                <button
+                  onClick={handleSkip}
+                  disabled={loading}
+                  className="px-6 py-2 text-gray-600 hover:text-gray-800 transition-colors disabled:opacity-50"
+                >
+                  跳过设置
+                </button>
               </div>
 
               <div>
