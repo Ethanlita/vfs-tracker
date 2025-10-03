@@ -3,7 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { updateUserProfile } from '../api';
 import { getUserAvatarUrl } from '../utils/avatar';
+import { ensureAppError, ValidationError } from '../utils/apiError.js';
 import AvatarUpload from './AvatarUpload';
+import { ApiErrorNotice } from './ApiErrorNotice.jsx';
 
 const UserProfileManager = () => {
   const {
@@ -14,14 +16,14 @@ const UserProfileManager = () => {
     cognitoLoading,
     updateCognitoUserInfo,
     refreshCognitoUserInfo,
-    resendEmailVerification // 新增
+    resendEmailVerification
   } = useAuth();
 
   const navigate = useNavigate();
 
   const [editing, setEditing] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [apiError, setApiError] = useState(null);
   const [success, setSuccess] = useState('');
   const [editingCognito, setEditingCognito] = useState(false);
 
@@ -49,21 +51,10 @@ const UserProfileManager = () => {
     'Bilibili', 'QQ', 'WeChat', 'Xiaohongshu', 'LinkedIn', '其他'
   ];
 
-  // 同步用户资料数据
   useEffect(() => {
     if (userProfile) {
-      console.log('🔍 同步用户资料数据:', userProfile);
-
-      // 修复：正确从 userProfile.profile 中读取数据
       const profile = userProfile.profile || {};
       setFormData({
-        name: profile.name || '',
-        isNamePublic: profile.isNamePublic || false,
-        socials: profile.socials || [],
-        areSocialsPublic: profile.areSocialsPublic || false
-      });
-
-      console.log('📝 设置表单数据:', {
         name: profile.name || '',
         isNamePublic: profile.isNamePublic || false,
         socials: profile.socials || [],
@@ -72,7 +63,6 @@ const UserProfileManager = () => {
     }
   }, [userProfile]);
 
-  // 同步Cognito用户数据
   useEffect(() => {
     if (cognitoUserInfo) {
       setCognitoFormData({
@@ -96,15 +86,13 @@ const UserProfileManager = () => {
     loadAvatar();
   }, [cognitoUserInfo, user]);
 
-  // 更新Cognito用户信息 - 增强邮箱验证处理
   const handleUpdateCognitoInfo = async () => {
-    setError('');
     setSuccess('');
+    setApiError(null);
 
     try {
       const updates = {};
 
-      // 只更新有变化的属性
       if (cognitoFormData.nickname !== cognitoUserInfo?.nickname) {
         updates.nickname = cognitoFormData.nickname;
       }
@@ -113,43 +101,38 @@ const UserProfileManager = () => {
         updates.email = cognitoFormData.email;
       }
 
-      // 处理密码更新
       if (cognitoFormData.newPassword && cognitoFormData.currentPassword) {
         if (cognitoFormData.newPassword !== cognitoFormData.confirmPassword) {
-          throw new Error('新密码和确认密码不匹配');
+          throw new ValidationError('新密码和确认密码不匹配');
         }
-
         updates.password = cognitoFormData.newPassword;
         updates.currentPassword = cognitoFormData.currentPassword;
       }
 
-      // 调用AuthContext的更新方法
       const result = await updateCognitoUserInfo(updates);
 
       if (result.success) {
         setSuccess(result.message);
         setEditingCognito(false);
-
-        // 清空密码字段
         setCognitoFormData(prev => ({
           ...prev,
           currentPassword: '',
           newPassword: '',
           confirmPassword: ''
         }));
-
-        // 如果邮箱需要验证，显示额外的提示
         if (result.needsEmailVerification) {
           setSuccess(prev => prev + ' 如果没有收到验证邮件，可以点击"重新发送验证邮件"按钮。');
         }
       }
     } catch (error) {
-      console.error('更新Cognito用户信息失败:', error);
-      setError(error.message || '更新失败，请重试');
+      setApiError(ensureAppError(error, {
+        message: '更新失败，请重试',
+        requestMethod: 'POST',
+        requestPath: '/cognito/profile'
+      }));
     }
   };
 
-  // 重新发送邮箱验证
   const handleResendEmailVerification = async () => {
     try {
       const result = await resendEmailVerification();
@@ -157,26 +140,24 @@ const UserProfileManager = () => {
         setSuccess(result.message);
       }
     } catch (error) {
-      setError(error.message || '重新发送验证邮件失败');
+      setApiError(ensureAppError(error, {
+        message: '重新发送验证邮件失败',
+        requestMethod: 'POST',
+        requestPath: '/cognito/resend-verification'
+      }));
     }
   };
 
   const handleInputChange = (field, value) => {
-    setFormData(prev => ({
-      ...prev,
-      [field]: value
-    }));
-    setError('');
+    setFormData(prev => ({ ...prev, [field]: value }));
     setSuccess('');
+    setApiError(null);
   };
 
   const handleCognitoInputChange = (field, value) => {
-    setCognitoFormData(prev => ({
-      ...prev,
-      [field]: value
-    }));
-    setError('');
+    setCognitoFormData(prev => ({ ...prev, [field]: value }));
     setSuccess('');
+    setApiError(null);
   };
 
   const addSocialAccount = () => {
@@ -197,17 +178,17 @@ const UserProfileManager = () => {
   };
 
   const handleSave = async () => {
-    if (!formData.name.trim()) {
-      setError('昵称不能为空');
-      return;
-    }
-
     setLoading(true);
-    setError('');
     setSuccess('');
+    setApiError(null);
 
     try {
-      // 修复：正确传递 userId 和 profileData 参数
+      if (!formData.name.trim()) {
+        throw new ValidationError('昵称不能为空。', {
+          fieldErrors: [{ field: 'name', message: '昵称是必填项。' }]
+        });
+      }
+
       await updateUserProfile(user.userId, {
         profile: {
           name: formData.name.trim(),
@@ -222,7 +203,11 @@ const UserProfileManager = () => {
       setSuccess('个人资料更新成功！');
     } catch (error) {
       console.error('更新个人资料失败:', error);
-      setError(error.message || '更新失败，请重试');
+      setApiError(ensureAppError(error, {
+        message: '更新失败，请重试',
+        requestMethod: 'POST',
+        requestPath: '/user/profile'
+      }));
     } finally {
       setLoading(false);
     }
@@ -230,7 +215,6 @@ const UserProfileManager = () => {
 
   const handleCancel = () => {
     if (userProfile) {
-      // 修复：正确从 userProfile.profile 中读取数据
       const profile = userProfile.profile || {};
       setFormData({
         name: profile.name || '',
@@ -240,11 +224,10 @@ const UserProfileManager = () => {
       });
     }
     setEditing(false);
-    setError('');
     setSuccess('');
+    setApiError(null);
   };
 
-  // 处理头像更新
   const handleAvatarUpdate = async (avatarKey) => {
     try {
       const result = await updateCognitoUserInfo({ avatarKey });
@@ -253,7 +236,11 @@ const UserProfileManager = () => {
         await refreshCognitoUserInfo();
       }
     } catch (error) {
-      setError('头像更新失败：' + error.message);
+      setApiError(ensureAppError(error, {
+        message: '头像更新失败：' + (error.message || ''),
+        requestMethod: 'POST',
+        requestPath: '/cognito/avatar'
+      }));
     }
   };
 
@@ -271,7 +258,6 @@ const UserProfileManager = () => {
 
   return (
     <div className="max-w-4xl mx-auto pt-6 space-y-6">
-      {/* 返回按钮 */}
       <button
         onClick={handleBack}
         className="ml-4 mt-4 mb-6 flex items-center text-purple-600 hover:text-purple-700 transition-colors duration-200"
@@ -282,16 +268,14 @@ const UserProfileManager = () => {
         返回仪表板
       </button>
 
-      {/* 页面标题 */}
       <div className="bg-white rounded-lg p-6 shadow-md">
         <h2 className="text-2xl font-bold text-gray-900 mb-2">个人资料管理</h2>
         <p className="text-gray-600">管理您的个人信息和隐私设置</p>
       </div>
 
-      {/* 错误和成功消息 */}
-      {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
-          {error}
+      {apiError && (
+        <div className="mb-4">
+          <ApiErrorNotice error={apiError} />
         </div>
       )}
 
@@ -301,7 +285,6 @@ const UserProfileManager = () => {
         </div>
       )}
 
-      {/* Cognito账户信息 */}
       <div className="bg-white rounded-lg shadow-md">
         <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
           <div>
@@ -329,8 +312,7 @@ const UserProfileManager = () => {
                       confirmPassword: ''
                     });
                   }
-                  setError('');
-                  setSuccess('');
+                  setApiError(null);
                 }}
                 disabled={cognitoLoading}
                 className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors disabled:opacity-50"
@@ -352,7 +334,6 @@ const UserProfileManager = () => {
         </div>
 
         <div className="px-6 py-4 space-y-4">
-          {/* 头像部分 - 使用AvatarUpload组件 */}
           <AvatarUpload
             currentAvatar={avatarUrl}
             onAvatarUpdate={handleAvatarUpdate}
@@ -414,7 +395,6 @@ const UserProfileManager = () => {
                     </span>
                   )}
                 </p>
-                {/* 重新发送验证邮件按钮 */}
                 {!cognitoUserInfo?.email_verified && (
                   <button
                     onClick={handleResendEmailVerification}
@@ -433,7 +413,6 @@ const UserProfileManager = () => {
             </div>
           </div>
 
-          {/* 密码修改部分 */}
           {editingCognito && (
             <div className="border-t pt-4 mt-6">
               <h4 className="text-md font-semibold text-gray-900 mb-4">修改密码</h4>
@@ -478,7 +457,6 @@ const UserProfileManager = () => {
         </div>
       </div>
 
-      {/* 个人资料（Lambda管理的部分） */}
       <div className="bg-white rounded-lg shadow-md">
         <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
           <div>
@@ -516,7 +494,6 @@ const UserProfileManager = () => {
         </div>
 
         <div className="px-6 py-4 space-y-6">
-          {/* 显示名称 */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               显示名称 <span className="text-red-500">*</span>
@@ -624,7 +601,6 @@ const UserProfileManager = () => {
         </div>
       </div>
 
-      {/* 隐私说明 */}
       <div className="bg-blue-50 rounded-lg p-4 shadow-md">
         <h4 className="text-sm font-semibold text-blue-900 mb-2">隐私说明</h4>
         <ul className="text-sm text-blue-800 space-y-1">

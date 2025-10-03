@@ -10,7 +10,7 @@ import { useAuth } from '../contexts/AuthContext.jsx';
  */
 const AddEvent = () => {
   const navigate = useNavigate();
-  const productionReady = globalIsProductionReady();
+  globalIsProductionReady();
 
   // @en Use AuthContext exclusively - it already uses Amplify v6 standard APIs
   // @zh 专门使用 AuthContext - 它已经使用了 Amplify v6 标准 API
@@ -24,16 +24,9 @@ const AddEvent = () => {
     混合来源检查: '无 - 仅使用AuthContext'
   });
 
-  const user = (productionReady && authContextUser) ? authContextUser : {
-    attributes: {
-      email: 'public-user@example.com',
-      sub: 'mock-user-1'
-    }
-  };
-
   const [showSuccessMessage, setShowSuccessMessage] = useState(false);
 
-  const handleEventAdded = (newEvent) => {
+  const handleEventAdded = () => {
     setShowSuccessMessage(true);
     setTimeout(() => {
       setShowSuccessMessage(false);

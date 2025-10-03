@@ -3,6 +3,8 @@ import { useSearchParams } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useAsync } from '../utils/useAsync.js';
+import { ApiError, ClientError } from '../utils/apiError.js';
+import { ApiErrorNotice } from './ApiErrorNotice.jsx';
 
 const PostViewer = () => {
   const [searchParams] = useSearchParams();
@@ -14,7 +16,7 @@ const PostViewer = () => {
     if (!filePath) return false;
     if (!filePath.endsWith('.md')) return false;
     if (filePath.includes('..') || filePath.includes('\\') || filePath.startsWith('/')) return false;
-    const validPathPattern = /^[a-zA-Z0-9\-_\/\s\u4e00-\u9fa5\u3000-\u303F]+\.md$/;
+    const validPathPattern = /^[a-zA-Z0-9\-_/\s\u4e00-\u9fa5\u3000-\u303F]+\.md$/;
     return validPathPattern.test(filePath);
   };
 
@@ -22,16 +24,18 @@ const PostViewer = () => {
   const docAsync = useAsync(async () => {
     if (!docPath) return '';
     if (!isValidMarkdownFile(docPath)) {
-      throw new Error('无效的文档路径。只允许访问 .md 文件。');
+      throw new ClientError('无效的文档路径。只允许访问 .md 文件。', { requestPath: docPath });
     }
     const fullPath = `/posts/${docPath}`;
     const res = await fetch(fullPath);
-    if (!res.ok) throw new Error(`文档未找到: ${res.status}`);
+    if (!res.ok) {
+      throw await ApiError.fromResponse(res, { requestMethod: 'GET', requestPath: fullPath });
+    }
     return await res.text();
   }, [docPath], { preserveValue: false });
 
   const loading = docAsync.loading;
-  const error = docAsync.error?.message || '';
+  const error = docAsync.error;
   const content = docAsync.value || '';
 
   if (!docPath) {
@@ -62,10 +66,9 @@ const PostViewer = () => {
   if (error) {
     return (
       <div className="max-w-3xl mx-auto p-4">
-        <div className="rounded-2xl bg-red-50 ring-1 ring-red-200 text-red-800 shadow-sm p-6 md:p-8">
-          <h3 className="text-lg font-semibold mb-2">错误</h3>
-          <p className="text-sm text-red-700">{error}</p>
-          <button onClick={docAsync.execute} className="mt-4 px-3 py-1.5 text-xs bg-red-600 hover:bg-red-500 text-white rounded-md">重试</button>
+        <div className="rounded-2xl bg-white/70 backdrop-blur-sm ring-1 ring-gray-200 shadow-sm p-6 md:p-8 space-y-3">
+          <h3 className="text-lg font-semibold text-gray-900">无法加载文档</h3>
+          <ApiErrorNotice error={error} onRetry={docAsync.execute} />
         </div>
       </div>
     );

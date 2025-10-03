@@ -8,6 +8,8 @@ import {
   gateByStability
 } from '../utils/pitchEval.js';
 import { getSongRecommendations } from '../api.js'; // Import the new API function
+import { ensureAppError } from '../utils/apiError.js';
+import { ApiErrorNotice } from './ApiErrorNotice.jsx';
 
 /**
  * @zh 将给定的频率（Hz）转换为最接近的音乐音名。
@@ -53,7 +55,7 @@ const ScalePractice = () => {
   const [step, setStep] = useState('permission');
   const [message, setMessage] = useState('');
   const [syllable, setSyllable] = useState('a');
-  const [error, setError] = useState(null);
+  const [permissionError, setPermissionError] = useState('');
   const [permissionMsg, setPermissionMsg] = useState('');
   const [startOffset, setStartOffset] = useState(0); // 起始音相对C4的半音数
   const [beat, setBeat] = useState(0);
@@ -242,12 +244,14 @@ const ScalePractice = () => {
   // --- Step0: 申请权限 ---
   const requestPermission = useCallback(async () => {
     setPermissionMsg('正在申请麦克风权限...');
+    setPermissionError('');
     try {
       await initAudio();
       setPermissionMsg('已成功获取麦克风权限，请戴上耳机');
     } catch (err) {
       console.error(err);
-      setError('无法获取麦克风权限');
+      setPermissionMsg('');
+      setPermissionError('无法获取麦克风权限，请确认已授予浏览器麦克风访问权限。');
     }
   }, [initAudio]);
 
@@ -505,7 +509,11 @@ const ScalePractice = () => {
       setRecommendations(result);
     } catch (err) {
       console.error('Failed to get song recommendations:', err);
-      setRecommendationError('获取推荐失败，请稍后再试。');
+      setRecommendationError(ensureAppError(err, {
+        message: '获取推荐失败，请稍后再试。',
+        requestMethod: 'POST',
+        requestPath: '/recommend-songs'
+      }));
     }
 
     setIsGenerating(false);
@@ -586,8 +594,19 @@ const ScalePractice = () => {
         <h1 className="text-4xl font-bold text-pink-600">音阶练习</h1>
       </div>
 
-      {error && (
-        <div className="bg-red-100 text-red-700 p-4 rounded mb-4">{error}</div>
+      {permissionError && (
+        <div className="mb-4 rounded-md border border-yellow-200 bg-yellow-50 p-4 text-sm text-yellow-900" role="alert">
+          <div className="font-semibold">{permissionError}</div>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={requestPermission}
+              className="inline-flex items-center rounded bg-yellow-500 px-3 py-1 text-xs font-medium text-white hover:bg-yellow-400 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:ring-offset-1"
+            >
+              重新尝试获取权限
+            </button>
+          </div>
+        </div>
       )}
 
       {showOfflineNotice && (
@@ -873,7 +892,11 @@ const ScalePractice = () => {
               </div>
             )}
             {recommendationError && (
-              <div className="bg-red-100 text-red-700 p-3 rounded-lg">{recommendationError}</div>
+              <ApiErrorNotice
+                error={recommendationError}
+                onRetry={handleGetRecommendations}
+                compact
+              />
             )}
             {recommendations.length > 0 && (
               <div>
