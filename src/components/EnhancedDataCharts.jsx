@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Line } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -96,7 +96,6 @@ const EnhancedDataCharts = ({ allEvents = [] }) => {
       userEvents[event.userId].push(event);
     });
 
-    const datasets = [];
     const colors = [
       'rgb(255, 99, 132)',
       'rgb(54, 162, 235)',

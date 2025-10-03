@@ -60,12 +60,16 @@
 ## 环境变量与 isProductionReady
 
 项目通过 isProductionReady 决定是否启用真实云服务：
-- 必需变量（全部存在才视为“生产就绪”）：
+- 必需变量（全部存在且非空才视为“生产就绪” Production Ready）：
   - VITE_COGNITO_USER_POOL_ID
   - VITE_COGNITO_USER_POOL_WEB_CLIENT_ID
   - VITE_AWS_REGION
+  - VITE_API_ENDPOINT（统一 API 入口，例如 https://api.vfs-tracker.app）
+  - VITE_S3_BUCKET（用户文件所使用的 S3 Bucket 名称）
 - 可选变量：
   - VITE_GOOGLE_GEMINI_API（用于生成 AI 鼓励消息，仅生产环境使用）
+
+> isProductionReady 会在上述任意一个配置缺失时返回 `false`，前端自动落入“开发模式”。只要全部配置齐全，就会被视为生产模式并走真实云端流程。
 
 行为差异：
 - 开发模式（未就绪）：
