@@ -229,7 +229,7 @@ export class ApiError extends AppError {
           responseBody = await cloned.text();
         }
       }
-  } catch {
+  } catch (_) {
       responseBody = undefined;
     }
 
