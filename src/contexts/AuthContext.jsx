@@ -11,6 +11,28 @@ import {
 import { getUserProfile, isUserProfileComplete, setupUserProfile, PROFILE_CACHE_KEY } from '../api.js';
 import { isProductionReady as globalIsProductionReady } from '../env.js';
 
+// Helper function to decode Base64URL-encoded strings, as used in JWTs.
+const b64UrlDecode = (str) => {
+  let base64 = str.replace(/-/g, '+').replace(/_/g, '/');
+  // Add padding if it's missing.
+  while (base64.length % 4) {
+    base64 += '=';
+  }
+  try {
+    // Decode the string and then handle potential UTF-8 characters
+    const decodedUtf8 = atob(base64);
+    return decodeURIComponent(
+      Array.prototype.map.call(decodedUtf8, (c) => {
+        return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+      }).join('')
+    );
+  } catch (e) {
+    console.error('Failed to decode base64 string:', e);
+    return ''; // Return empty string on failure
+  }
+};
+
+
 const AuthContext = createContext();
 
 export const useAuth = () => {
@@ -256,8 +278,8 @@ export const AuthProvider = ({ children }) => {
         try {
           const tokenParts = idToken.toString().split('.');
           if (tokenParts.length === 3) {
-            const header = JSON.parse(atob(tokenParts[0]));
-            const payload = JSON.parse(atob(tokenParts[1]));
+            const header = JSON.parse(b64UrlDecode(tokenParts[0]));
+            const payload = JSON.parse(b64UrlDecode(tokenParts[1]));
             console.log('🔍 ID Token Header:', header);
             console.log('🔍 ID Token Payload:', {
               ...payload,
