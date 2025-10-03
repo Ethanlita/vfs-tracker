@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
+import PropTypes from 'prop-types';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-const ProfileSetupWizard = ({ onComplete }) => {
+const ProfileSetupWizard = ({ onComplete, canSkip = true }) => {
   const { user, refreshUserProfile, completeProfileSetup } = useAuth();
   const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(1);
@@ -480,13 +481,15 @@ const ProfileSetupWizard = ({ onComplete }) => {
                     上一步
                   </button>
                 )}
-                <button
-                  onClick={handleSkip}
-                  disabled={loading}
-                  className="px-6 py-2 text-gray-600 hover:text-gray-800 transition-colors disabled:opacity-50"
-                >
-                  跳过设置
-                </button>
+                {canSkip && (
+                  <button
+                    onClick={handleSkip}
+                    disabled={loading}
+                    className="px-6 py-2 text-gray-600 hover:text-gray-800 transition-colors disabled:opacity-50"
+                  >
+                    跳过设置
+                  </button>
+                )}
               </div>
 
               <div>
@@ -521,6 +524,11 @@ const ProfileSetupWizard = ({ onComplete }) => {
       </div>
     </div>
   );
+};
+
+ProfileSetupWizard.propTypes = {
+  onComplete: PropTypes.func,
+  canSkip: PropTypes.bool
 };
 
 export default ProfileSetupWizard;
