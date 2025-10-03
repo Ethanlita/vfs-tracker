@@ -12,21 +12,18 @@ export function ApiErrorNotice({
   compact = false,
   includeResponseBody = false
 }) {
-  const [expanded, setExpanded] = useState(false);
-  const detailId = useId();
-
   const formatted = useMemo(() => {
-    if (!error) return null;
+    if (!error) return { summary: '', detailItems: [] };
     return formatApiError(error, { includeResponseBody });
   }, [error, includeResponseBody]);
+  const [expanded, setExpanded] = useState(false);
+  const detailId = useId();
 
   useEffect(() => {
     setExpanded(false);
   }, [error]);
 
-  if (!error || !formatted) {
-    return null;
-  }
+  if (!error) return null;
 
   const { summary, detailItems } = formatted;
 

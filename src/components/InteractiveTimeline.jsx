@@ -1,6 +1,10 @@
 import React, { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
 import { createPortal } from 'react-dom';
 import { resolveAttachmentLinks } from '../utils/attachments.js';
+
+// Prevent motion from being flagged as unused in some builds
+void motion;
 
 const EventDetails = ({ event }) => {
   const d = event?.details || {};

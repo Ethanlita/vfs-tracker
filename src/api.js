@@ -194,7 +194,7 @@ export const addEvent = async (eventData) => {
 export const getAllEvents = async () => {
   if (!isProductionReady() && !import.meta.env.VITE_FORCE_REAL) {
     // eslint-disable-next-line no-unused-vars
-    return Promise.resolve(mockData.events.map(({ attachments: _attachments, ...rest }) => rest));
+    return Promise.resolve(mockData.events.map(({ attachments, ...rest }) => rest));
   }
   return simpleGet('/all-events');
 };
@@ -203,7 +203,7 @@ export const getEventsByUserId = async (userId) => {
   if (!isProductionReady() && !import.meta.env.VITE_FORCE_REAL) {
     return Promise.resolve(mockData.events.filter(e => e.userId === userId));
   }
-  return await authenticatedGet(`/events/${userId}`);
+  return authenticatedGet(`/events/${userId}`);
 };
 
 export const deleteEvent = async (eventId) => {
@@ -212,7 +212,6 @@ export const deleteEvent = async (eventId) => {
     return Promise.resolve({ message: "Event deleted successfully (mock)" });
   }
   console.log(`[deleteEvent] deleting event with ID: ${eventId}`);
-  // FIX: Use the correct RESTful path /event/{eventId}
   return authenticatedDelete(`/event/${eventId}`);
 };
 
@@ -238,28 +237,20 @@ export const getEncouragingMessage = async (userData) => {
   if (!isAiEnabled) return "持续跟踪，持续进步 ✨";
 
   try {
-    // If there's no data, return a generic starter message.
     if (!userData || !userData.events || userData.events.length === 0) {
       return "开始记录你的声音数据，让我为你加油吧！";
     }
-
-    // Construct a detailed prompt from userData.
-    // The backend lambda already has the full knowledge base.
-    // The prompt here should just be the user's specific data, formatted clearly.
     const eventsSummary = userData.events.map(e => {
       const date = new Date(e.date || e.createdAt).toLocaleDateString('zh-CN');
       const details = e.details ? JSON.stringify(e.details) : '无';
       return `- 日期: ${date}, 事件类型: ${e.type}, 详情: ${details}`;
     }).join('\n');
-
     const prompt = `
 这是用户最近的嗓音事件记录：
 ${eventsSummary}
 
 请基于这些数据，结合你的知识库，给用户一句鼓励和分析的话。
 `;
-
-    console.log("Constructed prompt for Gemini:", prompt);
     return await callGeminiProxy(prompt);
   } catch (error) {
     console.error("获取AI消息失败:", error);
@@ -276,7 +267,6 @@ export const getSongRecommendations = async ({ lowestNote, highestNote }) => {
       { songName: "Mock Song 2", artist: "Mock Artist B", reason: "这首歌的音域非常适合您。" },
     ]);
   }
-
   const result = await authenticatedPost('/recommend-songs', { lowestNote, highestNote });
   if (result.success) {
     return result.recommendations;
@@ -324,7 +314,6 @@ export const setupUserProfile = async (profileData) => {
   return authenticatedPost('/user/profile-setup', requestBody);
 };
 
-// New API functions for Voice Test
 export const createVoiceTestSession = async (userId) => {
   if (!isProductionReady() && !import.meta.env.VITE_FORCE_REAL) {
     console.log('[mock] createVoiceTestSession: Returning mock session ID');
@@ -357,24 +346,18 @@ export const uploadVoiceTestFileToS3 = async (putUrl, file) => {
   try {
     const response = await fetch(putUrl, {
       method: 'PUT',
-      headers: {
-        'Content-Type': 'audio/wav' // Ensure this matches the expected content type
-      },
+      headers: { 'Content-Type': 'audio/wav' },
       body: file
     });
     if (!response.ok) {
-      // Use the new UploadError and fromResponse method
       throw await UploadError.fromResponse(response, {
         requestMethod: 'PUT',
         requestPath: putUrl,
         uploadUrl: putUrl,
       });
     }
-    console.log('✅ S3: Voice test file uploaded successfully');
     return response;
   } catch (error) {
-    console.error('❌ S3: Failed to upload voice test file:', error);
-    // Ensure any failure from this function is wrapped as an UploadError
     throw error instanceof ApiError
       ? error
       : UploadError.from(error, {
@@ -387,7 +370,7 @@ export const uploadVoiceTestFileToS3 = async (putUrl, file) => {
 };
 
 let mockGetResultsCallCount = 0;
-const MOCK_POLLING_THRESHOLD = 2; // Return processing for 2 calls, then done
+const MOCK_POLLING_THRESHOLD = 2;
 
 export const requestVoiceTestAnalyze = async (sessionId, calibration, forms) => {
   if (!isProductionReady() && !import.meta.env.VITE_FORCE_REAL) {
@@ -407,7 +390,6 @@ export const getVoiceTestResults = async (sessionId) => {
       return Promise.resolve(mockData.voiceTestResults.processing);
     } else {
       console.log('[mock] getVoiceTestResults: Returning mock done status');
-      // Reset counter for next session or test run
       mockGetResultsCallCount = 0;
       return Promise.resolve(mockData.voiceTestResults.done);
     }

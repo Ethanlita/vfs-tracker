@@ -18,7 +18,6 @@ const SecureFileUpload = ({
   const [previewUrl, setPreviewUrl] = useState(null);
   const [errorState, setErrorState] = useState(null);
 
-  // 根据文件类型确定存储路径
   const getStoragePath = (type) => {
     const paths = {
       avatar: 'avatars',
@@ -34,29 +33,26 @@ const SecureFileUpload = ({
 
     setErrorState(null);
 
-    // 验证文件类型
-    const isAllowedType = allowedTypes.some(type => {
-      if (type.endsWith('/*')) {
-        return file.type.startsWith(type.slice(0, -1));
-      }
-      return file.type === type;
-    });
-
     try {
+      const isAllowedType = allowedTypes.some(type => {
+        if (type.endsWith('/*')) {
+          return file.type.startsWith(type.slice(0, -1));
+        }
+        return file.type === type;
+      });
+
       if (!isAllowedType) {
         throw new ValidationError(`请选择允许的文件类型: ${allowedTypes.join(', ')}`, {
           fieldErrors: [{ field: 'file', message: '文件类型不被允许' }]
         });
       }
 
-      // 验证文件大小
       if (file.size > maxSize) {
         throw new ValidationError(`文件大小不能超过 ${Math.round(maxSize / 1024 / 1024)}MB`, {
           fieldErrors: [{ field: 'file', message: '文件过大' }]
         });
       }
 
-      // 为图片创建预览
       if (file.type.startsWith('image/')) {
         const reader = new FileReader();
         reader.onload = (e) => setPreviewUrl(e.target.result);
@@ -68,10 +64,8 @@ const SecureFileUpload = ({
       const timestamp = Date.now();
       const fileKey = `${storagePath}/${user.userId}/${timestamp}_${file.name}`;
 
-      // 获取预签名上传URL
       const uploadUrl = await getUploadUrl(fileKey, file.type);
 
-      // 直接上传到S3
       const uploadResponse = await fetch(uploadUrl, {
         method: 'PUT',
         body: file,
@@ -86,9 +80,6 @@ const SecureFileUpload = ({
         });
       }
 
-      console.log(`${fileType}上传成功:`, fileKey);
-
-      // 获取文件的访问URL
       let fileUrl;
       if (fileType === 'avatar') {
         fileUrl = await getAvatarUrl(user.userId);
@@ -96,17 +87,10 @@ const SecureFileUpload = ({
         fileUrl = await getFileUrl(fileKey);
       }
 
-      // 验证文件可访问性（仅对头像）
       if (fileType === 'avatar') {
         const img = new Image();
-        img.onload = () => {
-          console.log('头像URL验证成功:', fileUrl);
-          onFileUpdate(fileUrl, fileKey);
-        };
-        img.onerror = () => {
-          console.log('头像URL暂时无法访问，但文件已上传成功');
-          onFileUpdate(fileUrl, fileKey);
-        };
+        img.onload = () => onFileUpdate(fileUrl, fileKey);
+        img.onerror = () => onFileUpdate(fileUrl, fileKey);
         img.src = fileUrl;
       } else {
         onFileUpdate(fileUrl, fileKey, { fileType: file.type, fileName: file.name });
@@ -117,8 +101,9 @@ const SecureFileUpload = ({
         message: '文件上传失败，请稍后重试。',
         details: { fileKey: file?.name, fileType: file?.type }
       };
-      // 统一包装为 UploadError
-      setErrorState(UploadError.from(error, context));
+      // 统一包装为 UploadError 或 ValidationError
+      const specificError = error instanceof ValidationError ? error : UploadError.from(error, context);
+      setErrorState(specificError);
       setPreviewUrl(null);
     } finally {
       setUploading(false);
@@ -169,12 +154,11 @@ const SecureFileUpload = ({
       );
     }
 
-    // 其他文件类型的通用显示
     return (
       <div className={`border-2 border-dashed border-gray-300 rounded-lg p-4 text-center ${className}`}>
         {errorState && (
           <div className="mb-3">
-            <ApiErrorNotice error={errorState} compact />
+            <ApiErrorNotice error={errorState} compact onRetry={handleFileChange} />
           </div>
         )}
         {currentFileUrl && (

@@ -1,7 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { addEvent } from '../api';
-import { ensureAppError, StorageError, ApiError } from '../utils/apiError.js';
-import { ApiErrorNotice } from './ApiErrorNotice.jsx';
 
 const OFFLINE_QUEUE_KEY = 'pendingEvents:v1';
 
@@ -13,21 +11,20 @@ const readQueue = () => {
     const parsed = JSON.parse(raw);
     return Array.isArray(parsed) ? parsed : [];
   } catch (error) {
-    throw new StorageError('无法读取离线队列', { cause: error });
+    console.warn('无法读取离线队列', error);
+    return [];
   }
 };
 
 const PendingSyncButton = ({ className = '' }) => {
   const [pendingCount, setPendingCount] = useState(0);
   const [syncing, setSyncing] = useState(false);
-  const [error, setError] = useState(null);
-  const [successMessage, setSuccessMessage] = useState('');
 
   const refreshCount = useCallback(() => {
     try {
       setPendingCount(readQueue().length);
-    } catch (err) {
-      setError(ensureAppError(err));
+    } catch (error) {
+      console.warn('刷新离线队列计数失败', error);
       setPendingCount(0);
     }
   }, []);
@@ -50,56 +47,37 @@ const PendingSyncButton = ({ className = '' }) => {
   }, [refreshCount]);
 
   const syncPending = async () => {
-    setError(null);
-    setSuccessMessage('');
-
     const isOnline = typeof navigator === 'undefined' ? true : navigator.onLine;
     if (!isOnline) {
-      setError(new ApiError('当前仍处于离线状态，请联网后再同步。'));
+      alert('当前仍处于离线状态，请联网后再同步。');
       return;
     }
 
-    let queue;
-    try {
-      queue = readQueue();
-      if (queue.length === 0) {
-        setSuccessMessage('没有待同步的离线记录。');
-        setTimeout(() => setSuccessMessage(''), 3000);
-        return;
-      }
-    } catch (err) {
-      setError(ensureAppError(err));
+    const queue = readQueue();
+    if (!queue.length) {
+      alert('没有离线记录');
       return;
     }
 
     setSyncing(true);
     const failed = [];
-    let firstError = null;
-
     for (const item of queue) {
       try {
         await addEvent(item.eventData);
-      } catch (err) {
-        console.error('同步离线记录失败', err);
+      } catch (error) {
+        console.error('同步离线记录失败', error);
         failed.push(item);
-        if (!firstError) {
-          firstError = ensureAppError(err);
-        }
       }
     }
 
     try {
-      if (failed.length > 0) {
+      if (failed.length) {
         localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(failed));
       } else {
         localStorage.removeItem(OFFLINE_QUEUE_KEY);
       }
-    } catch (err) {
-      const storageErr = new StorageError('更新离线队列状态失败，部分记录可能已同步，但列表未更新。', { cause: err });
-      setError(storageErr);
-      setSyncing(false);
-      refreshCount();
-      return;
+    } catch (error) {
+      console.warn('更新离线队列失败', error);
     }
 
     refreshCount();
@@ -107,17 +85,7 @@ const PendingSyncButton = ({ className = '' }) => {
       window.dispatchEvent(new Event('pending-events-updated'));
     }
     setSyncing(false);
-
-    const successCount = queue.length - failed.length;
-    if (failed.length > 0) {
-        const finalError = ensureAppError(firstError, {
-            message: `同步部分失败：成功 ${successCount} 条，失败 ${failed.length} 条。请检查网络或稍后重试。`
-        });
-        setError(finalError);
-    } else {
-        setSuccessMessage(`同步完成：成功 ${successCount} 条。`);
-        setTimeout(() => setSuccessMessage(''), 3000);
-    }
+    alert(`同步完成：成功 ${queue.length - failed.length} 条，失败 ${failed.length} 条`);
   };
 
   const label = pendingCount > 0
@@ -125,26 +93,14 @@ const PendingSyncButton = ({ className = '' }) => {
     : '🔄 同步离线记录';
 
   return (
-    <div className="w-full flex flex-col items-center">
-      <button
-        type="button"
-        onClick={syncPending}
-        className={className || 'w-full bg-gradient-to-r from-yellow-500 to-amber-600 text-white px-6 py-3 rounded-lg font-semibold shadow-lg transition-all duration-300 transform hover:scale-105 hover:from-yellow-600 hover:to-amber-700'}
-        disabled={syncing || pendingCount === 0}
-      >
-        {syncing ? '同步中...' : label}
-      </button>
-      {error && (
-        <div className="w-full mt-2">
-          <ApiErrorNotice error={error} onRetry={syncPending} retryLabel="重试同步" compact/>
-        </div>
-      )}
-      {successMessage && (
-        <div className="w-full mt-2 text-sm text-center text-green-50 p-2 rounded-md">
-          {successMessage}
-        </div>
-      )}
-    </div>
+    <button
+      type="button"
+      onClick={syncPending}
+      className={className || 'bg-gradient-to-r from-yellow-500 to-amber-600 text-white px-6 py-3 rounded-lg font-semibold shadow-lg transition-all duration-300 transform hover:scale-105 hover:from-yellow-600 hover:to-amber-700'}
+      disabled={syncing}
+    >
+      {syncing ? '同步中...' : label}
+    </button>
   );
 };
 

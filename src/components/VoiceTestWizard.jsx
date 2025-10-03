@@ -80,10 +80,6 @@ const VoiceTestWizard = () => {
 
   const handleFormChange = (formName, values) => setFormData(prev => ({ ...prev, [formName]: values }));
 
-  const handleRecorderError = (err) => {
-    setError(ensureAppError(err));
-  };
-
   const initializeSession = useCallback(async () => {
     try {
       setIsLoading(true);
@@ -445,7 +441,7 @@ const VoiceTestWizard = () => {
           )}
           {allRecordingsDone && !isUploading && !uploadError && <div className="my-4 p-3 bg-green-100 text-green-800 rounded-lg"><p>✅ 本步骤所有录音已完成。</p></div>}
           <div className="mt-4">
-            <Recorder key={`${currentStep}-${recordingsForStep.length}`} onRecordingComplete={handleRecordingComplete} onDiscardRecording={handleDiscardRecording} onError={handleRecorderError} isRecording={isUploading || allRecordingsDone} />
+            <Recorder key={`${currentStep}-${recordingsForStep.length}`} onRecordingComplete={handleRecordingComplete} onDiscardRecording={handleDiscardRecording} isRecording={isUploading || allRecordingsDone} />
           </div>
           <div className="mt-6 flex flex-wrap gap-3 justify-center">
             {/* 已隐藏单步重置功能：强制用户使用重新开始测试，以避免旧文件仍存在导致的混淆 */}

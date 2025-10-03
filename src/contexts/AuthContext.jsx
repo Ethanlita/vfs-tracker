@@ -1,5 +1,5 @@
 /* eslint-disable react-refresh/only-export-components */
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { useAuthenticator } from '@aws-amplify/ui-react';
 import {
   getCurrentUser,
@@ -9,7 +9,6 @@ import {
   resendSignUpCode
 } from 'aws-amplify/auth';
 import { getUserProfile, isUserProfileComplete, setupUserProfile, PROFILE_CACHE_KEY } from '../api.js';
-import { StorageError } from '../utils/apiError.js';
 import { isProductionReady as globalIsProductionReady } from '../env.js';
 
 const AuthContext = createContext();
@@ -45,7 +44,9 @@ export const AuthProvider = ({ children }) => {
     context.authStatus,
     context.user
   ]);
-  const amplifyAuthHook = ready ? authenticatorData : { authStatus: 'unauthenticated', user: null };
+  const amplifyAuthHook = useMemo(() => (
+    ready ? authenticatorData : { authStatus: 'unauthenticated', user: null }
+  ), [ready, authenticatorData]);
 
   console.log('🔍 AuthContext: amplifyAuthHook 状态', {
     ready,
@@ -54,99 +55,7 @@ export const AuthProvider = ({ children }) => {
     amplifyUser: amplifyAuthHook.user
   });
 
-  // 检查现有的认证会话
-  useEffect(() => {
-    const checkExistingAuth = async () => {
-      if (!ready) {
-        // 开发模式：检查本地存储的模拟用户
-        try {
-          const savedUser = localStorage.getItem('dev-user');
-          if (savedUser) {
-            try {
-              const userData = JSON.parse(savedUser);
-              setUser(userData);
-              console.log('🔄 开发模式：恢复保存的用户会话', userData);
-            } catch (error) {
-              console.error('解析保存的用户数据失败:', error);
-              try {
-                localStorage.removeItem('dev-user');
-              } catch (removeError) {
-                console.error(new StorageError('无法移除无效的开发模式用户会话。', {
-                  operation: 'remove',
-                  key: 'dev-user',
-                  cause: removeError
-                }));
-              }
-            }
-          }
-        } catch (error) {
-          // Reading from storage can fail, e.g. if cookies are disabled in iframe
-          throw new StorageError('无法读取本地存储来检查开发模式会话。', {
-            operation: 'get',
-            key: 'dev-user',
-            cause: error
-          });
-        }
-        setAuthInitialized(true);
-        return;
-      }
-
-      // 生产模式：检查Amplify认证状态
-      try {
-        const currentUser = await getCurrentUser();
-        if (currentUser) {
-          console.log('🔄 检测到现有认证会话:', currentUser);
-          // 认证和用户资料加载改为后台并行执行
-          handleAuthSuccess(currentUser);
-        }
-      } catch (error) {
-        console.log('🔍 未检测到现有认证会话:', error.message);
-      } finally {
-        // 现在，这只会在所有异步操作完成后执行
-        setAuthInitialized(true);
-      }
-    };
-
-    checkExistingAuth();
-  }, [ready]);
-
-  // 监听生产模式下Amplify的认证状态变化
-  useEffect(() => {
-    console.log('🔍 AuthContext: useEffect 监听认证状态变化', {
-      ready,
-      authInitialized,
-      amplifyAuthStatus: amplifyAuthHook.authStatus,
-      amplifyUser: amplifyAuthHook.user,
-      currentUser: user
-    });
-
-    if (!ready || !authInitialized) return;
-
-    const { authStatus, user: amplifyUser } = amplifyAuthHook;
-
-    if (authStatus === 'authenticated' && amplifyUser && !user) {
-      console.log('🔄 Amplify认证状态变化 - 用户已认证:', amplifyUser);
-      handleAuthSuccess(amplifyUser);
-
-      // 🔍 DEBUG: 输出所有认证信息
-      debugAuthCredentials();
-    } else if (authStatus === 'unauthenticated' && user) {
-      console.log('🔄 Amplify认证状态变化 - 用户已登出');
-      logout();
-    } else {
-      console.log('🔍 AuthContext: useEffect 跳过处理', {
-        authStatus,
-        hasAmplifyUser: !!amplifyUser,
-        hasCurrentUser: !!user,
-        reason: authStatus !== 'authenticated' ? 'not authenticated' :
-                !amplifyUser ? 'no amplify user' :
-                user ? 'user already exists' : 'unknown'
-      });
-    }
-  }, [amplifyAuthHook.authStatus, amplifyAuthHook.user, authInitialized, ready, user]);
-
-  // 加载用户资料
-  const loadUserProfile = async (userId) => {
+  const loadUserProfile = useCallback(async (userId) => {
     if (!userId) return;
 
     const cacheKey = `userProfile:v1:${userId}`;
@@ -159,11 +68,7 @@ export const AuthProvider = ({ children }) => {
         }
       }
     } catch (error) {
-      console.warn(new StorageError('读取用户资料缓存失败，将从网络获取。', {
-        operation: 'get',
-        key: cacheKey,
-        cause: error
-      }));
+      console.warn('⚠️ 解析用户资料缓存失败，忽略本地缓存', error);
     }
 
     setProfileLoading(true);
@@ -181,12 +86,7 @@ export const AuthProvider = ({ children }) => {
         localStorage.setItem(cacheKey, JSON.stringify(cachedProfile));
         localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify(cachedProfile));
       } catch (error) {
-        console.warn(new StorageError('写入用户资料缓存失败。', {
-          operation: 'set',
-          key: cacheKey,
-          cause: error,
-          quotaExceeded: error.name === 'QuotaExceededError'
-        }));
+        console.warn('⚠️ 无法写入用户资料缓存', error);
       }
 
       // 检查资料是否完整 - 只根据资料内容判断，不考虑时间因素
@@ -213,16 +113,11 @@ export const AuthProvider = ({ children }) => {
               if (parsed) {
                 setUserProfile(parsed);
                 setNeedsProfileSetup(!isUserProfileComplete(parsed));
-                console.log(`📴 使用缓存 ${key} 成功恢复离线用户资料`);
                 break;
               }
             }
           } catch (cacheError) {
-            console.warn(new StorageError('离线模式下读取用户资料缓存失败。', {
-              operation: 'get',
-              key: key,
-              cause: cacheError
-            }));
+            console.warn('⚠️ 解析用户资料缓存失败，忽略本地缓存', cacheError);
           }
         }
       } else {
@@ -238,48 +133,9 @@ export const AuthProvider = ({ children }) => {
     } finally {
       setProfileLoading(false);
     }
-  };
+  }, []);
 
-  // 完善用户资料
-  const completeProfileSetup = async (profileData) => {
-    try {
-      const result = await setupUserProfile(profileData);
-      setUserProfile(result.user);
-      setNeedsProfileSetup(false);
-
-      console.log('✅ 用户资料设置完成:', result);
-      return result;
-    } catch (error) {
-      console.error('❌ 用户资料设置失败:', error);
-      throw error;
-    }
-  };
-
-  // 开发模式登录
-  const login = (userData) => {
-    setUser(userData);
-    // 保存到本地存储
-    if (!ready) {
-      try {
-        localStorage.setItem('dev-user', JSON.stringify(userData));
-      } catch (error) {
-        throw new StorageError('无法保存开发模式用户会话。', {
-          operation: 'set',
-          key: 'dev-user',
-          cause: error,
-          quotaExceeded: error.name === 'QuotaExceededError'
-        });
-      }
-    }
-
-    if (userData?.userId || userData?.attributes?.sub) {
-      const userId = userData.userId || userData.attributes.sub;
-      loadUserProfile(userId);
-    }
-  };
-
-  // 注册后的回调处理 - 使用Amplify v6标准API
-  const handleAuthSuccess = async (amplifyUser) => {
+  const handleAuthSuccess = useCallback(async (amplifyUser) => {
     console.log('🔍 AuthContext: handleAuthSuccess 接收到的用户对象:', amplifyUser);
     console.log('📍 [验证点20] 开始使用Amplify v6标准API获取用户信息');
 
@@ -365,19 +221,93 @@ export const AuthProvider = ({ children }) => {
         setUserProfile(null);
       }
     }
-  };
+  }, [loadUserProfile]);
 
-  // 加载Cognito用户详细信息
-  const loadCognitoUserInfo = async () => {
+  const logout = useCallback(() => {
+    setUser(null);
+    setUserProfile(null);
+    setCognitoUserInfo(null);
+    setNeedsProfileSetup(false);
     if (!ready) {
-      // 开发模式下的模拟数据
+      localStorage.removeItem('dev-user');
+    }
+  }, [ready]);
+
+  const debugAuthCredentials = useCallback(async () => {
+    if (!ready) return;
+    try {
+      console.group('🔍 [DEBUG] 认证凭据详细信息');
+      const { fetchAuthSession } = await import('aws-amplify/auth');
+      const session = await fetchAuthSession();
+      console.log('📋 完整认证会话:', {
+        hasTokens: !!session.tokens,
+        hasCredentials: !!session.credentials,
+        hasIdToken: !!session.tokens?.idToken,
+        hasRefreshToken: !!session.tokens?.refreshToken
+      });
+      if (session.tokens?.idToken) {
+        const idToken = session.tokens.idToken;
+        console.log('🆔 ID Token信息 (主要使用):', {
+          tokenType: typeof idToken,
+          tokenConstructor: idToken.constructor.name,
+          tokenString: idToken.toString(),
+          tokenLength: idToken.toString().length
+        });
+        try {
+          const tokenParts = idToken.toString().split('.');
+          if (tokenParts.length === 3) {
+            const header = JSON.parse(atob(tokenParts[0]));
+            const payload = JSON.parse(atob(tokenParts[1]));
+            console.log('🔍 ID Token Header:', header);
+            console.log('🔍 ID Token Payload:', {
+              ...payload,
+              exp: new Date(payload.exp * 1000),
+              iat: new Date(payload.iat * 1000)
+            });
+            console.log('🎯 ID Token关键信息:', {
+              userId: payload.sub,
+              username: payload.username || payload['cognito:username'],
+              email: payload.email,
+              audience: payload.aud,
+              tokenUse: payload.token_use,
+              expiresAt: new Date(payload.exp * 1000)
+            });
+          }
+        } catch (parseError) {
+          console.error('❌ ID Token解析失败:', parseError);
+        }
+      }
+      if (session.tokens?.refreshToken) {
+        console.log('🔄 Refresh Token信息:', {
+          hasRefreshToken: true,
+          tokenType: typeof session.tokens.refreshToken,
+          tokenLength: session.tokens.refreshToken.toString().length
+        });
+      }
+      if (session.credentials) {
+        console.log('🔐 AWS Credentials:', {
+          hasAccessKeyId: !!session.credentials.accessKeyId,
+          hasSecretAccessKey: !!session.credentials.secretAccessKey,
+          hasSessionToken: !!session.credentials.sessionToken,
+          expiration: session.credentials.expiration
+        });
+      }
+      console.log('✅ 系统将只使用ID Token进行API调用');
+      console.groupEnd();
+    } catch (error) {
+      console.error('❌ 获取认证凭据失败:', error);
+    }
+  }, [ready]);
+
+  const loadCognitoUserInfo = useCallback(async () => {
+    if (!ready) {
       setCognitoUserInfo({
         username: 'dev_user',
         userId: 'dev_user_id',
         email: 'dev@example.com',
         nickname: 'Dev User',
         email_verified: true,
-        avatarKey: null, // 开发模式下没有头像
+        avatarKey: null,
         attributes: {
           email: 'dev@example.com',
           nickname: 'Dev User',
@@ -387,13 +317,11 @@ export const AuthProvider = ({ children }) => {
       });
       return;
     }
-
     setCognitoLoading(true);
     try {
       const currentUser = await getCurrentUser();
       const attributes = await fetchUserAttributes();
       const avatarKey = attributes['custom:avatarKey'] || attributes.avatarKey || null;
-
       const cognitoUserData = {
         username: currentUser.username,
         userId: currentUser.userId,
@@ -403,7 +331,6 @@ export const AuthProvider = ({ children }) => {
         avatarKey,
         attributes: { ...attributes, avatarKey }
       };
-
       setCognitoUserInfo(cognitoUserData);
       console.log('Cognito用户信息加载完成:', cognitoUserData);
     } catch (error) {
@@ -411,6 +338,109 @@ export const AuthProvider = ({ children }) => {
       setCognitoUserInfo(null);
     } finally {
       setCognitoLoading(false);
+    }
+  }, [ready]);
+
+  // 检查现有的认证会话
+  useEffect(() => {
+    const checkExistingAuth = async () => {
+      if (!ready) {
+        // 开发模式：检查本地存储的模拟用户
+        const savedUser = localStorage.getItem('dev-user');
+        if (savedUser) {
+          try {
+            const userData = JSON.parse(savedUser);
+            setUser(userData);
+            console.log('🔄 开发模式：恢复保存的用户会话', userData);
+          } catch (error) {
+            console.error('解析保存的用户数据失败:', error);
+            localStorage.removeItem('dev-user');
+          }
+        }
+        setAuthInitialized(true);
+        return;
+      }
+
+      // 生产模式：检查Amplify认证状态
+      try {
+        const currentUser = await getCurrentUser();
+        if (currentUser) {
+          console.log('🔄 检测到现有认证会话:', currentUser);
+          // 认证和用户资料加载改为后台并行执行
+          handleAuthSuccess(currentUser);
+        }
+      } catch (error) {
+        console.log('🔍 未检测到现有认证会话:', error.message);
+      } finally {
+        // 现在，这只会在所有异步操作完成后执行
+        setAuthInitialized(true);
+      }
+    };
+
+    checkExistingAuth();
+  }, [ready, handleAuthSuccess]);
+
+  // 监听生产模式下Amplify的认证状态变化
+  useEffect(() => {
+    console.log('🔍 AuthContext: useEffect 监听认证状态变化', {
+      ready,
+      authInitialized,
+      amplifyAuthStatus: amplifyAuthHook.authStatus,
+      amplifyUser: amplifyAuthHook.user,
+      currentUser: user
+    });
+
+    if (!ready || !authInitialized) return;
+
+    const { authStatus, user: amplifyUser } = amplifyAuthHook;
+
+    if (authStatus === 'authenticated' && amplifyUser && !user) {
+      console.log('🔄 Amplify认证状态变化 - 用户已认证:', amplifyUser);
+      handleAuthSuccess(amplifyUser);
+
+      // 🔍 DEBUG: 输出所有认证信息
+      debugAuthCredentials();
+    } else if (authStatus === 'unauthenticated' && user) {
+      console.log('🔄 Amplify认证状态变化 - 用户已登出');
+      logout();
+    } else {
+      console.log('🔍 AuthContext: useEffect 跳过处理', {
+        authStatus,
+        hasAmplifyUser: !!amplifyUser,
+        hasCurrentUser: !!user,
+        reason: authStatus !== 'authenticated' ? 'not authenticated' :
+                !amplifyUser ? 'no amplify user' :
+                user ? 'user already exists' : 'unknown'
+      });
+    }
+  }, [amplifyAuthHook, authInitialized, ready, user, handleAuthSuccess, debugAuthCredentials, logout]);
+
+  // 完善用户资料
+  const completeProfileSetup = async (profileData) => {
+    try {
+      const result = await setupUserProfile(profileData);
+      setUserProfile(result.user);
+      setNeedsProfileSetup(false);
+
+      console.log('✅ 用户资料设置完成:', result);
+      return result;
+    } catch (error) {
+      console.error('❌ 用户资料设置失败:', error);
+      throw error;
+    }
+  };
+
+  // 开发模式登录
+  const login = (userData) => {
+    setUser(userData);
+    // 保存到本地存储
+    if (!ready) {
+      localStorage.setItem('dev-user', JSON.stringify(userData));
+    }
+
+    if (userData?.userId || userData?.attributes?.sub) {
+      const userId = userData.userId || userData.attributes.sub;
+      loadUserProfile(userId);
     }
   };
 
@@ -497,116 +527,14 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const logout = () => {
-    setUser(null);
-    setUserProfile(null);
-    setCognitoUserInfo(null); // 修复：退出时清除Cognito用户信息
-    setNeedsProfileSetup(false);
-    // 清除本地存储
-    if (!ready) {
-      try {
-        localStorage.removeItem('dev-user');
-      } catch (error) {
-        // Non-critical, just log it
-        console.error(new StorageError('无法清除开发模式用户会话。', {
-          operation: 'remove',
-          key: 'dev-user',
-          cause: error
-        }));
-      }
-    }
-  };
-
   const isAuthenticated = !!user;
-
-  // 🔍 DEBUG: 详细输出认证凭据
-  const debugAuthCredentials = async () => {
-    if (!ready) return;
-
-    try {
-      console.group('🔍 [DEBUG] 认证凭据详细信息');
-
-      // 获取完整的认证会话
-      const { fetchAuthSession } = await import('aws-amplify/auth');
-      const session = await fetchAuthSession();
-
-      console.log('📋 完整认证会话:', {
-        hasTokens: !!session.tokens,
-        hasCredentials: !!session.credentials,
-        hasIdToken: !!session.tokens?.idToken,
-        hasRefreshToken: !!session.tokens?.refreshToken
-      });
-
-      // ID Token详细信息 (主要关注)
-      if (session.tokens?.idToken) {
-        const idToken = session.tokens.idToken;
-        console.log('🆔 ID Token信息 (主要使用):', {
-          tokenType: typeof idToken,
-          tokenConstructor: idToken.constructor.name,
-          tokenString: idToken.toString(),
-          tokenLength: idToken.toString().length
-        });
-
-        // 解析ID Token内容
-        try {
-          const tokenParts = idToken.toString().split('.');
-          if (tokenParts.length === 3) {
-            const header = JSON.parse(atob(tokenParts[0]));
-            const payload = JSON.parse(atob(tokenParts[1]));
-
-            console.log('🔍 ID Token Header:', header);
-            console.log('🔍 ID Token Payload:', {
-              ...payload,
-              exp: new Date(payload.exp * 1000),
-              iat: new Date(payload.iat * 1000)
-            });
-
-            console.log('🎯 ID Token关键信息:', {
-              userId: payload.sub,
-              username: payload.username || payload['cognito:username'],
-              email: payload.email,
-              audience: payload.aud,
-              tokenUse: payload.token_use,
-              expiresAt: new Date(payload.exp * 1000)
-            });
-          }
-        } catch (parseError) {
-          console.error('❌ ID Token解析失败:', parseError);
-        }
-      }
-
-      // Refresh Token信息
-      if (session.tokens?.refreshToken) {
-        console.log('🔄 Refresh Token信息:', {
-          hasRefreshToken: true,
-          tokenType: typeof session.tokens.refreshToken,
-          tokenLength: session.tokens.refreshToken.toString().length
-        });
-      }
-
-      // AWS Credentials信息
-      if (session.credentials) {
-        console.log('🔐 AWS Credentials:', {
-          hasAccessKeyId: !!session.credentials.accessKeyId,
-          hasSecretAccessKey: !!session.credentials.secretAccessKey,
-          hasSessionToken: !!session.credentials.sessionToken,
-          expiration: session.credentials.expiration
-        });
-      }
-
-      console.log('✅ 系统将只使用ID Token进行API调用');
-      console.groupEnd();
-    } catch (error) {
-      console.error('❌ 获取认证凭据失败:', error);
-    }
-  };
 
   // 当用户认证成功时，自动加载Cognito用户信息
   useEffect(() => {
     if (user && !cognitoUserInfo) {
       loadCognitoUserInfo();
     }
-  }, [user]);
+  }, [user, cognitoUserInfo, loadCognitoUserInfo]);
 
   // 刷新用户资料的方法
   const refreshUserProfile = async () => {

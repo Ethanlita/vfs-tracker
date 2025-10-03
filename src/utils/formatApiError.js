@@ -1,13 +1,4 @@
-import {
-  ensureAppError,
-  ApiError,
-  AuthenticationError,
-  ServiceError,
-  UploadError,
-  PermissionError,
-  ValidationError,
-  StorageError
-} from './apiError.js';
+import { ensureAppError, ApiError, AuthenticationError, ServiceError } from './apiError.js';
 
 const defaultLabels = {
   summaryFallback: '请求过程中出现问题',
@@ -20,13 +11,7 @@ const defaultLabels = {
   details: '详细信息',
   notSent: '请求状态',
   serviceName: '服务',
-  meta: '附加信息',
-  // New labels for new error types
-  objectKey: 'S3 Object Key',
-  permissionName: '所需权限',
-  storageOperation: '存储操作',
-  storageKey: '存储键',
-  fieldErrors: '字段错误'
+  meta: '附加信息'
 };
 
 function toDisplayValue(value) {
@@ -92,27 +77,6 @@ export function formatApiError(error, options = {}) {
 
   if (appError instanceof ServiceError && appError.serviceName) {
     detailItems.push({ label: labels.serviceName, value: appError.serviceName });
-  }
-
-  // Handle new error types
-  if (appError instanceof UploadError && appError.objectKey) {
-    detailItems.push({ label: labels.objectKey, value: appError.objectKey });
-  }
-
-  if (appError instanceof PermissionError && appError.permissionName) {
-    detailItems.push({ label: labels.permissionName, value: appError.permissionName });
-  }
-
-  if (appError instanceof StorageError) {
-    if (appError.operation) detailItems.push({ label: labels.storageOperation, value: appError.operation });
-    if (appError.key) detailItems.push({ label: labels.storageKey, value: appError.key });
-  }
-
-  if (appError instanceof ValidationError && appError.fieldErrors) {
-    const fieldsSummary = appError.fieldErrors
-      .map(e => `${e.field}: ${e.message}`)
-      .join('; ');
-    detailItems.push({ label: labels.fieldErrors, value: fieldsSummary });
   }
 
   if (appError.requestMethod) {
