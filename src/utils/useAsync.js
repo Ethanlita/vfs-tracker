@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { ensureAppError } from './apiError.js';
 
 /**
  * 通用异步请求 hook
@@ -30,8 +31,9 @@ export function useAsync(asyncFn, deps = [], options = {}) {
       }
       return result;
     } catch (err) {
+      const enrichedError = ensureAppError(err);
       if (abortRef.current === currentCallId) {
-        setError(err instanceof Error ? err : new Error(String(err)));
+        setError(enrichedError);
       }
       return undefined;
     } finally {

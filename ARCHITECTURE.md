@@ -109,8 +109,7 @@
   - **Amazon S3**: 用于存储所有用户上传的二进制文件和系统生成的报告。
   - **Amazon SQS (可选但推荐)**: 用于解耦 `/analyze` API 请求和长时间运行的分析任务，提高系统的鲁棒性和响应速度。
 - **环境变量 (在托管平台侧配置)**
-  - `VITE_COGNITO_USER_POOL_ID`, `VITE_COGNITO_USER_POOL_WEB_CLIENT_ID`, `VITE_AWS_REGION` (必需)
-  - `VITE_API_BASE_URL` (必需)
+  - `VITE_COGNITO_USER_POOL_ID`, `VITE_COGNITO_USER_POOL_WEB_CLIENT_ID`, `VITE_AWS_REGION`, `VITE_API_ENDPOINT`, `VITE_S3_BUCKET`（全部配置齐全才视为生产模式）
   - `VITE_GOOGLE_GEMINI_API` (可选)
 
 ## 7. 未来演进建议

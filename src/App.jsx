@@ -47,6 +47,18 @@ const ProductionProtectedRoute = () => {
     };
   }, []);
 
+  // @en If the user is authenticated, redirect to their profile page on first login
+  // @zh 如果用户已认证，在首次登录时重定向到他们的个人页面
+  useEffect(() => {
+    if (authStatus === 'authenticated' && location.pathname === '/' && authInitialized) {
+      if (!profileLoading && needsProfileSetup && isOnline) {
+        navigate('/profile-setup-wizard', { replace: true });
+      } else {
+        navigate('/mypage', { replace: true });
+      }
+    }
+  }, [authStatus, location.pathname, navigate, needsProfileSetup, profileLoading, authInitialized, isOnline]);
+
   // @en While Amplify is figuring out the auth status, show a loading indicator.
   // @zh 在 Amplify 确定身份验证状态时，显示加载指示器。
   if (authStatus === 'configuring') {
@@ -59,18 +71,6 @@ const ProductionProtectedRoute = () => {
       </div>
     );
   }
-
-  // @en If the user is authenticated, redirect to their profile page on first login
-  // @zh 如果用户已认证，在首次登录时重定向到他们的个人页面
-  useEffect(() => {
-    if (authStatus === 'authenticated' && location.pathname === '/' && authInitialized) {
-      if (!profileLoading && needsProfileSetup && isOnline) {
-        navigate('/profile-setup-wizard', { replace: true });
-      } else {
-        navigate('/mypage', { replace: true });
-      }
-    }
-  }, [authStatus, location.pathname, navigate, needsProfileSetup, profileLoading, authInitialized, isOnline]);
 
   // @en If the user is not authenticated, redirect them to the home page.
   // @zh 如果用户未通过身份验证，则将他们重定向到主页。

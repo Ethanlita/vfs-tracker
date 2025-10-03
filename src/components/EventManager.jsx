@@ -1,7 +1,6 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { deleteEvent } from '../api';
-import { resolveAttachmentLinks } from '../utils/attachments';
+import { deleteEvent, getFileUrl } from '../api';
 
 // 防止某些构建下 motion 被判定未使用
 void motion;
@@ -10,6 +9,15 @@ void motion;
  * @en Event management component for filtering, viewing, editing, and deleting events
  * @zh 事件管理组件，用于筛选、查看、编辑和删除事件
  */
+const eventTypeConfig = {
+  'self_test': { label: '自我测试', icon: '🔍', color: 'green' },
+  'hospital_test': { label: '医院检测', icon: '🏥', color: 'blue' },
+  'voice_training': { label: '嗓音训练', icon: '💪', color: 'purple' },
+  'self_practice': { label: '自我练习', icon: '🎯', color: 'indigo' },
+  'surgery': { label: '嗓音手术', icon: '⚕️', color: 'red' },
+  'feeling_log': { label: '感受记录', icon: '💭', color: 'yellow' }
+};
+
 const EventManager = ({ events, onEventDeleted }) => { // 移除未使用参数
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedType, setSelectedType] = useState('all');
@@ -19,21 +27,11 @@ const EventManager = ({ events, onEventDeleted }) => { // 移除未使用参数
   const [showDetails, setShowDetails] = useState(false);
   const [resolvedAtts, setResolvedAtts] = useState([]);
 
-  // 事件类型配置
-  const eventTypeConfig = {
-    'self_test': { label: '自我测试', icon: '🔍', color: 'green' },
-    'hospital_test': { label: '医院检测', icon: '🏥', color: 'blue' },
-    'voice_training': { label: '嗓音训练', icon: '💪', color: 'purple' },
-    'self_practice': { label: '自我练习', icon: '🎯', color: 'indigo' },
-    'surgery': { label: '嗓音手术', icon: '⚕️', color: 'red' },
-    'feeling_log': { label: '感受记录', icon: '💭', color: 'yellow' }
-  };
-
   // 安全获取类型配置（兜底）
-  const getTypeConfig = (type) => {
+  const getTypeConfig = useCallback((type) => {
     if (!type) return { label: '未分类', icon: '📌', color: 'gray' };
     return eventTypeConfig[type] || { label: type, icon: '📌', color: 'gray' };
-  };
+  }, []);
 
   const dateRangeOptions = [
     { value: 'all', label: '全部时间' },
@@ -101,7 +99,7 @@ const EventManager = ({ events, onEventDeleted }) => { // 移除未使用参数
     });
 
     return filtered;
-  }, [events, searchTerm, selectedType, selectedDateRange, sortBy]);
+  }, [events, searchTerm, selectedType, selectedDateRange, sortBy, getTypeConfig]);
 
   // 事件统计（忽略无类型的）
   const eventStats = useMemo(() => {
@@ -134,7 +132,7 @@ const EventManager = ({ events, onEventDeleted }) => { // 移除未使用参数
             }
           })
         );
-        setAttachmentUrls(urls.filter(Boolean));
+        setResolvedAtts(urls.filter(Boolean));
       }
     };
     fetchAttachments();

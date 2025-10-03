@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getEventsByUserId } from '../api';
 import EventManager from './EventManager';
 import { useAsync } from '../utils/useAsync.js';
+import { ApiErrorNotice } from './ApiErrorNotice.jsx';
 import { isProductionReady as globalIsProductionReady } from '../env.js';
 import { useAuth } from '../contexts/AuthContext'; // 使用AuthContext而不是直接使用useAuthenticator
 
@@ -153,9 +154,8 @@ const EventManagerPage = () => {
             <span className="text-xl text-gray-600 font-medium">正在加载事件...</span>
           </div>
         ) : loadError ? (
-          <div className="p-6 text-center">
-            <p className="text-red-600 mb-4">加载事件失败：{loadError.message || '未知错误'}</p>
-            <button onClick={handleRetry} className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-sm">重试</button>
+          <div className="p-6">
+            <ApiErrorNotice error={loadError} onRetry={handleRetry} />
           </div>
         ) : (
           <EventManager
