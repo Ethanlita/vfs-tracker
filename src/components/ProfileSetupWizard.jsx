@@ -2,12 +2,16 @@ import React, { useState } from 'react';
 import PropTypes from 'prop-types';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { ensureAppError } from '../utils/apiError.js';
+import { ApiErrorNotice } from './ApiErrorNotice.jsx';
+
 const ProfileSetupWizard = ({ onComplete, canSkip = true }) => {
   const { user, refreshUserProfile, completeProfileSetup } = useAuth();
   const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [apiError, setApiError] = useState(null);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -42,6 +46,7 @@ const ProfileSetupWizard = ({ onComplete, canSkip = true }) => {
       [field]: value
     }));
     setError('');
+    setApiError(null);
   };
 
   const addSocialAccount = () => {
@@ -108,6 +113,7 @@ const ProfileSetupWizard = ({ onComplete, canSkip = true }) => {
     if (currentStep < totalSteps) {
       setCurrentStep(prev => prev + 1);
       setError('');
+      setApiError(null);
     }
   };
 
@@ -115,6 +121,7 @@ const ProfileSetupWizard = ({ onComplete, canSkip = true }) => {
     if (currentStep > 1) {
       setCurrentStep(prev => prev - 1);
       setError('');
+      setApiError(null);
     }
   };
 
@@ -160,7 +167,12 @@ const ProfileSetupWizard = ({ onComplete, canSkip = true }) => {
       finishSetup();
     } catch (error) {
       console.error('设置用户资料失败:', error);
-      setError(error.message || '设置失败，请重试');
+      setError('');
+      setApiError(ensureAppError(error, {
+        message: error.message || '设置失败，请重试',
+        requestMethod: 'POST',
+        requestPath: '/user/profile-setup'
+      }));
     } finally {
       setLoading(false);
     }
@@ -461,6 +473,11 @@ const ProfileSetupWizard = ({ onComplete, canSkip = true }) => {
             </div>
 
             {/* 错误消息 */}
+            {apiError && (
+              <div className="mb-6">
+                <ApiErrorNotice error={apiError} />
+              </div>
+            )}
             {error && (
               <div className="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
                 {error}
@@ -484,8 +501,7 @@ const ProfileSetupWizard = ({ onComplete, canSkip = true }) => {
                 {canSkip && (
                   <button
                     onClick={handleSkip}
-                    disabled={loading}
-                    className="px-6 py-2 text-gray-600 hover:text-gray-800 transition-colors disabled:opacity-50"
+                    className="px-6 py-2 text-gray-600 hover:text-gray-800 transition-colors"
                   >
                     跳过设置
                   </button>
@@ -524,11 +540,6 @@ const ProfileSetupWizard = ({ onComplete, canSkip = true }) => {
       </div>
     </div>
   );
-};
-
-ProfileSetupWizard.propTypes = {
-  onComplete: PropTypes.func,
-  canSkip: PropTypes.bool
 };
 
 export default ProfileSetupWizard;

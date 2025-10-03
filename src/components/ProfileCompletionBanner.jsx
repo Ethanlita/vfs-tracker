@@ -2,7 +2,7 @@ import React from 'react';
 import { useAuth } from '../contexts/AuthContext';
 
 const ProfileCompletionBanner = ({ onSetupClick }) => {
-  const { needsProfileSetup, userProfile } = useAuth();
+  const { needsProfileSetup } = useAuth();
 
   if (!needsProfileSetup) {
     return null;

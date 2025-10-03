@@ -5,6 +5,8 @@ import { useAsync } from '../utils/useAsync.js';
 import SecureFileUpload from './SecureFileUpload';
 import { useAuth } from '../contexts/AuthContext.jsx';
 import { resolveAttachmentLinks } from '../utils/attachments.js';
+import { AuthenticationError, ensureAppError } from '../utils/apiError.js';
+import { ApiErrorNotice } from './ApiErrorNotice.jsx';
 
 /**
  * @en A form for creating new voice events. It handles data input, file uploads, and submission to the backend.
@@ -42,7 +44,7 @@ const EventForm = ({ onEventAdded }) => {
   const [attachments, setAttachments] = useState([]); // 多附件集合
   const [resolvedAttachments, setResolvedAttachments] = useState([]);
   const [submitSuccess, setSubmitSuccess] = useState(false);
-  const [errorMsg, setErrorMsg] = useState('');
+  const [errorState, setErrorState] = useState(null);
 
   // 动态表单数据状态
   const [formData, setFormData] = useState({});
@@ -364,9 +366,11 @@ const EventForm = ({ onEventAdded }) => {
 
   // 简化的提交逻辑，移除复杂的useAsync文件上传
   const submitAsync = useAsync(async () => {
-    setErrorMsg('');
+    setErrorState(null);
     setSubmitSuccess(false);
-    if (!user) throw new Error('未登录用户');
+    if (!user) {
+      throw new AuthenticationError('未登录用户', { requestMethod: 'POST', requestPath: '/events' });
+    }
 
     // 构建符合数据结构的详细信息对象
     let details = { ...formData };
@@ -417,13 +421,14 @@ const EventForm = ({ onEventAdded }) => {
     submitAsync.execute()
       .then(newEvent => {
         if (newEvent) {
+          setErrorState(null);
           setSubmitSuccess(true);
           onEventAdded(newEvent);
           resetForm();
           setTimeout(() => setSubmitSuccess(false), 2500);
         }
       })
-      .catch(err => setErrorMsg(err.message || '提交失败'));
+      .catch(err => setErrorState(ensureAppError(err, { requestMethod: 'POST', requestPath: '/events' })));
   };
 
   const resetForm = () => {
@@ -554,15 +559,12 @@ const EventForm = ({ onEventAdded }) => {
           </div>
 
           {/* 提示信息 */}
-          <div className="mt-4">
-            {errorMsg && (
-                <div className="rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700 flex items-start justify-between gap-4">
-                  <span>{errorMsg}</span>
-                  <button type="button" onClick={()=>{ setErrorMsg(''); submitAsync.execute(); }} className="text-xs px-2 py-1 bg-red-600 hover:bg-red-500 text-white rounded">重试</button>
-                </div>
+          <div className="mt-4 space-y-3">
+            {errorState && (
+              <ApiErrorNotice error={errorState} onRetry={() => submitAsync.execute()} />
             )}
-            {submitSuccess && !errorMsg && (
-                <div className="rounded-md bg-emerald-50 border border-emerald-200 px-4 py-3 text-sm text-emerald-700">事件添加成功！</div>
+            {submitSuccess && !errorState && (
+              <div className="rounded-md bg-emerald-50 border border-emerald-200 px-4 py-3 text-sm text-emerald-700">事件添加成功！</div>
             )}
           </div>
         </form>
