@@ -193,6 +193,7 @@ export const addEvent = async (eventData) => {
 
 export const getAllEvents = async () => {
   if (!isProductionReady() && !import.meta.env.VITE_FORCE_REAL) {
+    // eslint-disable-next-line no-unused-vars
     return Promise.resolve(mockData.events.map(({ attachments: _attachments, ...rest }) => rest));
   }
   return simpleGet('/all-events');

@@ -10,7 +10,7 @@ const isLikelyChinaLocale = () => {
       return true;
     }
   } catch {
-    // Failed to detect timezone; fallback to language detection below. Error is non-critical.
+    // ignore
   }
 
   try {
@@ -22,7 +22,7 @@ const isLikelyChinaLocale = () => {
       });
     }
   } catch {
-    // Suppress errors accessing browser language info; not critical for region detection.
+    // ignore
   }
 
   return false;
@@ -51,7 +51,6 @@ const RegionSwitchBanner = () => {
     try {
       dismissed = localStorage.getItem(DISMISS_KEY) === '1';
     } catch {
-      // Intentionally ignore errors from localStorage (e.g., unavailable, SSR, private mode)
       dismissed = false;
     }
 
@@ -66,8 +65,8 @@ const RegionSwitchBanner = () => {
   const handleClose = () => {
     try {
       localStorage.setItem(DISMISS_KEY, '1');
-    } catch (_error) {
-      // Suppress localStorage errors (e.g., quota exceeded, private mode). Banner dismissal will still proceed.
+    } catch {
+      // ignore
     }
     setOpen(false);
   };
