@@ -16,7 +16,7 @@ const PostViewer = () => {
     if (!filePath) return false;
     if (!filePath.endsWith('.md')) return false;
     if (filePath.includes('..') || filePath.includes('\\') || filePath.startsWith('/')) return false;
-    const validPathPattern = /^[a-zA-Z0-9_\-/\s\u4e00-\u9fa5\u3000-\u303F]+\.md$/;
+    const validPathPattern = /^[a-zA-Z0-9\-_/\s\u4e00-\u9fa5\u3000-\u303F]+\.md$/;
     return validPathPattern.test(filePath);
   };
 
