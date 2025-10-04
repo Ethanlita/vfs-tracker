@@ -10,6 +10,7 @@ const Header = ({ AuthComponent }) => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState('');
   const [toolsMenuOpen, setToolsMenuOpen] = useState(false);
+  const toolsMenuTimeoutRef = useRef(null);
 
   const displayName = useMemo(() => (user ? getUserDisplayName(user) : '访客'), [user]);
   const location = useLocation();
@@ -68,35 +69,27 @@ const Header = ({ AuthComponent }) => {
   const navButtonInactiveClass = 'text-gray-700 hover:bg-gray-50';
 
   useEffect(() => {
-    if (typeof document === 'undefined') {
-      return undefined;
-    }
-    const handleClickOutside = (event) => {
-      if (!toolsMenuRef.current) return;
-      if (!toolsMenuRef.current.contains(event.target)) {
-        setToolsMenuOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  useEffect(() => {
-    if (!toolsMenuOpen || typeof window === 'undefined') {
-      return undefined;
-    }
-    const handleKey = (event) => {
-      if (event.key === 'Escape') {
-        setToolsMenuOpen(false);
-      }
-    };
-    window.addEventListener('keydown', handleKey);
-    return () => window.removeEventListener('keydown', handleKey);
-  }, [toolsMenuOpen]);
-
-  useEffect(() => {
     setToolsMenuOpen(false);
   }, [location.pathname]);
+
+  useEffect(() => () => {
+    window.clearTimeout(toolsMenuTimeoutRef.current);
+  }, []);
+
+  /**
+   * @zh 悬停打开工具菜单，离开后延迟关闭避免抖动。
+   * @en Open the tools menu on hover and delay closing to avoid flickers.
+   */
+  const handleToolsHover = (open) => {
+    window.clearTimeout(toolsMenuTimeoutRef.current);
+    if (open) {
+      setToolsMenuOpen(true);
+      return;
+    }
+    toolsMenuTimeoutRef.current = window.setTimeout(() => {
+      setToolsMenuOpen(false);
+    }, 120);
+  };
 
   return (
     <>
@@ -128,13 +121,20 @@ const Header = ({ AuthComponent }) => {
                   inactiveClassName={navButtonInactiveClass}
                   isActive={isDocsActive}
                 />
-                <div className="relative" ref={toolsMenuRef}>
+                <div
+                  className="relative"
+                  ref={toolsMenuRef}
+                  onMouseEnter={() => handleToolsHover(true)}
+                  onMouseLeave={() => handleToolsHover(false)}
+                >
                   <button
                     type="button"
                     className={`${navButtonBaseClass} ${
                       isToolsActive ? navButtonActiveClass : navButtonInactiveClass
                     }`}
-                    onClick={() => setToolsMenuOpen(prev => !prev)}
+                    onClick={(event) => {
+                      event.preventDefault();
+                    }}
                     aria-haspopup="true"
                     aria-expanded={toolsMenuOpen}
                   >
@@ -149,7 +149,7 @@ const Header = ({ AuthComponent }) => {
                     </svg>
                   </button>
                   {toolsMenuOpen ? (
-                    <div className="absolute right-0 mt-2 w-48 rounded-xl border border-gray-100 bg-white shadow-lg py-2">
+                    <div className="absolute left-0 mt-2 w-48 rounded-xl border border-gray-100 bg-white shadow-lg py-2">
                       {toolLinks.map(link => (
                         <NavLink
                           key={link.to}
