@@ -2,8 +2,8 @@
 
 一个用于记录与分析 VFS（Voice Feminization Surgery）相关语音事件的开源应用。前端基于 React + Vite，样式采用 Tailwind CSS；在具备云配置时通过 AWS Serverless（Cognito、API Gateway、Lambda、DynamoDB）提供鉴权、API 与存储。缺省情况下使用本地模拟数据运行，无需云账号即可体验。
 
-- 在线演示与文档：请参考本仓库主页与 ARCHITECTURE.md、docs/data_structures.md
-- 代码许可与贡献：参见 CONTRIBUTION.md
+- **在线演示与文档**: 请参考本仓库主页、[架构文档](ARCHITECTURE.md)和[API文档](API_Gateway_Documentation.md)。
+- **代码许可与贡献**: 参见 [CONTRIBUTION.md](CONTRIBUTION.md)。
 
 ## 功能概览
 
@@ -33,8 +33,9 @@
   - EventForm.jsx：事件录入表单，支持文件上传与动态字段
   - Timeline.jsx：个人时间轴与图表展示
   - PostList.jsx / PostViewer.jsx / PostsDropdown.jsx：帖子列表与阅读
-- src/api.js：对接 AWS Amplify（API/Storage），提供开发环境回退逻辑
-- **lambda-functions/online-praat-analysis**: 新增的嗓音分析后端服务。
+- `src/api.js`: 封装所有与后端 API 的交互，并提供开发环境回退逻辑。
+- `lambda-functions/`: 包含所有后端 Lambda 函数的源代码。
+- `docs/`: 包含项目的主要文档。
 - scripts/generate-posts-list.js：生成 public/posts.json
 - docs/data_structures.md：数据结构契约（禁止修改）
 
@@ -77,9 +78,9 @@
   - 上传文件返回模拟 Key（不调用 S3）
   - AI 鼓励消息使用静态默认文案
 - 生产模式（就绪）：
-  - 通过 Amplify API 调用 API Gateway/Lambda
-  - 通过 Amplify Storage 上传文件至 S3
-  - 可调用 Gemini API 生成鼓励消息
+  - 通过 `src/api.js` 中封装的函数调用 API Gateway/Lambda。
+  - 通过后端生成的预签名 URL 安全地上传文件至 S3。
+  - 可调用 Gemini API 生成鼓励消息。
 
 代码位置：
 - src/api.js 中的 isProductionReady() 与各 API 方法（getAllEvents、getEventsByUserId、addEvent、uploadFile、getEncouragingMessage）
@@ -101,9 +102,9 @@
   - GitHub Pages：本仓库包含 CNAME 与 vite.config.js base:'/'，可直接将 dist 发布到 gh-pages 或任何静态托管
   - 其他平台（Netlify、Vercel、Cloudflare Pages）均可直接指向 dist
 - 后端（若启用）：
-  - 需在托管平台配置上述 VITE_* 环境变量
-  - AWS 侧需准备 Cognito、API Gateway、Lambda、DynamoDB、S3，并在 Amplify 配置中与之对应
-  - **新增**: `online-praat-analysis` Lambda 函数需要单独部署，详情参见其目录下的 `README.md`。
+  - 需在托管平台配置上述所有 VITE_* 环境变量。
+  - AWS 侧需准备 Cognito, API Gateway, Lambda, 和 DynamoDB 服务。
+  - `online-praat-analysis` Lambda 函数需要作为容器镜像单独部署。
 
 ## FAQ
 
@@ -112,6 +113,6 @@
 - Q: 图表没有数据或显示“暂无可绘制的基频数据”？
   - A: 仪表板会在数据不足时生成额外演示数据；若仍为空，请检查 mock_data.json 或真实 API 返回。
 - Q: 上传失败如何排查？
-  - A: 在开发模式不会真的上传；生产模式请检查 S3 权限、Amplify 配置与浏览器控制台日志。
+  - A: 在开发模式下不会真的上传；在生产模式下，请检查 S3 权限、API Gateway 配置以及浏览器控制台的网络请求和日志。
 - Q: 帖子列表为什么自动生成？
   - A: 开发与构建时 scripts/generate-posts-list.js 会扫描 posts 目录，生成 public/posts.json，vite 插件会将 posts 复制到 dist/posts。
