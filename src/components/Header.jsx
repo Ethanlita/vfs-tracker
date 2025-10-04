@@ -88,7 +88,7 @@ const Header = ({ AuthComponent }) => {
     }
     toolsMenuTimeoutRef.current = window.setTimeout(() => {
       setToolsMenuOpen(false);
-    }, 120);
+    }, 240);
   };
 
   return (
