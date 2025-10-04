@@ -1,0 +1,527 @@
+{
+    "Items": [
+        {
+            "createdAt": {
+                "S": "2025-10-03T00:01:51.479Z"
+            },
+            "email": {
+                "S": "2586618121@qq.com"
+            },
+            "userId": {
+                "S": "0488a4b8-5041-70cc-2c96-f8f422bb04cd"
+            },
+            "updatedAt": {
+                "S": "2025-10-03T00:01:51.479Z"
+            },
+            "profile": {
+                "M": {
+                    "nickname": {
+                        "S": "Main包"
+                    },
+                    "name": {
+                        "S": "Main包"
+                    },
+                    "bio": {
+                        "S": ""
+                    },
+                    "isNamePublic": {
+                        "BOOL": true
+                    },
+                    "areSocialsPublic": {
+                        "BOOL": true
+                    },
+                    "socials": {
+                        "L": [
+                            {
+                                "M": {
+                                    "platform": {
+                                        "S": "Twitter"
+                                    },
+                                    "handle": {
+                                        "S": "@Lem_PackageMain"
+                                    }
+                                }
+                            }
+                        ]
+                    }
+                }
+            }
+        },
+        {
+            "createdAt": {
+                "S": "2025-10-04T16:25:30.365Z"
+            },
+            "email": {
+                "S": "2513023872@qq.com"
+            },
+            "userId": {
+                "S": "a4588428-a031-706e-a5ee-81573cd772f2"
+            },
+            "updatedAt": {
+                "S": "2025-10-04T16:25:30.365Z"
+            },
+            "profile": {
+                "M": {
+                    "nickname": {
+                        "S": "Yogurit"
+                    },
+                    "name": {
+                        "S": "Yogurit"
+                    },
+                    "bio": {
+                        "S": ""
+                    },
+                    "isNamePublic": {
+                        "BOOL": false
+                    },
+                    "areSocialsPublic": {
+                        "BOOL": false
+                    },
+                    "socials": {
+                        "L": []
+                    }
+                }
+            }
+        },
+        {
+            "createdAt": {
+                "S": "2025-09-30T13:08:04.660Z"
+            },
+            "email": {
+                "S": "sky19981115@gmail.com"
+            },
+            "userId": {
+                "S": "744884c8-b001-70c7-7344-33943a962488"
+            },
+            "updatedAt": {
+                "S": "2025-09-30T13:08:04.660Z"
+            },
+            "profile": {
+                "M": {
+                    "nickname": {
+                        "S": "lioncc"
+                    },
+                    "name": {
+                        "S": "qqzxudbjxk"
+                    },
+                    "bio": {
+                        "S": ""
+                    },
+                    "isNamePublic": {
+                        "BOOL": false
+                    },
+                    "areSocialsPublic": {
+                        "BOOL": false
+                    },
+                    "socials": {
+                        "L": []
+                    }
+                }
+            }
+        },
+        {
+            "createdAt": {
+                "S": "2025-09-30T15:12:50.739Z"
+            },
+            "email": {
+                "S": "lxz199811@outlook.com"
+            },
+            "userId": {
+                "S": "84789498-7091-70f9-a49b-121b29956e86"
+            },
+            "updatedAt": {
+                "S": "2025-09-30T15:12:50.739Z"
+            },
+            "profile": {
+                "M": {
+                    "nickname": {
+                        "S": "zhexiaxia"
+                    },
+                    "name": {
+                        "S": "zhexiaxia"
+                    },
+                    "bio": {
+                        "S": ""
+                    },
+                    "isNamePublic": {
+                        "BOOL": false
+                    },
+                    "areSocialsPublic": {
+                        "BOOL": false
+                    },
+                    "socials": {
+                        "L": []
+                    }
+                }
+            }
+        },
+        {
+            "createdAt": {
+                "S": "2025-10-04T06:14:00.873Z"
+            },
+            "email": {
+                "S": "1023688425@qq.com"
+            },
+            "userId": {
+                "S": "34e89438-20f1-70c5-6f9d-a9d9360d7a80"
+            },
+            "updatedAt": {
+                "S": "2025-10-04T06:14:12.131Z"
+            },
+            "profile": {
+                "M": {
+                    "nickname": {
+                        "S": "ryZoo"
+                    },
+                    "name": {
+                        "S": "ryZoo"
+                    },
+                    "bio": {
+                        "S": ""
+                    },
+                    "isNamePublic": {
+                        "BOOL": false
+                    },
+                    "areSocialsPublic": {
+                        "BOOL": false
+                    },
+                    "socials": {
+                        "L": []
+                    }
+                }
+            }
+        },
+        {
+            "createdAt": {
+                "S": "2025-10-03T14:45:03.625Z"
+            },
+            "email": {
+                "S": "654052370@qq.com"
+            },
+            "userId": {
+                "S": "44b8c418-9041-70c0-4824-b48e8dd48f29"
+            },
+            "updatedAt": {
+                "S": "2025-10-03T14:45:38.271Z"
+            },
+            "profile": {
+                "M": {
+                    "nickname": {
+                        "S": "Aa"
+                    },
+                    "name": {
+                        "S": "asmon"
+                    },
+                    "bio": {
+                        "S": ""
+                    },
+                    "isNamePublic": {
+                        "BOOL": false
+                    },
+                    "areSocialsPublic": {
+                        "BOOL": false
+                    },
+                    "socials": {
+                        "L": []
+                    }
+                }
+            }
+        },
+        {
+            "updatedAt": {
+                "S": "2025-08-27T15:38:33.491Z"
+            },
+            "userId": {
+                "S": "44a82468-7091-70fe-5596-a2a3ecfa144b"
+            },
+            "profile": {
+                "M": {
+                    "name": {
+                        "S": "兰汐"
+                    },
+                    "isNamePublic": {
+                        "BOOL": true
+                    },
+                    "areSocialsPublic": {
+                        "BOOL": true
+                    },
+                    "socials": {
+                        "L": [
+                            {
+                                "M": {
+                                    "platform": {
+                                        "S": "Twitter"
+                                    },
+                                    "handle": {
+                                        "S": "Moli_Lanxi"
+                                    }
+                                }
+                            }
+                        ]
+                    }
+                }
+            }
+        },
+        {
+            "createdAt": {
+                "S": "2025-10-01T03:03:26.380Z"
+            },
+            "email": {
+                "S": "frozen1746@gmail.com"
+            },
+            "userId": {
+                "S": "643874f8-c061-7017-545b-d4eb2ad4f392"
+            },
+            "updatedAt": {
+                "S": "2025-10-01T03:03:26.380Z"
+            },
+            "profile": {
+                "M": {
+                    "nickname": {
+                        "S": "do335"
+                    },
+                    "name": {
+                        "S": "咕咕"
+                    },
+                    "bio": {
+                        "S": ""
+                    },
+                    "isNamePublic": {
+                        "BOOL": true
+                    },
+                    "areSocialsPublic": {
+                        "BOOL": false
+                    },
+                    "socials": {
+                        "L": []
+                    }
+                }
+            }
+        },
+        {
+            "createdAt": {
+                "S": "2025-10-02T14:02:02.781Z"
+            },
+            "email": {
+                "S": "enjoynight@vip.qq.com"
+            },
+            "userId": {
+                "S": "0458c438-b0c1-704c-4f84-660e4c41f1bf"
+            },
+            "updatedAt": {
+                "S": "2025-10-02T14:02:02.781Z"
+            },
+            "profile": {
+                "M": {
+                    "nickname": {
+                        "S": "nothousand"
+                    },
+                    "name": {
+                        "S": "芊"
+                    },
+                    "bio": {
+                        "S": ""
+                    },
+                    "isNamePublic": {
+                        "BOOL": true
+                    },
+                    "areSocialsPublic": {
+                        "BOOL": true
+                    },
+                    "socials": {
+                        "L": [
+                            {
+                                "M": {
+                                    "platform": {
+                                        "S": "Twitter"
+                                    },
+                                    "handle": {
+                                        "S": "Nothousand"
+                                    }
+                                }
+                            }
+                        ]
+                    }
+                }
+            }
+        },
+        {
+            "createdAt": {
+                "S": "2025-08-17T12:29:16.937Z"
+            },
+            "email": {
+                "S": "lita@ethanlita.com"
+            },
+            "updatedAt": {
+                "S": "2025-10-03T12:24:19.514Z"
+            },
+            "userId": {
+                "S": "34f8b418-1011-70a7-633b-720845138963"
+            },
+            "profile": {
+                "M": {
+                    "nickname": {
+                        "S": "丽塔"
+                    },
+                    "name": {
+                        "S": "丽塔_public"
+                    },
+                    "bio": {
+                        "S": ""
+                    },
+                    "isNamePublic": {
+                        "BOOL": true
+                    },
+                    "areSocialsPublic": {
+                        "BOOL": true
+                    },
+                    "socials": {
+                        "L": [
+                            {
+                                "M": {
+                                    "platform": {
+                                        "S": "QQ"
+                                    },
+                                    "handle": {
+                                        "S": "lita001"
+                                    }
+                                }
+                            },
+                            {
+                                "M": {
+                                    "platform": {
+                                        "S": "Bilibili"
+                                    },
+                                    "handle": {
+                                        "S": "塔丽塔丽塔丽丽"
+                                    }
+                                }
+                            }
+                        ]
+                    }
+                }
+            }
+        },
+        {
+            "updatedAt": {
+                "S": "2025-09-18T13:55:38.392Z"
+            },
+            "userId": {
+                "S": "f4786458-a081-70e5-9501-e2ae6f8a0733"
+            },
+            "profile": {
+                "M": {
+                    "name": {
+                        "S": "Meru酱"
+                    },
+                    "isNamePublic": {
+                        "BOOL": true
+                    },
+                    "areSocialsPublic": {
+                        "BOOL": false
+                    },
+                    "socials": {
+                        "L": []
+                    }
+                }
+            }
+        },
+        {
+            "createdAt": {
+                "S": "2025-09-30T15:59:47.026Z"
+            },
+            "email": {
+                "S": "q18760686591@163.com"
+            },
+            "userId": {
+                "S": "74480428-b081-70ee-f11d-9ad0639e7490"
+            },
+            "updatedAt": {
+                "S": "2025-09-30T15:59:47.026Z"
+            },
+            "profile": {
+                "M": {
+                    "nickname": {
+                        "S": "C_baba"
+                    },
+                    "name": {
+                        "S": "C_baba"
+                    },
+                    "bio": {
+                        "S": ""
+                    },
+                    "isNamePublic": {
+                        "BOOL": false
+                    },
+                    "areSocialsPublic": {
+                        "BOOL": true
+                    },
+                    "socials": {
+                        "L": [
+                            {
+                                "M": {
+                                    "platform": {
+                                        "S": "Twitter"
+                                    },
+                                    "handle": {
+                                        "S": "@C_baba_66ccff"
+                                    }
+                                }
+                            }
+                        ]
+                    }
+                }
+            }
+        },
+        {
+            "createdAt": {
+                "S": "2025-09-30T14:00:45.962Z"
+            },
+            "email": {
+                "S": "1404632649@qq.com"
+            },
+            "userId": {
+                "S": "84a83498-50f1-70f4-69ce-576ae4a53079"
+            },
+            "updatedAt": {
+                "S": "2025-09-30T14:00:45.962Z"
+            },
+            "profile": {
+                "M": {
+                    "nickname": {
+                        "S": "钰莹酱"
+                    },
+                    "name": {
+                        "S": "钰莹酱"
+                    },
+                    "bio": {
+                        "S": ""
+                    },
+                    "isNamePublic": {
+                        "BOOL": false
+                    },
+                    "areSocialsPublic": {
+                        "BOOL": false
+                    },
+                    "socials": {
+                        "L": [
+                            {
+                                "M": {
+                                    "platform": {
+                                        "S": "Twitter"
+                                    },
+                                    "handle": {
+                                        "S": "YuYing0101"
+                                    }
+                                }
+                            }
+                        ]
+                    }
+                }
+            }
+        }
+    ],
+    "Count": 13,
+    "ScannedCount": 13,
+    "ConsumedCapacity": null
+}

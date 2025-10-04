@@ -1,0 +1,55 @@
+{
+    "Table": {
+        "AttributeDefinitions": [
+            {
+                "AttributeName": "eventId",
+                "AttributeType": "S"
+            },
+            {
+                "AttributeName": "userId",
+                "AttributeType": "S"
+            }
+        ],
+        "TableName": "VoiceFemEvents",
+        "KeySchema": [
+            {
+                "AttributeName": "userId",
+                "KeyType": "HASH"
+            },
+            {
+                "AttributeName": "eventId",
+                "KeyType": "RANGE"
+            }
+        ],
+        "TableStatus": "ACTIVE",
+        "CreationDateTime": "2025-07-30T07:26:26.902000+00:00",
+        "ProvisionedThroughput": {
+            "NumberOfDecreasesToday": 0,
+            "ReadCapacityUnits": 0,
+            "WriteCapacityUnits": 0
+        },
+        "TableSizeBytes": 198378,
+        "ItemCount": 73,
+        "TableArn": "arn:aws:dynamodb:us-east-1:296821242554:table/VoiceFemEvents",
+        "TableId": "cc385427-2344-4173-b413-2186b2cf8dd9",
+        "BillingModeSummary": {
+            "BillingMode": "PAY_PER_REQUEST",
+            "LastUpdateToPayPerRequestDateTime": "2025-07-30T07:26:26.902000+00:00"
+        },
+        "StreamSpecification": {
+            "StreamEnabled": true,
+            "StreamViewType": "NEW_IMAGE"
+        },
+        "LatestStreamLabel": "2025-08-17T18:28:10.144",
+        "LatestStreamArn": "arn:aws:dynamodb:us-east-1:296821242554:table/VoiceFemEvents/stream/2025-08-17T18:28:10.144",
+        "TableClassSummary": {
+            "TableClass": "STANDARD"
+        },
+        "DeletionProtectionEnabled": false,
+        "WarmThroughput": {
+            "ReadUnitsPerSecond": 12000,
+            "WriteUnitsPerSecond": 4000,
+            "Status": "ACTIVE"
+        }
+    }
+}

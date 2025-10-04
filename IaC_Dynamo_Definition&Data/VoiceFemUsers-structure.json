@@ -1,0 +1,41 @@
+{
+    "Table": {
+        "AttributeDefinitions": [
+            {
+                "AttributeName": "userId",
+                "AttributeType": "S"
+            }
+        ],
+        "TableName": "VoiceFemUsers",
+        "KeySchema": [
+            {
+                "AttributeName": "userId",
+                "KeyType": "HASH"
+            }
+        ],
+        "TableStatus": "ACTIVE",
+        "CreationDateTime": "2025-08-16T00:57:27.150000+00:00",
+        "ProvisionedThroughput": {
+            "NumberOfDecreasesToday": 0,
+            "ReadCapacityUnits": 0,
+            "WriteCapacityUnits": 0
+        },
+        "TableSizeBytes": 2718,
+        "ItemCount": 12,
+        "TableArn": "arn:aws:dynamodb:us-east-1:296821242554:table/VoiceFemUsers",
+        "TableId": "65807f40-66a4-43fc-a31c-d61c7570b4cd",
+        "BillingModeSummary": {
+            "BillingMode": "PAY_PER_REQUEST",
+            "LastUpdateToPayPerRequestDateTime": "2025-08-16T00:57:27.150000+00:00"
+        },
+        "TableClassSummary": {
+            "TableClass": "STANDARD"
+        },
+        "DeletionProtectionEnabled": false,
+        "WarmThroughput": {
+            "ReadUnitsPerSecond": 12000,
+            "WriteUnitsPerSecond": 4000,
+            "Status": "ACTIVE"
+        }
+    }
+}
