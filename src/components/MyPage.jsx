@@ -112,6 +112,12 @@ const MyPage = () => {
     navigate('/scale-practice');
   };
 
+  // @en Handler that jumps to the Hz-note conversion tool.
+  // @zh 导航到 Hz-音符转换器的处理函数。
+  const handleNavigateToNoteFrequencyTool = () => {
+    navigate('/note-frequency-tool');
+  };
+
   // --- RENDER ---
   return (
     <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-6 max-w-7xl">
@@ -162,6 +168,12 @@ const MyPage = () => {
           className="bg-gradient-to-r from-orange-500 to-red-600 text-white px-6 py-3 rounded-lg font-semibold shadow-lg hover:from-orange-600 hover:to-red-700 transition-all duration-300 transform hover:scale-105"
         >
           🎶 音阶练习
+        </button>
+        <button
+          onClick={handleNavigateToNoteFrequencyTool}
+          className="bg-gradient-to-r from-sky-500 to-blue-600 text-white px-6 py-3 rounded-lg font-semibold shadow-lg hover:from-sky-600 hover:to-blue-700 transition-all duration-300 transform hover:scale-105"
+        >
+          🎼 Hz-音符转换器
         </button>
         <PendingSyncButton className="bg-gradient-to-r from-yellow-500 to-amber-600 text-white px-6 py-3 rounded-lg font-semibold shadow-lg hover:from-yellow-600 hover:to-amber-700 transition-all duration-300 transform hover:scale-105" />
       </div>

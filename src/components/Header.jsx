@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { NavLink } from 'react-router-dom';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { NavLink, useLocation } from 'react-router-dom';
 import Sidebar from './Sidebar.jsx';
 import { useAuth } from '../contexts/AuthContext.jsx';
 import { generateAvatarFromName, getUserAvatarUrl, getUserDisplayName } from '../utils/avatar.js';
@@ -8,8 +8,11 @@ const Header = ({ AuthComponent }) => {
   const { user } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState('');
+  const [toolsMenuOpen, setToolsMenuOpen] = useState(false);
 
   const displayName = useMemo(() => (user ? getUserDisplayName(user) : '访客'), [user]);
+  const location = useLocation();
+  const toolsMenuRef = useRef(null);
 
   useEffect(() => {
     let active = true;
@@ -40,7 +43,49 @@ const Header = ({ AuthComponent }) => {
   }, [user, displayName]);
 
   const docLink = useMemo(() => ({ label: '文档', to: '/posts' }), []);
-  const dashboardLink = useMemo(() => ({ label: '公共仪表板', to: '/dashboard' }), []);
+  const toolLinks = useMemo(
+    () => [
+      { label: '公共仪表板', to: '/dashboard' },
+      { label: 'Hz-音符转换器', to: '/note-frequency-tool' },
+    ],
+    [],
+  );
+
+  const isToolsActive = useMemo(
+    () => toolLinks.some(link => location.pathname.startsWith(link.to)),
+    [toolLinks, location.pathname],
+  );
+
+  useEffect(() => {
+    if (typeof document === 'undefined') {
+      return undefined;
+    }
+    const handleClickOutside = (event) => {
+      if (!toolsMenuRef.current) return;
+      if (!toolsMenuRef.current.contains(event.target)) {
+        setToolsMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    if (!toolsMenuOpen || typeof window === 'undefined') {
+      return undefined;
+    }
+    const handleKey = (event) => {
+      if (event.key === 'Escape') {
+        setToolsMenuOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [toolsMenuOpen]);
+
+  useEffect(() => {
+    setToolsMenuOpen(false);
+  }, [location.pathname]);
 
   return (
     <>
@@ -67,7 +112,46 @@ const Header = ({ AuthComponent }) => {
 
               <div className="hidden lg:flex items-center gap-3 ml-6">
                 <TopNavLink to={docLink.to}>{docLink.label}</TopNavLink>
-                <TopNavLink to={dashboardLink.to}>{dashboardLink.label}</TopNavLink>
+                <div className="relative" ref={toolsMenuRef}>
+                  <button
+                    type="button"
+                    className={`flex items-center gap-1 rounded-lg px-3 py-2 text-sm font-medium transition ${
+                      isToolsActive ? 'bg-pink-50 text-pink-600' : 'text-gray-700 hover:bg-gray-50'
+                    }`}
+                    onClick={() => setToolsMenuOpen(prev => !prev)}
+                    aria-haspopup="true"
+                    aria-expanded={toolsMenuOpen}
+                  >
+                    工具
+                    <svg
+                      className={`h-4 w-4 transition-transform ${toolsMenuOpen ? 'rotate-180' : ''}`}
+                      viewBox="0 0 20 20"
+                      fill="currentColor"
+                      aria-hidden="true"
+                    >
+                      <path d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.21 8.27a.75.75 0 01.02-1.06z" />
+                    </svg>
+                  </button>
+                  {toolsMenuOpen ? (
+                    <div className="absolute right-0 mt-2 w-48 rounded-xl border border-gray-100 bg-white shadow-lg py-2">
+                      {toolLinks.map(link => (
+                        <NavLink
+                          key={link.to}
+                          to={link.to}
+                          className={({ isActive }) =>
+                            `block px-4 py-2 text-sm transition ${
+                              isActive ? 'text-pink-600 bg-pink-50' : 'text-gray-700 hover:bg-gray-50'
+                            }`
+                          }
+                          onClick={() => setToolsMenuOpen(false)}
+                          end
+                        >
+                          {link.label}
+                        </NavLink>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
               </div>
 
             </div>
@@ -104,6 +188,10 @@ const Header = ({ AuthComponent }) => {
   );
 };
 
+/**
+ * @en Render a navigation link in the desktop header.
+ * @zh 渲染桌面端顶部导航的链接按钮。
+ */
 const TopNavLink = ({ to, children }) => {
   return (
     <NavLink
