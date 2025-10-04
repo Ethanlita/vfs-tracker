@@ -220,12 +220,7 @@ Creates a new `Event` for the authenticated user. The request body can include a
 | `createdAt` | String | ISO 8601 creation timestamp | Yes |
 | `updatedAt` | String | ISO 8601 last modification timestamp | No |
 
-**Global Secondary Indexes**:
-
-1. **StatusDateIndex**
-   - Partition Key: `status` (String)
-   - Sort Key: `date` (String)
-   - Purpose: Efficiently query approved events by date for public dashboard
+**Global Secondary Indexes**: None currently configured (GSI优化计划在后续issue中实现)
 
 **Sample Item (with attachments)**:
 ```json
@@ -252,8 +247,7 @@ Creates a new `Event` for the authenticated user. The request body can include a
 **Access Patterns**:
 1. Get all events for a user: Query by `userId`
 2. Get specific event: Get item by `userId` + `eventId`
-3. Get all approved events: Query `StatusDateIndex` by `status = "approved"`
-4. Get approved events in date range: Query `StatusDateIndex` by `status` + date range
+3. Get all approved events: Currently uses Scan with filter on `status = "approved"` (consider adding StatusDateIndex GSI in future for optimization)
 
 ---
 
@@ -274,7 +268,8 @@ Creates a new `Event` for the authenticated user. The request body can include a
 | `updatedAt` | String | ISO 8601 last modification timestamp | No |
 
 **Profile Object Structure** (nested within `profile` attribute):
-- `name` (String, optional): User's display name
+- `name` (String, optional): User's display name for public dashboard
+- `nickname` (String, system-managed): System nickname from Cognito, used in Auth.jsx and MyPage.jsx. Synchronized from Cognito ID Token, not modifiable via API.
 - `isNamePublic` (Boolean, optional): Whether name is shown on public dashboard
 - `socials` (List, optional): Array of social media accounts
 - `areSocialsPublic` (Boolean, optional): Whether social accounts are shown publicly
@@ -315,76 +310,68 @@ Creates a new `Event` for the authenticated user. The request body can include a
 
 ---
 
-### VoiceTests Table
+### VoiceFemTests Table
 
 This table stores the state and results of each voice test session initiated by a user.
 
-**Table Name**: `VoiceTests`
+**Table Name**: `VoiceFemTests`
 
-**Partition Key**: `userOrAnonId` (String)
-**Sort Key**: `sessionId` (String)
+**Partition Key**: `sessionId` (String) - Single partition key for the table
 
 **Attributes**:
 
 | Attribute Name | Type | Description | Required |
 | :--- | :--- | :--- | :--- |
-| `userOrAnonId` | String | User ID (if logged in) or an anonymous ID. Partition Key. | Yes |
-| `sessionId` | String | Unique identifier for the test session (e.g., UUID). Sort Key. | Yes |
+| `sessionId` | String | Unique identifier for the test session (e.g., UUID). Partition Key. | Yes |
+| `userId` | String | User ID (from Cognito sub). Regular attribute, not part of key. | Yes |
 | `status` | String | The current status of the analysis: `pending` \| `processing` \| `done` \| `failed`. | Yes |
 | `createdAt` | String | ISO 8601 timestamp of when the session was created. | Yes |
-| `calibration` | Map | Object containing calibration details. | No |
-| `tests` | List | A list of `Map` objects, each representing a recorded audio segment. | No |
+| `updatedAt` | String | ISO 8601 timestamp of when the session was last updated. | No |
 | `metrics` | Map | A map containing the final calculated acoustic metrics after analysis. | No |
-| `forms` | Map | A map containing the user-submitted questionnaire data. | No |
-| `artifacts` | Map | A map containing S3 URLs for generated files (charts, PDF report). | No |
+| `charts` | Map | A map containing S3 URLs for generated chart files. | No |
+| `reportPdf` | String | S3 URL for the final PDF report (top-level field). | No |
+| `errorMessage` | String | Error message when status is 'failed'. | No |
+| `calibration` | Map | **[未实现/预留]** Object containing calibration details. | No |
+| `tests` | List | **[未实现/预留]** A list of `Map` objects for recorded audio segments. | No |
+| `forms` | Map | **[未实现/预留]** User-submitted questionnaire data. | No |
 
 **Nested Object Structures**:
 
-*   **`calibration` Object**:
-    *   `hasExternal` (Boolean): `true` if external calibration was performed.
-    *   `offsetDb` (Number, optional): The calibration offset in dB, if provided.
-    *   `noiseFloorDbA` (Number, optional): Estimated background noise level in dB(A).
-*   **`tests` Object (in a List)**:
-    *   `step` (String): The wizard step ID where the recording was made.
-    *   `s3Key` (String): The S3 object key for the raw `.wav` audio file.
-    *   `durationMs` (Number): Duration of the recording in milliseconds.
 *   **`metrics` Object**:
     *   `sustained` (Map): Metrics from sustained vowel test (e.g., `spl_dbA`, `f0_mean`, `jitter_local_percent`).
     *   `vrp` (Map): Metrics from voice range profile test (e.g., `f0_min`, `f0_max`, `spl_min`).
     *   `reading` (Map): Metrics from reading passage test (e.g., `duration_s`, `voiced_ratio`).
     *   `spontaneous` (Map): Metrics from spontaneous speech test.
+    *   `questionnaires` (Map): Questionnaire scores (RBH, VHI-9i, TVQ等).
     *   `dsi` (Number, optional): Dysphonia Severity Index score.
-*   **`forms` Object**:
-    *   `RBH` (Map): `{ "R": Number, "B": Number, "H": Number }`
-    *   `VHI9i` (Number): Total score for the VHI-9i or equivalent questionnaire.
-    *   `TVQ` (Map): `{ "total": Number, "percent": Number }` for the TVQ or equivalent.
-*   **`artifacts` Object**:
+*   **`charts` Object**:
     *   `timeSeries` (String): S3 URL for the time-series chart PNG.
     *   `vrp` (String): S3 URL for the VRP chart PNG.
-    *   `formants` (String): S3 URL for the formants chart PNG.
-    *   `reportPdf` (String): S3 URL for the final PDF report.
+    *   `formant` (String): S3 URL for the formant chart PNG (singular form).
+    *   `formant_spl_spectrum` (String): S3 URL for the formant SPL spectrum chart PNG.
+*   **`calibration` Object** **[未实现/预留]**:
+    *   `hasExternal` (Boolean): `true` if external calibration was performed.
+    *   `offsetDb` (Number, optional): The calibration offset in dB, if provided.
+    *   `noiseFloorDbA` (Number, optional): Estimated background noise level in dB(A).
+*   **`tests` Array** **[未实现/预留]**:
+    *   Each item: `{ "step": String, "s3Key": String, "durationMs": Number }`
+    *   Purpose: Store raw audio recording metadata.
+*   **`forms` Object** **[未实现/预留]**:
+    *   `RBH` (Map): `{ "R": Number, "B": Number, "H": Number }`
+    *   `VHI9i` (Number): Total score for the VHI-9i questionnaire.
+    *   `TVQ` (Map): `{ "total": Number, "percent": Number }`
+    *   Note: Current implementation stores questionnaire data in `metrics.questionnaires`.
 
-**Global Secondary Indexes**:
-
-1. **SessionIdIndex**
-   - Partition Key: `sessionId` (String)
-   - Sort Key: `createdAt` (String)
-   - Purpose: Allows for efficient querying of a session by its `sessionId` alone, which is useful for the result polling mechanism.
+**Global Secondary Indexes**: None currently configured (GSI优化计划在后续issue中实现)
 
 **Sample Item**:
 ```json
 {
-  "userOrAnonId": "us-east-1:12345678-1234-1234-1234-123456789012",
   "sessionId": "a1b2c3d4-e5f6-7890-1234-567890abcdef",
+  "userId": "us-east-1:12345678-1234-1234-1234-123456789012",
   "status": "done",
   "createdAt": "2025-09-01T10:00:00.000Z",
-  "calibration": {
-    "hasExternal": false
-  },
-  "tests": [
-    { "step": "1", "s3Key": "voice-tests/us-east-1:123.../a1b2c3d4.../raw/1_1.wav", "durationMs": 5100 },
-    { "step": "2", "s3Key": "voice-tests/us-east-1:123.../a1b2c3d4.../raw/2_1.wav", "durationMs": 8200 }
-  ],
+  "updatedAt": "2025-09-01T10:15:00.000Z",
   "metrics": {
     "sustained": {
       "spl_dbA": 76.8,
@@ -405,24 +392,26 @@ This table stores the state and results of each voice test session initiated by 
       "f0_max": 596,
       "spl_min": 57,
       "spl_max": 91
+    },
+    "questionnaires": {
+      "RBH": { "R": 1, "B": 0, "H": 1 },
+      "VHI9i": 18,
+      "TVQ": { "total": 30, "percent": 42 }
     }
   },
-  "forms": {
-    "RBH": { "R": 1, "B": 0, "H": 1 },
-    "VHI9i": 18,
-    "TVQ": { "total": 30, "percent": 42 }
+  "charts": {
+    "timeSeries": "s3://your-bucket-name/voice-tests/a1b2c3d4.../artifacts/timeSeries.png",
+    "vrp": "s3://your-bucket-name/voice-tests/a1b2c3d4.../artifacts/vrp.png",
+    "formant": "s3://your-bucket-name/voice-tests/a1b2c3d4.../artifacts/formant.png",
+    "formant_spl_spectrum": "s3://your-bucket-name/voice-tests/a1b2c3d4.../artifacts/formant_spl_spectrum.png"
   },
-  "artifacts": {
-    "timeSeries": "s3://your-bucket-name/voice-tests/us-east-1:123.../a1b2c3d4.../artifacts/timeSeries.png",
-    "vrp": "s3://your-bucket-name/voice-tests/us-east-1:123.../a1b2c3d4.../artifacts/vrp.png",
-    "reportPdf": "s3://your-bucket-name/voice-tests/us-east-1:123.../a1b2c3d4.../report.pdf"
-  }
+  "reportPdf": "s3://your-bucket-name/voice-tests/a1b2c3d4.../report.pdf"
 }
 ```
 
 **Access Patterns**:
-1. Get a specific test session: `GetItem` by `userOrAnonId` + `sessionId`.
-2. Get all test sessions for a user: `Query` by `userOrAnonId`.
-3. Get a session by its ID (e.g., for polling results): `Query` the `SessionIdIndex` by `sessionId`.
+1. Get a specific test session: `GetItem` by `sessionId` (partition key).
+2. Poll for session results: `GetItem` by `sessionId`.
+3. Get all test sessions for a user: Requires scanning with filter on `userId` (consider adding GSI in future for optimization).
 
 ---
