@@ -1,3 +1,6 @@
+/**
+ * @file [CN] index.mjs 是一个 AWS Lambda 函数，用于向 DynamoDB 中添加新的嗓音事件记录。
+ */
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient, PutCommand } from "@aws-sdk/lib-dynamodb";
 
@@ -7,7 +10,10 @@ const docClient = DynamoDBDocumentClient.from(client);
 // 使用环境变量或默认表名
 const tableName = process.env.EVENTS_TABLE || "VoiceFemEvents";
 
-// 原生UUID生成函数（无需外部依赖）
+/**
+ * [CN] 生成一个唯一的事件 ID。
+ * @returns {string} 一个唯一的事件 ID 字符串。
+ */
 function generateEventId() {
     const timestamp = Date.now().toString(36);
     const randomPart = Math.random().toString(36).substr(2, 9);
@@ -23,7 +29,10 @@ const corsHeaders = {
 };
 
 /**
- * 从JWT token中提取用户信息 - 专门处理ID Token
+ * [CN] 从 API Gateway 事件对象中提取用户信息，优先解析 Authorization 头中的 ID Token。
+ * @param {object} event - API Gateway Lambda 事件对象。
+ * @returns {{userId: string, email: string, username: string, nickname: string}} 提取出的用户信息。
+ * @throws {Error} 如果未找到有效的 ID token。
  */
 function extractUserFromEvent(event) {
   try {
@@ -88,6 +97,11 @@ function extractUserFromEvent(event) {
   }
 }
 
+/**
+ * [CN] 清理和验证附件数组，确保每个附件对象都包含必需的字段。
+ * @param {Array<object>} raw - 来自请求体的原始附件数组。
+ * @returns {Array<object>|undefined} 一个经过清理的附件对象数组，如果输入无效或为空则返回 undefined。
+ */
 function sanitizeAttachments(raw) {
   if (!raw) return undefined;
   if (!Array.isArray(raw)) {
@@ -105,6 +119,11 @@ function sanitizeAttachments(raw) {
   return sanitized.length ? sanitized : undefined;
 }
 
+/**
+ * [CN] Lambda 函数的主处理程序。它处理 CORS 预检请求，验证输入，并将新事件写入 DynamoDB。
+ * @param {object} event - API Gateway Lambda 事件对象。
+ * @returns {Promise<object>} 一个 API Gateway 响应对象。
+ */
 export const handler = async (event) => {
     try {
         // 处理OPTIONS预检请求

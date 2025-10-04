@@ -1,6 +1,15 @@
+/**
+ * @file [CN] 该文件包含一个 AWS Lambda 处理程序，用于根据用户的音域推荐歌曲。
+ */
+
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
-// Helper function to return a consistent response format
+/**
+ * [CN] 创建一个具有 CORS 标头的标准化 API Gateway 响应对象。
+ * @param {number} statusCode - HTTP 状态码。
+ * @param {object} body - 要在响应正文中进行 JSON 字符串化的对象。
+ * @returns {object} 格式化的 API Gateway 响应对象。
+ */
 const createResponse = (statusCode, body) => {
     return {
         statusCode,
@@ -14,6 +23,12 @@ const createResponse = (statusCode, body) => {
     };
 };
 
+/**
+ * [CN] 一个 AWS Lambda 处理程序，接收用户的最低和最高音符，
+ * 并使用 Google Gemini API 生成一个包含 10 首适合该音域的歌曲列表。
+ * @param {object} event - API Gateway Lambda 事件对象。它应包含一个带有“lowestNote”和“highestNote”字段的 JSON 正文。
+ * @returns {Promise<object>} 一个 API Gateway 响应，其中包含一个歌曲推荐列表或错误消息。
+ */
 export const handler = async (event) => {
     console.log("🚀 --- Lambda Invocation Start: get-song-recommendations --- 🚀");
     // Log essential request context
