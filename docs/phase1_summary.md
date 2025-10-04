@@ -1,35 +1,38 @@
-# Phase 1 快速总结：发现的问题一览表
+# Phase 1 快速总结：发现的问题一览表（修订版）
 
-**完整报告**: 请查看 `phase1_dynamodb_analysis.md`
+**完整报告**: 请查看 `phase1_dynamodb_analysis.md`  
+**状态**: 已根据用户反馈修订 ✅
 
 ---
 
-## 问题清单
+## 问题清单（修订后）
 
-### 🔴 关键问题（必须修复）
+### 🔴 需要修改文档（本issue范围内）
 
-| # | 问题 | 位置 | 影响 |
+| # | 问题 | 位置 | 行动 |
 |---|------|------|------|
-| 1 | **主键字段名不匹配** | VoiceFemTests | 文档：`userOrAnonId` + `sessionId`<br>实际：`userId` + `sessionId` (?) |
-| 2 | **表名错误** | 文档 | 文档：`VoiceTests`<br>实际：`VoiceFemTests` |
-| 3 | **必需字段缺失** | VoiceFemUsers | 2条记录缺少`email`和`createdAt` (15%) |
-| 4 | **结构不匹配** | VoiceFemTests | `artifacts` → 实际是 `charts`<br>`reportPdf`是顶层字段而非嵌套 |
+| 1 | **表名错误** | 文档 | `VoiceTests` → `VoiceFemTests` |
+| 2 | **主键字段不匹配** | VoiceFemTests | 主键：`sessionId`（单主键）<br>普通字段：`userOrAnonId` → `userId` |
+| 3 | **结构不匹配** | VoiceFemTests | `artifacts` → `charts`<br>`reportPdf`移到顶层 |
+| 4 | **GSI不存在** | 两个表 | 移除StatusDateIndex和SessionIdIndex定义 |
+| 5 | **未实现字段** | VoiceFemTests | 标记calibration/tests/forms为"未实现" |
+| 6 | **缺少字段文档** | 多处 | 添加errorMessage, nickname说明 |
 
-### 🟡 性能与一致性问题
+### 🟡 需要创建后续issue（超出范围）
 
-| # | 问题 | 位置 | 影响 |
+| # | 问题 | 位置 | 行动 |
 |---|------|------|------|
-| 5 | **GSI未使用** | getAllPublicEvents | 用Scan代替Query，性能差 |
-| 6 | **未使用字段** | VoiceFemTests | `calibration`, `tests`, `forms` (0%存在) |
-| 7 | **字段必需性不准确** | 多处 | `updatedAt`文档说可选，实际100%存在 |
+| 7 | **数据质量** | VoiceFemUsers | 创建issue：修复2条记录的缺失字段 |
+| 8 | **性能优化** | getAllPublicEvents | 创建issue：添加GSI，使用Query代替Scan |
+| 9 | **bio字段来源** | VoiceFemUsers | 创建issue：调查bio字段是否应该存在 |
 
-### 🟢 文档完善问题
+### ✅ 文档定义正确（无需修改）
 
-| # | 问题 | 位置 | 影响 |
-|---|------|------|------|
-| 8 | **缺少字段文档** | VoiceFemUsers | `bio`, `nickname`未记录 |
-| 9 | **缺少字段文档** | VoiceFemTests | `errorMessage`未记录 |
-| 10 | **nickname处理未说明** | VoiceFemUsers | 来自Cognito，处理逻辑未文档化 |
+| # | 项目 | 说明 |
+|---|------|------|
+| 10 | **updatedAt可选性** | 从语义上应保持可选，文档正确 |
+| 11 | **profile可选性** | 保持可选是合理设计 |
+| 12 | **Lambda实现** | 大部分正确，以代码为准更新文档 |
 
 ---
 
@@ -51,15 +54,16 @@
 
 ---
 
-## 待确认问题
+## 用户反馈已确认 ✅
 
-请确认以下问题以便继续Phase 2:
+基于用户comments，所有问题已明确：
 
-1. ❓ **VoiceFemTests主键**: 运行 `aws dynamodb describe-table --table-name VoiceFemTests` 确认实际Key Schema
-2. ❓ **匿名用户支持**: 是否需要userOrAnonId功能？还是所有用户都要求认证？
-3. ❓ **GSI存在性**: StatusDateIndex是否存在？运行 `aws dynamodb describe-table --table-name VoiceFemEvents --query 'Table.GlobalSecondaryIndexes'`
-4. ❓ **未使用字段**: calibration/tests/forms是未来功能还是应从文档移除？
-5. ❓ **数据修复**: 是否同意修复VoiceFemUsers中的2条不完整记录？
+1. ✅ **主键结构**: IaC准确，`sessionId`是单主键，`userId`是普通字段
+2. ✅ **GSI不存在**: IaC从AWS导出是准确的，文档中的GSI定义应移除
+3. ✅ **updatedAt**: 从语义上应保持可选，文档定义正确
+4. ✅ **未实现字段**: 标记为"未实现"而非移除，保留供后续开发
+5. ✅ **数据质量**: 创建issue后续处理历史数据问题
+6. ✅ **bio字段**: 不应该存在，需要调查来源
 
 ---
 
@@ -109,4 +113,8 @@
 
 ---
 
-**下一步**: 用户确认上述问题后，进入Phase 2 (API文档审查)
+## 下一步行动
+
+**立即**: 修改data_structures.md等文档（P0任务）  
+**然后**: 创建3个后续issue（P1任务）  
+**最后**: 进入Phase 2 (API文档审查)

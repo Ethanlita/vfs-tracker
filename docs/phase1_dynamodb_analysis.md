@@ -61,24 +61,24 @@ attachments:   73% ✅  (可选字段)
 
 ### 1.3 差异与建议
 
-#### ⚠️ 差异1: updatedAt字段的必需性
+#### ✅ 正确: updatedAt字段保持可选
 
-- **文档**: 标记为可选 (Optional)
+- **文档**: 标记为可选 (Optional) ✅
 - **实际**: 100%的记录都有此字段
 - **原因**: `addVoiceEvent` Lambda在创建时就设置了createdAt和updatedAt为相同值
-- **影响**: 低 - 实际上总是存在
-- **建议**: 将updatedAt标记为必需字段以反映实际情况
+- **分析**: 虽然当前实现在创建时填充了此字段，但从语义上讲，如果事件从未被修改，updatedAt可以不存在。文档定义是正确的。
+- **结论**: 保持updatedAt为可选字段，文档无需修改
 
-#### ⚠️ 差异2: GSI的使用
+#### ❌ 差异2: GSI不存在
 
 - **文档**: 定义了StatusDateIndex GSI
-- **IaC**: VoiceFemEvents-structure.json中未显示GSI定义
-- **Lambda实现**: `getAllPublicEvents`使用`ScanCommand + FilterExpression`而非`Query StatusDateIndex`
+- **IaC**: VoiceFemEvents-structure.json中未显示GSI定义（IaC是从AWS导出的，准确反映实际状态）
+- **实际**: GSI不存在于AWS中
+- **Lambda实现**: `getAllPublicEvents`使用`ScanCommand + FilterExpression`是正确的（因为GSI不存在）
 - **性能影响**: Scan操作在数据量增长时性能会下降
 - **建议**: 
-  1. 确认GSI是否真实存在于AWS中
-  2. 如果存在，更新Lambda使用Query GSI优化性能
-  3. 如果不存在，在IaC中创建或从文档中移除
+  1. 从文档中移除StatusDateIndex GSI定义
+  2. 创建新issue：添加StatusDateIndex GSI以优化getAllPublicEvents性能（超出本issue范围）
 
 #### ✅ 正确实现: attachments隐私处理
 
@@ -134,7 +134,7 @@ bio:                  84% (11/13) ⚠️ (文档未提及)
 
 ### 2.3 差异与建议
 
-#### ❌ 严重差异1: 必需字段缺失
+#### ❌ 差异1: 必需字段缺失（历史数据问题）
 
 **问题**: 2条用户记录(15%)缺少`email`和`createdAt`字段
 
@@ -142,50 +142,63 @@ bio:                  84% (11/13) ⚠️ (文档未提及)
 - 2个userId（从13条记录中）
 
 **根因分析**:
+- email和createdAt都应该是必需字段：
+  - email是Cognito的必填字段，应该始终从Cognito同步
+  - createdAt记录用户首次注册时间，是必需的审计字段
 - 检查了所有Lambda函数：
-  - ✅ `vfsTrackerUserProfileSetup`: 正确设置email和createdAt
+  - ✅ `vfsTrackerUserProfileSetup`: 正确设置email和createdAt（从Cognito获取）
   - ✅ `updateUserProfile`: 不创建新记录，只更新
-  - ⚠️ `getUserProfile`: 返回基本profile但不写入数据库
-
-**可能原因**: 早期测试数据或手动创建的记录
+  - ✅ `getUserProfile`: 返回基本profile但不写入数据库（正确行为）
+- **可能原因**: 用户注册较早，当时的代码版本尚未实现这些字段的写入
 
 **数据修复方案**:
-```sql
--- 方案1: 如果能从Cognito获取email
-UPDATE VoiceFemUsers
-SET email = <从Cognito获取>,
-    createdAt = updatedAt OR <当前时间>
-WHERE email IS NULL
+- 创建新issue处理历史数据清理：从Cognito获取email并补充缺失的字段
+- 修复脚本伪代码：
+  ```javascript
+  // 从Cognito获取用户信息并更新DynamoDB
+  for (userId with missing email/createdAt) {
+    cognitoUser = await cognito.getUser(userId);
+    await dynamodb.update({
+      userId: userId,
+      email: cognitoUser.email,
+      createdAt: updatedAt || cognitoUser.userCreateDate || now()
+    });
+  }
+  ```
 
--- 方案2: 标记为测试数据并删除
-```
-
-**预防措施**:
-1. 确保所有创建用户记录的代码路径都设置email和createdAt
-2. 考虑在DynamoDB表上添加Required validation（通过应用层或Lambda触发器）
+**结论**: 
+- 文档定义正确（email和createdAt应为必需）
+- Lambda实现正确
+- 需要后续issue处理历史数据清理
 
 #### ⚠️ 差异2: 未文档化的字段
 
 **profile.nickname**:
 - **文档**: 未提及
-- **实际**: 84%的记录存在
+- **实际**: 84%的记录存在（与email/createdAt缺失是同一批历史数据）
+- **用途**: 系统内的显示名称，在Auth.jsx和MyPage.jsx中展示
 - **Lambda处理**: 
   - `getUserProfile`从ID Token注入nickname
-  - `updateUserProfile`忽略请求中的nickname
-  - `vfsTrackerUserProfileSetup`将nickname写入profile
-- **建议**: 在文档中说明nickname是从Cognito ID Token获取并写入profile的字段
+  - `updateUserProfile`忽略请求中的nickname（由Cognito管理）
+  - `vfsTrackerUserProfileSetup`将nickname从Cognito写入profile
+- **数据源**: nickname是Cognito的必填字段，应始终与Cognito保持一致
+- **建议**: 在文档中添加nickname字段说明，标注为从Cognito同步的系统字段
 
 **profile.bio**:
 - **文档**: 未提及
 - **实际**: 84%的记录存在
+- **问题**: ⚠️ **此字段不应该存在** - 需要调查是哪段代码创建了这个字段
 - **Lambda处理**: `vfsTrackerUserProfileSetup`和`updateUserProfile`都支持bio字段
-- **建议**: 在文档中添加bio字段定义
+- **建议**: 调查bio字段的来源，考虑是否应该从代码和文档中移除
 
-#### ⚠️ 差异3: 字段的实际必需性
+#### ✅ 正确: 字段的可选性定义合理
 
 - **profile字段**: 文档标记为可选，实际100%存在
+  - 分析：profile在当前实现中总是存在，但从数据模型角度，用户可以选择不填写个人资料
+  - 结论：保持为可选是合理的设计
 - **updatedAt字段**: 文档标记为可选，实际100%存在
-- **建议**: 考虑将这些字段标记为"实际上总是存在"或"必需"
+  - 分析：从语义上讲，未修改的记录可以不设置updatedAt
+  - 结论：保持为可选是正确的
 
 ---
 
@@ -257,46 +270,45 @@ forms:             0% ❌ (文档定义但不存在)
 
 ### 3.3 差异与建议
 
-#### ❌ 严重差异1: 表名不匹配
+#### ❌ 严重差异1: 表名不匹配（需修改文档）
 
 - **文档**: `VoiceTests`
 - **实际**: `VoiceFemTests`
-- **影响**: 中等 - 文档阅读者会困惑
-- **建议**: 更新所有文档使用正确的表名`VoiceFemTests`
+- **影响**: 高 - 文档与实际表名不符
+- **行动**: 更新data_structures.md等所有文档，将`VoiceTests`改为`VoiceFemTests`
 
-#### ❌ 严重差异2: 主键字段名完全不匹配
+#### ❌ 严重差异2: 主键字段名不匹配（需修改文档）
 
 - **文档定义**: Partition Key是`userOrAnonId`
-- **实际数据**: 字段名是`userId`，`userOrAnonId`字段不存在
-- **IaC定义**: VoiceFemTests-structure.json只显示`sessionId`为HASH key
+- **实际数据**: 字段名是`userId`，`userOrAnonId`字段不存在（0/449条记录）
+- **IaC定义**: VoiceFemTests-structure.json显示`sessionId`为HASH key（IaC从AWS导出，准确）
 - **Lambda实现**: `online-praat-analysis/handler.py`使用`userId`字段
 
-**影响**: 高 - 这是关键的主键不一致
+**影响**: 高 - 文档定义的主键字段实际不存在
 
-**需要确认**:
-1. AWS控制台中表的实际Key Schema是什么？
-2. 是只有sessionId作为HASH key（单主键）？
-3. 还是userId+sessionId复合主键？
+**实际Key Schema**（基于IaC）:
+- Partition Key: `sessionId` (String) - 单主键
+- `userId`是普通属性字段，不是主键的一部分
 
 **Lambda分析**:
 ```python
 # handler.py 第398行 - 创建session
 table.put_item(
     Item={
-        'sessionId': session_id,
-        'userId': user_id,
+        'sessionId': session_id,  # 主键
+        'userId': user_id,        # 普通字段
         'status': 'created',
         'createdAt': int(datetime.now(timezone.utc).timestamp())
     }
 )
 ```
 
-**建议**:
-1. 运行`aws dynamodb describe-table --table-name VoiceFemTests`确认实际Key Schema
-2. 更新文档以反映实际结构
-3. 如果确实需要userOrAnonId功能（匿名用户），考虑数据迁移
+**行动**:
+1. 更新文档：主键从`userOrAnonId + sessionId`改为`sessionId`（单主键）
+2. 更新文档：将`userOrAnonId`字段定义改为`userId`
+3. 匿名用户功能：如需要，可在后续issue中实现（超出本issue范围）
 
-#### ❌ 严重差异3: artifacts vs charts 结构完全不同
+#### ❌ 严重差异3: artifacts vs charts 结构完全不同（需修改文档）
 
 **文档定义的artifacts**:
 ```javascript
@@ -308,74 +320,78 @@ table.put_item(
 }
 ```
 
-**实际数据结构**:
+**实际数据结构**（Lambda实现）:
 ```javascript
 {
-  charts: {                        // 字段名不同
+  charts: {                        // 字段名是charts，非artifacts
     timeSeries: String,
     vrp: String,
-    formant: String,               // 单数
-    formant_spl_spectrum: String   // 新字段
+    formant: String,               // 单数形式
+    formant_spl_spectrum: String   // 新增字段
   },
   reportPdf: String                // 顶层字段，非嵌套
 }
 ```
 
-**Lambda实现** (analysis.py):
+**Lambda实现** (analysis.py第189行):
 ```python
-# 第189行 - 保存metrics
 result_data = {
     'metrics': _to_dynamo(metrics),
-    'charts': _to_dynamo(artifact_urls),
-    'reportPdf': report_pdf_url,
+    'charts': _to_dynamo(artifact_urls),    # 使用charts
+    'reportPdf': report_pdf_url,            # 顶层字段
     ...
 }
 ```
 
-**建议**: 更新文档以匹配实际实现
+**行动**: 以Lambda实现为准，更新data_structures.md:
+1. 将`artifacts`改为`charts`
+2. `reportPdf`移到顶层
+3. `formants`改为`formant`（单数）
+4. 添加`formant_spl_spectrum`字段
 
-#### ⚠️ 差异4: 文档定义但从未使用的字段
+#### ⚠️ 差异4: 文档定义但从未使用的字段（标记为未实现）
 
-以下字段在文档中有详细定义，但实际数据中完全不存在：
+以下字段在文档中有详细定义，但实际数据中完全不存在（0/449条记录）：
 
 - **calibration** (0%): 
   ```javascript
   { hasExternal: Boolean, offsetDb: Number, noiseFloorDbA: Number }
   ```
+  - 用途：校准信息
+  - 状态：未实现功能
   
 - **tests** (0%): 
   ```javascript
   [{ step: String, s3Key: String, durationMs: Number }]
   ```
+  - 用途：原始录音文件信息
+  - 状态：原始数据存储在S3，不保存到DynamoDB
   
 - **forms** (0%): 
   ```javascript
   { RBH: Object, VHI9i: Number, TVQ: Object }
   ```
+  - 用途：问卷数据
+  - 状态：实际数据在`metrics.questionnaires`中
 
-**实际情况**: 
-- 这些数据可能存储在S3中的原始文件
-- metrics字段包含了questionnaires信息，对应forms
-- 分析结果直接保存，不保存原始tests数组
+**行动**: 在文档中将这些字段标记为"预留/未实现"，保留定义以供后续开发参考
 
-**建议**:
-1. 如果这些字段是未来计划的功能，标记为"预留"或"未实现"
-2. 如果不再需要，从文档中移除
-3. 考虑添加说明：原始数据存储在S3，DynamoDB只保存分析结果
-
-#### ⚠️ 差异5: 未文档化的字段
+#### ⚠️ 差异5: 未文档化的字段（需添加到文档）
 
 **errorMessage** (2%存在):
 - 用于记录failed状态的错误信息
-- 例子: `"unterminated triple-quoted string literal (detected at line 549)"`
-- **建议**: 在文档中添加此字段定义
+- 示例: `"unterminated triple-quoted string literal (detected at line 549)"`
+- 存在条件：仅在`status='failed'`时存在
+- **行动**: 在文档中添加errorMessage字段说明（可选字段）
 
-#### ⚠️ 差异6: GSI定义和使用
+#### ❌ 差异6: GSI不存在（需修改文档）
 
 - **文档**: 定义了SessionIdIndex GSI
-- **IaC**: VoiceFemTests-structure.json未显示GSI
-- **Lambda**: 代码中查询使用sessionId，但未确认是否使用GSI
-- **建议**: 确认GSI存在并更新IaC文档
+- **IaC**: VoiceFemTests-structure.json中无GSI定义（IaC从AWS导出，准确反映实际）
+- **实际**: SessionIdIndex GSI不存在于AWS中
+- **行动**: 
+  1. 从文档中移除SessionIdIndex GSI定义
+  2. 创建新issue：如需通过sessionId查询，后续添加GSI（超出本issue范围）
 
 ---
 
@@ -393,33 +409,19 @@ result_data = {
 
 **与文档一致性**: 完全一致 ✅
 
-#### ⚠️ getAllPublicEvents (index.mjs)
+#### ✅ getAllPublicEvents (index.mjs)
 **行为**:
-- 使用`ScanCommand + FilterExpression`查询status=approved的记录
-- 从响应中剥离attachments字段（隐私保护）
-- 使用BatchGetCommand批量获取用户显示名称
+- 使用`ScanCommand + FilterExpression`查询status=approved的记录（因为GSI不存在，这是正确实现）
+- 从响应中剥离attachments字段（隐私保护）✅
+- 使用BatchGetCommand批量获取用户显示名称 ✅
 - 手动按date降序排序
 
-**性能问题**:
-```javascript
-// 当前实现
-const command = new ScanCommand({
-    TableName: eventsTableName,
-    FilterExpression: "#st = :status_approved",
-    ...
-});
+**性能考虑**:
+- 当前使用Scan是因为StatusDateIndex GSI不存在
+- 在数据量增长时性能会下降
+- 建议：创建新issue，添加StatusDateIndex GSI以优化性能（超出本issue范围）
 
-// 建议实现（如果GSI存在）
-const command = new QueryCommand({
-    TableName: eventsTableName,
-    IndexName: "StatusDateIndex",
-    KeyConditionExpression: "#st = :status_approved",
-    ScanIndexForward: false,  // 降序
-    ...
-});
-```
-
-**建议**: 如果StatusDateIndex GSI存在，应使用Query优化性能
+**与文档一致性**: ✅ Lambda实现正确
 
 #### ✅ getVoiceEvents (index.mjs)
 **行为**:
@@ -441,14 +443,14 @@ const command = new QueryCommand({
 
 ### 4.2 VoiceFemUsers相关函数
 
-#### ⚠️ getUserProfile (index.mjs)
+#### ✅ getUserProfile (index.mjs)
 **行为**:
 - 从ID Token提取userId
 - 使用GetCommand查询
 - 如果用户不存在，返回基本profile（不写入数据库）
 - 将ID Token的nickname注入到返回的profile中
 
-**潜在问题**:
+**设计考虑**:
 ```javascript
 // 第172-186行：用户不存在时
 const basicProfile = {
@@ -468,10 +470,14 @@ const basicProfile = {
 return createResponse(200, basicProfile);
 ```
 
-- 返回了createdAt但未写入数据库
-- 用户体验：看起来有profile但实际不存在于数据库
+**分析**:
+- 返回基本profile但不写入是合理的设计
+- 用户应通过`vfsTrackerUserProfileSetup`或`updateUserProfile`显式创建/更新profile
+- 这种设计避免了隐式创建可能导致的数据不一致
 
-**建议**: 考虑在此时写入基本profile到数据库
+**与文档一致性**: ✅ 实现合理
+
+**改进建议**: 可创建新issue考虑是否在此时写入基本profile（超出本issue范围）
 
 #### ✅ updateUserProfile (index.mjs)
 **行为**:
@@ -497,14 +503,14 @@ return createResponse(200, basicProfile);
 
 ### 4.3 VoiceFemTests相关函数
 
-#### ⚠️ online-praat-analysis (handler.py)
+#### ✅ online-praat-analysis (handler.py) - 以函数为准，修改文档
 
 **POST /sessions** (第398行):
 ```python
 table.put_item(
     Item={
-        'sessionId': session_id,
-        'userId': user_id,  # ← 使用userId而非userOrAnonId
+        'sessionId': session_id,  # 主键
+        'userId': user_id,        # 普通字段（非userOrAnonId）
         'status': 'created',
         'createdAt': int(datetime.now(timezone.utc).timestamp())
     }
@@ -515,98 +521,92 @@ table.put_item(
 ```python
 result_data = {
     'metrics': _to_dynamo(metrics),
-    'charts': _to_dynamo(artifact_urls),  # ← charts而非artifacts
-    'reportPdf': report_pdf_url,          # ← 顶层字段
+    'charts': _to_dynamo(artifact_urls),  # 字段名是charts
+    'reportPdf': report_pdf_url,          # 顶层字段
     'status': 'done',
     'updatedAt': int(datetime.now(timezone.utc).timestamp())
 }
 table.update_item(...)
 ```
 
-**与文档不一致**:
-- 使用userId代替userOrAnonId
-- 使用charts代替artifacts
-- reportPdf是顶层字段
-- 不保存calibration、tests、forms字段
+**结论**:
+- Lambda实现是事实标准，文档需要更新以匹配实现
+- 使用`userId`字段（文档应改）
+- 使用`charts`对象（文档应改）
+- `reportPdf`是顶层字段（文档应改）
+- 不保存calibration、tests、forms字段（文档应标记为"未实现"）
+
+**行动**: 更新data_structures.md以匹配Lambda实现
 
 ---
 
 ## 5. 总结与优先级建议
 
-### 5.1 关键发现总结
+### 5.1 关键发现总结（修订版）
 
-| 类别 | 发现 | 严重程度 |
-|------|------|----------|
-| 字段命名 | VoiceFemTests: userId vs userOrAnonId | 🔴 高 |
-| 表名 | VoiceTests vs VoiceFemTests | 🔴 高 |
-| 数据质量 | VoiceFemUsers: 2条记录缺少email和createdAt | 🔴 高 |
-| 结构差异 | VoiceFemTests: artifacts vs charts结构 | 🔴 高 |
-| 未使用字段 | calibration, tests, forms (0%存在) | 🟡 中 |
-| GSI使用 | StatusDateIndex未被getAllPublicEvents使用 | 🟡 中 |
-| 未文档化字段 | bio, errorMessage, nickname处理 | 🟢 低 |
-| 字段必需性 | updatedAt实际上总是存在 | 🟢 低 |
+| 类别 | 发现 | 需要的行动 | 严重程度 |
+|------|------|-----------|----------|
+| 表名 | VoiceTests vs VoiceFemTests | 修改文档 | 🔴 高 |
+| 主键字段 | userOrAnonId不存在，实际为userId | 修改文档 | 🔴 高 |
+| 结构差异 | artifacts vs charts，reportPdf位置 | 修改文档 | 🔴 高 |
+| GSI定义 | 文档定义的GSI不存在 | 修改文档+创建issue | 🟡 中 |
+| 数据质量 | 2条记录缺字段 | 创建issue后续处理 | 🟡 中 |
+| 未实现字段 | calibration, tests, forms | 标记为"未实现" | 🟡 中 |
+| 未文档化字段 | errorMessage, nickname, bio | 添加到文档 | 🟢 低 |
+| 字段可选性 | updatedAt定义正确 | 无需修改 ✅ | N/A |
 
-### 5.2 修复优先级
+### 5.2 修复优先级（修订版）
 
-#### 🔴 P0 - 高优先级（影响功能正确性）
+#### 🔴 P0 - 立即修改文档（本issue范围内）
 
-1. **确认VoiceFemTests主键结构**
-   ```bash
-   aws dynamodb describe-table --table-name VoiceFemTests --query 'Table.KeySchema'
-   ```
-   - 如果是单主键（sessionId），更新文档移除userOrAnonId
-   - 如果是复合主键，确认实际字段名并更新文档
+1. **更新VoiceFemTests表名**
+   - 全局替换：`VoiceTests` → `VoiceFemTests`
+   - 影响文件：data_structures.md, API_Gateway_Documentation.md, online_praat_plan.md
 
-2. **修复VoiceFemUsers数据质量**
-   - 识别缺少email和createdAt的2条记录
-   - 从Cognito获取email并补充
-   - 设置createdAt（使用updatedAt或当前时间）
+2. **更新VoiceFemTests主键定义**
+   - 主键：从`userOrAnonId + sessionId`改为`sessionId`（单主键，IaC已确认）
+   - 普通字段：将`userOrAnonId`改为`userId`
 
-3. **更新表名**
-   - 全局替换：VoiceTests → VoiceFemTests
-   - 文件：data_structures.md, online_praat_plan.md, online_praat_detailed_plan.md
+3. **更新VoiceFemTests结构定义**（以Lambda实现为准）
+   - 将`artifacts`改为`charts`
+   - 将`reportPdf`从charts内移到顶层
+   - `formants` → `formant`（单数）
+   - 添加`formant_spl_spectrum`字段
 
-4. **更新VoiceFemTests的artifacts结构定义**
-   - 将artifacts重命名为charts
-   - 移除reportPdf从charts内部，标记为顶层字段
-   - 更新formants为formant（单数）
-   - 添加formant_spl_spectrum字段
-   - 添加errorMessage字段说明
+4. **移除不存在的GSI定义**
+   - VoiceFemEvents: 移除StatusDateIndex GSI定义
+   - VoiceFemTests: 移除SessionIdIndex GSI定义
+   - （IaC从AWS导出，准确反映实际，GSI确实不存在）
 
-#### 🟡 P1 - 中优先级（影响性能和一致性）
+5. **标记未实现字段**
+   - 将calibration, tests, forms标记为"预留/未实现"
+   - 保留定义供后续开发参考
 
-5. **确认并优化GSI使用**
-   ```bash
-   aws dynamodb describe-table --table-name VoiceFemEvents --query 'Table.GlobalSecondaryIndexes'
-   aws dynamodb describe-table --table-name VoiceFemTests --query 'Table.GlobalSecondaryIndexes'
-   ```
-   - 如果StatusDateIndex存在，更新getAllPublicEvents使用Query
-   - 如果不存在，创建GSI或从文档移除
+6. **添加缺失字段文档**
+   - 添加errorMessage字段（可选，status='failed'时存在）
+   - 添加nickname字段说明（从Cognito同步，系统字段）
+   - bio字段标记为"需要调查来源"
 
-6. **标准化updatedAt字段**
-   - 决定是否标记为必需
-   - 确保所有创建操作都设置此字段
+#### 🟡 P1 - 创建后续issue（超出本issue范围）
 
-7. **移除或标记未使用的字段**
-   - calibration, tests, forms在VoiceFemTests中不存在
-   - 选项A：标记为"未实现/预留"
-   - 选项B：完全移除并说明数据存储在S3
+7. **数据清理issue**: "修复VoiceFemUsers历史数据缺失字段"
+   - 从Cognito获取email和nickname
+   - 补充createdAt时间戳（2条记录）
 
-#### 🟢 P2 - 低优先级（文档完善）
+8. **性能优化issue**: "添加GSI提升DynamoDB查询性能"
+   - VoiceFemEvents: 添加StatusDateIndex GSI
+   - 更新getAllPublicEvents使用Query代替Scan
+   - 评估VoiceFemTests是否需要SessionIdIndex GSI
 
-8. **添加缺失字段文档**
-   - VoiceFemUsers.profile.bio
-   - VoiceFemUsers.profile.nickname（说明来源）
-   - VoiceFemTests.errorMessage
+9. **代码审查issue**: "调查bio字段来源并决定是否保留"
+   - 确认bio字段是否为计划功能
+   - 如不需要，从Lambda和文档中移除
 
-9. **说明nickname的特殊处理**
-   - 来自Cognito ID Token
-   - 由Lambda注入，不可通过API修改
-   - 存储在profile中但每次从Token读取
+#### ✅ 无需修改
 
-10. **更新IaC模板**
-    - 如果GSI存在，添加到IaC定义
-    - 确保Key Schema定义完整
+10. **updatedAt字段** - 文档定义为可选是正确的，保持现状
+11. **profile字段** - 文档定义为可选是合理的，保持现状
+12. **Lambda函数** - 大部分实现正确，以代码为准更新文档
 
 ### 5.3 数据迁移需求
 
@@ -665,20 +665,37 @@ for (const user of usersWithoutEmail) {
 - [x] 对比文档与实际数据结构
 - [x] 分析17个Lambda函数的数据访问模式
 - [x] 生成详细差异报告（本文档）
+- [x] 根据用户反馈修订分析结论
 
-### 等待用户确认
+### 用户反馈已确认 ✅
 
-**需要用户回答的问题**:
+基于用户comment，以下问题已明确：
 
-1. VoiceFemTests的主键结构是什么？（单主键还是复合主键？）
-2. 是否需要支持匿名用户（userOrAnonId功能）？
-3. StatusDateIndex GSI是否存在？是否应该使用？
-4. calibration、tests、forms字段是未来功能还是应该移除？
-5. 是否同意修复VoiceFemUsers中的2条不完整记录？
+1. ✅ **VoiceFemTests主键**: IaC准确，单主键`sessionId`，`userId`是普通字段
+2. ✅ **GSI不存在**: IaC从AWS导出是准确的，文档中的GSI定义需要移除
+3. ✅ **updatedAt可选性**: 从语义上应保持可选，文档定义正确
+4. ✅ **未实现字段**: calibration/tests/forms标记为"未实现"而非移除
+5. ✅ **数据质量问题**: email/createdAt缺失是历史数据问题，创建issue后续处理
+6. ✅ **bio字段**: 不应该存在，需要调查来源
+
+### 立即行动项 📝
+
+本issue范围内需要完成：
+- [ ] 更新data_structures.md（表名、主键、结构定义）
+- [ ] 移除不存在的GSI定义
+- [ ] 添加缺失字段文档（errorMessage, nickname说明）
+- [ ] 标记未实现字段
+
+### 后续issue ⏭️
+
+需要创建的新issue：
+1. 数据清理：修复VoiceFemUsers历史数据
+2. 性能优化：添加GSI提升查询性能  
+3. 代码审查：调查bio字段来源
 
 ### Phase 2 准备 📋
 
-用户确认后，将进行：
+完成文档修改后，将进行：
 - [ ] API Gateway文档审查（API_Gateway_Documentation.md）
 - [ ] Lambda实现与API文档对比
 - [ ] 记录API定义与实现的差异
