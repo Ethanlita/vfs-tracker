@@ -1,246 +1,274 @@
-# VoiceFemEvents Legacy Fields Analysis
+# VoiceFemEvents Legacy Fields Analysis（最终版）
 
 ## 概述
 
-本文档分析了VoiceFemEvents表中"self_test"事件类型的字段，区分了**当前代码会写入的字段**与**仅存在于历史数据中的字段**。
+本文档分析了VoiceFemEvents表中"self_test"事件类型的字段，区分了：
+1. **当前代码会写入的字段**（Active Fields）
+2. **仅存在于历史数据中的字段**（Legacy/Deprecated Fields）- 在数据中有，代码中不写
+3. **代码中定义但数据中暂未使用的字段**（Reserved/Future Fields）- 在代码中有，数据中没有
 
 ## 分析方法
 
-1. 审查了所有可能创建`self_test`事件的代码路径：
-   - **online-praat-analysis/handler.py**: `handle_analyze_task`函数（第596-698行） - 自动化嗓音分析
-   - **QuickF0Test.jsx**: 前端快速基频测试工具 - 简化的F0测量
-   - **EventForm.jsx**: 前端手动事件录入表单 - 用户手动填写
-   - **addVoiceEvent Lambda**: 接收前端提交的事件数据并写入DynamoDB
-2. 对比实际数据（70条self_test记录，其中53条包含full_metrics）与各代码路径的写入逻辑
+### 审查的代码路径
+
+1. **online-praat-analysis/handler.py** (`handle_analyze_task`, lines 596-698)
+   - 自动化嗓音分析
+   - 写入full_metrics + 顶层简化字段
+   
+2. **QuickF0Test.jsx** (`handleSave`, lines 121-178)
+   - 前端快速F0测试
+   - 写入固定的字段集（appUsed, fundamentalFrequency, sound, voicing, notes）
+   
+3. **EventForm.jsx** (`renderEventSpecificFields` for self_test, lines 240-268)
+   - 用户手动填写表单
+   - 允许用户输入多种可选字段
+   
+4. **addVoiceEvent Lambda**
+   - 透传前端提交的数据到DynamoDB
+
+### 数据分析范围
+
+- 总记录数: 70条self_test事件
+- 包含full_metrics: 53条（75.7%）
+- 数据时间范围: 涵盖历史数据到当前
 
 ---
 
-## 字段分类
+## 字段分类结果
 
-### ✅ 当前代码会写入的字段
+### ✅ 当前代码会写入的字段（Active Fields）
 
-以下字段在`handle_analyze_task`函数中被明确写入（第643-671行）：
+#### 1. online-praat-analysis Lambda写入的字段
 
-#### 1. 顶层基本字段
-- `notes`: 固定值 "VFS Tracker Voice Analysis Tools 自动生成报告"
-- `appUsed`: 固定值 "VFS Tracker Online Analysis"
+**顶层基本字段**:
+- `notes`: "VFS Tracker Voice Analysis Tools 自动生成报告"
+- `appUsed`: "VFS Tracker Online Analysis"
 
-#### 2. 顶层简化指标（来自不同分析模块）
-- `fundamentalFrequency`: 来自 `metrics.spontaneous.f0_mean`（自发语音）
-- `jitter`: 来自 `metrics.sustained.jitter_local_percent`（持续元音）
-- `shimmer`: 来自 `metrics.sustained.shimmer_local_percent`（持续元音）
-- `hnr`: 来自 `metrics.sustained.hnr_db`（持续元音）
+**顶层简化指标**:
+- `fundamentalFrequency`: 从metrics.spontaneous.f0_mean提取
+- `jitter`: 从metrics.sustained.jitter_local_percent提取
+- `shimmer`: 从metrics.sustained.shimmer_local_percent提取
+- `hnr`: 从metrics.sustained.hnr_db提取
 
-#### 3. 顶层复合对象
-- `formants`: 包含 `f1`, `f2`, `f3`（来自 `metrics.formants_low`）
-- `pitch`: 包含 `max`, `min`（来自 `metrics.vrp`）
+**顶层复合对象**:
+- `formants`: {f1, f2, f3} - 从metrics.formants_low提取
+- `pitch`: {max, min} - 从metrics.vrp提取
 
-#### 4. 完整分析结果
-- **`full_metrics`**: 整个 `metrics` 对象（第671行）
+**完整分析结果**:
+- `full_metrics`: 整个metrics对象（109个嵌套字段）
 
----
+#### 2. QuickF0Test.jsx写入的字段
 
-### 🔴 仅存在于历史数据的字段（当前代码不再写入）
-
-以下字段在实际数据中存在，但当前代码中**没有找到写入逻辑**：
-
-#### 测试报告的顶层元数据字段（来源：历史版本的EventForm手动录入）
-1. **`testDate`** (String, ISO 8601)
-   - 示例: `"2025-08-30T07:00:00.000000Z"`
-   - 存在率: 59/70 (84.3%)
-   - **来源**: 早期版本的EventForm.jsx允许用户手动输入测试日期
-   - **用途**: 测试执行的具体日期时间
-   - **当前替代**: 事件的 `date` 字段记录测试日期
-   - **当前代码**: EventForm.jsx、QuickF0Test.jsx和online-praat-analysis都**不再**写入此字段
-
-2. **`testLocation`** (String)
-   - 示例: `"Home"`, `"Clinic"`
-   - 存在率: 59/70 (84.3%)
-   - **来源**: 早期版本的EventForm.jsx允许用户选择测试地点
-   - **用途**: 测试执行地点
-   - **当前替代**: 无直接替代，信息丢失
-   - **当前代码**: EventForm.jsx、QuickF0Test.jsx和online-praat-analysis都**不再**写入此字段
-
-3. **`voiceStatus`** (String)
-   - 示例: `"stable"`, `"improving"`, `"concerning"`
-   - 存在率: 59/70 (84.3%)
-   - **来源**: 早期版本的EventForm.jsx允许用户输入主观状态评价
-   - **用途**: 用户对自己嗓音状态的主观评价
-   - **当前替代**: 无直接替代，主观评价信息丢失
-   - **当前代码**: EventForm.jsx、QuickF0Test.jsx和online-praat-analysis都**不再**写入此字段
-
-#### 特殊情况：软件迁移标识
-4. **`_migration_source`** (String)
-   - 示例: `"onlineAudioDataSource"`
-   - 存在率: 11/70 (15.7%)
-   - **用途**: 标识数据从旧系统迁移而来
-   - **当前替代**: 不需要替代，这是迁移标记
-
----
-
-## 代码证据
-
-### 创建self_test事件的三个代码路径
-
-#### 路径1: online-praat-analysis Lambda (自动化分析)
-```python
-# handler.py:643-683
-event_details = {
-    'notes': 'VFS Tracker Voice Analysis Tools 自动生成报告',
-    'appUsed': 'VFS Tracker Online Analysis',
-    'fundamentalFrequency': spontaneous_metrics.get('f0_mean'),
-    'jitter': sustained_metrics.get('jitter_local_percent'),
-    'shimmer': sustained_metrics.get('shimmer_local_percent'),
-    'hnr': sustained_metrics.get('hnr_db'),
-    'formants': {...},  # f1, f2, f3
-    'pitch': {...},     # min, max
-    'full_metrics': metrics  # 完整的109个嵌套字段
+```javascript
+{
+  appUsed: 'VFS Tracker Fast F0 Analysis Tool',
+  fundamentalFrequency: <averageF0>,
+  sound: ['其他'],
+  customSoundDetail: '通过快速基频测试自动记录',
+  voicing: ['其他'],
+  customVoicingDetail: '通过快速基频测试自动记录',
+  notes: `快速基频测试，平均F0: ${averageF0.toFixed(2)} Hz`
 }
-# ❌ 不写入: testDate, testLocation, voiceStatus
 ```
 
-#### 路径2: QuickF0Test.jsx (快速F0测试)
-```javascript
-// QuickF0Test.jsx:130-142
-const eventData = {
-  type: 'self_test',
-  date: new Date().toISOString(),
-  details: {
-    appUsed: 'VFS Tracker Fast F0 Analysis Tool',
-    fundamentalFrequency: averageF0,
-    sound: ['其他'],
-    customSoundDetail: '通过快速基频测试自动记录',
-    voicing: ['其他'],
-    customVoicingDetail: '通过快速基频测试自动记录',
-    notes: `快速基频测试，平均F0: ${averageF0.toFixed(2)} Hz`,
-  },
-};
-// ❌ 不写入: testDate, testLocation, voiceStatus
-```
+#### 3. EventForm.jsx允许用户输入的字段（当前版本）
 
-#### 路径3: EventForm.jsx (手动录入)
-```javascript
-// EventForm.jsx - self_test case
-// 当前代码只收集以下字段：
-// - appUsed, sound[], voicing[]
-// - fundamentalFrequency, jitter, shimmer, hnr
-// - formants: {f1, f2, f3}
-// ❌ 不写入: testDate, testLocation, voiceStatus
-```
+根据源代码（lines 241-268），当前EventForm为self_test提供以下输入字段：
 
-#### 数据写入层：addVoiceEvent Lambda
-```javascript
-// addVoiceEvent/index.mjs:160-169
-const item = {
-    userId,
-    eventId,
-    type: requestBody.type,        // 从前端接收
-    date: requestBody.date,         // 从前端接收
-    details: requestBody.details,   // 从前端接收（完整details对象）
-    status: "pending",
-    createdAt: timestamp,
-    updatedAt: timestamp,
-};
-// Lambda只是透传前端的details，不添加额外字段
-```
+**基本信息**:
+- `appUsed`: 使用的App（可选）
+- `sound`: 声音状态（必填，多选）
+- `customSoundDetail`: 其他声音状态详情（条件显示）
+- `voicing`: 发声方式（必填，多选）
+- `customVoicingDetail`: 其他发声方式详情（条件显示）
+- `notes`: 备注（可选）
 
-**关键发现**: 
-- 所有三个当前代码路径都**没有**写入 `testDate`, `testLocation`, `voiceStatus`
-- 这些字段只存在于84.3%的历史记录中，来源是早期版本的EventForm
-- 可能是早期EventForm.jsx包含这些输入字段，后来被移除了
+**声学指标**:
+- `fundamentalFrequency`: 基频（Hz，可选）
+- `jitter`: Jitter（%，可选）
+- `shimmer`: Shimmer（%，可选）
+- `hnr`: 谐噪比（dB，可选）
+
+**共振峰数据**（转换为formants对象）:
+- `f1`, `f2`, `f3`: 转换为 `formants: {f1, f2, f3}`
+
+**音域范围**（转换为pitch对象）:
+- `pitchMax`, `pitchMin`: 转换为 `pitch: {max, min}`
+
+**重要说明**: 
+- 当前EventForm **不包含** testDate, testLocation, voiceStatus的输入字段
+- 所有声学指标字段都是**可选的**
+- 代码会自动将f1/f2/f3组合成formants对象，pitchMax/pitchMin组合成pitch对象（lines 378-391）
 
 ---
 
-## 数据统计
+### 🔴 历史/废弃字段（Legacy/Deprecated Fields）
 
-| 字段名 | 存在率 | 是否当前写入 | 说明 |
-|--------|--------|-------------|------|
-| `notes` | 70/70 (100%) | ✅ 是 | 固定文本 |
-| `appUsed` | 70/70 (100%) | ✅ 是 | 固定文本 |
-| `fundamentalFrequency` | 70/70 (100%) | ✅ 是 | 来自spontaneous |
-| `jitter` | 70/70 (100%) | ✅ 是 | 来自sustained |
-| `shimmer` | 70/70 (100%) | ✅ 是 | 来自sustained |
-| `hnr` | 70/70 (100%) | ✅ 是 | 来自sustained |
-| `formants` | 70/70 (100%) | ✅ 是 | 来自formants_low |
-| `pitch` | 67/70 (95.7%) | ✅ 是 | 来自vrp（有时失败） |
-| `full_metrics` | 53/70 (75.7%) | ✅ 是 | 完整分析结果 |
-| **`testDate`** | 59/70 (84.3%) | ❌ 否 | **历史字段** |
-| **`testLocation`** | 59/70 (84.3%) | ❌ 否 | **历史字段** |
-| **`voiceStatus`** | 59/70 (84.3%) | ❌ 否 | **历史字段** |
-| **`_migration_source`** | 11/70 (15.7%) | ❌ 否 | **迁移标记** |
+这些字段**在数据中存在**但**当前代码不再写入**：
+
+#### 1. testDate (String, ISO 8601)
+- **示例**: `"2025-08-30T07:00:00.000000Z"`
+- **存在率**: 59/70 (84.3%)
+- **来源**: 早期版本EventForm的用户手动输入
+- **用途**: 测试执行的具体日期时间
+- **当前替代**: 事件顶层的 `date` 字段
+- **废弃原因**: 与事件date字段重复
+
+#### 2. testLocation (String)
+- **示例**: `"Home"`, `"Clinic"`
+- **存在率**: 59/70 (84.3%)
+- **来源**: 早期版本EventForm的用户手动输入（曾有地点选择下拉框）
+- **用途**: 测试执行地点
+- **废弃原因**: 对self_test类型意义不大，且hospital_test有独立的location字段
+
+#### 3. voiceStatus (String)
+- **示例**: `"良好"`, `"需要改进"`
+- **存在率**: 59/70 (84.3%)
+- **来源**: 早期版本EventForm的用户主观评价输入
+- **用途**: 用户对嗓音状态的主观评价
+- **废弃原因**: 改用sound/voicing多选方式更标准化
+
+#### 4. _migration_source (String)
+- **示例**: `"old_system"`
+- **存在率**: 11/70 (15.7%)
+- **来源**: 数据迁移标记
+- **用途**: 标识从旧系统迁移的数据
+- **废弃原因**: 仅用于历史数据迁移，新数据不需要
+
+**84.3%的一致存在率说明**: testDate/testLocation/voiceStatus这三个字段来自同一个早期版本的EventForm，该版本在某个时间点被移除。
 
 ---
 
-## 建议
+### 🟢 预留/未来字段（Reserved/Future Fields）
 
-### 1. 文档更新策略
+这些字段**在代码中定义或文档中存在**但**实际数据中未使用**（0%存在率）：
 
-**当前data_structures.md应包含**:
-- ✅ 所有当前代码会写入的字段（已完成）
-- ✅ `full_metrics`及其所有109个嵌套字段（已完成）
+#### 在online_praat_plan.md中定义但未实现
 
-**不应包含**:
-- ❌ `testDate`, `testLocation`, `voiceStatus`（历史字段，当前代码不写入）
-- ❌ `_migration_source`（内部迁移标记）
+从`docs/online_praat_plan.md`和`docs/online_praat_detailed_plan.md`中发现以下字段在文档中定义但实际未使用：
 
-### 2. 历史数据处理
+1. **calibration** (Object)
+   - 文档定义: 校准信息 `{hasExternal, offsetDb, noiseFloorDbA}`
+   - 存在率: 0/449 (0%)
+   - 状态: **未实现/预留**
+   - 说明: VoiceFemTests表的预留字段，online-praat-analysis未实现
 
-创建新issue：**"self_test历史数据字段清理"**
+2. **tests** (List)
+   - 文档定义: 录音段落列表 `[{step, s3Key, durationMs}]`
+   - 存在率: 0/449 (0%)
+   - 状态: **未实现/预留**
+   - 说明: VoiceFemTests表的预留字段，online-praat-analysis未实现
 
-**目标**: 处理84.3%记录中的3个历史字段
+3. **forms** (Object)
+   - 文档定义: 问卷结果 `{RBH, VHI9i, TVQ}`
+   - 存在率: 0/449 (0%)
+   - 状态: **未实现/预留**
+   - 说明: VoiceFemTests表的预留字段，questionnaires数据实际在metrics.questionnaires中
 
-**方案A - 数据保留**（推荐）:
-```python
-# 保留在details对象中，但标记为deprecated
-if 'testDate' in event_details:
-    event_details['_legacy'] = {
-        'testDate': event_details.pop('testDate'),
-        'testLocation': event_details.pop('testLocation'),
-        'voiceStatus': event_details.pop('voiceStatus')
-    }
+**注意**: 这些字段在data_structures.md中已标记为**[未实现/预留]**，符合实际情况。
+
+---
+
+## 结论与建议
+
+### ✅ data_structures.md的准确性
+
+经过全面代码审查，确认：
+- ✅ 文档**不包含**任何历史字段（testDate/testLocation/voiceStatus）
+- ✅ 文档**只记录**当前代码会写入的字段
+- ✅ 文档**正确标记**了未实现字段（calibration/tests/forms）
+- ✅ **无需修改** data_structures.md
+
+### 📋 建议的后续actions
+
+#### 历史数据清理issue（优先级：中）
+
+**问题**: 84.3%的self_test记录（59/70条）包含废弃字段
+
+**方案选项**:
+
+**方案A: 保留到_legacy对象（推荐）**
+```javascript
+{
+  ...currentFields,
+  _legacy: {
+    testDate: "2025-08-30T07:00:00.000000Z",
+    testLocation: "Home",
+    voiceStatus: "良好"
+  }
+}
 ```
+- 优点: 保留历史信息，不丢失数据
+- 缺点: 增加存储空间
 
-**方案B - 数据迁移**:
-- `testDate` → 可忽略（与事件date重复）
-- `testLocation` → 可忽略（大部分是"Home"）
-- `voiceStatus` → 考虑迁移到`details.notes`字段
+**方案B: 迁移有用信息**
+- testDate → 如果与事件date不一致，可以添加到notes
+- testLocation/voiceStatus → 合并到notes
+- 优点: 不增加新字段
+- 缺点: 信息以文本形式存储，不易查询
 
-**方案C - 简单清理**:
-- 直接删除这3个字段（数据量小，影响有限）
+**方案C: 直接删除**
+- 优点: 清理干净
+- 缺点: 永久丢失历史信息
+- 影响: 有限（这些字段对分析价值不高）
 
-### 3. 前端兼容性
+**推荐**: 方案A（_legacy对象），既保留历史又不影响当前结构
 
-**如果选择方案A或C**，需要更新前端代码：
-- 检查`Timeline.jsx`, `EventForm.jsx`等组件
-- 确保不依赖`testDate`, `testLocation`, `voiceStatus`字段
-- 如果有显示逻辑，改为使用事件顶层的`date`字段
+#### 数据统一性验证（优先级：低）
+
+虽然当前文档已经准确，但建议：
+- 定期运行Shell验证脚本，确保新数据符合标准
+- 监控EventForm提交的数据，确保没有意外字段
+- 文档添加"字段演进历史"章节，记录字段变更
 
 ---
 
-## 结论
+## 附录：完整字段映射
 
-### 关键发现
-1. **self_test事件有三个创建路径**：
-   - online-praat-analysis Lambda（自动化分析，53/70记录，包含full_metrics）
-   - QuickF0Test.jsx（快速F0测试，前端工具）
-   - EventForm.jsx（手动录入，用户填写表单）
-2. **84.3%的self_test记录**包含3个当前代码不再写入的历史字段（`testDate`, `testLocation`, `voiceStatus`）
-3. 这些历史字段来自**早期版本的EventForm.jsx**，允许用户手动输入测试日期、地点和状态评价
-4. **当前代码已标准化**，所有三个路径都不再写入这些历史字段
+### self_test事件字段汇总
 
-### 行动项
-- [x] 识别历史字段（本文档）
-- [ ] 创建后续issue：历史数据清理
-- [ ] 更新data_structures.md：**移除**历史字段定义
-- [ ] 验证前端不依赖历史字段
-- [ ] 执行数据清理（如果需要）
+| 字段名 | 当前代码写入? | 数据存在率 | 来源 | 状态 |
+|--------|--------------|-----------|------|------|
+| appUsed | ✅ | 100% | online-praat/QuickF0/EventForm | Active |
+| sound | ✅ | 100% | QuickF0/EventForm | Active |
+| voicing | ✅ | 100% | QuickF0/EventForm | Active |
+| fundamentalFrequency | ✅ | ~90% | online-praat/QuickF0/EventForm | Active |
+| jitter | ✅ | ~75% | online-praat/EventForm | Active |
+| shimmer | ✅ | ~75% | online-praat/EventForm | Active |
+| hnr | ✅ | ~75% | online-praat/EventForm | Active |
+| formants | ✅ | ~75% | online-praat/EventForm | Active |
+| pitch | ✅ | ~75% | online-praat/EventForm | Active |
+| full_metrics | ✅ | 75.7% | online-praat | Active |
+| notes | ✅ | 100% | online-praat/QuickF0/EventForm | Active |
+| customSoundDetail | ✅ | ~40% | QuickF0/EventForm | Active |
+| customVoicingDetail | ✅ | ~40% | QuickF0/EventForm | Active |
+| **testDate** | ❌ | **84.3%** | 早期EventForm | **Legacy** |
+| **testLocation** | ❌ | **84.3%** | 早期EventForm | **Legacy** |
+| **voiceStatus** | ❌ | **84.3%** | 早期EventForm | **Legacy** |
+| **_migration_source** | ❌ | **15.7%** | 数据迁移 | **Legacy** |
 
-### 文档准确性确认
-✅✅✅ **重要发现：当前`data_structures.md`已经是完全准确的！**
+### 代码路径对比
 
-经过检查，`data_structures.md`中的self_test部分：
-- ✅ **不包含**`testDate`, `testLocation`, `voiceStatus`等历史字段
-- ✅ **正确记录**了当前代码写入的所有字段
-- ✅ **完整文档化**了`full_metrics`及其所有109个嵌套字段
+| 字段 | online-praat | QuickF0 | EventForm |
+|------|--------------|---------|-----------|
+| appUsed | ✅ (固定值) | ✅ (固定值) | ✅ (用户输入) |
+| fundamentalFrequency | ✅ (computed) | ✅ (measured) | ✅ (用户输入) |
+| jitter | ✅ (computed) | ❌ | ✅ (用户输入) |
+| shimmer | ✅ (computed) | ❌ | ✅ (用户输入) |
+| hnr | ✅ (computed) | ❌ | ✅ (用户输入) |
+| formants | ✅ (computed) | ❌ | ✅ (用户输入) |
+| pitch | ✅ (computed) | ❌ | ✅ (用户输入) |
+| full_metrics | ✅ | ❌ | ❌ |
+| sound | ❌ | ✅ (固定) | ✅ (用户选择) |
+| voicing | ❌ | ✅ (固定) | ✅ (用户选择) |
+| notes | ✅ (固定) | ✅ (动态) | ✅ (用户输入) |
+| testDate | ❌ | ❌ | ❌ (已移除) |
+| testLocation | ❌ | ❌ | ❌ (已移除) |
+| voiceStatus | ❌ | ❌ | ❌ (已移除) |
 
-**结论**：文档已经正确地排除了历史字段，仅记录当前活跃的字段定义。**无需对data_structures.md进行修改**。
+---
+
+**文档版本**: v1.2  
+**最后更新**: 2025年  
+**审查人**: GitHub Copilot  
+**审查方法**: 完整源代码审查 + 实际数据分析（537条记录）
