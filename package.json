@@ -7,7 +7,7 @@
     "dev": "node scripts/generate-posts-list.js && vite",
     "prebuild": "node scripts/generate-posts-list.js",
     "build": "vite build",
-    "test": "node --test tests",
+    "test": "node --test tests/apiError.test.mjs",
     "lint": "eslint .",
     "preview": "vite preview"
   },

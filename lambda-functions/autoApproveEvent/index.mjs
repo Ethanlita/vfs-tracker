@@ -1,3 +1,7 @@
+/**
+ * @file [CN] index.mjs 是一个由 DynamoDB 流触发的 AWS Lambda 函数。
+ * 它会自动批准新创建的嗓音事件。对于 'hospital_test' 类型的事件，它会使用 Google Gemini API 进行多模态验证，将用户提交的数据与上传的报告文件进行比较。
+ */
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient, UpdateCommand } from "@aws-sdk/lib-dynamodb";
 import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
@@ -14,7 +18,13 @@ const genAI_modal = new GoogleGenAI_Modal({ apiKey: process.env.GEMINI_API_KEY }
 
 const tableName = process.env.EVENTS_TABLE || "VoiceFemEvents";
 
-// --- DynamoDB Helper ---
+/**
+ * [CN] 更新 DynamoDB 中指定事件的状态。
+ * @param {string} userId - 用户 ID。
+ * @param {string} eventId - 事件 ID。
+ * @param {string} newStatus - 要设置的新状态 (例如, 'approved')。
+ * @returns {Promise<void>}
+ */
 const updateEventStatus = async (userId, eventId, newStatus) => {
   console.log(`🚀 Updating event ${eventId} for user ${userId} to status: ${newStatus}`);
   const command = new UpdateCommand({
@@ -33,10 +43,18 @@ const updateEventStatus = async (userId, eventId, newStatus) => {
   }
 };
 
-// --- System Instructions for Gemini ---
+/**
+ * [CN] 提供给 Gemini 模型的系统指令，指导其如何分析报告。
+ * @type {string}
+ */
 const SYSTEM_INSTRUCTION = `You are an intelligent medical report analysis assistant. Your task is to compare the user-submitted structured data with the content of the provided attachments, which should be medical reports. Based on your analysis, you must respond with a single word: MATCH or NO_MATCH. If the information is generally consistent, return MATCH. If there are significant discrepancies, or the attachments do not seem to be valid medical reports related to the data, return NO_MATCH.`;
 
-// --- Multi-Modal Verification Logic (File API) ---
+/**
+ * [CN] 将所有附件从 S3 下载，写入 Lambda 的临时存储，然后上传到 Gemini File API 以进行多模态分析。
+ * @param {string} bucketName - S3 存储桶名称。
+ * @param {Array<object>} attachments - 来自事件的附件对象数组。
+ * @returns {Promise<Array<object>>} 一个解析为包含 Gemini 文件部分以用于 API 调用的 Promise。
+ */
 async function uploadAllAttachmentsMultiModal(bucketName, attachments) {
   if (!Array.isArray(attachments) || attachments.length === 0) return [];
   const parts = [];
@@ -90,6 +108,12 @@ async function uploadAllAttachmentsMultiModal(bucketName, attachments) {
   return parts;
 }
 
+/**
+ * [CN] 使用 Gemini API 验证用户提交的数据是否与附件内容匹配。
+ * @param {object} userDetails - 来自事件的用户提交的详细信息。
+ * @param {Array<object>} attachmentsParts - 来自 `uploadAllAttachmentsMultiModal` 的 Gemini 文件部分数组。
+ * @returns {Promise<boolean>} 一个解析为 `true`（如果验证成功匹配）或 `false` 的 Promise。
+ */
 async function verifyMultiModal(userDetails, attachmentsParts) {
   if (!attachmentsParts || attachmentsParts.length === 0) {
     console.log('No attachments were successfully uploaded for multi-modal verification. Verification fails.');
@@ -126,7 +150,11 @@ async function verifyMultiModal(userDetails, attachmentsParts) {
   }
 }
 
-// --- Main Handler ---
+/**
+ * [CN] Lambda 函数的主处理程序。由 DynamoDB 流触发，处理新插入的事件记录。
+ * @param {object} event - DynamoDB 流事件。
+ * @returns {Promise<{status: string}>} 一个表示处理完成的状态对象。
+ */
 export const handler = async (event) => {
   console.log(`📬 Received ${event.Records.length} records from DynamoDB stream.`);
 

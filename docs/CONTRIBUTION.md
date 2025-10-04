@@ -12,8 +12,8 @@
 
 - 前端：React + Vite + Tailwind CSS
 - 图表：chart.js + react-chartjs-2
-- 云端（可选）：AWS Amplify（API/Storage），API Gateway + Lambda，DynamoDB，S3
-- 代码质量：ESLint（eslint.config.js），Node 版本以项目 CI/本地环境为准
+- 云端（可选）：API Gateway, AWS Lambda, Amazon DynamoDB, Amazon S3
+- 代码质量：ESLint（eslint.config.js）
 
 ## 3. 代码风格与约定
 
@@ -22,7 +22,10 @@
 - 避免在渲染期间创建不必要的对象与函数；按需使用 useMemo/useCallback。
 - 组件职责单一、拆分合理；将数据处理逻辑提取为纯函数以便测试。
 - Props/State 命名清晰，布尔值以 is/has/can 开头。
-- 严禁在没有必要的情况下使用 any（若引入 TS 时适用）。
+
+### 3.2 Lambda 函数 (Node.js & Python)
+- **文档**: 所有函数处理程序和公共的辅助函数都必须有完整的中文 JSDoc 或 Python Docstring 文档。
+- **结构**: 每个 Lambda 函数都应位于 `lambda-functions/` 下的独立子目录中。
 
 ### 3.2 命名与文件布局
 - 组件文件：PascalCase（例如 PublicDashboard.jsx, EventForm.jsx）。
@@ -82,11 +85,13 @@
 
 1) 安装依赖：`npm i` 或 `pnpm i`
 2) 开发模式：`npm run dev`（不配置云端变量也可运行，使用模拟数据）
-3) 生产就绪校验：配置以下变量后重新运行/构建以验证真实调用
-   - VITE_COGNITO_USER_POOL_ID
-   - VITE_COGNITO_USER_POOL_WEB_CLIENT_ID
-   - VITE_AWS_REGION
-   - VITE_GOOGLE_GEMINI_API（可选）
+3) 生产就绪校验：配置以下**所有**必需变量后，重新运行/构建以验证真实调用：
+   - `VITE_COGNITO_USER_POOL_ID`
+   - `VITE_COGNITO_USER_POOL_WEB_CLIENT_ID`
+   - `VITE_AWS_REGION`
+   - `VITE_API_ENDPOINT`
+   - `VITE_S3_BUCKET`
+   - `VITE_GOOGLE_GEMINI_API` (可选, 用于 AI 相关功能)
 4) 构建：`npm run build`（会复制 posts 与 public，产出 dist）
 5) 预览：`npm run preview`
 

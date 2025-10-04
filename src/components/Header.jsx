@@ -40,7 +40,7 @@ const Header = ({ AuthComponent }) => {
   }, [user, displayName]);
 
   const docLink = useMemo(() => ({ label: '文档', to: '/posts' }), []);
-    const dashboardLink = useMemo(() => ({ label: '公共仪表板', to: '/dashboard' }), []);
+  const dashboardLink = useMemo(() => ({ label: '公共仪表板', to: '/dashboard' }), []);
 
   return (
     <>
