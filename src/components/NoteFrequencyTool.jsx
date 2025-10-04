@@ -123,7 +123,7 @@ const generatePianoKeys = () => {
         isSharp: true,
         position,
         base,
-        showLabel: false,
+        showLabel: true,
       });
     } else {
       const position = whiteIndex;
@@ -133,7 +133,7 @@ const generatePianoKeys = () => {
         isSharp: false,
         position,
         base,
-        showLabel: base === 'C' || base === 'A',
+        showLabel: true,
       });
       whiteIndex += 1;
     }
@@ -291,7 +291,8 @@ const NoteFrequencyTool = () => {
       outOfRange,
     });
     setNoteInput(noteName);
-  }, [frequencyInput]);
+    void playMidiNote(clampedMidi);
+  }, [frequencyInput, playMidiNote]);
 
   /**
    * @en Convert note input to frequency.
@@ -333,7 +334,8 @@ const NoteFrequencyTool = () => {
     });
     setFrequencyInput(formatFrequency(baseFrequency));
     setNoteInput(midiToNoteName(clampedMidi));
-  }, [noteInput]);
+    void playMidiNote(clampedMidi);
+  }, [noteInput, playMidiNote]);
 
   /**
    * @en Handle piano key interactions.
@@ -614,7 +616,7 @@ const NoteFrequencyTool = () => {
                 );
               })}
             </div>
-            <div className="absolute inset-0">
+            <div className="absolute inset-0 pointer-events-none">
               {keys.filter((key) => key.isSharp).map((key) => {
                 const isActive = key.midi === activeMidi;
                 return (
@@ -622,7 +624,7 @@ const NoteFrequencyTool = () => {
                     key={key.midi}
                     type="button"
                     onClick={() => handleKeyClick(key)}
-                    className={`absolute top-0 h-28 sm:h-32 rounded-b-lg text-xs transition-colors ${
+                    className={`absolute top-0 h-28 sm:h-32 rounded-b-lg text-xs transition-colors pointer-events-auto ${
                       isActive ? 'bg-pink-500 text-white shadow-lg border border-pink-600' : 'bg-gray-900 hover:bg-gray-700 text-gray-200 border border-gray-900'
                     }`}
                     style={{
