@@ -1,3 +1,6 @@
+/**
+ * @file [CN] index.mjs 是一个 AWS Lambda 函数，用于删除指定的嗓音事件及其在 S3 上的关联附件。
+ */
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient, DeleteCommand } from "@aws-sdk/lib-dynamodb";
 import { S3Client, DeleteObjectCommand } from "@aws-sdk/client-s3";
@@ -17,7 +20,10 @@ const corsHeaders = {
 };
 
 /**
- * Extracts user information from the Cognito ID token in the event.
+ * [CN] 从事件的 Cognito ID Token 中提取经过身份验证的用户 ID。
+ * @param {object} event - API Gateway Lambda 事件对象。
+ * @returns {string} 经过身份验证的用户的 ID (sub)。
+ * @throws {Error} 如果在 token 中找不到用户 ID。
  */
 function getAuthenticatedUserId(event) {
   const claims = event.requestContext?.authorizer?.claims;
@@ -27,6 +33,11 @@ function getAuthenticatedUserId(event) {
   return claims.sub;
 }
 
+/**
+ * [CN] Lambda 函数的主处理程序。它负责删除 DynamoDB 中的事件记录，并同时删除 S3 中所有关联的附件文件。
+ * @param {object} event - API Gateway Lambda 事件对象，在路径参数中包含 `eventId`。
+ * @returns {Promise<object>} 一个 API Gateway 响应对象。
+ */
 export const handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') {
     return {
@@ -57,12 +68,12 @@ export const handler = async (event) => {
         eventId: eventId,
       },
       ConditionExpression: "attribute_exists(eventId)",
-      ReturnValues: "ALL_OLD", // Return the item that was deleted
+      ReturnValues: "ALL_OLD", // 返回被删除的项
     });
 
     const { Attributes: deletedEvent } = await docClient.send(deleteDbEntryCommand);
 
-    // If the event had attachments, delete them from S3
+    // 如果事件有附件，则从 S3 删除它们
     if (bucketName && deletedEvent && Array.isArray(deletedEvent.attachments) && deletedEvent.attachments.length > 0) {
       console.log(`Event ${eventId} has ${deletedEvent.attachments.length} attachments. Deleting from S3 bucket: ${bucketName}`);
 
@@ -75,14 +86,14 @@ export const handler = async (event) => {
           let key;
           const s3Prefix = `s3://${bucketName}/`;
 
-          // Handle three possible formats: S3 URI, HTTPS URL, or just the key
+          // 处理三种可能的格式：S3 URI、HTTPS URL 或仅 key 本身
           if (att.fileUrl.startsWith(s3Prefix)) {
             key = att.fileUrl.substring(s3Prefix.length);
           } else if (att.fileUrl.startsWith('http')) {
             const url = new URL(att.fileUrl);
             key = decodeURIComponent(url.pathname.substring(1)); 
           } else {
-            // Assume it's the key itself
+            // 假设它就是 key
             key = att.fileUrl;
           }
           
@@ -97,7 +108,7 @@ export const handler = async (event) => {
             Key: key,
           });
 
-          // Return the promise, logging errors individually without failing the whole batch
+          // 返回 promise，单独记录错误而不使整个批次失败
           return s3Client.send(deleteS3Command).catch(err => {
             console.error(`Failed to delete S3 object ${key}:`, err);
           });

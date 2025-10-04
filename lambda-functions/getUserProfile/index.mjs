@@ -1,6 +1,5 @@
 /**
- * 获取用户资料 Lambda函数
- * GET /user/{userId}
+ * @file [CN] 该文件包含一个 AWS Lambda 处理程序，用于获取用户的个人资料信息。
  */
 
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
@@ -21,7 +20,11 @@ const corsHeaders = {
 };
 
 /**
- * 从JWT token中提取用户信息 - 专门处理ID Token
+ * [CN] 从 API Gateway 事件对象中提取用户信息，优先解析 Authorization 头中的 ID Token。
+ * 此函数会尝试从 API Gateway 的授权方上下文中获取 claims，如果失败，则会手动解析 Bearer token。
+ * @param {object} event - API Gateway Lambda 事件对象。
+ * @returns {{userId: string, email: string, username: string, nickname: string}} 提取出的用户信息对象。
+ * @throws {Error} 如果在请求中找不到有效的 ID token 或解析失败。
  */
 function extractUserFromEvent(event) {
   try {
@@ -93,7 +96,10 @@ function extractUserFromEvent(event) {
 }
 
 /**
- * 创建标准HTTP响应
+ * [CN] 创建一个标准化的、包含 CORS 头的 API Gateway 响应对象。
+ * @param {number} statusCode - HTTP 状态码。
+ * @param {object} body - 要在响应体中进行 JSON 字符串化的对象。
+ * @returns {object} 格式化后的 API Gateway 响应对象。
  */
 function createResponse(statusCode, body) {
   return {
@@ -104,7 +110,11 @@ function createResponse(statusCode, body) {
 }
 
 /**
- * 主处理函数
+ * [CN] Lambda 函数的主处理程序。它通过从授权 token 中提取用户 ID 来获取用户的个人资料。
+ * 它验证请求者只能访问自己的个人资料。如果数据库中不存在该用户的个人资料，
+ * 它会根据 token 中的信息返回一个基本的默认个人资料。
+ * @param {object} event - API Gateway Lambda 事件对象。
+ * @returns {Promise<object>} 一个 API Gateway 响应，其中包含用户的个人资料信息或错误消息。
  */
 export const handler = async (event) => {
   console.log('Event:', JSON.stringify(event, null, 2));

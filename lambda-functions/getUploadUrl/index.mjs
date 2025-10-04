@@ -1,3 +1,6 @@
+/**
+ * @file [CN] 该文件包含一个 AWS Lambda 处理程序，用于为 S3 对象生成一个安全的、有时限的预签名 PUT URL，以允许客户端上传文件。
+ */
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { decode } from 'jsonwebtoken';
@@ -5,7 +8,13 @@ import { decode } from 'jsonwebtoken';
 const s3Client = new S3Client({ region: process.env.AWS_REGION || 'us-east-1' });
 const BUCKET_NAME = process.env.BUCKET_NAME;
 
-// 验证JWT token并提取用户信息（演示环境仅解码，不做签名验证）
+/**
+ * [CN] 解码 JWT token 以提取用户信息。
+ * 注意：此函数仅解码 token，不验证其签名。它假定签名已由上游服务（如 API Gateway 授权方）验证。
+ * @param {string} token - 来自 Authorization 头的 JWT token。
+ * @returns {object} 解码后的 token 载荷。
+ * @throws {Error} 如果 token 缺失或无效。
+ */
 const verifyToken = (token) => {
   if (!token) throw new Error('缺少token');
   try {
@@ -26,12 +35,25 @@ const CORS_HEADERS = {
   'Access-Control-Max-Age': '86400'
 };
 
+/**
+ * [CN] 创建一个标准化的、包含 CORS 头的错误响应对象。
+ * @param {number} statusCode - HTTP 状态码。
+ * @param {string} message - 要包含在响应体中的错误消息。
+ * @param {object} [extra={}] - 要包含在响应体中的附加信息。
+ * @returns {object} 格式化后的 API Gateway 响应对象。
+ */
 const errorResponse = (statusCode, message, extra = {}) => ({
   statusCode,
   headers: CORS_HEADERS,
   body: JSON.stringify({ error: message, ...extra })
 });
 
+/**
+ * [CN] Lambda 函数的主处理程序。它验证用户请求，并为客户端上传文件到 S3 生成一个预签名的 PUT URL。
+ * 授权基于文件键的结构（`<folder>/<userId>/<filename>`），确保用户只能上传到自己的目录中。
+ * @param {object} event - API Gateway Lambda 事件对象。请求体应包含 `fileKey` 和 `contentType`。
+ * @returns {Promise<object>} 一个 API Gateway 响应，其中包含预签名的上传 URL 或错误消息。
+ */
 export const handler = async (event) => {
   // 基础调试日志
   console.log('[getUploadUrl] incoming event meta', {

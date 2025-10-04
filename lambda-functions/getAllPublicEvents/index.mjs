@@ -1,3 +1,7 @@
+/**
+ * @file [CN] 该文件包含一个 AWS Lambda 处理程序，用于从数据库中获取所有公开的、已批准的活动。
+ */
+
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient, ScanCommand, BatchGetCommand } from "@aws-sdk/lib-dynamodb";
 
@@ -6,6 +10,12 @@ const docClient = DynamoDBDocumentClient.from(client);
 const eventsTableName = "VoiceFemEvents";
 const usersTableName = "VoiceFemUsers";
 
+/**
+ * [CN] 一个 AWS Lambda 处理程序，用于扫描 VoiceFemEvents 表以查找所有状态为“approved”的事件。
+ * 它会获取这些事件，并附加上关联用户的显示名称，然后按日期降序返回结果。
+ * @param {object} event - API Gateway Lambda 事件对象。
+ * @returns {Promise<object>} 一个 API Gateway 响应，其中包含一个已批准事件的 JSON 数组（附带用户名）或错误消息。
+ */
 export const handler = async (event) => {
     // 添加CORS头部配置 - 确保在Lambda代理集成下CORS正常工作
     const corsHeaders = {
@@ -80,9 +90,10 @@ export const handler = async (event) => {
 };
 
 /**
- * 批量获取用户显示名称
- * @param {string[]} userIds - 用户ID数组
- * @returns {Object} userId到显示名称的映射
+ * [CN] 批量从 VoiceFemUsers 表中获取一组用户的显示名称。
+ * 该函数会考虑用户的隐私设置（isNamePublic），如果名称不公开或未找到用户，则返回默认占位符。
+ * @param {string[]} userIds - 需要获取显示名称的用户 ID 数组。
+ * @returns {Promise<Object<string, string>>} 一个将 userId 映射到其对应显示名称的对象。
  */
 async function getUserDisplayNames(userIds) {
     if (userIds.length === 0) return {};
