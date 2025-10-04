@@ -1,261 +1,124 @@
-# Lambda函数环境变量配置指南
+# Lambda 函数环境变量配置指南
 
-## 必需的环境变量
+## 概述
 
-### S3预签名URL相关的Lambda函数
+本指南详细列出了 VFS Tracker 项目中所有 Lambda 函数所需的环境变量。正确的配置是确保后端服务正常运行的关键。
 
-所有S3预签名URL相关的Lambda函数都需要：
+---
 
-1. **BUCKET_NAME**
-   - 描述：S3存储桶名称
-   - 示例值：`vfs-tracker-files`
-   - 用途：指定文件存储的S3桶
+## 1. 核心服务 (Core Services)
 
-2. **AWS_REGION**
-   - 描述：AWS区域
-   - 示例值：`us-east-1`
-   - 用途：S3客户端配置和预签名URL生成
-   - 注意：通常Lambda运行时会自动提供此变量，但明确设置更安全
+这些函数处理核心的业务逻辑，如用户资料、事件管理和文件权限。
 
-### DynamoDB相关的Lambda函数
+### a. 用户管理
+- **函数**: `getUserProfile`, `updateUserProfile`, `getUserPublicProfile`, `vfsTrackerUserProfileSetup`
+- **环境变量**:
+  - `USERS_TABLE`: 用户资料 DynamoDB 表的名称。 (例如: `VoiceFemUsers`)
 
-所有访问DynamoDB的Lambda函数都需要：
+### b. 事件管理
+- **函数**: `addVoiceEvent`, `getVoiceEvents`, `getAllPublicEvents`, `deleteEvent`, `autoApproveEvent`
+- **环境变量**:
+  - `EVENTS_TABLE`: 嗓音事件 DynamoDB 表的名称。 (例如: `VoiceFemEvents`)
+  - `USERS_TABLE`: (仅 `getAllPublicEvents` 需要) 用户资料 DynamoDB 表的名称，用于获取用户名。
+  - `ATTACHMENTS_BUCKET`: (仅 `autoApproveEvent` 和 `deleteEvent` 需要) 存储附件的 S3 存储桶名称。
+  - `GEMINI_API_KEY`: (仅 `autoApproveEvent` 需要) 用于多模态验证。
 
-1. **USERS_TABLE**
-   - 描述：用户资料DynamoDB表名
-   - 示例值：`VoiceFemUsers`
-   - 用途：存储用户资料信息
+### c. 文件管理 (预签名 URL)
+- **函数**: `getUploadUrl`, `getFileUrl`, `getAvatarUrl`
+- **环境变量**:
+  - `BUCKET_NAME`: 存储文件的 S3 存储桶名称。
+  - `VOICE_TESTS_TABLE_NAME`: (仅 `getFileUrl` 需要) 嗓音测试表的名称，用于验证私有报告的访问权限。
 
-2. **EVENTS_TABLE**
-   - 描述：嗓音事件DynamoDB表名
-   - 示例值：`VoiceFemEvents`
-   - 用途：存储嗓音训练事件记录
+---
 
-## 各Lambda函数的环境变量需求
+## 2. AI 与服务集成 (AI & Services)
 
-### S3文件管理函数
+这些函数与第三方服务（如 Google Gemini）集成，提供增值功能。
 
-#### getUploadUrl
-```
-BUCKET_NAME = your-s3-bucket-name
-AWS_REGION = us-east-1
-```
+### a. Gemini 代理
+- **函数**: `gemini-proxy`
+- **环境变量**:
+  - `GEMINI_API_KEY`: Google Gemini API 的密钥。
 
-#### getFileUrl
-```
-BUCKET_NAME = your-s3-bucket-name
-AWS_REGION = us-east-1
-```
+### b. 歌曲推荐
+- **函数**: `get-song-recommendations`
+- **环境变量**:
+  - `GEMINI_API_KEY`: Google Gemini API 的密钥。
 
-#### getAvatarUrl
-```
-BUCKET_NAME = your-s3-bucket-name
-AWS_REGION = us-east-1
-```
+---
 
-### 嗓音事件管理函数
+## 3. 在线嗓音分析服务 (Online Praat Analysis)
 
-#### addVoiceEvent
-```
-EVENTS_TABLE = VoiceFemEvents
-AWS_REGION = us-east-1
-```
+这是一个独立的、功能复杂的 Lambda 函数，负责执行所有声学分析任务。
 
-#### getAllPublicEvents
-```
-EVENTS_TABLE = VoiceFemEvents
-AWS_REGION = us-east-1
-```
+- **函数**: `online-praat-analysis`
+- **环境变量**:
+  - `DDB_TABLE`: **主会话表**的名称，用于存储嗓音测试的状态和结果。(例如: `VoiceTests`)
+  - `BUCKET`: **主存储桶**的名称，用于读取原始录音和写入分析产物（图表、报告）。
+  - `EVENTS_TABLE`: **事件表**的名称，用于在分析成功后自动创建一条 `self_test` 事件记录。
+  - `AWS_LAMBDA_FUNCTION_NAME`: Lambda 函数自身的名称。这是**必需的**，因为该函数会通过异步方式自我调用来处理耗时任务。
+  - `AWS_REGION`: AWS 区域。(通常由 Lambda 运行时自动提供，但建议明确设置)
 
-#### getVoiceEvents
-```
-EVENTS_TABLE = VoiceFemEvents
-AWS_REGION = us-east-1
-```
+---
 
-### 用户资料管理函数
+## 部署与配置建议
 
-#### getUserProfile
-```
-USERS_TABLE = VoiceFemUsers
-AWS_REGION = us-east-1
-```
-
-#### getUserPublicProfile
-```
-USERS_TABLE = VoiceFemUsers
-AWS_REGION = us-east-1
-```
-
-#### updateUserProfile
-```
-USERS_TABLE = VoiceFemUsers
-AWS_REGION = us-east-1
-```
-
-#### vfsTrackerUserProfileSetup
-```
-USERS_TABLE = VoiceFemUsers
-AWS_REGION = us-east-1
-```
-
-## 现有代码问题修复
-
-⚠️ **发现问题**：部分Lambda函数使用了硬编码的表名，需要修复为使用环境变量。
-
-### 需要修复的函数：
-1. **addVoiceEvent** - 硬编码了 `"VoiceFemEvents"`
-2. **getAllPublicEvents** - 硬编码了 `"VoiceFemEvents"`  
-3. **getVoiceEvents** - 硬编码了 `"VoiceFemEvents"`
-
-### 修复方法：
-将硬编码的表名替换为环境变量：
-```javascript
-// 修复前
-const tableName = "VoiceFemEvents";
-
-// 修复后
-const tableName = process.env.EVENTS_TABLE || "VoiceFemEvents";
-```
-
-## AWS控制台配置步骤
-
-### 1. 批量环境变量配置
-
-对于所有Lambda函数，建议使用以下环境变量：
-
-#### 通用环境变量（所有函数）
-```
-AWS_REGION = us-east-1
-```
-
-#### S3文件管理函数额外需要
-```
-BUCKET_NAME = your-s3-bucket-name
-```
-
-#### 嗓音事件管理函数额外需要
-```
-EVENTS_TABLE = VoiceFemEvents
-```
-
-#### 用户资料管理函数额外需要
-```
-USERS_TABLE = VoiceFemUsers
-```
-
-### 2. 通过AWS CLI批量配置
-
-```bash
-# S3文件管理函数
-for func in getUploadUrl getFileUrl getAvatarUrl; do
-  aws lambda update-function-configuration \
-    --function-name $func \
-    --environment Variables='{BUCKET_NAME=your-s3-bucket-name,AWS_REGION=us-east-1}'
-done
-
-# 嗓音事件管理函数
-for func in addVoiceEvent getAllPublicEvents getVoiceEvents; do
-  aws lambda update-function-configuration \
-    --function-name $func \
-    --environment Variables='{EVENTS_TABLE=VoiceFemEvents,AWS_REGION=us-east-1}'
-done
-
-# 用户资料管理函数
-for func in getUserProfile getUserPublicProfile updateUserProfile vfsTrackerUserProfileSetup; do
-  aws lambda update-function-configuration \
-    --function-name $func \
-    --environment Variables='{USERS_TABLE=VoiceFemUsers,AWS_REGION=us-east-1}'
-done
-```
-
-### 3. 通过CloudFormation/SAM模板配置
+### CloudFormation/SAM 模板示例
+在您的 IaC (Infrastructure as Code) 模板中，为每个函数定义其所需的环境变量。
 
 ```yaml
 Parameters:
   S3BucketName:
     Type: String
     Default: vfs-tracker-files
-  
   UsersTableName:
     Type: String
     Default: VoiceFemUsers
-  
   EventsTableName:
     Type: String
     Default: VoiceFemEvents
+  VoiceTestsTableName:
+    Type: String
+    Default: VoiceTests
+  GeminiApiKey:
+    Type: String
+    NoEcho: true
 
 Resources:
-  # S3文件管理函数
-  GetUploadUrlFunction:
+  # 核心服务示例
+  UpdateUserProfileFunction:
     Type: AWS::Lambda::Function
     Properties:
-      Environment:
-        Variables:
-          BUCKET_NAME: !Ref S3BucketName
-          AWS_REGION: !Ref AWS::Region
-  
-  # 用户资料管理函数
-  GetUserProfileFunction:
-    Type: AWS::Lambda::Function
-    Properties:
+      # ... 其他配置
       Environment:
         Variables:
           USERS_TABLE: !Ref UsersTableName
-          AWS_REGION: !Ref AWS::Region
-  
-  # 嗓音事件管理函数
-  AddVoiceEventFunction:
+
+  # AI 服务示例
+  GeminiProxyFunction:
     Type: AWS::Lambda::Function
     Properties:
+      # ... 其他配置
       Environment:
         Variables:
+          GEMINI_API_KEY: !Ref GeminiApiKey
+
+  # 分析服务
+  OnlinePraatAnalysisFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      # ... 其他配置 (如容器镜像)
+      FunctionName: !Sub '${AWS::StackName}-OnlinePraatAnalysis'
+      Environment:
+        Variables:
+          DDB_TABLE: !Ref VoiceTestsTableName
+          BUCKET: !Ref S3BucketName
           EVENTS_TABLE: !Ref EventsTableName
-          AWS_REGION: !Ref AWS::Region
+          AWS_LAMBDA_FUNCTION_NAME: !Ref OnlinePraatAnalysisFunction # 引用自身
 ```
 
-## 必需的AWS资源
-
-确保以下AWS资源已创建：
-
-### DynamoDB表
-1. **VoiceFemUsers** - 用户资料表
-2. **VoiceFemEvents** - 嗓音事件表
-
-### S3存储桶
-1. **your-s3-bucket-name** - 文件存储桶
-
-### IAM权限
-Lambda函数需要相应的IAM权限：
-- DynamoDB: `dynamodb:GetItem`, `dynamodb:PutItem`, `dynamodb:UpdateItem`, `dynamodb:Query`, `dynamodb:Scan`
-- S3: `s3:GetObject`, `s3:PutObject`, `s3:DeleteObject`
-
-## 测试环境变量配置
-
-可以创建一个简单的测试函数来验证环境变量是否正确设置：
-
-```javascript
-export const handler = async (event) => {
-  return {
-    statusCode: 200,
-    body: JSON.stringify({
-      bucketName: process.env.BUCKET_NAME,
-      region: process.env.AWS_REGION,
-      message: '环境变量配置检查'
-    })
-  };
-};
-```
-
-## 故障排除
-
-### 常见问题
-1. **BUCKET_NAME未设置**：Lambda函数会抛出错误
-2. **AWS_REGION未设置**：可能默认使用Lambda运行的区域
-3. **存储桶不存在**：预签名URL生成会失败
-4. **权限不足**：即使环境变量正确，如果IAM权限不足也会失败
-
-### 调试方法
-- 检查CloudWatch日志中的错误信息
-- 使用AWS CLI测试S3访问权限
-- 在Lambda函数中添加console.log来检查环境变量值
+### 手动配置检查清单
+- [ ] `online-praat-analysis` 函数是否已配置所有四个必需的环境变量？
+- [ ] 所有需要访问 Gemini 的函数是否已配置 `GEMINI_API_KEY`？
+- [ ] 所有数据库和 S3 的表名/桶名是否与实际部署的资源名称一致？
+- [ ] IAM 角色是否授予了对这些环境变量所指向资源的相应权限？

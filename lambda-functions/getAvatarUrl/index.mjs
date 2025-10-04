@@ -1,9 +1,19 @@
+/**
+ * @file [CN] 该文件包含一个 AWS Lambda 处理程序，用于为指定的用户头像生成一个预签名的 S3 GET URL。
+ */
 import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
 const s3Client = new S3Client({ region: process.env.AWS_REGION || 'us-east-1' });
 const BUCKET_NAME = process.env.BUCKET_NAME;
 
+/**
+ * [CN] 一个 AWS Lambda 处理程序，接收一个用户 ID 作为路径参数，并返回一个预签名的 S3 URL，
+ * 该 URL 可用于在 24 小时内公开访问该用户的头像。
+ * 它还支持 CDN 主机重写以优化性能。
+ * @param {object} event - API Gateway Lambda 事件对象，应在 `pathParameters` 中包含 `userId`。
+ * @returns {Promise<object>} 一个 API Gateway 响应，其中包含头像的预签名 URL 或错误消息。
+ */
 export const handler = async (event) => {
     const headers = {
         'Content-Type': 'application/json',

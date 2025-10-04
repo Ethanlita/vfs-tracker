@@ -1,3 +1,6 @@
+/**
+ * @file [CN] 该文件包含一个 AWS Lambda 处理程序，用于获取特定用户的所有嗓音事件。
+ */
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient, QueryCommand } from "@aws-sdk/lib-dynamodb";
 
@@ -13,7 +16,11 @@ const corsHeaders = {
 };
 
 /**
- * 从JWT token中提取用户信息 - 专门处理ID Token
+ * [CN] 从 API Gateway 事件对象中提取用户信息，优先解析 Authorization 头中的 ID Token。
+ * 此函数会尝试从 API Gateway 的授权方上下文中获取 claims，如果失败，则会手动解析 Bearer token。
+ * @param {object} event - API Gateway Lambda 事件对象。
+ * @returns {{userId: string, email: string, username: string, nickname: string}} 提取出的用户信息对象。
+ * @throws {Error} 如果在请求中找不到有效的 ID token 或解析失败。
  */
 function extractUserFromEvent(event) {
   try {
@@ -78,6 +85,12 @@ function extractUserFromEvent(event) {
   }
 }
 
+/**
+ * [CN] Lambda 函数的主处理程序。它通过从授权 token 中提取的用户 ID 查询并返回该用户的所有嗓音事件。
+ * 它强制执行一项安全检查，以确保用户只能访问自己的数据。事件按创建日期降序返回。
+ * @param {object} event - API Gateway Lambda 事件对象，应在 `pathParameters` 中包含 `userId`。
+ * @returns {Promise<object>} 一个 API Gateway 响应，其中包含用户的嗓音事件列表或错误消息。
+ */
 export const handler = async (event) => {
     // 调试信息
     const debugInfo = {

@@ -1,3 +1,7 @@
+"""
+[CN] 该文件包含一个 AWS Lambda 处理程序，用于在线进行 Praat 语音分析。
+它通过 API Gateway 暴露多个端点，用于创建会话、获取上传URL、触发异步分析以及检索结果。
+"""
 import json
 import logging
 import os
@@ -44,6 +48,11 @@ AWS_REGION = os.getenv("AWS_REGION", "us-east-1")
 US_EAST_1_REGIONAL_ENDPOINT = os.getenv("US_EAST_1_REGIONAL_ENDPOINT", "regional")
 
 def get_s3_client():
+    """
+    [CN] 初始化并返回一个单例的 S3 客户端。
+    该客户端被配置为使用特定的区域端点和虚拟主机寻址方式，以确保兼容性和性能。
+    :return: boto3 S3 客户端实例。
+    """
     global _s3_client
     if _s3_client is None:
         _s3_client = boto3.client(
@@ -61,24 +70,40 @@ def get_s3_client():
     return _s3_client
 
 def get_dynamodb():
+    """
+    [CN] 初始化并返回一个单例的 DynamoDB 资源客户端。
+    :return: boto3 DynamoDB 资源实例。
+    """
     global _dynamodb
     if _dynamodb is None:
         _dynamodb = boto3.resource('dynamodb')
     return _dynamodb
 
 def get_lambda_client():
+    """
+    [CN] 初始化并返回一个单例的 Lambda 客户端。
+    :return: boto3 Lambda 客户端实例。
+    """
     global _lambda_client
     if _lambda_client is None:
         _lambda_client = boto3.client('lambda')
     return _lambda_client
 
 def get_table():
+    """
+    [CN] 使用单例客户端返回一个指向主会话表的 DynamoDB Table 资源。
+    :return: DynamoDB Table 资源实例。
+    """
     global _table
     if _table is None and DDB_TABLE:
         _table = get_dynamodb().Table(DDB_TABLE)
     return _table
 
 def get_events_table():
+    """
+    [CN] 使用单例客户端返回一个指向事件表的 DynamoDB Table 资源。
+    :return: DynamoDB Table 资源实例。
+    """
     global _events_table
     if _events_table is None and EVENTS_TABLE:
         _events_table = get_dynamodb().Table(EVENTS_TABLE)
@@ -92,6 +117,12 @@ CORS_HEADERS = {
 
 # ---------- Serialization Helpers ----------
 def _to_dynamo(v):
+    """
+    [CN] 递归地将一个 Python 对象转换为 DynamoDB 兼容的格式。
+    它能处理 numpy 的浮点数/整数、标准的浮点数，并将它们转换为 Decimal 类型，同时处理 NaN/inf 值。
+    :param v: 要转换的值或对象。
+    :return: DynamoDB 兼容的对象。
+    """
     if isinstance(v, (np.floating,)):
         if np.isnan(v) or np.isinf(v):
             return Decimal('0')
@@ -111,6 +142,11 @@ def _to_dynamo(v):
     return v
 
 def _from_dynamo(v):
+    """
+    [CN] 递归地将一个从 DynamoDB 读取的对象（包含 Decimal 类型）转换回标准的 Python 对象。
+    :param v: 从 DynamoDB 读取的值或对象。
+    :return: 标准的 Python 对象。
+    """
     if isinstance(v, Decimal):
         return int(v) if v % 1 == 0 else float(v)
     if isinstance(v, dict):
@@ -121,7 +157,12 @@ def _from_dynamo(v):
 
 # ---------- JWT Helper ----------
 def extract_user_info(event) -> Dict[str, Optional[str]]:
-    """Extracts user ID and username from JWT token."""
+    """
+    [CN] 从 API Gateway 事件中提取用户ID和用户名。
+    该函数首先尝试从 API Gateway 授权方的上下文中获取用户信息，如果失败，则回退到手动解码 Authorization 头中的 JWT token。
+    :param event: API Gateway Lambda 事件对象。
+    :return: 一个包含 'userId' 和 'userName' 的字典。
+    """
     info = {'userId': None, 'userName': 'Anonymous'}
 
     # First try the easy way via API Gateway authorizer context
@@ -161,9 +202,10 @@ TMP_BASE = '/tmp'
 # ---------- Analysis Logic ----------
 def _sort_and_select_notes(note_paths: list) -> (Optional[str], Optional[str]):
     """
-    Sorts notes alphabetically by filename and returns the high and low notes.
-    It assumes that the file with the name that comes first alphabetically is the 'high' note,
-    and the second is the 'low' note. This is based on the S3 key ordering.
+    [CN] 根据文件名按字母顺序对音符文件进行排序，并返回高音和低音文件路径。
+    它假设文件名按字母顺序排列时，第一个文件是'high' note，第二个是'low' note。这是基于 S3 键的排序行为。
+    :param note_paths: 本地音符文件路径列表。
+    :return: 一个包含 (low_note_path, high_note_path) 的元组。
     """
     if not note_paths:
         return None, None
@@ -177,6 +219,17 @@ def _sort_and_select_notes(note_paths: list) -> (Optional[str], Optional[str]):
     return low_note, high_note
 
 def perform_full_analysis(session_id: str, calibration: dict = None, forms: dict = None, userInfo: dict = None):
+    """
+    [CN] 执行完整的语音分析流程。
+    该函数协调整个分析过程：列出并下载会话的音频文件，调用各种分析模块
+    （如 analyze_sustained_vowel, analyze_speech_flow 等），从分析结果生成图表，
+    创建最终的 PDF 报告，并将所有产物（图表、PDF）上传到 S3。
+    :param session_id: 要分析的会话 ID。
+    :param calibration: (可选) 校准数据。
+    :param forms: (可选) 用户填写的问卷数据。
+    :param userInfo: (可选) 包含用户信息的字典。
+    :return: 一个包含 (metrics, charts, report_url) 的元组。
+    """
     from analysis import analyze_sustained_vowel, analyze_speech_flow, analyze_glide_files, analyze_note_file_robust, get_lpc_spectrum
     from artifacts import create_time_series_chart, create_vrp_chart, create_pdf_report, create_formant_chart, create_formant_spl_chart, create_placeholder_chart
 
@@ -351,6 +404,12 @@ def perform_full_analysis(session_id: str, calibration: dict = None, forms: dict
 
 # ---------- API Handlers ----------
 def handle_create_session(event):
+    """
+    [CN] API 端点处理程序：创建一个新的分析会话。
+    在 DynamoDB 中为经过身份验证的用户创建一个新的会话记录。
+    :param event: API Gateway Lambda 事件对象。
+    :return: 包含新会话 ID 的 API Gateway 响应。
+    """
     userInfo = extract_user_info(event)
     user_id = userInfo.get('userId')
     if not user_id:
@@ -369,6 +428,12 @@ def handle_create_session(event):
         return {'statusCode': 500, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Could not create session'})}
 
 def handle_get_upload_url(event):
+    """
+    [CN] API 端点处理程序：为文件上传生成一个预签名的 S3 URL。
+    在验证用户对会话的所有权后，为客户端生成一个有时限的 PUT URL。
+    :param event: API Gateway Lambda 事件对象，请求体中包含 sessionId, step, fileName。
+    :return: 包含预签名上传 URL 的 API Gateway 响应。
+    """
     userInfo = extract_user_info(event)
     user_id = userInfo.get('userId')
     if not user_id:
@@ -413,6 +478,12 @@ def handle_get_upload_url(event):
         return {'statusCode': 500, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Could not generate upload URL'})}
 
 def handle_analyze_trigger(event):
+    """
+    [CN] API 端点处理程序：触发一个异步分析任务。
+    此函数通过使用 'Event' 调用类型再次调用自身来启动分析，从而允许立即返回响应。
+    :param event: API Gateway Lambda 事件对象，请求体中包含 sessionId。
+    :return: 202 Accepted 响应，表示分析已排队。
+    """
     body = json.loads(event.get('body', '{}'))
     session_id = body.get('sessionId')
     if not session_id:
@@ -445,7 +516,14 @@ def handle_analyze_trigger(event):
         return {'statusCode': 500, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Failed to queue analysis'})}
 
 def generate_presigned_url_from_s3_uri(s3_uri: str, event=None, expiration: int = 3600) -> Optional[str]:
-    """Parses an S3 URI and generates a presigned GET URL."""
+    """
+    [CN] 解析一个 S3 URI 并为其生成一个有时限的预签名 GET URL。
+    还支持将 URL 的主机名重写为 CDN 主机以优化性能。
+    :param s3_uri: 要签名的对象的 S3 URI (例如, 's3://bucket/key')。
+    :param event: (可选) API Gateway 事件对象，用于 CDN 主机重写。
+    :param expiration: URL 的有效时间（秒）。
+    :return: 预签名的 URL 字符串，如果失败则返回 None。
+    """
     if not s3_uri or not s3_uri.startswith('s3://'):
         return None
     try:
@@ -478,6 +556,12 @@ def generate_presigned_url_from_s3_uri(s3_uri: str, event=None, expiration: int 
         return None
 
 def handle_get_results(event):
+    """
+    [CN] API 端点处理程序：获取指定会话的分析结果。
+    在验证用户所有权后，从 DynamoDB 检索会话数据。如果分析完成，它会将产物的 S3 URI 转换为可访问的预签名 URL。
+    :param event: API Gateway Lambda 事件对象，路径参数中包含 sessionId。
+    :return: 包含会话状态和结果的 API Gateway 响应。
+    """
     userInfo = extract_user_info(event)
     user_id = userInfo.get('userId')
     if not user_id:
@@ -510,6 +594,12 @@ def handle_get_results(event):
 
 # ---------- Async Task Handler ----------
 def handle_analyze_task(event):
+    """
+    [CN] 异步分析任务的处理程序。
+    由 `handle_analyze_trigger` 异步调用。它执行 `perform_full_analysis`，
+    将结果保存到 DynamoDB，并（如果成功）在事件表中创建一个新的 'self_test' 事件。
+    :param event: 包含 'sessionId', 'body', 'userInfo' 的事件负载。
+    """
     session_id = event.get('sessionId')
     body = event.get('body', {})
     userInfo = event.get('userInfo', {'userId': None, 'userName': 'N/A'})
@@ -608,6 +698,13 @@ def handle_analyze_task(event):
 
 # ---------- Main Handler & Router ----------
 def handler(event, context):
+    """
+    [CN] Lambda 函数的主入口点和路由器。
+    它检查事件是同步 API Gateway 调用还是异步任务。对于 API 调用，它根据 HTTP 方法和路径将请求路由到相应的处理程序。
+    :param event: Lambda 事件对象。
+    :param context: Lambda 上下文对象。
+    :return: API Gateway 响应对象。
+    """
     logger.info(f'Handler started. Request ID: {getattr(context, "aws_request_id", "N/A")}')
 
     if 'task' in event and event['task'] == 'analyze':
@@ -638,6 +735,11 @@ def handler(event, context):
 
 # Helper functions from original code that are still needed
 def list_session_audio_keys(session_id: str):
+    """
+    [CN] 列出给定会话 ID 在 S3 中的所有音频对象键，并按“步骤”目录分组。
+    :param session_id: 要列出文件的会话 ID。
+    :return: 一个将步骤 ID 映射到 S3 对象键列表的字典。
+    """
     prefix = RAW_PREFIX_TEMPLATE.format(sessionId=session_id)
     paginator = get_s3_client().get_paginator('list_objects_v2')
     groups = {}
@@ -652,6 +754,11 @@ def list_session_audio_keys(session_id: str):
     return groups
 
 def safe_download(key: str) -> str:
+    """
+    [CN] 安全地将一个文件从 S3 下载到本地临时路径，并处理潜在的错误。
+    :param key: 要下载的 S3 对象的键。
+    :return: 文件的本地路径，如果下载失败则返回空字符串。
+    """
     local_path = os.path.join(TMP_BASE, key.replace('/', '_'))
     try:
         get_s3_client().download_file(BUCKET, key, local_path)
@@ -661,6 +768,11 @@ def safe_download(key: str) -> str:
         return ''
 
 def pick_longest_file(local_paths):
+    """
+    [CN] 从本地文件路径列表中选择持续时间最长的音频文件。
+    :param local_paths: 本地音频文件的路径列表。
+    :return: 持续时间最长的文件的路径。
+    """
     import wave
     best_path, max_duration = None, -1
     for p in local_paths:

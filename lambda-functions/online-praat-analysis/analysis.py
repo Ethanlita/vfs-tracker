@@ -1,3 +1,7 @@
+"""
+[CN] 该文件包含用于在线 Praat 分析服务的所有核心语音处理和声学分析逻辑。
+它利用 parselmouth、librosa 和 numpy 等库来计算各种声学指标。
+"""
 import logging
 import numpy as np
 import parselmouth
@@ -20,7 +24,11 @@ logger.setLevel(logging.INFO)
 # --- New Robust Analysis Helper Functions (based on user guidance) ---
 
 def pick_params(f0_median: float) -> (int, float):
-    """Selects analysis parameters based on the voice's F0."""
+    """
+    [CN] 根据声音的基频中位数选择分析参数。
+    :param f0_median: 基频的中位数（Hz）。
+    :return: 一个包含 (max_formant, window_length) 的元组。
+    """
     if f0_median < 220:
         max_formant = 5000
         win_len = 0.025
@@ -35,8 +43,11 @@ def pick_params(f0_median: float) -> (int, float):
 
 def true_envelope_db(frame: np.ndarray, sr: int, lifter_ms: float = 2.8):
     """
-    用倒谱低 quefrency 截断得到平滑的“真谱包络”（dB）以及对应频率刻度。
-    仅依赖 numpy，不需要 scipy。
+    [CN] 通过倒谱低通提升（cepstral liftering）来计算平滑的“真实谱包络”（单位dB）。
+    :param frame: 音频帧的 numpy 数组。
+    :param sr: 采样率。
+    :param lifter_ms: 倒谱提升的截止时间（毫秒）。
+    :return: 一个包含 (envelope_db, frequencies) 的元组。
     """
     x = np.asarray(frame, dtype=np.float64)
     if x.size == 0:
@@ -62,6 +73,15 @@ def true_envelope_db(frame: np.ndarray, sr: int, lifter_ms: float = 2.8):
     return env_db, freqs
 
 def peak_prominence_db(env_db: np.ndarray, idx: int, freq_bins: Optional[np.ndarray], win_hz: float = 150.0) -> float:
+    """
+    [CN] 计算频谱包络中一个峰值的显著性（prominence）。
+    显著性定义为峰值与其两侧最近的深谷之间的垂直距离。
+    :param env_db: 频谱包络（dB）。
+    :param idx: 峰值的索引。
+    :param freq_bins: 频率轴。
+    :param win_hz: 搜索深谷的窗口宽度（Hz）。
+    :return: 峰值的显著性（dB）。
+    """
     if idx <= 1 or idx >= len(env_db) - 2:
         return 0.0
     if freq_bins is None or len(freq_bins) < 2:
@@ -86,8 +106,14 @@ def _calculate_confidence(
     freq_bins: Optional[np.ndarray] = None
 ) -> (float, float):
     """
-    Calculates a robust confidence score for a formant candidate,
-    incorporating bandwidth, peak prominence, and harmonic proximity.
+    [CN] 为一个共振峰候选者计算一个稳健的置信度分数。
+    该分数综合考虑了带宽、峰值显著性和与谐波的接近程度。
+    :param freq_hz: 候选共振峰的频率。
+    :param bw_hz: 候选共振峰的带宽。
+    :param f0: 当前帧的基频。
+    :param true_envelope: (可选) 真实谱包络。
+    :param freq_bins: (可选) 频率轴。
+    :return: 一个包含 (confidence_score, prominence_db) 的元组。
     """
     # Bandwidth score
     bw_score = 1.0 if 80 <= bw_hz <= 600 else max(0.0, 1.0 - (abs(bw_hz - 340) / 500))
@@ -114,9 +140,12 @@ def _calculate_confidence(
 
 def analyze_note_file_robust(path: str, f0min: int = 75, f0max: int = 1200) -> Dict:
     """
-    稳健版：遍历所有发声片段 → 帧级筛选（F0/HNR）→ Praat(Burg) + 真谱包络联合评分
-          → 非交叉/最小间距约束 → 在最佳时间窗口内取中位数。
-    返回结构保持兼容，新增 best_segment_time / is_high_pitch / debug_info。
+    [CN] 对单个音符音频文件进行稳健的共振峰分析。
+    流程：遍历所有发声片段 -> 帧级筛选（F0/HNR）-> Praat(Burg) + 真谱包络联合评分 -> 非交叉/最小间距约束 -> 在最佳时间窗口内取中位数。
+    :param path: 音频文件的本地路径。
+    :param f0min: 最低基频搜索范围。
+    :param f0max: 最高基频搜索范围。
+    :return: 包含共振峰、基频等指标的字典。
     """
     try:
         sound = parselmouth.Sound(path)
@@ -300,8 +329,12 @@ def analyze_note_file_robust(path: str, f0min: int = 75, f0max: int = 1200) -> D
 
 def analyze_sustained_vowel(local_paths: list, f0_min: int = 75, f0_max: int = 800) -> Dict:
     """
-    Analyzes a list of sustained vowel recordings, picks the best one based on MPT,
-    and returns a comprehensive analysis dictionary including its own formant analysis.
+    [CN] 分析一个持续元音录音列表，根据最长发声时长（MPT）选择最佳录音，
+    并返回一个包含其声学指标（包括共振峰）的综合分析字典。
+    :param local_paths: 持续元音文件的本地路径列表。
+    :param f0_min: 最低基频搜索范围。
+    :param f0_max: 最高基频搜索范围。
+    :return: 包含 'metrics', 'chosen_file', 'lpc_spectrum' 的字典。
     """
     best_file = None
     max_voiced_duration = -1.0
@@ -373,6 +406,14 @@ def analyze_sustained_vowel(local_paths: list, f0_min: int = 75, f0_max: int = 8
         return {'metrics': {'error': 'Analysis failed for the chosen file.', 'reason': str(e)}}
 
 def analyze_speech_flow(file_path, f0min=75, f0max=600):
+    """
+    [CN] 分析一段连续语音（如朗读或自发语音）的声学特征。
+    计算并返回时长、发声比例、停顿次数以及基频的均值、标准差和统计数据。
+    :param file_path: 音频文件的本地路径。
+    :param f0min: 最低基频搜索范围。
+    :param f0max: 最高基频搜索范围。
+    :return: 包含分析指标的字典，如果失败则返回 None。
+    """
     logger.info(f"Analyzing speech flow at {file_path} with F0 range {f0min}-{f0max} Hz")
     try:
         sound = parselmouth.Sound(file_path)
@@ -397,20 +438,38 @@ def analyze_speech_flow(file_path, f0min=75, f0max=600):
         return None
 
 def _load_mono(path):
+    """
+    [CN] 加载一个音频文件并将其转换为单声道。
+    :param path: 音频文件的路径。
+    :return: 一个包含 (y, sr) 的元组，其中 y 是音频时间序列，sr 是采样率。
+    """
     y, sr = librosa.load(path, sr=None, mono=True)
     return y, sr
 
 def _rms_spl(y):
+    """
+    [CN] 计算音频信号的估计声压级（SPL in dBA）。
+    :param y: 音频时间序列。
+    :return: 估计的 dBA 声压级。
+    """
     rms = np.sqrt(np.mean(y ** 2) + 1e-12)
     return 20 * np.log10(rms) + 94.0
 
 @dataclass
 class PitchSplFrame:
+    """[CN] 用于存储单个时间帧的音高和声压级的数据类。"""
     time: float
     f0: float
     spl: float
 
 def extract_pitch_spl_series(path, f0min=75, f0max=1200):
+    """
+    [CN] 从音频文件中提取音高（F0）和声压级（SPL）的时间序列。
+    :param path: 音频文件的本地路径。
+    :param f0min: 最低基频搜索范围。
+    :param f0max: 最高基频搜索范围。
+    :return: 一个 PitchSplFrame 对象的列表。
+    """
     try:
         y, sr = _load_mono(path)
         snd = parselmouth.Sound(path)
@@ -433,6 +492,12 @@ def extract_pitch_spl_series(path, f0min=75, f0max=1200):
         return []
 
 def analyze_glide_files(local_paths):
+    """
+    [CN] 分析一组滑音（glide）录音，以构建一个音域图（Voice Range Profile, VRP）。
+    它从所有文件中提取 F0-SPL 数据点，并按半音进行分箱，计算每个半音的 SPL 范围。
+    :param local_paths: 滑音文件的本地路径列表。
+    :return: 包含 VRP 数据的字典。
+    """
     all_frames=[]
     for p in local_paths:
         all_frames.extend(extract_pitch_spl_series(p))
@@ -451,7 +516,12 @@ def analyze_glide_files(local_paths):
     return {'f0_min': float(np.percentile(f0s, 10)), 'f0_max': float(np.percentile(f0s, 90)), 'spl_min': float(np.percentile(spls, 10)), 'spl_max': float(np.percentile(spls, 90)), 'bins': bins}
 
 def _find_loudest_segment(sound: parselmouth.Sound, duration: float = 0.1) -> parselmouth.Sound:
-    """Finds the segment of a sound with the highest energy (RMS)."""
+    """
+    [CN] 找到声音中能量（RMS）最高的片段。
+    :param sound: parselmouth Sound 对象。
+    :param duration: 片段的时长。
+    :return: 能量最高的 parselmouth Sound 片段。
+    """
     if sound.duration < duration:
         return sound
 
@@ -472,8 +542,13 @@ def _find_loudest_segment(sound: parselmouth.Sound, duration: float = 0.1) -> pa
 
 def get_lpc_spectrum(file_path: str, max_formant: int = 5500, analysis_time: Optional[float] = None, is_high_pitch: bool = False):
     """
-    Get a smooth LPC (Linear Predictive Coding) spectrum of an audio file.
-    This version uses librosa and scipy, which is more stable than the parselmouth LPC methods.
+    [CN] 获取音频文件的平滑 LPC（线性预测编码）频谱。
+    该版本使用 librosa 和 scipy，比 parselmouth 的 LPC 方法更稳定。
+    :param file_path: 音频文件的本地路径。
+    :param max_formant: 要分析的最大共振峰频率。
+    :param analysis_time: (可选) 进行分析的特定时间点（秒）。
+    :param is_high_pitch: (可选) 是否为高音调声音的提示。
+    :return: 包含 'frequencies' 和 'spl_values' 的字典，如果失败则返回 None。
     """
     logger.info(f"Getting LPC spectrum for {file_path}")
     try:
