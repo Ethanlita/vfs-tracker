@@ -65,7 +65,7 @@ const PostsDropdown = ({
     closeTimeoutRef.current = window.setTimeout(() => {
       setIsOpen(false);
       setActiveFolderPath([]);
-    }, 120);
+    }, 240);
   }, []);
 
   /**
