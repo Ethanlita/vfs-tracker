@@ -187,9 +187,9 @@ bio:                  84% (11/13) ⚠️ (文档未提及)
 **profile.bio**:
 - **文档**: 未提及
 - **实际**: 84%的记录存在
-- **问题**: ⚠️ **此字段不应该存在** - 需要调查是哪段代码创建了这个字段
+- **问题**: ⚠️ **此字段不应该存在于业务中**
 - **Lambda处理**: `vfsTrackerUserProfileSetup`和`updateUserProfile`都支持bio字段
-- **建议**: 调查bio字段的来源，考虑是否应该从代码和文档中移除
+- **行动**: 创建后续issue - 找到添加bio字段的代码（可能在这两个Lambda中），修改代码移除bio支持
 
 #### ✅ 正确: 字段的可选性定义合理
 
@@ -471,13 +471,12 @@ return createResponse(200, basicProfile);
 ```
 
 **分析**:
-- 返回基本profile但不写入是合理的设计
-- 用户应通过`vfsTrackerUserProfileSetup`或`updateUserProfile`显式创建/更新profile
-- 这种设计避免了隐式创建可能导致的数据不一致
+- 返回基本profile但不写入是**正确的设计** ✅
+- 当profile不存在时，会触发用户信息完善向导
+- 向导会引导用户通过`vfsTrackerUserProfileSetup`创建完整profile
+- 这种设计确保用户主动完善信息，而非隐式创建可能不完整的数据
 
-**与文档一致性**: ✅ 实现合理
-
-**改进建议**: 可创建新issue考虑是否在此时写入基本profile（超出本issue范围）
+**与文档一致性**: ✅ 实现正确，无需修改
 
 #### ✅ updateUserProfile (index.mjs)
 **行为**:
@@ -598,9 +597,10 @@ table.update_item(...)
    - 更新getAllPublicEvents使用Query代替Scan
    - 评估VoiceFemTests是否需要SessionIdIndex GSI
 
-9. **代码审查issue**: "调查bio字段来源并决定是否保留"
-   - 确认bio字段是否为计划功能
-   - 如不需要，从Lambda和文档中移除
+9. **代码清理issue**: "移除bio字段支持"
+   - bio字段不应该存在于业务中（已确认）
+   - 找到Lambda中添加bio的代码（vfsTrackerUserProfileSetup和updateUserProfile）
+   - 修改代码移除对bio字段的支持
 
 #### ✅ 无需修改
 

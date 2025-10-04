@@ -24,7 +24,7 @@
 |---|------|------|------|
 | 7 | **数据质量** | VoiceFemUsers | 创建issue：修复2条记录的缺失字段 |
 | 8 | **性能优化** | getAllPublicEvents | 创建issue：添加GSI，使用Query代替Scan |
-| 9 | **bio字段来源** | VoiceFemUsers | 创建issue：调查bio字段是否应该存在 |
+| 9 | **bio字段来源** | VoiceFemUsers | 创建issue：找到添加bio的代码并修改，使其不再添加bio |
 
 ### ✅ 文档定义正确（无需修改）
 
