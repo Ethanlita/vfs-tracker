@@ -1,0 +1,2344 @@
+---
+Metadata:
+  AWSToolsMetrics:
+    IaC_Generator: "arn:aws:cloudformation:us-east-1:296821242554:generatedTemplate/43a4015e-baaa-41db-a096-5ce64ae38374"
+Parameters:
+  LambdaFunctionGetAvatarUrlCodeS3BucketE5oSf:
+    NoEcho: "true"
+    Type: "String"
+    Description: "An Amazon S3 bucket in the same AWS-Region as your function. The\
+      \ bucket can be in a different AWS-account."
+  LambdaFunctionGetFileUrlCodeS3BucketUUAqg:
+    NoEcho: "true"
+    Type: "String"
+    Description: "An Amazon S3 bucket in the same AWS-Region as your function. The\
+      \ bucket can be in a different AWS-account."
+  LambdaFunctionUpdateUserProfileCodeS3BucketuLGPd:
+    NoEcho: "true"
+    Type: "String"
+    Description: "An Amazon S3 bucket in the same AWS-Region as your function. The\
+      \ bucket can be in a different AWS-account."
+  LambdaFunctionGetUserPublicProfileCodeImageUriaEQyO:
+    NoEcho: "true"
+    Type: "String"
+    Description: "URI of a [container image](https://docs.aws.amazon.com/lambda/latest/dg/lambda-images.html)\
+      \ in the Amazon ECR registry."
+  LambdaFunctionUpdateUserProfileCodeS3KeyQ5qEy:
+    NoEcho: "true"
+    Type: "String"
+    Description: "The Amazon S3 key of the deployment package."
+  LambdaFunctionEdgeprobeCodeZipFile4I53t:
+    NoEcho: "true"
+    Type: "String"
+    Description: "(Node.js and Python) The source code of your Lambda function. If\
+      \ you include your function source inline with this parameter, CFN places it\
+      \ in a file named ``index`` and zips it to create a [deployment package](https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-package.html).\
+      \ This zip file cannot exceed 4MB. For the ``Handler`` property, the first part\
+      \ of the handler identifier must be ``index``. For example, ``index.handler``.\n\
+      \  When you specify source code inline for a Node.js function, the ``index``\
+      \ file that CFN creates uses the extension ``.js``. This means that LAM treats\
+      \ the file as a CommonJS module. ES modules aren't supported for inline functions.\n\
+      \   For JSON, you must escape quotes and special characters such as newline\
+      \ (``\\n``) with a backslash.\n If you specify a function that interacts with\
+      \ an AWS CloudFormation custom resource, you don't have to write your own functions\
+      \ to send responses to the custom resource that invoked the function. AWS CloudFormation\
+      \ provides a response module ([cfn-response](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-lambda-function-code-cfnresponsemodule.html))\
+      \ that simplifies sending responses. See [Using Lambda with CloudFormation](https://docs.aws.amazon.com/lambda/latest/dg/services-cloudformation.html)\
+      \ for details."
+  LambdaFunctionGetFileUrlCodeS3ObjectVersionatnLs:
+    NoEcho: "true"
+    Type: "String"
+    Description: "For versioned objects, the version of the deployment package object\
+      \ to use."
+  LambdaFunctionOnlinepraatanalysisCodeSourceKMSKeyArnK1CWR:
+    NoEcho: "true"
+    Type: "String"
+    Description: "The ARN of the KMSlong (KMS) customer managed key that's used to\
+      \ encrypt your function's .zip deployment package. If you don't provide a customer\
+      \ managed key, Lambda uses an [owned key](https://docs.aws.amazon.com/kms/latest/developerguide/concepts.html#aws-owned-cmk)."
+  LambdaFunctionGetUserProfileCodeImageUrijBkEU:
+    NoEcho: "true"
+    Type: "String"
+    Description: "URI of a [container image](https://docs.aws.amazon.com/lambda/latest/dg/lambda-images.html)\
+      \ in the Amazon ECR registry."
+  LambdaFunctionOnlinepraatanalysisCodeS3KeyCEUVB:
+    NoEcho: "true"
+    Type: "String"
+    Description: "The Amazon S3 key of the deployment package."
+  LambdaFunctionGetVoiceEventsCodeZipFileKjm5C:
+    NoEcho: "true"
+    Type: "String"
+    Description: "(Node.js and Python) The source code of your Lambda function. If\
+      \ you include your function source inline with this parameter, CFN places it\
+      \ in a file named ``index`` and zips it to create a [deployment package](https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-package.html).\
+      \ This zip file cannot exceed 4MB. For the ``Handler`` property, the first part\
+      \ of the handler identifier must be ``index``. For example, ``index.handler``.\n\
+      \  When you specify source code inline for a Node.js function, the ``index``\
+      \ file that CFN creates uses the extension ``.js``. This means that LAM treats\
+      \ the file as a CommonJS module. ES modules aren't supported for inline functions.\n\
+      \   For JSON, you must escape quotes and special characters such as newline\
+      \ (``\\n``) with a backslash.\n If you specify a function that interacts with\
+      \ an AWS CloudFormation custom resource, you don't have to write your own functions\
+      \ to send responses to the custom resource that invoked the function. AWS CloudFormation\
+      \ provides a response module ([cfn-response](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-lambda-function-code-cfnresponsemodule.html))\
+      \ that simplifies sending responses. See [Using Lambda with CloudFormation](https://docs.aws.amazon.com/lambda/latest/dg/services-cloudformation.html)\
+      \ for details."
+  LambdaFunctionGetUserProfileCodeS3Key0KqqW:
+    NoEcho: "true"
+    Type: "String"
+    Description: "The Amazon S3 key of the deployment package."
+  LambdaFunctionGetFileUrlCodeImageUriYXFtJ:
+    NoEcho: "true"
+    Type: "String"
+    Description: "URI of a [container image](https://docs.aws.amazon.com/lambda/latest/dg/lambda-images.html)\
+      \ in the Amazon ECR registry."
+  LambdaFunctionAddVoiceEventCodeImageUrinKFAe:
+    NoEcho: "true"
+    Type: "String"
+    Description: "URI of a [container image](https://docs.aws.amazon.com/lambda/latest/dg/lambda-images.html)\
+      \ in the Amazon ECR registry."
+  LambdaFunctionEdgeprobeCodeS3BucketFndCP:
+    NoEcho: "true"
+    Type: "String"
+    Description: "An Amazon S3 bucket in the same AWS-Region as your function. The\
+      \ bucket can be in a different AWS-account."
+  LambdaFunctionOnlinepraatanalysisCodeS3ObjectVersion2Rz9k:
+    NoEcho: "true"
+    Type: "String"
+    Description: "For versioned objects, the version of the deployment package object\
+      \ to use."
+  LambdaFunctionOnlinepraatanalysisCodeImageUriBrKUn:
+    NoEcho: "true"
+    Type: "String"
+    Description: "URI of a [container image](https://docs.aws.amazon.com/lambda/latest/dg/lambda-images.html)\
+      \ in the Amazon ECR registry."
+  LambdaFunctionGetAvatarUrlCodeSourceKMSKeyArn3dgsG:
+    NoEcho: "true"
+    Type: "String"
+    Description: "The ARN of the KMSlong (KMS) customer managed key that's used to\
+      \ encrypt your function's .zip deployment package. If you don't provide a customer\
+      \ managed key, Lambda uses an [owned key](https://docs.aws.amazon.com/kms/latest/developerguide/concepts.html#aws-owned-cmk)."
+  LambdaFunctionGetUploadUrlCodeZipFileOh6mX:
+    NoEcho: "true"
+    Type: "String"
+    Description: "(Node.js and Python) The source code of your Lambda function. If\
+      \ you include your function source inline with this parameter, CFN places it\
+      \ in a file named ``index`` and zips it to create a [deployment package](https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-package.html).\
+      \ This zip file cannot exceed 4MB. For the ``Handler`` property, the first part\
+      \ of the handler identifier must be ``index``. For example, ``index.handler``.\n\
+      \  When you specify source code inline for a Node.js function, the ``index``\
+      \ file that CFN creates uses the extension ``.js``. This means that LAM treats\
+      \ the file as a CommonJS module. ES modules aren't supported for inline functions.\n\
+      \   For JSON, you must escape quotes and special characters such as newline\
+      \ (``\\n``) with a backslash.\n If you specify a function that interacts with\
+      \ an AWS CloudFormation custom resource, you don't have to write your own functions\
+      \ to send responses to the custom resource that invoked the function. AWS CloudFormation\
+      \ provides a response module ([cfn-response](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-lambda-function-code-cfnresponsemodule.html))\
+      \ that simplifies sending responses. See [Using Lambda with CloudFormation](https://docs.aws.amazon.com/lambda/latest/dg/services-cloudformation.html)\
+      \ for details."
+  LambdaFunctionVfsTrackerUserProfileSetupCodeZipFileuCRE3:
+    NoEcho: "true"
+    Type: "String"
+    Description: "(Node.js and Python) The source code of your Lambda function. If\
+      \ you include your function source inline with this parameter, CFN places it\
+      \ in a file named ``index`` and zips it to create a [deployment package](https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-package.html).\
+      \ This zip file cannot exceed 4MB. For the ``Handler`` property, the first part\
+      \ of the handler identifier must be ``index``. For example, ``index.handler``.\n\
+      \  When you specify source code inline for a Node.js function, the ``index``\
+      \ file that CFN creates uses the extension ``.js``. This means that LAM treats\
+      \ the file as a CommonJS module. ES modules aren't supported for inline functions.\n\
+      \   For JSON, you must escape quotes and special characters such as newline\
+      \ (``\\n``) with a backslash.\n If you specify a function that interacts with\
+      \ an AWS CloudFormation custom resource, you don't have to write your own functions\
+      \ to send responses to the custom resource that invoked the function. AWS CloudFormation\
+      \ provides a response module ([cfn-response](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-lambda-function-code-cfnresponsemodule.html))\
+      \ that simplifies sending responses. See [Using Lambda with CloudFormation](https://docs.aws.amazon.com/lambda/latest/dg/services-cloudformation.html)\
+      \ for details."
+  LambdaFunctionGeminiproxyCodeSourceKMSKeyArnAApia:
+    NoEcho: "true"
+    Type: "String"
+    Description: "The ARN of the KMSlong (KMS) customer managed key that's used to\
+      \ encrypt your function's .zip deployment package. If you don't provide a customer\
+      \ managed key, Lambda uses an [owned key](https://docs.aws.amazon.com/kms/latest/developerguide/concepts.html#aws-owned-cmk)."
+  LambdaFunctionGetAllPublicEventsCodeSourceKMSKeyArn54MSc:
+    NoEcho: "true"
+    Type: "String"
+    Description: "The ARN of the KMSlong (KMS) customer managed key that's used to\
+      \ encrypt your function's .zip deployment package. If you don't provide a customer\
+      \ managed key, Lambda uses an [owned key](https://docs.aws.amazon.com/kms/latest/developerguide/concepts.html#aws-owned-cmk)."
+  LambdaFunctionUpdateUserProfileCodeSourceKMSKeyArnvo8Wl:
+    NoEcho: "true"
+    Type: "String"
+    Description: "The ARN of the KMSlong (KMS) customer managed key that's used to\
+      \ encrypt your function's .zip deployment package. If you don't provide a customer\
+      \ managed key, Lambda uses an [owned key](https://docs.aws.amazon.com/kms/latest/developerguide/concepts.html#aws-owned-cmk)."
+  LambdaFunctionGetAvatarUrlCodeImageUriY2lnX:
+    NoEcho: "true"
+    Type: "String"
+    Description: "URI of a [container image](https://docs.aws.amazon.com/lambda/latest/dg/lambda-images.html)\
+      \ in the Amazon ECR registry."
+  LambdaFunctionGetsongrecommendationsCodeImageUriaN41b:
+    NoEcho: "true"
+    Type: "String"
+    Description: "URI of a [container image](https://docs.aws.amazon.com/lambda/latest/dg/lambda-images.html)\
+      \ in the Amazon ECR registry."
+  LambdaFunctionGetAllPublicEventsCodeS3Key02ioE:
+    NoEcho: "true"
+    Type: "String"
+    Description: "The Amazon S3 key of the deployment package."
+  LambdaFunctionEdgeprobeCodeS3KeyQyKhX:
+    NoEcho: "true"
+    Type: "String"
+    Description: "The Amazon S3 key of the deployment package."
+  LambdaFunctionGeminiproxyCodeS3ObjectVersiont668X:
+    NoEcho: "true"
+    Type: "String"
+    Description: "For versioned objects, the version of the deployment package object\
+      \ to use."
+  LambdaFunctionAddVoiceEventCodeS3ObjectVersionclN1G:
+    NoEcho: "true"
+    Type: "String"
+    Description: "For versioned objects, the version of the deployment package object\
+      \ to use."
+  LambdaFunctionGetFileUrlCodeSourceKMSKeyArnw0Qwc:
+    NoEcho: "true"
+    Type: "String"
+    Description: "The ARN of the KMSlong (KMS) customer managed key that's used to\
+      \ encrypt your function's .zip deployment package. If you don't provide a customer\
+      \ managed key, Lambda uses an [owned key](https://docs.aws.amazon.com/kms/latest/developerguide/concepts.html#aws-owned-cmk)."
+  LambdaFunctionGetUploadUrlCodeSourceKMSKeyArnhdBCv:
+    NoEcho: "true"
+    Type: "String"
+    Description: "The ARN of the KMSlong (KMS) customer managed key that's used to\
+      \ encrypt your function's .zip deployment package. If you don't provide a customer\
+      \ managed key, Lambda uses an [owned key](https://docs.aws.amazon.com/kms/latest/developerguide/concepts.html#aws-owned-cmk)."
+  LambdaFunctionAutoApproveEventCodeS3KeyZEAqA:
+    NoEcho: "true"
+    Type: "String"
+    Description: "The Amazon S3 key of the deployment package."
+  LambdaFunctionGetVoiceEventsCodeS3ObjectVersion4boUW:
+    NoEcho: "true"
+    Type: "String"
+    Description: "For versioned objects, the version of the deployment package object\
+      \ to use."
+  LambdaFunctionUpdateUserProfileCodeS3ObjectVersion1big3:
+    NoEcho: "true"
+    Type: "String"
+    Description: "For versioned objects, the version of the deployment package object\
+      \ to use."
+  LambdaFunctionGetUserProfileCodeSourceKMSKeyArnbs1yb:
+    NoEcho: "true"
+    Type: "String"
+    Description: "The ARN of the KMSlong (KMS) customer managed key that's used to\
+      \ encrypt your function's .zip deployment package. If you don't provide a customer\
+      \ managed key, Lambda uses an [owned key](https://docs.aws.amazon.com/kms/latest/developerguide/concepts.html#aws-owned-cmk)."
+  LambdaFunctionGetFileUrlCodeZipFile6wqv7:
+    NoEcho: "true"
+    Type: "String"
+    Description: "(Node.js and Python) The source code of your Lambda function. If\
+      \ you include your function source inline with this parameter, CFN places it\
+      \ in a file named ``index`` and zips it to create a [deployment package](https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-package.html).\
+      \ This zip file cannot exceed 4MB. For the ``Handler`` property, the first part\
+      \ of the handler identifier must be ``index``. For example, ``index.handler``.\n\
+      \  When you specify source code inline for a Node.js function, the ``index``\
+      \ file that CFN creates uses the extension ``.js``. This means that LAM treats\
+      \ the file as a CommonJS module. ES modules aren't supported for inline functions.\n\
+      \   For JSON, you must escape quotes and special characters such as newline\
+      \ (``\\n``) with a backslash.\n If you specify a function that interacts with\
+      \ an AWS CloudFormation custom resource, you don't have to write your own functions\
+      \ to send responses to the custom resource that invoked the function. AWS CloudFormation\
+      \ provides a response module ([cfn-response](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-lambda-function-code-cfnresponsemodule.html))\
+      \ that simplifies sending responses. See [Using Lambda with CloudFormation](https://docs.aws.amazon.com/lambda/latest/dg/services-cloudformation.html)\
+      \ for details."
+  LambdaFunctionEdgeprobeCodeSourceKMSKeyArnhv96m:
+    NoEcho: "true"
+    Type: "String"
+    Description: "The ARN of the KMSlong (KMS) customer managed key that's used to\
+      \ encrypt your function's .zip deployment package. If you don't provide a customer\
+      \ managed key, Lambda uses an [owned key](https://docs.aws.amazon.com/kms/latest/developerguide/concepts.html#aws-owned-cmk)."
+  LambdaFunctionAutoApproveEventCodeSourceKMSKeyArnT0U0q:
+    NoEcho: "true"
+    Type: "String"
+    Description: "The ARN of the KMSlong (KMS) customer managed key that's used to\
+      \ encrypt your function's .zip deployment package. If you don't provide a customer\
+      \ managed key, Lambda uses an [owned key](https://docs.aws.amazon.com/kms/latest/developerguide/concepts.html#aws-owned-cmk)."
+  LambdaFunctionEdgeprobeCodeImageUriKbwW7:
+    NoEcho: "true"
+    Type: "String"
+    Description: "URI of a [container image](https://docs.aws.amazon.com/lambda/latest/dg/lambda-images.html)\
+      \ in the Amazon ECR registry."
+  LambdaFunctionGetVoiceEventsCodeImageUriE2i6m:
+    NoEcho: "true"
+    Type: "String"
+    Description: "URI of a [container image](https://docs.aws.amazon.com/lambda/latest/dg/lambda-images.html)\
+      \ in the Amazon ECR registry."
+  LambdaFunctionAddVoiceEventCodeSourceKMSKeyArn3rRl5:
+    NoEcho: "true"
+    Type: "String"
+    Description: "The ARN of the KMSlong (KMS) customer managed key that's used to\
+      \ encrypt your function's .zip deployment package. If you don't provide a customer\
+      \ managed key, Lambda uses an [owned key](https://docs.aws.amazon.com/kms/latest/developerguide/concepts.html#aws-owned-cmk)."
+  LambdaFunctionGetAvatarUrlCodeS3ObjectVersioniVnBO:
+    NoEcho: "true"
+    Type: "String"
+    Description: "For versioned objects, the version of the deployment package object\
+      \ to use."
+  LambdaFunctionGetAvatarUrlCodeS3Keyyc8wS:
+    NoEcho: "true"
+    Type: "String"
+    Description: "The Amazon S3 key of the deployment package."
+  LambdaFunctionAddVoiceEventCodeS3KeyeTqV8:
+    NoEcho: "true"
+    Type: "String"
+    Description: "The Amazon S3 key of the deployment package."
+  LambdaFunctionGetAllPublicEventsCodeImageUrisE9SE:
+    NoEcho: "true"
+    Type: "String"
+    Description: "URI of a [container image](https://docs.aws.amazon.com/lambda/latest/dg/lambda-images.html)\
+      \ in the Amazon ECR registry."
+  LambdaFunctionOnlinepraatanalysisCodeS3BucketqqS8G:
+    NoEcho: "true"
+    Type: "String"
+    Description: "An Amazon S3 bucket in the same AWS-Region as your function. The\
+      \ bucket can be in a different AWS-account."
+  LambdaFunctionGetVoiceEventsCodeS3KeyFliCr:
+    NoEcho: "true"
+    Type: "String"
+    Description: "The Amazon S3 key of the deployment package."
+  LambdaFunctionGetUploadUrlCodeS3ObjectVersionKY5Ue:
+    NoEcho: "true"
+    Type: "String"
+    Description: "For versioned objects, the version of the deployment package object\
+      \ to use."
+  LambdaFunctionDeleteEventCodeSourceKMSKeyArn1ldri:
+    NoEcho: "true"
+    Type: "String"
+    Description: "The ARN of the KMSlong (KMS) customer managed key that's used to\
+      \ encrypt your function's .zip deployment package. If you don't provide a customer\
+      \ managed key, Lambda uses an [owned key](https://docs.aws.amazon.com/kms/latest/developerguide/concepts.html#aws-owned-cmk)."
+  LambdaFunctionGetUserPublicProfileCodeS3KeytiVeY:
+    NoEcho: "true"
+    Type: "String"
+    Description: "The Amazon S3 key of the deployment package."
+  LambdaFunctionVfsTrackerUserProfileSetupCodeS3ObjectVersiontWZPE:
+    NoEcho: "true"
+    Type: "String"
+    Description: "For versioned objects, the version of the deployment package object\
+      \ to use."
+  LambdaFunctionGetsongrecommendationsCodeSourceKMSKeyArnDRM57:
+    NoEcho: "true"
+    Type: "String"
+    Description: "The ARN of the KMSlong (KMS) customer managed key that's used to\
+      \ encrypt your function's .zip deployment package. If you don't provide a customer\
+      \ managed key, Lambda uses an [owned key](https://docs.aws.amazon.com/kms/latest/developerguide/concepts.html#aws-owned-cmk)."
+  LambdaFunctionGetUserProfileCodeZipFiletxgMD:
+    NoEcho: "true"
+    Type: "String"
+    Description: "(Node.js and Python) The source code of your Lambda function. If\
+      \ you include your function source inline with this parameter, CFN places it\
+      \ in a file named ``index`` and zips it to create a [deployment package](https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-package.html).\
+      \ This zip file cannot exceed 4MB. For the ``Handler`` property, the first part\
+      \ of the handler identifier must be ``index``. For example, ``index.handler``.\n\
+      \  When you specify source code inline for a Node.js function, the ``index``\
+      \ file that CFN creates uses the extension ``.js``. This means that LAM treats\
+      \ the file as a CommonJS module. ES modules aren't supported for inline functions.\n\
+      \   For JSON, you must escape quotes and special characters such as newline\
+      \ (``\\n``) with a backslash.\n If you specify a function that interacts with\
+      \ an AWS CloudFormation custom resource, you don't have to write your own functions\
+      \ to send responses to the custom resource that invoked the function. AWS CloudFormation\
+      \ provides a response module ([cfn-response](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-lambda-function-code-cfnresponsemodule.html))\
+      \ that simplifies sending responses. See [Using Lambda with CloudFormation](https://docs.aws.amazon.com/lambda/latest/dg/services-cloudformation.html)\
+      \ for details."
+  LambdaFunctionGetsongrecommendationsCodeS3ObjectVersionuW6XS:
+    NoEcho: "true"
+    Type: "String"
+    Description: "For versioned objects, the version of the deployment package object\
+      \ to use."
+  LambdaFunctionGeminiproxyCodeZipFileqD1iH:
+    NoEcho: "true"
+    Type: "String"
+    Description: "(Node.js and Python) The source code of your Lambda function. If\
+      \ you include your function source inline with this parameter, CFN places it\
+      \ in a file named ``index`` and zips it to create a [deployment package](https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-package.html).\
+      \ This zip file cannot exceed 4MB. For the ``Handler`` property, the first part\
+      \ of the handler identifier must be ``index``. For example, ``index.handler``.\n\
+      \  When you specify source code inline for a Node.js function, the ``index``\
+      \ file that CFN creates uses the extension ``.js``. This means that LAM treats\
+      \ the file as a CommonJS module. ES modules aren't supported for inline functions.\n\
+      \   For JSON, you must escape quotes and special characters such as newline\
+      \ (``\\n``) with a backslash.\n If you specify a function that interacts with\
+      \ an AWS CloudFormation custom resource, you don't have to write your own functions\
+      \ to send responses to the custom resource that invoked the function. AWS CloudFormation\
+      \ provides a response module ([cfn-response](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-lambda-function-code-cfnresponsemodule.html))\
+      \ that simplifies sending responses. See [Using Lambda with CloudFormation](https://docs.aws.amazon.com/lambda/latest/dg/services-cloudformation.html)\
+      \ for details."
+  LambdaFunctionGetUserProfileCodeS3BucketF2tVW:
+    NoEcho: "true"
+    Type: "String"
+    Description: "An Amazon S3 bucket in the same AWS-Region as your function. The\
+      \ bucket can be in a different AWS-account."
+  LambdaFunctionDeleteEventCodeS3ObjectVersionZ8uLC:
+    NoEcho: "true"
+    Type: "String"
+    Description: "For versioned objects, the version of the deployment package object\
+      \ to use."
+  LambdaFunctionGetUserPublicProfileCodeS3ObjectVersionxavh5:
+    NoEcho: "true"
+    Type: "String"
+    Description: "For versioned objects, the version of the deployment package object\
+      \ to use."
+  LambdaFunctionGetVoiceEventsCodeS3Bucket7NwL5:
+    NoEcho: "true"
+    Type: "String"
+    Description: "An Amazon S3 bucket in the same AWS-Region as your function. The\
+      \ bucket can be in a different AWS-account."
+  LambdaFunctionDeleteEventCodeImageUriKeFp5:
+    NoEcho: "true"
+    Type: "String"
+    Description: "URI of a [container image](https://docs.aws.amazon.com/lambda/latest/dg/lambda-images.html)\
+      \ in the Amazon ECR registry."
+  LambdaFunctionDeleteEventCodeS3Key3X40r:
+    NoEcho: "true"
+    Type: "String"
+    Description: "The Amazon S3 key of the deployment package."
+  LambdaFunctionGetUserPublicProfileCodeZipFilewswH4:
+    NoEcho: "true"
+    Type: "String"
+    Description: "(Node.js and Python) The source code of your Lambda function. If\
+      \ you include your function source inline with this parameter, CFN places it\
+      \ in a file named ``index`` and zips it to create a [deployment package](https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-package.html).\
+      \ This zip file cannot exceed 4MB. For the ``Handler`` property, the first part\
+      \ of the handler identifier must be ``index``. For example, ``index.handler``.\n\
+      \  When you specify source code inline for a Node.js function, the ``index``\
+      \ file that CFN creates uses the extension ``.js``. This means that LAM treats\
+      \ the file as a CommonJS module. ES modules aren't supported for inline functions.\n\
+      \   For JSON, you must escape quotes and special characters such as newline\
+      \ (``\\n``) with a backslash.\n If you specify a function that interacts with\
+      \ an AWS CloudFormation custom resource, you don't have to write your own functions\
+      \ to send responses to the custom resource that invoked the function. AWS CloudFormation\
+      \ provides a response module ([cfn-response](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-lambda-function-code-cfnresponsemodule.html))\
+      \ that simplifies sending responses. See [Using Lambda with CloudFormation](https://docs.aws.amazon.com/lambda/latest/dg/services-cloudformation.html)\
+      \ for details."
+  LambdaFunctionGeminiproxyCodeS3Bucket2zu8N:
+    NoEcho: "true"
+    Type: "String"
+    Description: "An Amazon S3 bucket in the same AWS-Region as your function. The\
+      \ bucket can be in a different AWS-account."
+  LambdaFunctionAutoApproveEventCodeZipFilea2Hxo:
+    NoEcho: "true"
+    Type: "String"
+    Description: "(Node.js and Python) The source code of your Lambda function. If\
+      \ you include your function source inline with this parameter, CFN places it\
+      \ in a file named ``index`` and zips it to create a [deployment package](https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-package.html).\
+      \ This zip file cannot exceed 4MB. For the ``Handler`` property, the first part\
+      \ of the handler identifier must be ``index``. For example, ``index.handler``.\n\
+      \  When you specify source code inline for a Node.js function, the ``index``\
+      \ file that CFN creates uses the extension ``.js``. This means that LAM treats\
+      \ the file as a CommonJS module. ES modules aren't supported for inline functions.\n\
+      \   For JSON, you must escape quotes and special characters such as newline\
+      \ (``\\n``) with a backslash.\n If you specify a function that interacts with\
+      \ an AWS CloudFormation custom resource, you don't have to write your own functions\
+      \ to send responses to the custom resource that invoked the function. AWS CloudFormation\
+      \ provides a response module ([cfn-response](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-lambda-function-code-cfnresponsemodule.html))\
+      \ that simplifies sending responses. See [Using Lambda with CloudFormation](https://docs.aws.amazon.com/lambda/latest/dg/services-cloudformation.html)\
+      \ for details."
+  LambdaFunctionVfsTrackerUserProfileSetupCodeSourceKMSKeyArnMyvtR:
+    NoEcho: "true"
+    Type: "String"
+    Description: "The ARN of the KMSlong (KMS) customer managed key that's used to\
+      \ encrypt your function's .zip deployment package. If you don't provide a customer\
+      \ managed key, Lambda uses an [owned key](https://docs.aws.amazon.com/kms/latest/developerguide/concepts.html#aws-owned-cmk)."
+  LambdaFunctionUpdateUserProfileCodeImageUriZOx36:
+    NoEcho: "true"
+    Type: "String"
+    Description: "URI of a [container image](https://docs.aws.amazon.com/lambda/latest/dg/lambda-images.html)\
+      \ in the Amazon ECR registry."
+  LambdaFunctionVfsTrackerUserProfileSetupCodeS3Keyng8qA:
+    NoEcho: "true"
+    Type: "String"
+    Description: "The Amazon S3 key of the deployment package."
+  LambdaFunctionAutoApproveEventCodeImageUriruo7W:
+    NoEcho: "true"
+    Type: "String"
+    Description: "URI of a [container image](https://docs.aws.amazon.com/lambda/latest/dg/lambda-images.html)\
+      \ in the Amazon ECR registry."
+  LambdaFunctionGetFileUrlCodeS3Keyoec0C:
+    NoEcho: "true"
+    Type: "String"
+    Description: "The Amazon S3 key of the deployment package."
+  LambdaFunctionGetAllPublicEventsCodeS3Bucket0cF0v:
+    NoEcho: "true"
+    Type: "String"
+    Description: "An Amazon S3 bucket in the same AWS-Region as your function. The\
+      \ bucket can be in a different AWS-account."
+  LambdaFunctionAutoApproveEventCodeS3Bucketuqq8i:
+    NoEcho: "true"
+    Type: "String"
+    Description: "An Amazon S3 bucket in the same AWS-Region as your function. The\
+      \ bucket can be in a different AWS-account."
+  LambdaFunctionVfsTrackerUserProfileSetupCodeImageUrirg9E0:
+    NoEcho: "true"
+    Type: "String"
+    Description: "URI of a [container image](https://docs.aws.amazon.com/lambda/latest/dg/lambda-images.html)\
+      \ in the Amazon ECR registry."
+  LambdaFunctionGetUserPublicProfileCodeSourceKMSKeyArn1DVj3:
+    NoEcho: "true"
+    Type: "String"
+    Description: "The ARN of the KMSlong (KMS) customer managed key that's used to\
+      \ encrypt your function's .zip deployment package. If you don't provide a customer\
+      \ managed key, Lambda uses an [owned key](https://docs.aws.amazon.com/kms/latest/developerguide/concepts.html#aws-owned-cmk)."
+  LambdaFunctionGetAvatarUrlCodeZipFileJN0ty:
+    NoEcho: "true"
+    Type: "String"
+    Description: "(Node.js and Python) The source code of your Lambda function. If\
+      \ you include your function source inline with this parameter, CFN places it\
+      \ in a file named ``index`` and zips it to create a [deployment package](https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-package.html).\
+      \ This zip file cannot exceed 4MB. For the ``Handler`` property, the first part\
+      \ of the handler identifier must be ``index``. For example, ``index.handler``.\n\
+      \  When you specify source code inline for a Node.js function, the ``index``\
+      \ file that CFN creates uses the extension ``.js``. This means that LAM treats\
+      \ the file as a CommonJS module. ES modules aren't supported for inline functions.\n\
+      \   For JSON, you must escape quotes and special characters such as newline\
+      \ (``\\n``) with a backslash.\n If you specify a function that interacts with\
+      \ an AWS CloudFormation custom resource, you don't have to write your own functions\
+      \ to send responses to the custom resource that invoked the function. AWS CloudFormation\
+      \ provides a response module ([cfn-response](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-lambda-function-code-cfnresponsemodule.html))\
+      \ that simplifies sending responses. See [Using Lambda with CloudFormation](https://docs.aws.amazon.com/lambda/latest/dg/services-cloudformation.html)\
+      \ for details."
+  LambdaFunctionGetsongrecommendationsCodeZipFilepnAgJ:
+    NoEcho: "true"
+    Type: "String"
+    Description: "(Node.js and Python) The source code of your Lambda function. If\
+      \ you include your function source inline with this parameter, CFN places it\
+      \ in a file named ``index`` and zips it to create a [deployment package](https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-package.html).\
+      \ This zip file cannot exceed 4MB. For the ``Handler`` property, the first part\
+      \ of the handler identifier must be ``index``. For example, ``index.handler``.\n\
+      \  When you specify source code inline for a Node.js function, the ``index``\
+      \ file that CFN creates uses the extension ``.js``. This means that LAM treats\
+      \ the file as a CommonJS module. ES modules aren't supported for inline functions.\n\
+      \   For JSON, you must escape quotes and special characters such as newline\
+      \ (``\\n``) with a backslash.\n If you specify a function that interacts with\
+      \ an AWS CloudFormation custom resource, you don't have to write your own functions\
+      \ to send responses to the custom resource that invoked the function. AWS CloudFormation\
+      \ provides a response module ([cfn-response](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-lambda-function-code-cfnresponsemodule.html))\
+      \ that simplifies sending responses. See [Using Lambda with CloudFormation](https://docs.aws.amazon.com/lambda/latest/dg/services-cloudformation.html)\
+      \ for details."
+  LambdaFunctionGetVoiceEventsCodeSourceKMSKeyArnUnuhc:
+    NoEcho: "true"
+    Type: "String"
+    Description: "The ARN of the KMSlong (KMS) customer managed key that's used to\
+      \ encrypt your function's .zip deployment package. If you don't provide a customer\
+      \ managed key, Lambda uses an [owned key](https://docs.aws.amazon.com/kms/latest/developerguide/concepts.html#aws-owned-cmk)."
+  LambdaFunctionEdgeprobeCodeS3ObjectVersioniTLNv:
+    NoEcho: "true"
+    Type: "String"
+    Description: "For versioned objects, the version of the deployment package object\
+      \ to use."
+  LambdaFunctionDeleteEventCodeZipFileEot1C:
+    NoEcho: "true"
+    Type: "String"
+    Description: "(Node.js and Python) The source code of your Lambda function. If\
+      \ you include your function source inline with this parameter, CFN places it\
+      \ in a file named ``index`` and zips it to create a [deployment package](https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-package.html).\
+      \ This zip file cannot exceed 4MB. For the ``Handler`` property, the first part\
+      \ of the handler identifier must be ``index``. For example, ``index.handler``.\n\
+      \  When you specify source code inline for a Node.js function, the ``index``\
+      \ file that CFN creates uses the extension ``.js``. This means that LAM treats\
+      \ the file as a CommonJS module. ES modules aren't supported for inline functions.\n\
+      \   For JSON, you must escape quotes and special characters such as newline\
+      \ (``\\n``) with a backslash.\n If you specify a function that interacts with\
+      \ an AWS CloudFormation custom resource, you don't have to write your own functions\
+      \ to send responses to the custom resource that invoked the function. AWS CloudFormation\
+      \ provides a response module ([cfn-response](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-lambda-function-code-cfnresponsemodule.html))\
+      \ that simplifies sending responses. See [Using Lambda with CloudFormation](https://docs.aws.amazon.com/lambda/latest/dg/services-cloudformation.html)\
+      \ for details."
+  LambdaFunctionGetUserProfileCodeS3ObjectVersionSnqFO:
+    NoEcho: "true"
+    Type: "String"
+    Description: "For versioned objects, the version of the deployment package object\
+      \ to use."
+  LambdaFunctionGetUploadUrlCodeImageUriu86t2:
+    NoEcho: "true"
+    Type: "String"
+    Description: "URI of a [container image](https://docs.aws.amazon.com/lambda/latest/dg/lambda-images.html)\
+      \ in the Amazon ECR registry."
+  LambdaFunctionGetAllPublicEventsCodeZipFileCvhDb:
+    NoEcho: "true"
+    Type: "String"
+    Description: "(Node.js and Python) The source code of your Lambda function. If\
+      \ you include your function source inline with this parameter, CFN places it\
+      \ in a file named ``index`` and zips it to create a [deployment package](https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-package.html).\
+      \ This zip file cannot exceed 4MB. For the ``Handler`` property, the first part\
+      \ of the handler identifier must be ``index``. For example, ``index.handler``.\n\
+      \  When you specify source code inline for a Node.js function, the ``index``\
+      \ file that CFN creates uses the extension ``.js``. This means that LAM treats\
+      \ the file as a CommonJS module. ES modules aren't supported for inline functions.\n\
+      \   For JSON, you must escape quotes and special characters such as newline\
+      \ (``\\n``) with a backslash.\n If you specify a function that interacts with\
+      \ an AWS CloudFormation custom resource, you don't have to write your own functions\
+      \ to send responses to the custom resource that invoked the function. AWS CloudFormation\
+      \ provides a response module ([cfn-response](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-lambda-function-code-cfnresponsemodule.html))\
+      \ that simplifies sending responses. See [Using Lambda with CloudFormation](https://docs.aws.amazon.com/lambda/latest/dg/services-cloudformation.html)\
+      \ for details."
+  LambdaFunctionGetsongrecommendationsCodeS3KeyVtMxK:
+    NoEcho: "true"
+    Type: "String"
+    Description: "The Amazon S3 key of the deployment package."
+  LambdaFunctionGeminiproxyCodeS3KeyqXuFQ:
+    NoEcho: "true"
+    Type: "String"
+    Description: "The Amazon S3 key of the deployment package."
+  LambdaFunctionAddVoiceEventCodeZipFile7erxJ:
+    NoEcho: "true"
+    Type: "String"
+    Description: "(Node.js and Python) The source code of your Lambda function. If\
+      \ you include your function source inline with this parameter, CFN places it\
+      \ in a file named ``index`` and zips it to create a [deployment package](https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-package.html).\
+      \ This zip file cannot exceed 4MB. For the ``Handler`` property, the first part\
+      \ of the handler identifier must be ``index``. For example, ``index.handler``.\n\
+      \  When you specify source code inline for a Node.js function, the ``index``\
+      \ file that CFN creates uses the extension ``.js``. This means that LAM treats\
+      \ the file as a CommonJS module. ES modules aren't supported for inline functions.\n\
+      \   For JSON, you must escape quotes and special characters such as newline\
+      \ (``\\n``) with a backslash.\n If you specify a function that interacts with\
+      \ an AWS CloudFormation custom resource, you don't have to write your own functions\
+      \ to send responses to the custom resource that invoked the function. AWS CloudFormation\
+      \ provides a response module ([cfn-response](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-lambda-function-code-cfnresponsemodule.html))\
+      \ that simplifies sending responses. See [Using Lambda with CloudFormation](https://docs.aws.amazon.com/lambda/latest/dg/services-cloudformation.html)\
+      \ for details."
+  LambdaFunctionUpdateUserProfileCodeZipFileSam51:
+    NoEcho: "true"
+    Type: "String"
+    Description: "(Node.js and Python) The source code of your Lambda function. If\
+      \ you include your function source inline with this parameter, CFN places it\
+      \ in a file named ``index`` and zips it to create a [deployment package](https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-package.html).\
+      \ This zip file cannot exceed 4MB. For the ``Handler`` property, the first part\
+      \ of the handler identifier must be ``index``. For example, ``index.handler``.\n\
+      \  When you specify source code inline for a Node.js function, the ``index``\
+      \ file that CFN creates uses the extension ``.js``. This means that LAM treats\
+      \ the file as a CommonJS module. ES modules aren't supported for inline functions.\n\
+      \   For JSON, you must escape quotes and special characters such as newline\
+      \ (``\\n``) with a backslash.\n If you specify a function that interacts with\
+      \ an AWS CloudFormation custom resource, you don't have to write your own functions\
+      \ to send responses to the custom resource that invoked the function. AWS CloudFormation\
+      \ provides a response module ([cfn-response](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-lambda-function-code-cfnresponsemodule.html))\
+      \ that simplifies sending responses. See [Using Lambda with CloudFormation](https://docs.aws.amazon.com/lambda/latest/dg/services-cloudformation.html)\
+      \ for details."
+  LambdaFunctionGetAllPublicEventsCodeS3ObjectVersion5Cuyd:
+    NoEcho: "true"
+    Type: "String"
+    Description: "For versioned objects, the version of the deployment package object\
+      \ to use."
+  LambdaFunctionGetUploadUrlCodeS3KeyB0zxw:
+    NoEcho: "true"
+    Type: "String"
+    Description: "The Amazon S3 key of the deployment package."
+  LambdaFunctionAutoApproveEventCodeS3ObjectVersionGHslu:
+    NoEcho: "true"
+    Type: "String"
+    Description: "For versioned objects, the version of the deployment package object\
+      \ to use."
+  LambdaFunctionOnlinepraatanalysisCodeZipFileFt8G9:
+    NoEcho: "true"
+    Type: "String"
+    Description: "(Node.js and Python) The source code of your Lambda function. If\
+      \ you include your function source inline with this parameter, CFN places it\
+      \ in a file named ``index`` and zips it to create a [deployment package](https://docs.aws.amazon.com/lambda/latest/dg/gettingstarted-package.html).\
+      \ This zip file cannot exceed 4MB. For the ``Handler`` property, the first part\
+      \ of the handler identifier must be ``index``. For example, ``index.handler``.\n\
+      \  When you specify source code inline for a Node.js function, the ``index``\
+      \ file that CFN creates uses the extension ``.js``. This means that LAM treats\
+      \ the file as a CommonJS module. ES modules aren't supported for inline functions.\n\
+      \   For JSON, you must escape quotes and special characters such as newline\
+      \ (``\\n``) with a backslash.\n If you specify a function that interacts with\
+      \ an AWS CloudFormation custom resource, you don't have to write your own functions\
+      \ to send responses to the custom resource that invoked the function. AWS CloudFormation\
+      \ provides a response module ([cfn-response](https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/cfn-lambda-function-code-cfnresponsemodule.html))\
+      \ that simplifies sending responses. See [Using Lambda with CloudFormation](https://docs.aws.amazon.com/lambda/latest/dg/services-cloudformation.html)\
+      \ for details."
+  LambdaFunctionGetUploadUrlCodeS3BucketqamqB:
+    NoEcho: "true"
+    Type: "String"
+    Description: "An Amazon S3 bucket in the same AWS-Region as your function. The\
+      \ bucket can be in a different AWS-account."
+  LambdaFunctionGetsongrecommendationsCodeS3BucketEq0Z5:
+    NoEcho: "true"
+    Type: "String"
+    Description: "An Amazon S3 bucket in the same AWS-Region as your function. The\
+      \ bucket can be in a different AWS-account."
+  LambdaFunctionDeleteEventCodeS3Bucketf8JzD:
+    NoEcho: "true"
+    Type: "String"
+    Description: "An Amazon S3 bucket in the same AWS-Region as your function. The\
+      \ bucket can be in a different AWS-account."
+  LambdaFunctionGetUserPublicProfileCodeS3BucketyjDxc:
+    NoEcho: "true"
+    Type: "String"
+    Description: "An Amazon S3 bucket in the same AWS-Region as your function. The\
+      \ bucket can be in a different AWS-account."
+  LambdaFunctionAddVoiceEventCodeS3BucketXL62D:
+    NoEcho: "true"
+    Type: "String"
+    Description: "An Amazon S3 bucket in the same AWS-Region as your function. The\
+      \ bucket can be in a different AWS-account."
+  LambdaFunctionGeminiproxyCodeImageUriccFU4:
+    NoEcho: "true"
+    Type: "String"
+    Description: "URI of a [container image](https://docs.aws.amazon.com/lambda/latest/dg/lambda-images.html)\
+      \ in the Amazon ECR registry."
+  LambdaFunctionVfsTrackerUserProfileSetupCodeS3BucketgB1gN:
+    NoEcho: "true"
+    Type: "String"
+    Description: "An Amazon S3 bucket in the same AWS-Region as your function. The\
+      \ bucket can be in a different AWS-account."
+Resources:
+  LambdaFunctionGetsongrecommendations:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::Lambda::Function"
+    DeletionPolicy: "Retain"
+    Properties:
+      MemorySize: 128
+      Description: ""
+      TracingConfig:
+        Mode: "PassThrough"
+      Timeout: 29
+      RuntimeManagementConfig:
+        UpdateRuntimeOn: "Auto"
+      Handler: "index.handler"
+      Code:
+        SourceKMSKeyArn:
+          Ref: "LambdaFunctionGetsongrecommendationsCodeSourceKMSKeyArnDRM57"
+        S3ObjectVersion:
+          Ref: "LambdaFunctionGetsongrecommendationsCodeS3ObjectVersionuW6XS"
+        S3Bucket:
+          Ref: "LambdaFunctionGetsongrecommendationsCodeS3BucketEq0Z5"
+        ZipFile:
+          Ref: "LambdaFunctionGetsongrecommendationsCodeZipFilepnAgJ"
+        ImageUri:
+          Ref: "LambdaFunctionGetsongrecommendationsCodeImageUriaN41b"
+        S3Key:
+          Ref: "LambdaFunctionGetsongrecommendationsCodeS3KeyVtMxK"
+      Role:
+        Fn::GetAtt:
+        - "IAMRoleAddVoiceEventrolel30o387r"
+        - "Arn"
+      FileSystemConfigs: []
+      FunctionName: "get-song-recommendations"
+      Runtime: "nodejs22.x"
+      PackageType: "Zip"
+      LoggingConfig:
+        LogFormat: "Text"
+        LogGroup: "/aws/lambda/get-song-recommendations"
+      RecursiveLoop: "Terminate"
+      Environment:
+        Variables:
+          GEMINI_API_KEY: "AIzaSyB9juMFp2U6MqrUKuL9oT8PF-JiRaS56CM"
+      EphemeralStorage:
+        Size: 512
+      Architectures:
+      - "x86_64"
+  ApiGatewayDeploymentJb:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::ApiGateway::Deployment"
+    DeletionPolicy: "Retain"
+    Properties:
+      RestApiId:
+        Ref: "ApiGatewayRestApi"
+  LambdaPermissionFunctiononlinepraatanalysisVp:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::Lambda::Permission"
+    DeletionPolicy: "Retain"
+    Properties:
+      FunctionName:
+        Fn::GetAtt:
+        - "LambdaFunctionOnlinepraatanalysis"
+        - "Arn"
+      Action: "lambda:InvokeFunction"
+      SourceArn: "arn:aws:execute-api:us-east-1:296821242554:2rzxc2x5l8/*/POST/analyze"
+      Principal: "apigateway.amazonaws.com"
+  LambdaPermissionFunctiongetVoiceEvents:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::Lambda::Permission"
+    DeletionPolicy: "Retain"
+    Properties:
+      FunctionName:
+        Fn::GetAtt:
+        - "LambdaFunctionGetVoiceEvents"
+        - "Arn"
+      Action: "lambda:InvokeFunction"
+      SourceArn: "arn:aws:execute-api:us-east-1:296821242554:2rzxc2x5l8/*/GET/events/*"
+      Principal: "apigateway.amazonaws.com"
+  LambdaPermissionFunctiongetUploadUrl:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::Lambda::Permission"
+    DeletionPolicy: "Retain"
+    Properties:
+      FunctionName:
+        Fn::GetAtt:
+        - "LambdaFunctionGetUploadUrl"
+        - "Arn"
+      Action: "lambda:InvokeFunction"
+      SourceArn: "arn:aws:execute-api:us-east-1:296821242554:2rzxc2x5l8/*/POST/upload-url"
+      Principal: "apigateway.amazonaws.com"
+  LambdaPermissionFunctiongetAvatarUrl:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::Lambda::Permission"
+    DeletionPolicy: "Retain"
+    Properties:
+      FunctionName:
+        Fn::GetAtt:
+        - "LambdaFunctionGetAvatarUrl"
+        - "Arn"
+      Action: "lambda:InvokeFunction"
+      SourceArn: "arn:aws:execute-api:us-east-1:296821242554:2rzxc2x5l8/*/GET/avatar/*"
+      Principal: "apigateway.amazonaws.com"
+  SESEmailIdentity:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::SES::EmailIdentity"
+    DeletionPolicy: "Retain"
+    Properties:
+      ConfigurationSetAttributes:
+        ConfigurationSetName: "SES_Bounce_and_Complain_Supress"
+      EmailIdentity: "vfs-tracker.app"
+      DkimSigningAttributes:
+        NextSigningKeyLength: "RSA_2048_BIT"
+      DkimAttributes:
+        SigningEnabled: true
+      FeedbackAttributes:
+        EmailForwardingEnabled: true
+      Tags: []
+      MailFromAttributes:
+        MailFromDomain: "mail.vfs-tracker.app"
+        BehaviorOnMxFailure: "USE_DEFAULT_VALUE"
+  IAMRoleEdgeproberolettc3yql4:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::IAM::Role"
+    DeletionPolicy: "Retain"
+    Properties:
+      Path: "/service-role/"
+      ManagedPolicyArns:
+      - "arn:aws:iam::296821242554:policy/service-role/AWSLambdaBasicExecutionRole-b2dde5f4-2394-428d-af9f-4a7496348548"
+      MaxSessionDuration: 3600
+      RoleName: "edge-probe-role-ttc3yql4"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+        - Action: "sts:AssumeRole"
+          Effect: "Allow"
+          Principal:
+            Service: "lambda.amazonaws.com"
+  LambdaPermissionFunctiongetAllPublicEvents:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::Lambda::Permission"
+    DeletionPolicy: "Retain"
+    Properties:
+      FunctionName:
+        Fn::GetAtt:
+        - "LambdaFunctionGetAllPublicEvents"
+        - "Arn"
+      Action: "lambda:InvokeFunction"
+      SourceArn: "arn:aws:execute-api:us-east-1:296821242554:2rzxc2x5l8/*/GET/all-events"
+      Principal: "apigateway.amazonaws.com"
+  LambdaPermissionFunctiongetFileUrl:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::Lambda::Permission"
+    DeletionPolicy: "Retain"
+    Properties:
+      FunctionName:
+        Fn::GetAtt:
+        - "LambdaFunctionGetFileUrl"
+        - "Arn"
+      Action: "lambda:InvokeFunction"
+      SourceArn: "arn:aws:execute-api:us-east-1:296821242554:2rzxc2x5l8/*/POST/file-url"
+      Principal: "apigateway.amazonaws.com"
+  IAMRoleGeminiproxyrolecegcoi6x:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::IAM::Role"
+    DeletionPolicy: "Retain"
+    Properties:
+      Path: "/service-role/"
+      ManagedPolicyArns:
+      - "arn:aws:iam::296821242554:policy/service-role/AWSLambdaBasicExecutionRole-aec287c3-2544-47ed-beb5-4d5588e5de65"
+      MaxSessionDuration: 3600
+      RoleName: "gemini-proxy-role-cegcoi6x"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+        - Action: "sts:AssumeRole"
+          Effect: "Allow"
+          Principal:
+            Service: "lambda.amazonaws.com"
+  LambdaFunctionGeminiproxy:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::Lambda::Function"
+    DeletionPolicy: "Retain"
+    Properties:
+      MemorySize: 128
+      Description: ""
+      TracingConfig:
+        Mode: "PassThrough"
+      Timeout: 30
+      RuntimeManagementConfig:
+        UpdateRuntimeOn: "Auto"
+      Handler: "index.handler"
+      Code:
+        SourceKMSKeyArn:
+          Ref: "LambdaFunctionGeminiproxyCodeSourceKMSKeyArnAApia"
+        S3ObjectVersion:
+          Ref: "LambdaFunctionGeminiproxyCodeS3ObjectVersiont668X"
+        S3Bucket:
+          Ref: "LambdaFunctionGeminiproxyCodeS3Bucket2zu8N"
+        ZipFile:
+          Ref: "LambdaFunctionGeminiproxyCodeZipFileqD1iH"
+        ImageUri:
+          Ref: "LambdaFunctionGeminiproxyCodeImageUriccFU4"
+        S3Key:
+          Ref: "LambdaFunctionGeminiproxyCodeS3KeyqXuFQ"
+      Role:
+        Fn::GetAtt:
+        - "IAMRoleGeminiproxyrolecegcoi6x"
+        - "Arn"
+      FileSystemConfigs: []
+      FunctionName: "gemini-proxy"
+      Runtime: "nodejs22.x"
+      PackageType: "Zip"
+      LoggingConfig:
+        LogFormat: "Text"
+        LogGroup: "/aws/lambda/gemini-proxy"
+      RecursiveLoop: "Terminate"
+      Environment:
+        Variables:
+          GEMINI_API_KEY: "AIzaSyB9juMFp2U6MqrUKuL9oT8PF-JiRaS56CM"
+      EphemeralStorage:
+        Size: 512
+      Architectures:
+      - "x86_64"
+  LambdaFunctionGetUserPublicProfile:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::Lambda::Function"
+    DeletionPolicy: "Retain"
+    Properties:
+      MemorySize: 128
+      Description: ""
+      TracingConfig:
+        Mode: "PassThrough"
+      Timeout: 3
+      RuntimeManagementConfig:
+        UpdateRuntimeOn: "Auto"
+      Handler: "index.handler"
+      Code:
+        SourceKMSKeyArn:
+          Ref: "LambdaFunctionGetUserPublicProfileCodeSourceKMSKeyArn1DVj3"
+        S3ObjectVersion:
+          Ref: "LambdaFunctionGetUserPublicProfileCodeS3ObjectVersionxavh5"
+        S3Bucket:
+          Ref: "LambdaFunctionGetUserPublicProfileCodeS3BucketyjDxc"
+        ZipFile:
+          Ref: "LambdaFunctionGetUserPublicProfileCodeZipFilewswH4"
+        ImageUri:
+          Ref: "LambdaFunctionGetUserPublicProfileCodeImageUriaEQyO"
+        S3Key:
+          Ref: "LambdaFunctionGetUserPublicProfileCodeS3KeytiVeY"
+      Role:
+        Fn::GetAtt:
+        - "IAMRoleAddVoiceEventrolel30o387r"
+        - "Arn"
+      FileSystemConfigs: []
+      FunctionName: "getUserPublicProfile"
+      Runtime: "nodejs22.x"
+      PackageType: "Zip"
+      LoggingConfig:
+        LogFormat: "Text"
+        LogGroup: "/aws/lambda/getUserPublicProfile"
+      RecursiveLoop: "Terminate"
+      EphemeralStorage:
+        Size: 512
+      Architectures:
+      - "x86_64"
+  ApiGatewayDeploymentYj:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::ApiGateway::Deployment"
+    DeletionPolicy: "Retain"
+    Properties:
+      RestApiId:
+        Ref: "ApiGatewayRestApi"
+  ApiGatewayDeploymentS0:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::ApiGateway::Deployment"
+    DeletionPolicy: "Retain"
+    Properties:
+      RestApiId:
+        Ref: "ApiGatewayRestApi"
+  LambdaFunctionGetAllPublicEvents:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::Lambda::Function"
+    DeletionPolicy: "Retain"
+    Properties:
+      MemorySize: 3008
+      Description: ""
+      TracingConfig:
+        Mode: "PassThrough"
+      Timeout: 29
+      RuntimeManagementConfig:
+        UpdateRuntimeOn: "Auto"
+      Handler: "index.handler"
+      Code:
+        SourceKMSKeyArn:
+          Ref: "LambdaFunctionGetAllPublicEventsCodeSourceKMSKeyArn54MSc"
+        S3ObjectVersion:
+          Ref: "LambdaFunctionGetAllPublicEventsCodeS3ObjectVersion5Cuyd"
+        S3Bucket:
+          Ref: "LambdaFunctionGetAllPublicEventsCodeS3Bucket0cF0v"
+        ZipFile:
+          Ref: "LambdaFunctionGetAllPublicEventsCodeZipFileCvhDb"
+        ImageUri:
+          Ref: "LambdaFunctionGetAllPublicEventsCodeImageUrisE9SE"
+        S3Key:
+          Ref: "LambdaFunctionGetAllPublicEventsCodeS3Key02ioE"
+      Role:
+        Fn::GetAtt:
+        - "IAMRoleAddVoiceEventrolel30o387r"
+        - "Arn"
+      FileSystemConfigs: []
+      FunctionName: "getAllPublicEvents"
+      Runtime: "nodejs20.x"
+      PackageType: "Zip"
+      LoggingConfig:
+        LogFormat: "Text"
+        LogGroup: "/aws/lambda/getAllPublicEvents"
+      RecursiveLoop: "Terminate"
+      Environment:
+        Variables:
+          EVENTS_TABLE: "VoiceFemEvents"
+      EphemeralStorage:
+        Size: 512
+      Architectures:
+      - "x86_64"
+  IAMGroupAliyun:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::IAM::Group"
+    DeletionPolicy: "Retain"
+    Properties:
+      GroupName: "Aliyun"
+      Path: "/"
+      ManagedPolicyArns:
+      - "arn:aws:iam::aws:policy/AmazonS3FullAccess"
+  ApiGatewayDeploymentRM:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::ApiGateway::Deployment"
+    DeletionPolicy: "Retain"
+    Properties:
+      RestApiId:
+        Ref: "ApiGatewayRestApi"
+  ApiGatewayDeploymentIm:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::ApiGateway::Deployment"
+    DeletionPolicy: "Retain"
+    Properties:
+      RestApiId:
+        Ref: "ApiGatewayRestApi"
+  LambdaFunctionAddVoiceEvent:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::Lambda::Function"
+    DeletionPolicy: "Retain"
+    Properties:
+      MemorySize: 128
+      Description: ""
+      TracingConfig:
+        Mode: "PassThrough"
+      Timeout: 3
+      RuntimeManagementConfig:
+        UpdateRuntimeOn: "Auto"
+      Handler: "index.handler"
+      Code:
+        SourceKMSKeyArn:
+          Ref: "LambdaFunctionAddVoiceEventCodeSourceKMSKeyArn3rRl5"
+        S3ObjectVersion:
+          Ref: "LambdaFunctionAddVoiceEventCodeS3ObjectVersionclN1G"
+        S3Bucket:
+          Ref: "LambdaFunctionAddVoiceEventCodeS3BucketXL62D"
+        ZipFile:
+          Ref: "LambdaFunctionAddVoiceEventCodeZipFile7erxJ"
+        ImageUri:
+          Ref: "LambdaFunctionAddVoiceEventCodeImageUrinKFAe"
+        S3Key:
+          Ref: "LambdaFunctionAddVoiceEventCodeS3KeyeTqV8"
+      Role:
+        Fn::GetAtt:
+        - "IAMRoleAddVoiceEventrolel30o387r"
+        - "Arn"
+      FileSystemConfigs: []
+      FunctionName: "addVoiceEvent"
+      Runtime: "nodejs20.x"
+      PackageType: "Zip"
+      LoggingConfig:
+        LogFormat: "Text"
+        LogGroup: "/aws/lambda/addVoiceEvent"
+      RecursiveLoop: "Terminate"
+      Environment:
+        Variables:
+          EVENTS_TABLE: "VoiceFemEvents"
+      EphemeralStorage:
+        Size: 512
+      Architectures:
+      - "x86_64"
+  ApiGatewayDeploymentBP:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::ApiGateway::Deployment"
+    DeletionPolicy: "Retain"
+    Properties:
+      RestApiId:
+        Ref: "ApiGatewayRestApi"
+  LambdaPermissionFunctionaddVoiceEvent:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::Lambda::Permission"
+    DeletionPolicy: "Retain"
+    Properties:
+      FunctionName:
+        Fn::GetAtt:
+        - "LambdaFunctionAddVoiceEvent"
+        - "Arn"
+      Action: "lambda:InvokeFunction"
+      SourceArn: "arn:aws:execute-api:us-east-1:296821242554:2rzxc2x5l8/*/POST/events"
+      Principal: "apigateway.amazonaws.com"
+  ApiGatewayDeploymentQz:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::ApiGateway::Deployment"
+    DeletionPolicy: "Retain"
+    Properties:
+      RestApiId:
+        Ref: "ApiGatewayRestApi"
+  ApiGatewayDeploymentBN:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::ApiGateway::Deployment"
+    DeletionPolicy: "Retain"
+    Properties:
+      RestApiId:
+        Ref: "ApiGatewayRestApi"
+  IAMRoleAddVoiceEventrolel30o387r:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::IAM::Role"
+    DeletionPolicy: "Retain"
+    Properties:
+      Path: "/service-role/"
+      ManagedPolicyArns:
+      - "arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess_v2"
+      - "arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess"
+      - "arn:aws:iam::aws:policy/AmazonS3FullAccess"
+      - "arn:aws:iam::296821242554:policy/service-role/AWSLambdaBasicExecutionRole-6e94d769-2176-47f0-abdf-3107d134ad3f"
+      - "arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs"
+      - "arn:aws:iam::aws:policy/AWSLambdaInvocation-DynamoDB"
+      - "arn:aws:iam::aws:policy/CloudWatchLogsFullAccess"
+      MaxSessionDuration: 3600
+      RoleName: "addVoiceEvent-role-l30o387r"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+        - Action: "sts:AssumeRole"
+          Effect: "Allow"
+          Principal:
+            Service: "lambda.amazonaws.com"
+  LambdaPermissionFunctiongeminiproxy:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::Lambda::Permission"
+    DeletionPolicy: "Retain"
+    Properties:
+      FunctionName:
+        Fn::GetAtt:
+        - "LambdaFunctionGeminiproxy"
+        - "Arn"
+      Action: "lambda:InvokeFunction"
+      SourceArn: "arn:aws:execute-api:us-east-1:296821242554:2rzxc2x5l8/*/POST/gemini-proxy"
+      Principal: "apigateway.amazonaws.com"
+  DynamoDBTableVoiceFemEvents:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::DynamoDB::Table"
+    DeletionPolicy: "Retain"
+    Properties:
+      SSESpecification:
+        SSEEnabled: false
+      StreamSpecification:
+        StreamViewType: "NEW_IMAGE"
+      ContributorInsightsSpecification:
+        Enabled: false
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: false
+      WarmThroughput:
+        ReadUnitsPerSecond: 12000
+        WriteUnitsPerSecond: 4000
+      TableName: "VoiceFemEvents"
+      AttributeDefinitions:
+      - AttributeType: "S"
+        AttributeName: "eventId"
+      - AttributeType: "S"
+        AttributeName: "userId"
+      BillingMode: "PAY_PER_REQUEST"
+      KeySchema:
+      - KeyType: "HASH"
+        AttributeName: "userId"
+      - KeyType: "RANGE"
+        AttributeName: "eventId"
+      DeletionProtectionEnabled: false
+      TableClass: "STANDARD"
+      Tags: []
+      TimeToLiveSpecification:
+        Enabled: false
+  ApiGatewayDeploymentA4:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::ApiGateway::Deployment"
+    DeletionPolicy: "Retain"
+    Properties:
+      RestApiId:
+        Ref: "ApiGatewayRestApi"
+  ApiGatewayDeploymentR7:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::ApiGateway::Deployment"
+    DeletionPolicy: "Retain"
+    Properties:
+      RestApiId:
+        Ref: "ApiGatewayRestApi"
+  ApiGatewayDeploymentHp:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::ApiGateway::Deployment"
+    DeletionPolicy: "Retain"
+    Properties:
+      RestApiId:
+        Ref: "ApiGatewayRestApi"
+  LambdaPermissionFunctiononlinepraatanalysisLq:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::Lambda::Permission"
+    DeletionPolicy: "Retain"
+    Properties:
+      FunctionName:
+        Fn::GetAtt:
+        - "LambdaFunctionOnlinepraatanalysis"
+        - "Arn"
+      Action: "lambda:InvokeFunction"
+      SourceArn: "arn:aws:execute-api:us-east-1:296821242554:2rzxc2x5l8/*/POST/uploads"
+      Principal: "apigateway.amazonaws.com"
+  LambdaPermissionFunctiongetsongrecommendations:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::Lambda::Permission"
+    DeletionPolicy: "Retain"
+    Properties:
+      FunctionName:
+        Fn::GetAtt:
+        - "LambdaFunctionGetsongrecommendations"
+        - "Arn"
+      Action: "lambda:InvokeFunction"
+      SourceArn: "arn:aws:execute-api:us-east-1:296821242554:2rzxc2x5l8/*/POST/recommend-songs"
+      Principal: "apigateway.amazonaws.com"
+  LambdaFunctionGetVoiceEvents:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::Lambda::Function"
+    DeletionPolicy: "Retain"
+    Properties:
+      MemorySize: 128
+      Description: ""
+      TracingConfig:
+        Mode: "PassThrough"
+      Timeout: 3
+      RuntimeManagementConfig:
+        UpdateRuntimeOn: "Auto"
+      Handler: "index.handler"
+      Code:
+        SourceKMSKeyArn:
+          Ref: "LambdaFunctionGetVoiceEventsCodeSourceKMSKeyArnUnuhc"
+        S3ObjectVersion:
+          Ref: "LambdaFunctionGetVoiceEventsCodeS3ObjectVersion4boUW"
+        S3Bucket:
+          Ref: "LambdaFunctionGetVoiceEventsCodeS3Bucket7NwL5"
+        ZipFile:
+          Ref: "LambdaFunctionGetVoiceEventsCodeZipFileKjm5C"
+        ImageUri:
+          Ref: "LambdaFunctionGetVoiceEventsCodeImageUriE2i6m"
+        S3Key:
+          Ref: "LambdaFunctionGetVoiceEventsCodeS3KeyFliCr"
+      Role:
+        Fn::GetAtt:
+        - "IAMRoleAddVoiceEventrolel30o387r"
+        - "Arn"
+      FileSystemConfigs: []
+      FunctionName: "getVoiceEvents"
+      Runtime: "nodejs20.x"
+      PackageType: "Zip"
+      LoggingConfig:
+        LogFormat: "Text"
+        LogGroup: "/aws/lambda/getVoiceEvents"
+      RecursiveLoop: "Terminate"
+      Environment:
+        Variables:
+          EVENTS_TABLE: "VoiceFemEvents"
+      EphemeralStorage:
+        Size: 512
+      Architectures:
+      - "x86_64"
+  LambdaPermissionFunctiononlinepraatanalysisMc:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::Lambda::Permission"
+    DeletionPolicy: "Retain"
+    Properties:
+      FunctionName:
+        Fn::GetAtt:
+        - "LambdaFunctionOnlinepraatanalysis"
+        - "Arn"
+      Action: "lambda:InvokeFunction"
+      SourceArn: "arn:aws:execute-api:us-east-1:296821242554:2rzxc2x5l8/*/GET/results/*"
+      Principal: "apigateway.amazonaws.com"
+  ApiGatewayV2ApiMappingApivfstrackerapp:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::ApiGatewayV2::ApiMapping"
+    DeletionPolicy: "Retain"
+    Properties:
+      Stage:
+        Ref: "ApiGatewayStageDev"
+      ApiMappingKey: "dev"
+      DomainName:
+        Ref: "ApiGatewayV2DomainNameApivfstrackerapp"
+      ApiId:
+        Ref: "ApiGatewayRestApi"
+  LambdaPermissionFunctiondeleteEvent:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::Lambda::Permission"
+    DeletionPolicy: "Retain"
+    Properties:
+      FunctionName:
+        Fn::GetAtt:
+        - "LambdaFunctionDeleteEvent"
+        - "Arn"
+      Action: "lambda:InvokeFunction"
+      SourceArn: "arn:aws:execute-api:us-east-1:296821242554:2rzxc2x5l8/*/DELETE/event/*"
+      Principal: "apigateway.amazonaws.com"
+  ApiGatewayDeploymentGg:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::ApiGateway::Deployment"
+    DeletionPolicy: "Retain"
+    Properties:
+      RestApiId:
+        Ref: "ApiGatewayRestApi"
+  ApiGatewayDeploymentHI:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::ApiGateway::Deployment"
+    DeletionPolicy: "Retain"
+    Properties:
+      RestApiId:
+        Ref: "ApiGatewayRestApi"
+  LambdaPermissionFunctionedgeprobe:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::Lambda::Permission"
+    DeletionPolicy: "Retain"
+    Properties:
+      FunctionName:
+        Fn::GetAtt:
+        - "LambdaFunctionEdgeprobe"
+        - "Arn"
+      Action: "lambda:InvokeFunction"
+      SourceArn: "arn:aws:execute-api:us-east-1:296821242554:2rzxc2x5l8/*/*/edge-probe"
+      Principal: "apigateway.amazonaws.com"
+  ApiGatewayDeploymentYG:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::ApiGateway::Deployment"
+    DeletionPolicy: "Retain"
+    Properties:
+      RestApiId:
+        Ref: "ApiGatewayRestApi"
+  ApiGatewayDeploymentYF:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::ApiGateway::Deployment"
+    DeletionPolicy: "Retain"
+    Properties:
+      RestApiId:
+        Ref: "ApiGatewayRestApi"
+  LambdaFunctionGetAvatarUrl:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::Lambda::Function"
+    DeletionPolicy: "Retain"
+    Properties:
+      MemorySize: 128
+      Description: ""
+      TracingConfig:
+        Mode: "PassThrough"
+      Timeout: 3
+      RuntimeManagementConfig:
+        UpdateRuntimeOn: "Auto"
+      Handler: "index.handler"
+      Code:
+        SourceKMSKeyArn:
+          Ref: "LambdaFunctionGetAvatarUrlCodeSourceKMSKeyArn3dgsG"
+        S3ObjectVersion:
+          Ref: "LambdaFunctionGetAvatarUrlCodeS3ObjectVersioniVnBO"
+        S3Bucket:
+          Ref: "LambdaFunctionGetAvatarUrlCodeS3BucketE5oSf"
+        ZipFile:
+          Ref: "LambdaFunctionGetAvatarUrlCodeZipFileJN0ty"
+        ImageUri:
+          Ref: "LambdaFunctionGetAvatarUrlCodeImageUriY2lnX"
+        S3Key:
+          Ref: "LambdaFunctionGetAvatarUrlCodeS3Keyyc8wS"
+      Role:
+        Fn::GetAtt:
+        - "IAMRoleAddVoiceEventrolel30o387r"
+        - "Arn"
+      FileSystemConfigs: []
+      FunctionName: "getAvatarUrl"
+      Runtime: "nodejs22.x"
+      PackageType: "Zip"
+      LoggingConfig:
+        LogFormat: "Text"
+        LogGroup: "/aws/lambda/getAvatarUrl"
+      RecursiveLoop: "Terminate"
+      Environment:
+        Variables:
+          BUCKET_NAME: "vfs-tracker-objstor"
+      EphemeralStorage:
+        Size: 512
+      Architectures:
+      - "x86_64"
+  LambdaFunctionOnlinepraatanalysis:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::Lambda::Function"
+    DeletionPolicy: "Retain"
+    Properties:
+      MemorySize: 3008
+      Description: ""
+      TracingConfig:
+        Mode: "PassThrough"
+      Timeout: 300
+      Code:
+        SourceKMSKeyArn:
+          Ref: "LambdaFunctionOnlinepraatanalysisCodeSourceKMSKeyArnK1CWR"
+        S3ObjectVersion:
+          Ref: "LambdaFunctionOnlinepraatanalysisCodeS3ObjectVersion2Rz9k"
+        S3Bucket:
+          Ref: "LambdaFunctionOnlinepraatanalysisCodeS3BucketqqS8G"
+        ZipFile:
+          Ref: "LambdaFunctionOnlinepraatanalysisCodeZipFileFt8G9"
+        ImageUri:
+          Ref: "LambdaFunctionOnlinepraatanalysisCodeImageUriBrKUn"
+        S3Key:
+          Ref: "LambdaFunctionOnlinepraatanalysisCodeS3KeyCEUVB"
+      Role:
+        Fn::GetAtt:
+        - "IAMRoleAddVoiceEventrolel30o387r"
+        - "Arn"
+      FileSystemConfigs: []
+      FunctionName: "online-praat-analysis"
+      PackageType: "Image"
+      LoggingConfig:
+        LogFormat: "Text"
+        LogGroup: "/aws/lambda/online-praat-analysis"
+      RecursiveLoop: "Terminate"
+      Environment:
+        Variables:
+          DDB_TABLE: "VoiceFemTests"
+          LOG_LEVEL: "INFO"
+          AWS_S3_US_EAST_1_REGIONAL_ENDPOINT: "regional"
+          BUCKET: "vfs-tracker-objstor"
+      EphemeralStorage:
+        Size: 512
+      Architectures:
+      - "arm64"
+  ApiGatewayDeploymentOD:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::ApiGateway::Deployment"
+    DeletionPolicy: "Retain"
+    Properties:
+      RestApiId:
+        Ref: "ApiGatewayRestApi"
+  ApiGatewayDeploymentOF:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::ApiGateway::Deployment"
+    DeletionPolicy: "Retain"
+    Properties:
+      RestApiId:
+        Ref: "ApiGatewayRestApi"
+  ApiGatewayDeploymentEy:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::ApiGateway::Deployment"
+    DeletionPolicy: "Retain"
+    Properties:
+      RestApiId:
+        Ref: "ApiGatewayRestApi"
+  ApiGatewayDeploymentFe:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::ApiGateway::Deployment"
+    DeletionPolicy: "Retain"
+    Properties:
+      RestApiId:
+        Ref: "ApiGatewayRestApi"
+  ApiGatewayV2DomainNameApivfstrackerapp:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::ApiGatewayV2::DomainName"
+    DeletionPolicy: "Retain"
+    Properties:
+      RoutingMode: "API_MAPPING_ONLY"
+      DomainNameConfigurations:
+      - IpAddressType: "dualstack"
+        EndpointType: "REGIONAL"
+        SecurityPolicy: "TLS_1_2"
+        CertificateArn: "arn:aws:acm:us-east-1:296821242554:certificate/642286ab-3434-453d-946b-318939cd7987"
+      DomainName: "api.vfs-tracker.app"
+      Tags: {}
+  ApiGatewayDeploymentOH:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::ApiGateway::Deployment"
+    DeletionPolicy: "Retain"
+    Properties:
+      RestApiId:
+        Ref: "ApiGatewayRestApi"
+  IAMManagedPolicyPolicyserviceroleAWSLambdaBasicExecutionRole6e94d769217647f0abdf3107d134ad3f:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::IAM::ManagedPolicy"
+    DeletionPolicy: "Retain"
+    Properties:
+      ManagedPolicyName: "AWSLambdaBasicExecutionRole-6e94d769-2176-47f0-abdf-3107d134ad3f"
+      Path: "/service-role/"
+      Description: ""
+      Groups: []
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+        - Resource: "arn:aws:logs:us-east-1:296821242554:*"
+          Action: "logs:CreateLogGroup"
+          Effect: "Allow"
+        - Resource:
+          - "arn:aws:logs:us-east-1:296821242554:log-group:/aws/lambda/addVoiceEvent:*"
+          Action:
+          - "logs:CreateLogStream"
+          - "logs:PutLogEvents"
+          Effect: "Allow"
+      Roles:
+      - Ref: "IAMRoleAddVoiceEventrolel30o387r"
+      Users: []
+  IAMGroupJules:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::IAM::Group"
+    DeletionPolicy: "Retain"
+    Properties:
+      GroupName: "Jules"
+      Path: "/"
+      ManagedPolicyArns:
+      - "arn:aws:iam::aws:policy/CloudWatchFullAccessV2"
+      - "arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess_v2"
+      - "arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess"
+      - "arn:aws:iam::aws:policy/AmazonCognitoPowerUser"
+      - "arn:aws:iam::aws:policy/AWSLambda_FullAccess"
+      - "arn:aws:iam::aws:policy/AmazonS3FullAccess"
+      - "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryFullAccess"
+      - "arn:aws:iam::aws:policy/AmazonECS_FullAccess"
+      - "arn:aws:iam::aws:policy/AmazonAPIGatewayAdministrator"
+      - "arn:aws:iam::aws:policy/CloudWatchFullAccess"
+  LambdaFunctionGetFileUrl:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::Lambda::Function"
+    DeletionPolicy: "Retain"
+    Properties:
+      MemorySize: 128
+      Description: ""
+      TracingConfig:
+        Mode: "PassThrough"
+      Timeout: 3
+      RuntimeManagementConfig:
+        UpdateRuntimeOn: "Auto"
+      Handler: "index.handler"
+      Code:
+        SourceKMSKeyArn:
+          Ref: "LambdaFunctionGetFileUrlCodeSourceKMSKeyArnw0Qwc"
+        S3ObjectVersion:
+          Ref: "LambdaFunctionGetFileUrlCodeS3ObjectVersionatnLs"
+        S3Bucket:
+          Ref: "LambdaFunctionGetFileUrlCodeS3BucketUUAqg"
+        ZipFile:
+          Ref: "LambdaFunctionGetFileUrlCodeZipFile6wqv7"
+        ImageUri:
+          Ref: "LambdaFunctionGetFileUrlCodeImageUriYXFtJ"
+        S3Key:
+          Ref: "LambdaFunctionGetFileUrlCodeS3Keyoec0C"
+      Role:
+        Fn::GetAtt:
+        - "IAMRoleAddVoiceEventrolel30o387r"
+        - "Arn"
+      FileSystemConfigs: []
+      FunctionName: "getFileUrl"
+      Runtime: "nodejs22.x"
+      PackageType: "Zip"
+      LoggingConfig:
+        LogFormat: "Text"
+        LogGroup: "/aws/lambda/getFileUrl"
+      RecursiveLoop: "Terminate"
+      Environment:
+        Variables:
+          VOICE_TESTS_TABLE_NAME: "VoiceFemTests"
+          BUCKET_NAME: "vfs-tracker-objstor"
+      EphemeralStorage:
+        Size: 512
+      Architectures:
+      - "x86_64"
+  LambdaFunctionUpdateUserProfile:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::Lambda::Function"
+    DeletionPolicy: "Retain"
+    Properties:
+      MemorySize: 128
+      Description: ""
+      TracingConfig:
+        Mode: "PassThrough"
+      Timeout: 3
+      RuntimeManagementConfig:
+        UpdateRuntimeOn: "Auto"
+      Handler: "index.handler"
+      Code:
+        SourceKMSKeyArn:
+          Ref: "LambdaFunctionUpdateUserProfileCodeSourceKMSKeyArnvo8Wl"
+        S3ObjectVersion:
+          Ref: "LambdaFunctionUpdateUserProfileCodeS3ObjectVersion1big3"
+        S3Bucket:
+          Ref: "LambdaFunctionUpdateUserProfileCodeS3BucketuLGPd"
+        ZipFile:
+          Ref: "LambdaFunctionUpdateUserProfileCodeZipFileSam51"
+        ImageUri:
+          Ref: "LambdaFunctionUpdateUserProfileCodeImageUriZOx36"
+        S3Key:
+          Ref: "LambdaFunctionUpdateUserProfileCodeS3KeyQ5qEy"
+      Role:
+        Fn::GetAtt:
+        - "IAMRoleAddVoiceEventrolel30o387r"
+        - "Arn"
+      FileSystemConfigs: []
+      FunctionName: "updateUserProfile"
+      Runtime: "nodejs22.x"
+      PackageType: "Zip"
+      LoggingConfig:
+        LogFormat: "Text"
+        LogGroup: "/aws/lambda/updateUserProfile"
+      RecursiveLoop: "Terminate"
+      Environment:
+        Variables:
+          USERS_TABLE: "VoiceFemUsers"
+      EphemeralStorage:
+        Size: 512
+      Architectures:
+      - "x86_64"
+  LambdaPermissionFunctiongetUserProfile:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::Lambda::Permission"
+    DeletionPolicy: "Retain"
+    Properties:
+      FunctionName:
+        Fn::GetAtt:
+        - "LambdaFunctionGetUserProfile"
+        - "Arn"
+      Action: "lambda:InvokeFunction"
+      SourceArn: "arn:aws:execute-api:us-east-1:296821242554:2rzxc2x5l8/*/GET/user/*"
+      Principal: "apigateway.amazonaws.com"
+  LambdaEventSourceMapping:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::Lambda::EventSourceMapping"
+    DeletionPolicy: "Retain"
+    Properties:
+      StartingPosition: "LATEST"
+      BatchSize: 1
+      FunctionName:
+        Fn::GetAtt:
+        - "LambdaFunctionAutoApproveEvent"
+        - "Arn"
+      TumblingWindowInSeconds: 0
+      MaximumRetryAttempts: -1
+      BisectBatchOnFunctionError: false
+      ParallelizationFactor: 1
+      MaximumRecordAgeInSeconds: -1
+      Enabled: true
+      EventSourceArn:
+        Fn::GetAtt:
+        - "DynamoDBTableVoiceFemEvents"
+        - "StreamArn"
+      Tags: []
+      MaximumBatchingWindowInSeconds: 0
+  ApiGatewayDeploymentUs:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::ApiGateway::Deployment"
+    DeletionPolicy: "Retain"
+    Properties:
+      RestApiId:
+        Ref: "ApiGatewayRestApi"
+  ApiGatewayDeploymentNK:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::ApiGateway::Deployment"
+    DeletionPolicy: "Retain"
+    Properties:
+      RestApiId:
+        Ref: "ApiGatewayRestApi"
+  ApiGatewayRestApi:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::ApiGateway::RestApi"
+    DeletionPolicy: "Retain"
+    Properties:
+      ApiKeySourceType: "HEADER"
+      EndpointConfiguration:
+        IpAddressType: "dualstack"
+        Types:
+        - "EDGE"
+      DisableExecuteApiEndpoint: false
+      Name: "VoiceFemApi"
+  ApiGatewayDeploymentFC:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::ApiGateway::Deployment"
+    DeletionPolicy: "Retain"
+    Properties:
+      RestApiId:
+        Ref: "ApiGatewayRestApi"
+  ApiGatewayDeploymentEe:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::ApiGateway::Deployment"
+    DeletionPolicy: "Retain"
+    Properties:
+      RestApiId:
+        Ref: "ApiGatewayRestApi"
+  ApiGatewayDeploymentFB:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::ApiGateway::Deployment"
+    DeletionPolicy: "Retain"
+    Properties:
+      RestApiId:
+        Ref: "ApiGatewayRestApi"
+  ApiGatewayDeploymentEk:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::ApiGateway::Deployment"
+    DeletionPolicy: "Retain"
+    Properties:
+      RestApiId:
+        Ref: "ApiGatewayRestApi"
+  IAMUserLitajulesvtracker:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::IAM::User"
+    DeletionPolicy: "Retain"
+    Properties:
+      Path: "/"
+      ManagedPolicyArns:
+      - "arn:aws:iam::aws:policy/AmazonElasticContainerRegistryPublicPowerUser"
+      - "arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess_v2"
+      - "arn:aws:iam::aws:policy/AmazonElasticContainerRegistryPublicReadOnly"
+      - "arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess"
+      - "arn:aws:iam::aws:policy/AmazonCognitoPowerUser"
+      - "arn:aws:iam::aws:policy/AWSLambda_FullAccess"
+      - "arn:aws:iam::aws:policy/AmazonS3FullAccess"
+      - "arn:aws:iam::aws:policy/AmazonElasticContainerRegistryPublicFullAccess"
+      - "arn:aws:iam::aws:policy/AmazonAPIGatewayAdministrator"
+      UserName: "lita_jules_vtracker"
+      Groups:
+      - Ref: "IAMGroupJules"
+      Tags:
+      - Value: "jules"
+        Key: "hidden"
+  IAMUserAliyunESA:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::IAM::User"
+    DeletionPolicy: "Retain"
+    Properties:
+      Path: "/"
+      UserName: "Aliyun_ESA"
+      Groups:
+      - Ref: "IAMGroupAliyun"
+      Tags:
+      - Value: "Aliyun_ESA"
+        Key: "hidden"
+  ApiGatewayDeploymentFG:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::ApiGateway::Deployment"
+    DeletionPolicy: "Retain"
+    Properties:
+      RestApiId:
+        Ref: "ApiGatewayRestApi"
+  ApiGatewayDeploymentW8:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::ApiGateway::Deployment"
+    DeletionPolicy: "Retain"
+    Properties:
+      RestApiId:
+        Ref: "ApiGatewayRestApi"
+  LambdaFunctionVfsTrackerUserProfileSetup:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::Lambda::Function"
+    DeletionPolicy: "Retain"
+    Properties:
+      MemorySize: 128
+      Description: ""
+      TracingConfig:
+        Mode: "PassThrough"
+      Timeout: 3
+      RuntimeManagementConfig:
+        UpdateRuntimeOn: "Auto"
+      Handler: "index.handler"
+      Code:
+        SourceKMSKeyArn:
+          Ref: "LambdaFunctionVfsTrackerUserProfileSetupCodeSourceKMSKeyArnMyvtR"
+        S3ObjectVersion:
+          Ref: "LambdaFunctionVfsTrackerUserProfileSetupCodeS3ObjectVersiontWZPE"
+        S3Bucket:
+          Ref: "LambdaFunctionVfsTrackerUserProfileSetupCodeS3BucketgB1gN"
+        ZipFile:
+          Ref: "LambdaFunctionVfsTrackerUserProfileSetupCodeZipFileuCRE3"
+        ImageUri:
+          Ref: "LambdaFunctionVfsTrackerUserProfileSetupCodeImageUrirg9E0"
+        S3Key:
+          Ref: "LambdaFunctionVfsTrackerUserProfileSetupCodeS3Keyng8qA"
+      Role:
+        Fn::GetAtt:
+        - "IAMRoleGetAllPublicEventsrole33fp67ha"
+        - "Arn"
+      FileSystemConfigs: []
+      FunctionName: "vfsTrackerUserProfileSetup"
+      Runtime: "nodejs22.x"
+      PackageType: "Zip"
+      LoggingConfig:
+        LogFormat: "Text"
+        LogGroup: "/aws/lambda/vfsTrackerUserProfileSetup"
+      RecursiveLoop: "Terminate"
+      Environment:
+        Variables:
+          USERS_TABLE: "VoiceFemUsers"
+      EphemeralStorage:
+        Size: 512
+      Architectures:
+      - "x86_64"
+  ApiGatewayDeploymentUy:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::ApiGateway::Deployment"
+    DeletionPolicy: "Retain"
+    Properties:
+      RestApiId:
+        Ref: "ApiGatewayRestApi"
+  ApiGatewayDeploymentNQ:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::ApiGateway::Deployment"
+    DeletionPolicy: "Retain"
+    Properties:
+      RestApiId:
+        Ref: "ApiGatewayRestApi"
+  ApiGatewayDeploymentVc:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::ApiGateway::Deployment"
+    DeletionPolicy: "Retain"
+    Properties:
+      RestApiId:
+        Ref: "ApiGatewayRestApi"
+  IAMRoleGetAllPublicEventsrole33fp67ha:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::IAM::Role"
+    DeletionPolicy: "Retain"
+    Properties:
+      Path: "/service-role/"
+      ManagedPolicyArns:
+      - "arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess_v2"
+      - "arn:aws:iam::aws:policy/AmazonDynamoDBFullAccess"
+      - "arn:aws:iam::296821242554:policy/service-role/AWSLambdaBasicExecutionRole-4852be3d-f93c-4ad8-937c-289f9fedc805"
+      - "arn:aws:iam::aws:policy/AmazonS3FullAccess"
+      - "arn:aws:iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs"
+      - "arn:aws:iam::aws:policy/CloudWatchLogsFullAccess"
+      MaxSessionDuration: 3600
+      RoleName: "getAllPublicEvents-role-33fp67ha"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+        - Action: "sts:AssumeRole"
+          Effect: "Allow"
+          Principal:
+            Service: "lambda.amazonaws.com"
+  ApiGatewayDeploymentVe:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::ApiGateway::Deployment"
+    DeletionPolicy: "Retain"
+    Properties:
+      RestApiId:
+        Ref: "ApiGatewayRestApi"
+  LambdaFunctionGetUploadUrl:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::Lambda::Function"
+    DeletionPolicy: "Retain"
+    Properties:
+      MemorySize: 128
+      Description: ""
+      TracingConfig:
+        Mode: "PassThrough"
+      Timeout: 3
+      RuntimeManagementConfig:
+        UpdateRuntimeOn: "Auto"
+      Handler: "index.handler"
+      Code:
+        SourceKMSKeyArn:
+          Ref: "LambdaFunctionGetUploadUrlCodeSourceKMSKeyArnhdBCv"
+        S3ObjectVersion:
+          Ref: "LambdaFunctionGetUploadUrlCodeS3ObjectVersionKY5Ue"
+        S3Bucket:
+          Ref: "LambdaFunctionGetUploadUrlCodeS3BucketqamqB"
+        ZipFile:
+          Ref: "LambdaFunctionGetUploadUrlCodeZipFileOh6mX"
+        ImageUri:
+          Ref: "LambdaFunctionGetUploadUrlCodeImageUriu86t2"
+        S3Key:
+          Ref: "LambdaFunctionGetUploadUrlCodeS3KeyB0zxw"
+      Role:
+        Fn::GetAtt:
+        - "IAMRoleAddVoiceEventrolel30o387r"
+        - "Arn"
+      FileSystemConfigs: []
+      FunctionName: "getUploadUrl"
+      Runtime: "nodejs22.x"
+      PackageType: "Zip"
+      LoggingConfig:
+        LogFormat: "Text"
+        LogGroup: "/aws/lambda/getUploadUrl"
+      RecursiveLoop: "Terminate"
+      Environment:
+        Variables:
+          BUCKET_NAME: "vfs-tracker-objstor"
+      EphemeralStorage:
+        Size: 512
+      Architectures:
+      - "x86_64"
+  LambdaPermissionFunctionvfsTrackerUserProfileSetup:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::Lambda::Permission"
+    DeletionPolicy: "Retain"
+    Properties:
+      FunctionName:
+        Fn::GetAtt:
+        - "LambdaFunctionVfsTrackerUserProfileSetup"
+        - "Arn"
+      Action: "lambda:InvokeFunction"
+      SourceArn: "arn:aws:execute-api:us-east-1:296821242554:2rzxc2x5l8/*/POST/user/profile-setup"
+      Principal: "apigateway.amazonaws.com"
+  ApiGatewayDeploymentCv:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::ApiGateway::Deployment"
+    DeletionPolicy: "Retain"
+    Properties:
+      RestApiId:
+        Ref: "ApiGatewayRestApi"
+  LambdaPermissionFunctiongetUserPublicProfile:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::Lambda::Permission"
+    DeletionPolicy: "Retain"
+    Properties:
+      FunctionName:
+        Fn::GetAtt:
+        - "LambdaFunctionGetUserPublicProfile"
+        - "Arn"
+      Action: "lambda:InvokeFunction"
+      SourceArn: "arn:aws:execute-api:us-east-1:296821242554:2rzxc2x5l8/*/GET/user/*/public"
+      Principal: "apigateway.amazonaws.com"
+  LambdaPermissionFunctiononlinepraatanalysisR0:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::Lambda::Permission"
+    DeletionPolicy: "Retain"
+    Properties:
+      FunctionName:
+        Fn::GetAtt:
+        - "LambdaFunctionOnlinepraatanalysis"
+        - "Arn"
+      Action: "lambda:InvokeFunction"
+      SourceArn: "arn:aws:execute-api:us-east-1:296821242554:2rzxc2x5l8/*/POST/sessions"
+      Principal: "apigateway.amazonaws.com"
+  ApiGatewayDeployment:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::ApiGateway::Deployment"
+    DeletionPolicy: "Retain"
+    Properties:
+      RestApiId:
+        Ref: "ApiGatewayRestApi"
+  LambdaPermissionFunctiononlinepraatanalysisYa:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::Lambda::Permission"
+    DeletionPolicy: "Retain"
+    Properties:
+      FunctionName:
+        Fn::GetAtt:
+        - "LambdaFunctionOnlinepraatanalysis"
+        - "Arn"
+      Action: "lambda:InvokeFunction"
+      SourceArn: "arn:aws:execute-api:us-east-1:296821242554:2rzxc2x5l8/*/POST/session"
+      Principal: "apigateway.amazonaws.com"
+  LambdaFunctionEdgeprobe:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::Lambda::Function"
+    DeletionPolicy: "Retain"
+    Properties:
+      MemorySize: 128
+      Description: ""
+      TracingConfig:
+        Mode: "PassThrough"
+      Timeout: 3
+      RuntimeManagementConfig:
+        UpdateRuntimeOn: "Auto"
+      Handler: "index.handler"
+      Code:
+        SourceKMSKeyArn:
+          Ref: "LambdaFunctionEdgeprobeCodeSourceKMSKeyArnhv96m"
+        S3ObjectVersion:
+          Ref: "LambdaFunctionEdgeprobeCodeS3ObjectVersioniTLNv"
+        S3Bucket:
+          Ref: "LambdaFunctionEdgeprobeCodeS3BucketFndCP"
+        ZipFile:
+          Ref: "LambdaFunctionEdgeprobeCodeZipFile4I53t"
+        ImageUri:
+          Ref: "LambdaFunctionEdgeprobeCodeImageUriKbwW7"
+        S3Key:
+          Ref: "LambdaFunctionEdgeprobeCodeS3KeyQyKhX"
+      Role:
+        Fn::GetAtt:
+        - "IAMRoleEdgeproberolettc3yql4"
+        - "Arn"
+      FileSystemConfigs: []
+      FunctionName: "edge-probe"
+      Runtime: "nodejs22.x"
+      PackageType: "Zip"
+      LoggingConfig:
+        LogFormat: "Text"
+        LogGroup: "/aws/lambda/edge-probe"
+      RecursiveLoop: "Terminate"
+      EphemeralStorage:
+        Size: 512
+      Architectures:
+      - "x86_64"
+  LambdaPermissionFunctionupdateUserProfile:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::Lambda::Permission"
+    DeletionPolicy: "Retain"
+    Properties:
+      FunctionName:
+        Fn::GetAtt:
+        - "LambdaFunctionUpdateUserProfile"
+        - "Arn"
+      Action: "lambda:InvokeFunction"
+      SourceArn: "arn:aws:execute-api:us-east-1:296821242554:2rzxc2x5l8/*/PUT/user/*"
+      Principal: "apigateway.amazonaws.com"
+  ApiGatewayDeploymentTJ:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::ApiGateway::Deployment"
+    DeletionPolicy: "Retain"
+    Properties:
+      RestApiId:
+        Ref: "ApiGatewayRestApi"
+  LambdaPermissionFunctiononlinepraatanalysis:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::Lambda::Permission"
+    DeletionPolicy: "Retain"
+    Properties:
+      FunctionName:
+        Fn::GetAtt:
+        - "LambdaFunctionOnlinepraatanalysis"
+        - "Arn"
+      Action: "lambda:InvokeFunction"
+      SourceArn: "arn:aws:execute-api:us-east-1:296821242554:2rzxc2x5l8/*/POST/session/uploads"
+      Principal: "apigateway.amazonaws.com"
+  LambdaPermissionFunctionedgeprobeFO:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::Lambda::Permission"
+    DeletionPolicy: "Retain"
+    Properties:
+      FunctionName:
+        Fn::GetAtt:
+        - "LambdaFunctionEdgeprobe"
+        - "Arn"
+      Action: "lambda:InvokeFunction"
+      SourceArn: "arn:aws:execute-api:us-east-1:296821242554:2rzxc2x5l8/*/GET/edge-probe"
+      Principal: "apigateway.amazonaws.com"
+  LambdaFunctionAutoApproveEvent:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::Lambda::Function"
+    DeletionPolicy: "Retain"
+    Properties:
+      MemorySize: 1024
+      Description: ""
+      TracingConfig:
+        Mode: "PassThrough"
+      Timeout: 300
+      RuntimeManagementConfig:
+        UpdateRuntimeOn: "Auto"
+      Handler: "index.handler"
+      Code:
+        SourceKMSKeyArn:
+          Ref: "LambdaFunctionAutoApproveEventCodeSourceKMSKeyArnT0U0q"
+        S3ObjectVersion:
+          Ref: "LambdaFunctionAutoApproveEventCodeS3ObjectVersionGHslu"
+        S3Bucket:
+          Ref: "LambdaFunctionAutoApproveEventCodeS3Bucketuqq8i"
+        ZipFile:
+          Ref: "LambdaFunctionAutoApproveEventCodeZipFilea2Hxo"
+        ImageUri:
+          Ref: "LambdaFunctionAutoApproveEventCodeImageUriruo7W"
+        S3Key:
+          Ref: "LambdaFunctionAutoApproveEventCodeS3KeyZEAqA"
+      Role:
+        Fn::GetAtt:
+        - "IAMRoleAddVoiceEventrolel30o387r"
+        - "Arn"
+      FileSystemConfigs: []
+      FunctionName: "autoApproveEvent"
+      Runtime: "nodejs22.x"
+      PackageType: "Zip"
+      LoggingConfig:
+        LogFormat: "Text"
+        LogGroup: "/aws/lambda/autoApproveEvent"
+      RecursiveLoop: "Terminate"
+      Environment:
+        Variables:
+          EVENTS_TABLE: "VoiceFemEvents"
+          GEMINI_API_KEY: "AIzaSyB9juMFp2U6MqrUKuL9oT8PF-JiRaS56CM"
+          ATTACHMENTS_BUCKET: "vfs-tracker-objstor"
+      EphemeralStorage:
+        Size: 512
+      Architectures:
+      - "x86_64"
+  LambdaFunctionDeleteEvent:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::Lambda::Function"
+    DeletionPolicy: "Retain"
+    Properties:
+      MemorySize: 128
+      Description: ""
+      TracingConfig:
+        Mode: "PassThrough"
+      Timeout: 3
+      RuntimeManagementConfig:
+        UpdateRuntimeOn: "Auto"
+      Handler: "index.handler"
+      Code:
+        SourceKMSKeyArn:
+          Ref: "LambdaFunctionDeleteEventCodeSourceKMSKeyArn1ldri"
+        S3ObjectVersion:
+          Ref: "LambdaFunctionDeleteEventCodeS3ObjectVersionZ8uLC"
+        S3Bucket:
+          Ref: "LambdaFunctionDeleteEventCodeS3Bucketf8JzD"
+        ZipFile:
+          Ref: "LambdaFunctionDeleteEventCodeZipFileEot1C"
+        ImageUri:
+          Ref: "LambdaFunctionDeleteEventCodeImageUriKeFp5"
+        S3Key:
+          Ref: "LambdaFunctionDeleteEventCodeS3Key3X40r"
+      Role:
+        Fn::GetAtt:
+        - "IAMRoleAddVoiceEventrolel30o387r"
+        - "Arn"
+      FileSystemConfigs: []
+      FunctionName: "deleteEvent"
+      Runtime: "nodejs22.x"
+      PackageType: "Zip"
+      LoggingConfig:
+        LogFormat: "Text"
+        LogGroup: "/aws/lambda/deleteEvent"
+      RecursiveLoop: "Terminate"
+      Environment:
+        Variables:
+          ATTACHMENTS_BUCKET_NAME: "vfs-tracker-objstor"
+      EphemeralStorage:
+        Size: 512
+      Architectures:
+      - "x86_64"
+  ApiGatewayDeploymentLQ:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::ApiGateway::Deployment"
+    DeletionPolicy: "Retain"
+    Properties:
+      RestApiId:
+        Ref: "ApiGatewayRestApi"
+  ApiGatewayDeploymentM2:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::ApiGateway::Deployment"
+    DeletionPolicy: "Retain"
+    Properties:
+      RestApiId:
+        Ref: "ApiGatewayRestApi"
+  ApiGatewayDeploymentLS:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::ApiGateway::Deployment"
+    DeletionPolicy: "Retain"
+    Properties:
+      RestApiId:
+        Ref: "ApiGatewayRestApi"
+  LambdaFunctionGetUserProfile:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::Lambda::Function"
+    DeletionPolicy: "Retain"
+    Properties:
+      MemorySize: 128
+      Description: ""
+      TracingConfig:
+        Mode: "PassThrough"
+      Timeout: 3
+      RuntimeManagementConfig:
+        UpdateRuntimeOn: "Auto"
+      Handler: "index.handler"
+      Code:
+        SourceKMSKeyArn:
+          Ref: "LambdaFunctionGetUserProfileCodeSourceKMSKeyArnbs1yb"
+        S3ObjectVersion:
+          Ref: "LambdaFunctionGetUserProfileCodeS3ObjectVersionSnqFO"
+        S3Bucket:
+          Ref: "LambdaFunctionGetUserProfileCodeS3BucketF2tVW"
+        ZipFile:
+          Ref: "LambdaFunctionGetUserProfileCodeZipFiletxgMD"
+        ImageUri:
+          Ref: "LambdaFunctionGetUserProfileCodeImageUrijBkEU"
+        S3Key:
+          Ref: "LambdaFunctionGetUserProfileCodeS3Key0KqqW"
+      Role:
+        Fn::GetAtt:
+        - "IAMRoleGetAllPublicEventsrole33fp67ha"
+        - "Arn"
+      FileSystemConfigs: []
+      FunctionName: "getUserProfile"
+      Runtime: "nodejs22.x"
+      PackageType: "Zip"
+      LoggingConfig:
+        LogFormat: "Text"
+        LogGroup: "/aws/lambda/getUserProfile"
+      RecursiveLoop: "Terminate"
+      Environment:
+        Variables:
+          USERS_TABLE: "VoiceFemUsers"
+      EphemeralStorage:
+        Size: 512
+      Architectures:
+      - "x86_64"
+  DynamoDBTableVoiceFemTests:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::DynamoDB::Table"
+    DeletionPolicy: "Retain"
+    Properties:
+      SSESpecification:
+        SSEEnabled: false
+      TableName: "VoiceFemTests"
+      AttributeDefinitions:
+      - AttributeType: "S"
+        AttributeName: "sessionId"
+      ContributorInsightsSpecification:
+        Enabled: false
+      BillingMode: "PAY_PER_REQUEST"
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: false
+      WarmThroughput:
+        ReadUnitsPerSecond: 12000
+        WriteUnitsPerSecond: 4000
+      KeySchema:
+      - KeyType: "HASH"
+        AttributeName: "sessionId"
+      DeletionProtectionEnabled: false
+      TableClass: "STANDARD"
+      Tags: []
+      TimeToLiveSpecification:
+        Enabled: false
+  S3BucketVfstrackerobjstor:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::S3::Bucket"
+    DeletionPolicy: "Retain"
+    Properties:
+      PublicAccessBlockConfiguration:
+        RestrictPublicBuckets: true
+        IgnorePublicAcls: true
+        BlockPublicPolicy: true
+        BlockPublicAcls: true
+      LifecycleConfiguration:
+        TransitionDefaultMinimumObjectSize: "all_storage_classes_128K"
+        Rules:
+        - Status: "Disabled"
+          TagFilters:
+          - Value: "wav"
+            Key: "FileType"
+          Id: "wav_max_saving_time"
+          ExpirationInDays: 1
+          ObjectSizeGreaterThan: "1"
+      BucketName: "vfs-tracker-objstor"
+      CorsConfiguration:
+        CorsRules:
+        - MaxAge: 3000
+          ExposedHeaders:
+          - "ETag"
+          AllowedMethods:
+          - "GET"
+          - "PUT"
+          - "POST"
+          - "DELETE"
+          AllowedOrigins:
+          - "http://localhost:4173"
+          - "http://localhost:5173"
+          - "http://localhost:3000"
+          - "https://vfs-tracker.app"
+          - "https://vfs-tracker.cn"
+          AllowedHeaders:
+          - "Content-Type"
+          - "Authorization"
+          - "X-Amz-Date"
+          - "X-Api-Key"
+          - "X-Amz-Security-Token"
+      OwnershipControls:
+        Rules:
+        - ObjectOwnership: "BucketOwnerEnforced"
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+        - BucketKeyEnabled: true
+          ServerSideEncryptionByDefault:
+            SSEAlgorithm: "AES256"
+  ApiGatewayDeploymentTW:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::ApiGateway::Deployment"
+    DeletionPolicy: "Retain"
+    Properties:
+      RestApiId:
+        Ref: "ApiGatewayRestApi"
+  DynamoDBTableVoiceFemUsers:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::DynamoDB::Table"
+    DeletionPolicy: "Retain"
+    Properties:
+      SSESpecification:
+        SSEEnabled: false
+      TableName: "VoiceFemUsers"
+      AttributeDefinitions:
+      - AttributeType: "S"
+        AttributeName: "userId"
+      ContributorInsightsSpecification:
+        Enabled: false
+      BillingMode: "PAY_PER_REQUEST"
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: false
+      WarmThroughput:
+        ReadUnitsPerSecond: 12000
+        WriteUnitsPerSecond: 4000
+      KeySchema:
+      - KeyType: "HASH"
+        AttributeName: "userId"
+      DeletionProtectionEnabled: false
+      TableClass: "STANDARD"
+      Tags: []
+      TimeToLiveSpecification:
+        Enabled: false
+  ApiGatewayStageDev:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::ApiGateway::Stage"
+    DeletionPolicy: "Retain"
+    Properties:
+      RestApiId:
+        Ref: "ApiGatewayRestApi"
+      DeploymentId:
+        Fn::GetAtt:
+        - "ApiGatewayDeploymentOH"
+        - "DeploymentId"
+      StageName: "dev"
+      CacheClusterSize: "0.5"
+      TracingEnabled: false
+      CacheClusterEnabled: false
+  ApiGatewayDeploymentTd:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::ApiGateway::Deployment"
+    DeletionPolicy: "Retain"
+    Properties:
+      RestApiId:
+        Ref: "ApiGatewayRestApi"
+  ApiGatewayDeploymentCm:
+    UpdateReplacePolicy: "Retain"
+    Type: "AWS::ApiGateway::Deployment"
+    DeletionPolicy: "Retain"
+    Properties:
+      RestApiId:
+        Ref: "ApiGatewayRestApi"
