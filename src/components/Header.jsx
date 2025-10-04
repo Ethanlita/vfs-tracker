@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import Sidebar from './Sidebar.jsx';
+import PostsDropdown from './PostsDropdown.jsx';
 import { useAuth } from '../contexts/AuthContext.jsx';
 import { generateAvatarFromName, getUserAvatarUrl, getUserDisplayName } from '../utils/avatar.js';
 
@@ -55,6 +56,16 @@ const Header = ({ AuthComponent }) => {
     () => toolLinks.some(link => location.pathname.startsWith(link.to)),
     [toolLinks, location.pathname],
   );
+
+  const isDocsActive = useMemo(
+    () => location.pathname.startsWith('/posts') || location.pathname.startsWith('/docs'),
+    [location.pathname],
+  );
+
+  // #zh: 统一顶栏按钮的基础样式，确保“文档”和“工具”视觉保持一致。
+  const navButtonBaseClass = 'flex items-center gap-1 rounded-lg px-3 py-2 text-sm font-medium transition';
+  const navButtonActiveClass = 'bg-pink-50 text-pink-600';
+  const navButtonInactiveClass = 'text-gray-700 hover:bg-gray-50';
 
   useEffect(() => {
     if (typeof document === 'undefined') {
@@ -111,12 +122,17 @@ const Header = ({ AuthComponent }) => {
               </NavLink>
 
               <div className="hidden lg:flex items-center gap-3 ml-6">
-                <TopNavLink to={docLink.to}>{docLink.label}</TopNavLink>
+                <PostsDropdown
+                  triggerClassName={navButtonBaseClass}
+                  activeClassName={navButtonActiveClass}
+                  inactiveClassName={navButtonInactiveClass}
+                  isActive={isDocsActive}
+                />
                 <div className="relative" ref={toolsMenuRef}>
                   <button
                     type="button"
-                    className={`flex items-center gap-1 rounded-lg px-3 py-2 text-sm font-medium transition ${
-                      isToolsActive ? 'bg-pink-50 text-pink-600' : 'text-gray-700 hover:bg-gray-50'
+                    className={`${navButtonBaseClass} ${
+                      isToolsActive ? navButtonActiveClass : navButtonInactiveClass
                     }`}
                     onClick={() => setToolsMenuOpen(prev => !prev)}
                     aria-haspopup="true"
@@ -185,26 +201,6 @@ const Header = ({ AuthComponent }) => {
         AuthComponent={AuthComponent}
       />
     </>
-  );
-};
-
-/**
- * @en Render a navigation link in the desktop header.
- * @zh 渲染桌面端顶部导航的链接按钮。
- */
-const TopNavLink = ({ to, children }) => {
-  return (
-    <NavLink
-      to={to}
-      className={({ isActive }) =>
-        `rounded-lg px-3 py-2 text-sm font-medium transition ${
-          isActive ? 'bg-pink-50 text-pink-600' : 'text-gray-700 hover:bg-gray-50'
-        }`
-      }
-      end
-    >
-      {children}
-    </NavLink>
   );
 };
 
