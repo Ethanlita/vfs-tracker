@@ -28,15 +28,17 @@
 ## 目录结构（摘录）
 
 - src/components
-  - **VoiceTestWizard.jsx**: 新增的在线嗓音测试向导核心组件。
+  - VoiceTestWizard.jsx: 在线嗓音测试向导核心组件。
   - PublicDashboard.jsx：公开仪表板，聚合全体用户匿名数据与可视化
   - EventForm.jsx：事件录入表单，支持文件上传与动态字段
   - Timeline.jsx：个人时间轴与图表展示
   - PostList.jsx / PostViewer.jsx / PostsDropdown.jsx：帖子列表与阅读
 - src/api.js：对接 AWS Amplify（API/Storage），提供开发环境回退逻辑
-- **lambda-functions/online-praat-analysis**: 新增的嗓音分析后端服务。
+- lambda-functions/online-praat-analysis: 新增的嗓音分析后端服务。
 - scripts/generate-posts-list.js：生成 public/posts.json
 - docs/data_structures.md：数据结构契约（禁止修改）
+- docs/: 这个文件夹里面的是技术文档（README和AGENTS除外）
+- posts/: 这个文件夹里面是向用户展示的文档
 
 ## 快速开始
 
