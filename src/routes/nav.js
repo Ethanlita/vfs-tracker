@@ -6,5 +6,6 @@ export const SIDEBAR_ROUTES = [
   { to: '/quick-f0-test', label: '⚡ 快速基频测试', requiresAuth: true, offlineSafe: true },
   { to: '/voice-test', label: '🎤 启动嗓音测试', requiresAuth: true, offlineSafe: false },
   { to: '/scale-practice', label: '🎹 音阶练习', requiresAuth: true, offlineSafe: true },
-  { to: '/profile-setup-wizard', label: '完善资料', requiresAuth: true, showInSidebar: false, offlineSafe: true }
+  { to: '/profile-setup-wizard', label: '完善资料', requiresAuth: true, showInSidebar: false, offlineSafe: true },
+  { to: '/dashboard', label: '🧭 公共仪表板', offlineSafe: false },
 ];
