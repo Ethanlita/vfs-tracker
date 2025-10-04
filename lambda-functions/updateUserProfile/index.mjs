@@ -1,6 +1,5 @@
 /**
- * 更新用户资料 Lambda函数
- * PUT /user/{userId}
+ * @file [CN] 该文件包含一个 AWS Lambda 处理程序，用于更新用户的个人资料信息。
  */
 
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
@@ -21,7 +20,11 @@ const corsHeaders = {
 };
 
 /**
- * 从JWT token中提取用户信息 - 专门处理ID Token
+ * [CN] 从 API Gateway 事件对象中提取用户信息，优先解析 Authorization 头中的 ID Token。
+ * 此函数会尝试从 API Gateway 的授权方上下文中获取 claims，如果失败，则会手动解析 Bearer token。
+ * @param {object} event - API Gateway Lambda 事件对象。
+ * @returns {{userId: string, email: string, username: string, nickname: string}} 提取出的用户信息对象。
+ * @throws {Error} 如果在请求中找不到有效的 ID token 或解析失败。
  */
 function extractUserFromEvent(event) {
   try {
@@ -87,7 +90,10 @@ function extractUserFromEvent(event) {
 }
 
 /**
- * 创建标准HTTP响应
+ * [CN] 创建一个标准化的、包含 CORS 头的 API Gateway 响应对象。
+ * @param {number} statusCode - HTTP 状态码。
+ * @param {object} body - 要在响应体中进行 JSON 字符串化的对象。
+ * @returns {object} 格式化后的 API Gateway 响应对象。
  */
 function createResponse(statusCode, body) {
   return {
@@ -98,7 +104,11 @@ function createResponse(statusCode, body) {
 }
 
 /**
- * 主处理函数
+ * [CN] Lambda 函数的主处理程序。它接收一个用户的个人资料更新，并将其保存到 DynamoDB。
+ * 该函数强制执行一项安全检查，以确保用户只能更新自己的个人资料。它会忽略请求中的 `nickname` 字段，
+ * 因为该字段由 Cognito 管理，并在响应中重新注入来自 token 的 `nickname`。
+ * @param {object} event - API Gateway Lambda 事件对象。请求体应包含一个 `profile` 对象。
+ * @returns {Promise<object>} 一个 API Gateway 响应，其中包含更新后的用户个人资料或错误消息。
  */
 export const handler = async (event) => {
   console.log('Event:', JSON.stringify(event, null, 2));
