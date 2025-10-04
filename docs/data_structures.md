@@ -325,8 +325,8 @@ This table stores the state and results of each voice test session initiated by 
 | `sessionId` | String | Unique identifier for the test session (e.g., UUID). Partition Key. | Yes |
 | `userId` | String | User ID (from Cognito sub). Regular attribute, not part of key. | Yes |
 | `status` | String | The current status of the analysis: `pending` \| `processing` \| `done` \| `failed`. | Yes |
-| `createdAt` | String | ISO 8601 timestamp of when the session was created. | Yes |
-| `updatedAt` | String | ISO 8601 timestamp of when the session was last updated. | No |
+| `createdAt` | Number | Unix timestamp (epoch seconds) of when the session was created. | Yes |
+| `updatedAt` | Number | Unix timestamp (epoch seconds) of when the session was last updated. | No |
 | `metrics` | Map | A map containing the final calculated acoustic metrics after analysis. | No |
 | `charts` | Map | A map containing S3 URLs for generated chart files. | No |
 | `reportPdf` | String | S3 URL for the final PDF report (top-level field). | No |
@@ -370,8 +370,8 @@ This table stores the state and results of each voice test session initiated by 
   "sessionId": "a1b2c3d4-e5f6-7890-1234-567890abcdef",
   "userId": "us-east-1:12345678-1234-1234-1234-123456789012",
   "status": "done",
-  "createdAt": "2025-09-01T10:00:00.000Z",
-  "updatedAt": "2025-09-01T10:15:00.000Z",
+  "createdAt": 1725188400,
+  "updatedAt": 1725189300,
   "metrics": {
     "sustained": {
       "spl_dbA": 76.8,
