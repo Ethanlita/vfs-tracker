@@ -26,11 +26,11 @@
 
 ### 1. VoiceFemEvents表
 
-**字段总数**: 148个  
-**数据覆盖**: 133/148 (89%)  
-**代码覆盖**: 
-- 写入: 47/148 (31%)
-- 读取: 10/148 (6%)
+**字段总数**: 146个  
+**数据覆盖**: 133/146 (91%)  
+**代码覆盖**（修正版）: 
+- 写入: 120/146 (82%)
+- 读取: 130/146 (89%)
 
 #### 重点发现
 
@@ -65,9 +65,9 @@
 
 **字段总数**: 10个  
 **数据覆盖**: 8/10 (80%)  
-**代码覆盖**:
-- 写入: 9/10 (90%)
-- 读取: 4/10 (40%)
+**代码覆盖**（修正版）:
+- 写入: 8/10 (80%)
+- 读取: 7/10 (70%)
 
 #### 重点发现
 
@@ -86,11 +86,11 @@
 
 ### 3. VoiceFemTests表
 
-**字段总数**: 121个  
-**数据覆盖**: 121/121 (100%)  
-**代码覆盖**:
-- 写入: 18/121 (14%)
-- 读取: 7/121 (5%)
+**字段总数**: 106个  
+**数据覆盖**: 106/106 (100%)  
+**代码覆盖**（修正版）:
+- 写入: 74/106 (70%)
+- 读取: 106/106 (100%)
 
 #### 重点发现
 
@@ -170,13 +170,27 @@
    - 数据验证：确实0条记录包含这些字段
    - 文档标注正确 ✅
 
-3. **formants位置**
-   - 文档描述了三个formant位置：
-     - `details.full_metrics.sustained.formants_low` (33/75存在)
-     - `details.full_metrics.sustained.formants_high` (33/75存在)  
-     - `details.full_metrics.formants_low` (顶层，19/75存在)
-     - `details.full_metrics.formants_high` (顶层，19/75存在)
-   - 这反映了算法演进，文档正确记录了所有可能位置 ✅
+3. **formants位置 - 专题分析**
+   
+   **✅ 结论：这是有意的设计，不是数据不一致**
+   
+   Formants字段同时存在于两个位置：
+   - **顶层**: `details.full_metrics.formants_low/high` (19/75条, 25%)
+     - 写入: `handler.py:284, 300`
+     - 目的: 向后兼容 + 快速访问
+   
+   - **sustained内**: `details.full_metrics.sustained.formants_low/high` (33/75条, 44%)
+     - 写入: 通过整个metrics对象
+     - 目的: 逻辑归属
+   
+   - **sustained专用**: `details.full_metrics.sustained.formants_sustained` (27/75条, 36%)
+     - 写入: `analysis.py:385`
+     - 目的: 专门分析sustained vowel
+   
+   **为什么同时写入？**
+   代码在`handler.py:284,300`写入顶层formants，然后在`handler.py:671`将整个metrics（包含sustained内的formants）作为full_metrics写入Events表。
+   
+   **建议**: 保持现状，两个位置都保留。不需要数据迁移。
 
 ---
 

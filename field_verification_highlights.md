@@ -10,10 +10,10 @@
 
 | 指标 | 数值 | 百分比 |
 |------|------|--------|
-| **总字段数** | 279 | 100% |
-| **有数据的字段** | 262 | 93% |
-| **有写入代码的字段** | 74 | 26% |
-| **有读取代码的字段** | 21 | 7% |
+| **总字段数** | 262 | 100% |
+| **有数据的字段** | 262 | 100% |
+| **有写入代码的字段** | 202 | 77% |
+| **有读取代码的字段** | 243 | 92% |
 
 ---
 
@@ -122,18 +122,31 @@ metrics字段 (54/449, 12%)
 
 ## 有趣的数据模式
 
-### 1. 共振峰分析的多个位置
+### 1. 共振峰分析的多个位置（重要澄清）
 
-在`details.full_metrics`中发现了3种formant位置：
-- `sustained.formants_low`: 低音共振峰 (33/75)
-- `sustained.formants_high`: 高音共振峰 (33/75)
-- `sustained.formants_sustained`: 持续音共振峰 (27/75)
+**✅ 这是有意的设计，不是数据不一致**
 
-同时在顶层也有：
-- `formants_low`: 19/75
-- `formants_high`: 19/75
+在`details.full_metrics`中formants同时存在于两个位置：
 
-**解读**: 这反映了声学分析算法的演进，新版本将formants放在sustained下，旧版本在顶层。
+**顶层位置** (`formants_low/high`):
+- 数据: 19/75条记录 (25%)
+- 写入: `handler.py:284, 300`
+- 目的: 向后兼容 + 快速访问
+
+**sustained内位置** (`sustained.formants_low/high`):
+- 数据: 33/75条记录 (44%)
+- 写入: 通过整个metrics对象
+- 目的: 逻辑归属（formants属于sustained测试）
+
+**sustained专用** (`sustained.formants_sustained`):
+- 数据: 27/75条记录 (36%)
+- 写入: `analysis.py:385`
+- 目的: 专门分析sustained vowel
+
+**为什么同时存在？**
+代码先在`handler.py:284,300`写入顶层formants，然后在`handler.py:671`将整个metrics对象（包含sustained内的formants）作为full_metrics写入Events。这确保了两种访问模式都能工作。
+
+**结论**: 保持现状，不需要修改数据结构。
 
 ### 2. questionnaires的详细结构
 
