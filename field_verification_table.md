@@ -1,340 +1,319 @@
-# DynamoDB字段完整验证表格（修正版 - 仅实际存在的字段）
-
-**生成时间**: 2025-10-05 03:45:02
-
-**重要说明**: 本表格仅包含数据库中实际存在的字段。
-
----
-
-## VoiceFemEvents
-
-**实际存在的字段数**: 142
-
-| 字段名 | 数据存在率 | 示例ID | 示例值 | 当前写入代码 | 当前读取代码 | 字段含义 |
-|---|---|---|---|---|---|---|
-| `attachments` | 55/75 (73%) | `6e453f06-9212-49ef-9015-36fd5d` | [{"fileUrl": "voice-tests/656501ca-8a61- | lambda-functions/addVoiceEvent/index.mjs:95 (sanitizeAttachments) | getVoiceEvents/index.mjs + Timeline.jsx | 附件列表（PDF报告等） |
-| `attachments.fileName` | 0/75 (0%) | `-` | - | lambda-functions/addVoiceEvent/index.mjs:95 (作为attachments数组的一部分) | - | - |
-| `attachments.fileType` | 0/75 (0%) | `-` | - | lambda-functions/addVoiceEvent/index.mjs:95 (作为attachments数组的一部分) | - | - |
-| `attachments.fileUrl` | 0/75 (0%) | `-` | - | lambda-functions/addVoiceEvent/index.mjs:95 (作为attachments数组的一部分) | - | - |
-| `date` | 75/75 (100%) | `6e453f06-9212-49ef-9015-36fd5d` | 2025-08-30T18:00:21.036949Z | lambda-functions/addVoiceEvent/index.mjs:89 (requestBody.date) | Timeline.jsx:228 + PublicDashboard.jsx | 事件发生日期 |
-| `details` | 75/75 (100%) | `6e453f06-9212-49ef-9015-36fd5d` | {"formants": {"f2": "2072.972442", "f3": | lambda-functions/addVoiceEvent/index.mjs:90 (requestBody.details整个对象) | Timeline.jsx + PublicDashboard.jsx | 事件详细信息对象 |
-| `details.appUsed` | 70/75 (93%) | `6e453f06-9212-49ef-9015-36fd5d` | VFS Tracker Online Analysis | lambda-functions/online-praat-analysis/handler.py:645 (固定值) | Timeline.jsx (显示工具) | 使用的测试工具名称 |
-| `details.customSoundDetail` | 14/75 (18%) | `event_mg5krxyc_x4i9lnkng` | 通过快速基频测试自动记录 | src/components/QuickF0Test.jsx:158 + EventForm.jsx | src/components/Timeline.jsx + PublicDashboard.jsx (details对象) | 自定义发音说明 |
-| `details.customVoicingDetail` | 14/75 (18%) | `event_mg5krxyc_x4i9lnkng` | 通过快速基频测试自动记录 | src/components/QuickF0Test.jsx:160 + EventForm.jsx | src/components/Timeline.jsx + PublicDashboard.jsx (details对象) | 自定义嗓音说明 |
-| `details.doctor` | 3/75 (4%) | `event_mga2yfmz_lkqlwwxt6` | 李革临 | src/components/EventForm.jsx:348 (surgery事件) | src/components/Timeline.jsx + PublicDashboard.jsx (details对象) | 医生名称（surgery事件） |
-| `details.formants` | 52/75 (69%) | `6e453f06-9212-49ef-9015-36fd5d` | {"f2": "2072.972442", "f3": "3204.985286 | lambda-functions/online-praat-analysis/handler.py:657-661 (从formants_low提取) | src/components/Timeline.jsx + PublicDashboard.jsx (details对象) | 共振峰信息（F1/F2/F3） |
-| `details.formants.f1` | 52/75 (69%) | `6e453f06-9212-49ef-9015-36fd5d` | 622.576208 | lambda-functions/online-praat-analysis/handler.py:657-661 (作为formants对象的一部分) | src/components/Timeline.jsx + PublicDashboard.jsx (details对象) | - |
-| `details.formants.f2` | 52/75 (69%) | `6e453f06-9212-49ef-9015-36fd5d` | 2072.972442 | lambda-functions/online-praat-analysis/handler.py:657-661 (作为formants对象的一部分) | src/components/Timeline.jsx + PublicDashboard.jsx (details对象) | - |
-| `details.formants.f3` | 52/75 (69%) | `6e453f06-9212-49ef-9015-36fd5d` | 3204.985286 | lambda-functions/online-praat-analysis/handler.py:657-661 (作为formants对象的一部分) | src/components/Timeline.jsx + PublicDashboard.jsx (details对象) | - |
-| `details.full_metrics` | 53/75 (70%) | `6e453f06-9212-49ef-9015-36fd5d` | {"questionnaires": {"RBH": {"H": "2", "R | lambda-functions/online-praat-analysis/handler.py:671 (整个metrics对象) | Timeline.jsx (详细展示) | 完整的分析指标对象 |
-| `details.full_metrics.formants_high` | 19/75 (25%) | `bc56487c-35fa-49f8-9e76-22cf17` | {"reason": "LOW_PROMINENCE", "f0_mean":  | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取full_metrics子字段) | - |
-| `details.full_metrics.formants_high.B1` | 19/75 (25%) | `bc56487c-35fa-49f8-9e76-22cf17` | 406.55 | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取full_metrics子字段) | - |
-| `details.full_metrics.formants_high.B2` | 19/75 (25%) | `bc56487c-35fa-49f8-9e76-22cf17` | 306.05 | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取full_metrics子字段) | - |
-| `details.full_metrics.formants_high.B3` | 19/75 (25%) | `bc56487c-35fa-49f8-9e76-22cf17` | 111.29 | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取full_metrics子字段) | - |
-| `details.full_metrics.formants_high.F1` | 19/75 (25%) | `bc56487c-35fa-49f8-9e76-22cf17` | 310.95 | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取full_metrics子字段) | - |
-| `details.full_metrics.formants_high.F1_available` | 19/75 (25%) | `bc56487c-35fa-49f8-9e76-22cf17` | False | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取full_metrics子字段) | - |
-| `details.full_metrics.formants_high.F2` | 19/75 (25%) | `bc56487c-35fa-49f8-9e76-22cf17` | 889.62 | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取full_metrics子字段) | - |
-| `details.full_metrics.formants_high.F2_available` | 19/75 (25%) | `bc56487c-35fa-49f8-9e76-22cf17` | False | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取full_metrics子字段) | - |
-| `details.full_metrics.formants_high.F3` | 19/75 (25%) | `bc56487c-35fa-49f8-9e76-22cf17` | 2050.98 | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取full_metrics子字段) | - |
-| `details.full_metrics.formants_high.best_segment_time` | 19/75 (25%) | `bc56487c-35fa-49f8-9e76-22cf17` | 2.154333 | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取full_metrics子字段) | - |
-| `details.full_metrics.formants_high.f0_mean` | 19/75 (25%) | `bc56487c-35fa-49f8-9e76-22cf17` | 185.29 | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取full_metrics子字段) | - |
-| `details.full_metrics.formants_high.is_high_pitch` | 19/75 (25%) | `bc56487c-35fa-49f8-9e76-22cf17` | False | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取full_metrics子字段) | - |
-| `details.full_metrics.formants_high.reason` | 19/75 (25%) | `bc56487c-35fa-49f8-9e76-22cf17` | LOW_PROMINENCE | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取full_metrics子字段) | - |
-| `details.full_metrics.formants_high.source_file` | 19/75 (25%) | `bc56487c-35fa-49f8-9e76-22cf17` | voice-tests_596c7b65-c840-4044-8a51-6801 | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取full_metrics子字段) | - |
-| `details.full_metrics.formants_high.spl_dbA_est` | 19/75 (25%) | `bc56487c-35fa-49f8-9e76-22cf17` | 54.56665 | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取full_metrics子字段) | - |
-| `details.full_metrics.formants_low` | 19/75 (25%) | `bc56487c-35fa-49f8-9e76-22cf17` | {"reason": "LOW_PROMINENCE", "f0_mean":  | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取full_metrics子字段) | - |
-| `details.full_metrics.formants_low.B1` | 19/75 (25%) | `bc56487c-35fa-49f8-9e76-22cf17` | 119.25 | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取full_metrics子字段) | - |
-| `details.full_metrics.formants_low.B2` | 19/75 (25%) | `bc56487c-35fa-49f8-9e76-22cf17` | 97.68 | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取full_metrics子字段) | - |
-| `details.full_metrics.formants_low.B3` | 19/75 (25%) | `bc56487c-35fa-49f8-9e76-22cf17` | 53.43 | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取full_metrics子字段) | - |
-| `details.full_metrics.formants_low.F1` | 19/75 (25%) | `bc56487c-35fa-49f8-9e76-22cf17` | 858.13 | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取full_metrics子字段) | - |
-| `details.full_metrics.formants_low.F1_available` | 19/75 (25%) | `bc56487c-35fa-49f8-9e76-22cf17` | False | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取full_metrics子字段) | - |
-| `details.full_metrics.formants_low.F2` | 19/75 (25%) | `bc56487c-35fa-49f8-9e76-22cf17` | 1322.3 | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取full_metrics子字段) | - |
-| `details.full_metrics.formants_low.F2_available` | 19/75 (25%) | `bc56487c-35fa-49f8-9e76-22cf17` | False | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取full_metrics子字段) | - |
-| `details.full_metrics.formants_low.F3` | 19/75 (25%) | `bc56487c-35fa-49f8-9e76-22cf17` | 2864.81 | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取full_metrics子字段) | - |
-| `details.full_metrics.formants_low.best_segment_time` | 19/75 (25%) | `bc56487c-35fa-49f8-9e76-22cf17` | 2.384667 | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取full_metrics子字段) | - |
-| `details.full_metrics.formants_low.f0_mean` | 19/75 (25%) | `bc56487c-35fa-49f8-9e76-22cf17` | 358.75 | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取full_metrics子字段) | - |
-| `details.full_metrics.formants_low.is_high_pitch` | 19/75 (25%) | `bc56487c-35fa-49f8-9e76-22cf17` | True | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取full_metrics子字段) | - |
-| `details.full_metrics.formants_low.reason` | 19/75 (25%) | `bc56487c-35fa-49f8-9e76-22cf17` | LOW_PROMINENCE | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取full_metrics子字段) | - |
-| `details.full_metrics.formants_low.source_file` | 19/75 (25%) | `bc56487c-35fa-49f8-9e76-22cf17` | voice-tests_596c7b65-c840-4044-8a51-6801 | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取full_metrics子字段) | - |
-| `details.full_metrics.formants_low.spl_dbA_est` | 19/75 (25%) | `bc56487c-35fa-49f8-9e76-22cf17` | 80.352821 | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取full_metrics子字段) | - |
-| `details.full_metrics.questionnaires` | 53/75 (70%) | `6e453f06-9212-49ef-9015-36fd5d` | {"RBH": {"H": "2", "R": "2", "B": "1"},  | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取questionnaires.*) | - |
-| `details.full_metrics.questionnaires.OVHS-9 Total` | 49/75 (65%) | `6e453f06-9212-49ef-9015-36fd5d` | 17 | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取questionnaires.*) | - |
-| `details.full_metrics.questionnaires.RBH` | 53/75 (70%) | `6e453f06-9212-49ef-9015-36fd5d` | {"H": "2", "R": "2", "B": "1"} | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取questionnaires.*) | - |
-| `details.full_metrics.questionnaires.RBH.B` | 50/75 (66%) | `6e453f06-9212-49ef-9015-36fd5d` | 1 | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取questionnaires.*) | - |
-| `details.full_metrics.questionnaires.RBH.H` | 50/75 (66%) | `6e453f06-9212-49ef-9015-36fd5d` | 2 | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取questionnaires.*) | - |
-| `details.full_metrics.questionnaires.RBH.R` | 50/75 (66%) | `6e453f06-9212-49ef-9015-36fd5d` | 2 | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取questionnaires.*) | - |
-| `details.full_metrics.questionnaires.TVQ-G Percent` | 49/75 (65%) | `6e453f06-9212-49ef-9015-36fd5d` | 35% | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取questionnaires.*) | - |
-| `details.full_metrics.questionnaires.TVQ-G Total` | 49/75 (65%) | `6e453f06-9212-49ef-9015-36fd5d` | 17 | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取questionnaires.*) | - |
-| `details.full_metrics.reading` | 53/75 (70%) | `6e453f06-9212-49ef-9015-36fd5d` | {"f0_mean": "205.86", "f0_stats": {"medi | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取reading.*) | - |
-| `details.full_metrics.reading.duration_s` | 53/75 (70%) | `6e453f06-9212-49ef-9015-36fd5d` | 60.17 | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取reading.*) | - |
-| `details.full_metrics.reading.f0_mean` | 46/75 (61%) | `6e453f06-9212-49ef-9015-36fd5d` | 205.86 | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取reading.*) | - |
-| `details.full_metrics.reading.f0_sd` | 46/75 (61%) | `6e453f06-9212-49ef-9015-36fd5d` | 49.19 | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取reading.*) | - |
-| `details.full_metrics.reading.f0_stats` | 53/75 (70%) | `6e453f06-9212-49ef-9015-36fd5d` | {"median": "210.93", "p10": "111.23", "p | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取reading.*) | - |
-| `details.full_metrics.reading.f0_stats.median` | 53/75 (70%) | `6e453f06-9212-49ef-9015-36fd5d` | 210.93 | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取reading.*) | - |
-| `details.full_metrics.reading.f0_stats.p10` | 53/75 (70%) | `6e453f06-9212-49ef-9015-36fd5d` | 111.23 | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取reading.*) | - |
-| `details.full_metrics.reading.f0_stats.p90` | 53/75 (70%) | `6e453f06-9212-49ef-9015-36fd5d` | 253.04 | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取reading.*) | - |
-| `details.full_metrics.reading.pause_count` | 53/75 (70%) | `6e453f06-9212-49ef-9015-36fd5d` | 97 | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取reading.*) | - |
-| `details.full_metrics.reading.voiced_ratio` | 53/75 (70%) | `6e453f06-9212-49ef-9015-36fd5d` | 0.48 | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取reading.*) | - |
-| `details.full_metrics.spontaneous` | 53/75 (70%) | `6e453f06-9212-49ef-9015-36fd5d` | {"f0_mean": "203.1", "f0_stats": {"media | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取spontaneous.*) | - |
-| `details.full_metrics.spontaneous.duration_s` | 53/75 (70%) | `6e453f06-9212-49ef-9015-36fd5d` | 38.94 | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取spontaneous.*) | - |
-| `details.full_metrics.spontaneous.f0_mean` | 46/75 (61%) | `6e453f06-9212-49ef-9015-36fd5d` | 203.1 | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取spontaneous.*) | - |
-| `details.full_metrics.spontaneous.f0_sd` | 46/75 (61%) | `6e453f06-9212-49ef-9015-36fd5d` | 63 | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取spontaneous.*) | - |
-| `details.full_metrics.spontaneous.f0_stats` | 53/75 (70%) | `6e453f06-9212-49ef-9015-36fd5d` | {"median": "209.24", "p10": "103.06", "p | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取spontaneous.*) | - |
-| `details.full_metrics.spontaneous.f0_stats.median` | 53/75 (70%) | `6e453f06-9212-49ef-9015-36fd5d` | 209.24 | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取spontaneous.*) | - |
-| `details.full_metrics.spontaneous.f0_stats.p10` | 53/75 (70%) | `6e453f06-9212-49ef-9015-36fd5d` | 103.06 | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取spontaneous.*) | - |
-| `details.full_metrics.spontaneous.f0_stats.p90` | 53/75 (70%) | `6e453f06-9212-49ef-9015-36fd5d` | 265.53 | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取spontaneous.*) | - |
-| `details.full_metrics.spontaneous.pause_count` | 53/75 (70%) | `6e453f06-9212-49ef-9015-36fd5d` | 60 | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取spontaneous.*) | - |
-| `details.full_metrics.spontaneous.voiced_ratio` | 53/75 (70%) | `6e453f06-9212-49ef-9015-36fd5d` | 0.39 | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取spontaneous.*) | - |
-| `details.full_metrics.sustained` | 53/75 (70%) | `6e453f06-9212-49ef-9015-36fd5d` | {"mpt_s": "3.82", "f0_sd": "12.78", "shi | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取sustained.*) | - |
-| `details.full_metrics.sustained.f0_mean` | 53/75 (70%) | `6e453f06-9212-49ef-9015-36fd5d` | 345.6 | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取sustained.*) | - |
-| `details.full_metrics.sustained.f0_sd` | 26/75 (34%) | `6e453f06-9212-49ef-9015-36fd5d` | 12.78 | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取sustained.*) | - |
-| `details.full_metrics.sustained.formant_analysis_failed` | 9/75 (12%) | `d1111149-a125-4e2f-9556-26aae3` | True | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取sustained.*) | - |
-| `details.full_metrics.sustained.formant_analysis_reason_high` | 8/75 (10%) | `d1111149-a125-4e2f-9556-26aae3` | Failed to find formants even with multip | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取sustained.*) | - |
-| `details.full_metrics.sustained.formant_analysis_reason_low` | 8/75 (10%) | `d1111149-a125-4e2f-9556-26aae3` | Failed to find formants even with multip | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取sustained.*) | - |
-| `details.full_metrics.sustained.formant_analysis_reason_sustained` | 27/75 (36%) | `bc56487c-35fa-49f8-9e76-22cf17` | LOW_PROMINENCE | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取sustained.*) | - |
-| `details.full_metrics.sustained.formants_high` | 33/75 (44%) | `6e453f06-9212-49ef-9015-36fd5d` | {"f0_mean": "299.871058", "F1": "589.616 | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取sustained.*) | - |
-| `details.full_metrics.sustained.formants_high.F1` | 33/75 (44%) | `6e453f06-9212-49ef-9015-36fd5d` | 589.616537 | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取sustained.*) | - |
-| `details.full_metrics.sustained.formants_high.F2` | 33/75 (44%) | `6e453f06-9212-49ef-9015-36fd5d` | 1509.944704 | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取sustained.*) | - |
-| `details.full_metrics.sustained.formants_high.F3` | 33/75 (44%) | `6e453f06-9212-49ef-9015-36fd5d` | 2346.190007 | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取sustained.*) | - |
-| `details.full_metrics.sustained.formants_high.error_details` | 8/75 (10%) | `d1111149-a125-4e2f-9556-26aae3` | Analysis failed | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取sustained.*) | - |
-| `details.full_metrics.sustained.formants_high.f0_mean` | 33/75 (44%) | `6e453f06-9212-49ef-9015-36fd5d` | 299.871058 | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取sustained.*) | - |
-| `details.full_metrics.sustained.formants_high.reason` | 8/75 (10%) | `d1111149-a125-4e2f-9556-26aae3` | Failed to find formants even with multip | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取sustained.*) | - |
-| `details.full_metrics.sustained.formants_high.spl_dbA_est` | 33/75 (44%) | `6e453f06-9212-49ef-9015-36fd5d` | 74.830437 | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取sustained.*) | - |
-| `details.full_metrics.sustained.formants_low` | 33/75 (44%) | `6e453f06-9212-49ef-9015-36fd5d` | {"f0_mean": "99.5239", "F1": "622.576208 | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取sustained.*) | - |
-| `details.full_metrics.sustained.formants_low.F1` | 33/75 (44%) | `6e453f06-9212-49ef-9015-36fd5d` | 622.576208 | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取sustained.*) | - |
-| `details.full_metrics.sustained.formants_low.F2` | 33/75 (44%) | `6e453f06-9212-49ef-9015-36fd5d` | 2072.972442 | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取sustained.*) | - |
-| `details.full_metrics.sustained.formants_low.F3` | 33/75 (44%) | `6e453f06-9212-49ef-9015-36fd5d` | 3204.985286 | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取sustained.*) | - |
-| `details.full_metrics.sustained.formants_low.error_details` | 8/75 (10%) | `d1111149-a125-4e2f-9556-26aae3` | Analysis failed | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取sustained.*) | - |
-| `details.full_metrics.sustained.formants_low.f0_mean` | 33/75 (44%) | `6e453f06-9212-49ef-9015-36fd5d` | 99.5239 | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取sustained.*) | - |
-| `details.full_metrics.sustained.formants_low.reason` | 8/75 (10%) | `d1111149-a125-4e2f-9556-26aae3` | Failed to find formants even with multip | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取sustained.*) | - |
-| `details.full_metrics.sustained.formants_low.spl_dbA_est` | 33/75 (44%) | `6e453f06-9212-49ef-9015-36fd5d` | 72.960861 | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取sustained.*) | - |
-| `details.full_metrics.sustained.formants_sustained` | 27/75 (36%) | `bc56487c-35fa-49f8-9e76-22cf17` | {"reason": "LOW_PROMINENCE", "f0_mean":  | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取sustained.*) | - |
-| `details.full_metrics.sustained.formants_sustained.B1` | 19/75 (25%) | `bc56487c-35fa-49f8-9e76-22cf17` | 295.1 | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取sustained.*) | - |
-| `details.full_metrics.sustained.formants_sustained.B2` | 19/75 (25%) | `bc56487c-35fa-49f8-9e76-22cf17` | 156.17 | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取sustained.*) | - |
-| `details.full_metrics.sustained.formants_sustained.B3` | 19/75 (25%) | `bc56487c-35fa-49f8-9e76-22cf17` | 401.15 | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取sustained.*) | - |
-| `details.full_metrics.sustained.formants_sustained.F1` | 27/75 (36%) | `bc56487c-35fa-49f8-9e76-22cf17` | 638.22 | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取sustained.*) | - |
-| `details.full_metrics.sustained.formants_sustained.F1_available` | 19/75 (25%) | `bc56487c-35fa-49f8-9e76-22cf17` | False | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取sustained.*) | - |
-| `details.full_metrics.sustained.formants_sustained.F2` | 27/75 (36%) | `bc56487c-35fa-49f8-9e76-22cf17` | 1156.48 | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取sustained.*) | - |
-| `details.full_metrics.sustained.formants_sustained.F2_available` | 19/75 (25%) | `bc56487c-35fa-49f8-9e76-22cf17` | False | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取sustained.*) | - |
-| `details.full_metrics.sustained.formants_sustained.F3` | 27/75 (36%) | `bc56487c-35fa-49f8-9e76-22cf17` | 2600.09 | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取sustained.*) | - |
-| `details.full_metrics.sustained.formants_sustained.best_segment_time` | 19/75 (25%) | `bc56487c-35fa-49f8-9e76-22cf17` | 3.347667 | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取sustained.*) | - |
-| `details.full_metrics.sustained.formants_sustained.error_details` | 8/75 (10%) | `d1111149-a125-4e2f-9556-26aae3` | Analysis failed | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取sustained.*) | - |
-| `details.full_metrics.sustained.formants_sustained.f0_mean` | 27/75 (36%) | `bc56487c-35fa-49f8-9e76-22cf17` | 179.49 | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取sustained.*) | - |
-| `details.full_metrics.sustained.formants_sustained.is_high_pitch` | 19/75 (25%) | `bc56487c-35fa-49f8-9e76-22cf17` | False | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取sustained.*) | - |
-| `details.full_metrics.sustained.formants_sustained.reason` | 27/75 (36%) | `bc56487c-35fa-49f8-9e76-22cf17` | LOW_PROMINENCE | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取sustained.*) | - |
-| `details.full_metrics.sustained.formants_sustained.spl_dbA_est` | 27/75 (36%) | `bc56487c-35fa-49f8-9e76-22cf17` | 64.486183 | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取sustained.*) | - |
-| `details.full_metrics.sustained.hnr_db` | 53/75 (70%) | `6e453f06-9212-49ef-9015-36fd5d` | 19.1 | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取sustained.*) | - |
-| `details.full_metrics.sustained.jitter_local_percent` | 53/75 (70%) | `6e453f06-9212-49ef-9015-36fd5d` | 0.64 | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取sustained.*) | - |
-| `details.full_metrics.sustained.mpt_s` | 53/75 (70%) | `6e453f06-9212-49ef-9015-36fd5d` | 3.82 | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取sustained.*) | - |
-| `details.full_metrics.sustained.shimmer_local_percent` | 53/75 (70%) | `6e453f06-9212-49ef-9015-36fd5d` | 3.98 | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取sustained.*) | - |
-| `details.full_metrics.sustained.spl_dbA_est` | 53/75 (70%) | `6e453f06-9212-49ef-9015-36fd5d` | 74.84 | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取sustained.*) | - |
-| `details.full_metrics.vrp` | 53/75 (70%) | `6e453f06-9212-49ef-9015-36fd5d` | {"f0_max": "438.638387", "spl_min": "68. | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取vrp.*) | - |
-| `details.full_metrics.vrp.bins` | 52/75 (69%) | `6e453f06-9212-49ef-9015-36fd5d` | [{"spl_min": "81.305534", "count": "4",  | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取vrp.*) | - |
-| `details.full_metrics.vrp.bins.count` | 0/75 (0%) | `-` | - | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取vrp.*) | - |
-| `details.full_metrics.vrp.bins.f0_center_hz` | 0/75 (0%) | `-` | - | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取vrp.*) | - |
-| `details.full_metrics.vrp.bins.semi` | 0/75 (0%) | `-` | - | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取vrp.*) | - |
-| `details.full_metrics.vrp.bins.spl_max` | 0/75 (0%) | `-` | - | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取vrp.*) | - |
-| `details.full_metrics.vrp.bins.spl_mean` | 0/75 (0%) | `-` | - | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取vrp.*) | - |
-| `details.full_metrics.vrp.bins.spl_min` | 0/75 (0%) | `-` | - | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取vrp.*) | - |
-| `details.full_metrics.vrp.error` | 1/75 (1%) | `f5c64bb1-0738-478c-8b81-a5a464` | no_frames | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取vrp.*) | - |
-| `details.full_metrics.vrp.f0_max` | 52/75 (69%) | `6e453f06-9212-49ef-9015-36fd5d` | 438.638387 | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取vrp.*) | - |
-| `details.full_metrics.vrp.f0_min` | 52/75 (69%) | `6e453f06-9212-49ef-9015-36fd5d` | 227.588206 | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取vrp.*) | - |
-| `details.full_metrics.vrp.spl_max` | 52/75 (69%) | `6e453f06-9212-49ef-9015-36fd5d` | 81.980774 | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取vrp.*) | - |
-| `details.full_metrics.vrp.spl_min` | 52/75 (69%) | `6e453f06-9212-49ef-9015-36fd5d` | 68.339275 | lambda-functions/online-praat-analysis/handler.py:671 (作为metrics对象的一部分) | src/components/TestResultsDisplay.jsx:78-130 (读取vrp.*) | - |
-| `details.fundamentalFrequency` | 72/75 (96%) | `6e453f06-9212-49ef-9015-36fd5d` | 203.1 | lambda-functions/online-praat-analysis/handler.py:648 (spontaneous.f0_mean) | Timeline.jsx:170 (图表) + PublicDashboard.jsx | 平均基频（Hz） |
-| `details.hnr` | 53/75 (70%) | `6e453f06-9212-49ef-9015-36fd5d` | 19.1 | lambda-functions/online-praat-analysis/handler.py:651 (sustained.hnr_db) | src/components/Timeline.jsx + PublicDashboard.jsx (details对象) | 谐噪比（dB） |
-| `details.jitter` | 55/75 (73%) | `6e453f06-9212-49ef-9015-36fd5d` | 0.64 | lambda-functions/online-praat-analysis/handler.py:649 (sustained.jitter_local_percent) | src/components/Timeline.jsx + PublicDashboard.jsx (details对象) | Jitter频率抖动百分比 |
-| `details.location` | 5/75 (6%) | `event_mga2yfmz_lkqlwwxt6` | 友谊医院 | src/components/EventForm.jsx:346 (surgery/hospital_test) | src/components/Timeline.jsx + PublicDashboard.jsx (details对象) | 医院/地点名称 |
-| `details.notes` | 67/75 (89%) | `6e453f06-9212-49ef-9015-36fd5d` | VFS Tracker Voice Analysis Tools 自动生成报告 | lambda-functions/online-praat-analysis/handler.py:644 (固定值) | src/components/Timeline.jsx + PublicDashboard.jsx (details对象) | 备注信息 |
-| `details.pitch` | 53/75 (70%) | `6e453f06-9212-49ef-9015-36fd5d` | {"max": "438.638387", "min": "227.588206 | lambda-functions/online-praat-analysis/handler.py:664-668 (从vrp提取) | src/components/Timeline.jsx + PublicDashboard.jsx (details对象) | 音高范围（min/max） |
-| `details.pitch.max` | 53/75 (70%) | `6e453f06-9212-49ef-9015-36fd5d` | 438.638387 | lambda-functions/online-praat-analysis/handler.py:664-668 (作为pitch对象的一部分) | src/components/Timeline.jsx + PublicDashboard.jsx (details对象) | - |
-| `details.pitch.min` | 53/75 (70%) | `6e453f06-9212-49ef-9015-36fd5d` | 227.588206 | lambda-functions/online-praat-analysis/handler.py:664-668 (作为pitch对象的一部分) | src/components/Timeline.jsx + PublicDashboard.jsx (details对象) | - |
-| `details.shimmer` | 55/75 (73%) | `6e453f06-9212-49ef-9015-36fd5d` | 3.98 | lambda-functions/online-praat-analysis/handler.py:650 (sustained.shimmer_local_percent) | src/components/Timeline.jsx + PublicDashboard.jsx (details对象) | Shimmer振幅微颤百分比 |
-| `details.sound` | 19/75 (25%) | `event_mg5krxyc_x4i9lnkng` | ["其他"] | src/components/QuickF0Test.jsx:157 + EventForm.jsx | src/components/Timeline.jsx + PublicDashboard.jsx (details对象) | 发音类型选择 |
-| `details.voicing` | 19/75 (25%) | `event_mg5krxyc_x4i9lnkng` | ["其他"] | src/components/QuickF0Test.jsx:159 + EventForm.jsx | src/components/Timeline.jsx + PublicDashboard.jsx (details对象) | 嗓音类型选择 |
-| `eventId` | 75/75 (100%) | `6e453f06-9212-49ef-9015-36fd5d` | 6e453f06-9212-49ef-9015-36fd5dfe19c6 | lambda-functions/addVoiceEvent/index.mjs:74 (generateEventId()) | getVoiceEvents/index.mjs + autoApproveEvent/index.mjs:39 | 事件ID（排序键） |
-| `type` | 75/75 (100%) | `6e453f06-9212-49ef-9015-36fd5d` | self_test | lambda-functions/addVoiceEvent/index.mjs:88 (requestBody.type) | Timeline.jsx + EventForm.jsx (判断事件类型) | 事件类型（self_test/hospital_test/voice_training/etc） |
-
----
-
-## VoiceFemUsers
-
-**实际存在的字段数**: 10
-
-| 字段名 | 数据存在率 | 示例ID | 示例值 | 当前写入代码 | 当前读取代码 | 字段含义 |
-|---|---|---|---|---|---|---|
-| `email` | 11/13 (84%) | `0488a4b8-5041-70cc-2c96-f8f422` | 2586618121@qq.com | lambda-functions/vfsTrackerUserProfileSetup/index.mjs:88 | (无读取) 用户邮箱 | 用户邮箱 |
-| `profile` | 13/13 (100%) | `0488a4b8-5041-70cc-2c96-f8f422` | {"nickname": "Main包", "name": "Main包", " | lambda-functions/vfsTrackerUserProfileSetup/index.mjs:90 + updateUserProfile/index.mjs:71 | getUserProfile/index.mjs:53 + MyPage.jsx | 用户资料对象 |
-| `profile.areSocialsPublic` | 13/13 (100%) | `0488a4b8-5041-70cc-2c96-f8f422` | True | lambda-functions/vfsTrackerUserProfileSetup/index.mjs:96 + updateUserProfile + MyPage | src/components/MyPage.jsx + getUserProfile (profile对象) | 社交账号是否公开 |
-| `profile.bio` | 11/13 (84%) | `0488a4b8-5041-70cc-2c96-f8f422` | - | lambda-functions/vfsTrackerUserProfileSetup/index.mjs + updateUserProfile/index.mjs (历史代码，不应存在) | src/components/MyPage.jsx + getUserProfile (profile对象) | 个人简介（不应存在） |
-| `profile.isNamePublic` | 13/13 (100%) | `0488a4b8-5041-70cc-2c96-f8f422` | True | lambda-functions/vfsTrackerUserProfileSetup/index.mjs:94 + updateUserProfile + MyPage | src/components/MyPage.jsx + getUserProfile (profile对象) | 姓名是否公开 |
-| `profile.name` | 13/13 (100%) | `0488a4b8-5041-70cc-2c96-f8f422` | Main包 | lambda-functions/vfsTrackerUserProfileSetup/index.mjs:92 + updateUserProfile/index.mjs + MyPage.jsx | getAllPublicEvents/index.mjs:65 + PublicDashboard.jsx | 用户姓名 |
-| `profile.nickname` | 11/13 (84%) | `0488a4b8-5041-70cc-2c96-f8f422` | Main包 | lambda-functions/vfsTrackerUserProfileSetup/index.mjs:93 (从Cognito) | getUserProfile/index.mjs:76 + MyPage.jsx | 昵称（从Cognito同步） |
-| `profile.socials` | 13/13 (100%) | `0488a4b8-5041-70cc-2c96-f8f422` | [{"platform": "Twitter", "handle": "@Lem | lambda-functions/vfsTrackerUserProfileSetup/index.mjs:95 + updateUserProfile + MyPage | PublicDashboard.jsx (如果公开) | 社交账号列表 |
-| `profile.socials.handle` | 0/13 (0%) | `-` | - | src/components/MyPage.jsx + lambda-functions/updateUserProfile (作为socials数组的一部分) | src/components/MyPage.jsx + getUserProfile (profile对象) | - |
-| `profile.socials.platform` | 0/13 (0%) | `-` | - | src/components/MyPage.jsx + lambda-functions/updateUserProfile (作为socials数组的一部分) | src/components/MyPage.jsx + getUserProfile (profile对象) | - |
-
----
-
-## VoiceFemTests
-
-**实际存在的字段数**: 127
-
-| 字段名 | 数据存在率 | 示例ID | 示例值 | 当前写入代码 | 当前读取代码 | 字段含义 |
-|---|---|---|---|---|---|---|
-| `charts` | 54/449 (12%) | `34f8b418-1011-70a7-633b-720845` | {"timeSeries": "s3://vfs-tracker-objstor | lambda-functions/online-praat-analysis/handler.py:624 (artifact_urls) | VoiceTestWizard.jsx + TestResultsDisplay.jsx | 图表S3 URLs |
-| `charts.formant` | 54/449 (12%) | `34f8b418-1011-70a7-633b-720845` | s3://vfs-tracker-objstor/voice-tests/1a3 | lambda-functions/online-praat-analysis/handler.py:624 (作为charts对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx:图表显示 | - |
-| `charts.formant_spl_spectrum` | 54/449 (12%) | `34f8b418-1011-70a7-633b-720845` | s3://vfs-tracker-objstor/voice-tests/1a3 | lambda-functions/online-praat-analysis/handler.py:624 (作为charts对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx:图表显示 | - |
-| `charts.timeSeries` | 54/449 (12%) | `34f8b418-1011-70a7-633b-720845` | s3://vfs-tracker-objstor/voice-tests/1a3 | lambda-functions/online-praat-analysis/handler.py:624 (作为charts对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx:图表显示 | - |
-| `charts.vrp` | 53/449 (11%) | `34f8b418-1011-70a7-633b-720845` | s3://vfs-tracker-objstor/voice-tests/1a3 | lambda-functions/online-praat-analysis/handler.py:624 (作为charts对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx:图表显示 | - |
-| `createdAt` | 449/449 (100%) | `34f8b418-1011-70a7-633b-720845` | 1759471754 | lambda-functions/online-praat-analysis/handler.py:400 | getVoiceEvents/index.mjs:排序 + Timeline.jsx | 创建时间戳 |
-| `errorMessage` | 10/449 (2%) | `34f8b418-1011-70a7-633b-720845` | Float types are not supported. Use Decim | lambda-functions/online-praat-analysis/handler.py:异常处理 | (无读取) 错误信息（失败时） | 错误信息（失败时） |
-| `metrics` | 54/449 (12%) | `34f8b418-1011-70a7-633b-720845` | {"questionnaires": {"RBH": {}}, "reading | lambda-functions/online-praat-analysis/handler.py:623 (整个metrics对象) | VoiceTestWizard.jsx + TestResultsDisplay.jsx | 分析指标对象 |
-| `metrics.formants_high` | 18/449 (4%) | `04f83418-e0a1-70b4-1cb1-6bd062` | {"reason": "LOW_PROMINENCE", "f0_mean":  | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.formants_high.B1` | 18/449 (4%) | `04f83418-e0a1-70b4-1cb1-6bd062` | 253.19 | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.formants_high.B2` | 18/449 (4%) | `04f83418-e0a1-70b4-1cb1-6bd062` | 92.25 | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.formants_high.B3` | 18/449 (4%) | `04f83418-e0a1-70b4-1cb1-6bd062` | 1749.29 | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.formants_high.F1` | 18/449 (4%) | `04f83418-e0a1-70b4-1cb1-6bd062` | 627.34 | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.formants_high.F1_available` | 18/449 (4%) | `04f83418-e0a1-70b4-1cb1-6bd062` | False | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.formants_high.F2` | 18/449 (4%) | `04f83418-e0a1-70b4-1cb1-6bd062` | 1137.57 | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.formants_high.F2_available` | 18/449 (4%) | `04f83418-e0a1-70b4-1cb1-6bd062` | False | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.formants_high.F3` | 18/449 (4%) | `04f83418-e0a1-70b4-1cb1-6bd062` | 2957.26 | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.formants_high.best_segment_time` | 18/449 (4%) | `04f83418-e0a1-70b4-1cb1-6bd062` | 2.765333 | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.formants_high.f0_mean` | 18/449 (4%) | `04f83418-e0a1-70b4-1cb1-6bd062` | 120.73 | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.formants_high.is_high_pitch` | 18/449 (4%) | `04f83418-e0a1-70b4-1cb1-6bd062` | False | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.formants_high.reason` | 18/449 (4%) | `04f83418-e0a1-70b4-1cb1-6bd062` | LOW_PROMINENCE | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.formants_high.source_file` | 18/449 (4%) | `04f83418-e0a1-70b4-1cb1-6bd062` | voice-tests_bf3ccbba-cf8f-4012-b52d-8f06 | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.formants_high.spl_dbA_est` | 18/449 (4%) | `04f83418-e0a1-70b4-1cb1-6bd062` | 67.068298 | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.formants_low` | 18/449 (4%) | `04f83418-e0a1-70b4-1cb1-6bd062` | {"reason": "LOW_PROMINENCE", "f0_mean":  | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.formants_low.B1` | 18/449 (4%) | `04f83418-e0a1-70b4-1cb1-6bd062` | 404.81 | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.formants_low.B2` | 18/449 (4%) | `04f83418-e0a1-70b4-1cb1-6bd062` | 115.55 | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.formants_low.B3` | 18/449 (4%) | `04f83418-e0a1-70b4-1cb1-6bd062` | 408.74 | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.formants_low.F1` | 18/449 (4%) | `04f83418-e0a1-70b4-1cb1-6bd062` | 507.78 | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.formants_low.F1_available` | 18/449 (4%) | `04f83418-e0a1-70b4-1cb1-6bd062` | False | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.formants_low.F2` | 18/449 (4%) | `04f83418-e0a1-70b4-1cb1-6bd062` | 1117.87 | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.formants_low.F2_available` | 18/449 (4%) | `04f83418-e0a1-70b4-1cb1-6bd062` | False | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.formants_low.F3` | 18/449 (4%) | `04f83418-e0a1-70b4-1cb1-6bd062` | 1560.96 | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.formants_low.best_segment_time` | 18/449 (4%) | `04f83418-e0a1-70b4-1cb1-6bd062` | 1.857333 | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.formants_low.f0_mean` | 18/449 (4%) | `04f83418-e0a1-70b4-1cb1-6bd062` | 235.08 | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.formants_low.is_high_pitch` | 18/449 (4%) | `04f83418-e0a1-70b4-1cb1-6bd062` | False | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.formants_low.reason` | 18/449 (4%) | `04f83418-e0a1-70b4-1cb1-6bd062` | LOW_PROMINENCE | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.formants_low.source_file` | 18/449 (4%) | `04f83418-e0a1-70b4-1cb1-6bd062` | voice-tests_bf3ccbba-cf8f-4012-b52d-8f06 | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.formants_low.spl_dbA_est` | 18/449 (4%) | `04f83418-e0a1-70b4-1cb1-6bd062` | 70.16272 | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.questionnaires` | 54/449 (12%) | `34f8b418-1011-70a7-633b-720845` | {"RBH": {}} | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.questionnaires.OVHS-9 Total` | 49/449 (10%) | `4428c488-3061-70af-5d78-582d38` | 13 | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.questionnaires.RBH` | 54/449 (12%) | `34f8b418-1011-70a7-633b-720845` | {} | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.questionnaires.RBH.B` | 50/449 (11%) | `4428c488-3061-70af-5d78-582d38` | 1 | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.questionnaires.RBH.H` | 50/449 (11%) | `4428c488-3061-70af-5d78-582d38` | 2 | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.questionnaires.RBH.R` | 50/449 (11%) | `4428c488-3061-70af-5d78-582d38` | 1 | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.questionnaires.TVQ-G Percent` | 49/449 (10%) | `4428c488-3061-70af-5d78-582d38` | 33% | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.questionnaires.TVQ-G Total` | 49/449 (10%) | `4428c488-3061-70af-5d78-582d38` | 16 | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.reading` | 54/449 (12%) | `34f8b418-1011-70a7-633b-720845` | {"f0_mean": "121.5", "f0_stats": {"media | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.reading.duration_s` | 54/449 (12%) | `34f8b418-1011-70a7-633b-720845` | 6.48 | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.reading.f0_mean` | 45/449 (10%) | `34f8b418-1011-70a7-633b-720845` | 121.5 | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.reading.f0_sd` | 45/449 (10%) | `34f8b418-1011-70a7-633b-720845` | 17.5 | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.reading.f0_stats` | 54/449 (12%) | `34f8b418-1011-70a7-633b-720845` | {"median": "125.88", "p10": "95.24", "p9 | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.reading.f0_stats.median` | 54/449 (12%) | `34f8b418-1011-70a7-633b-720845` | 125.88 | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.reading.f0_stats.p10` | 54/449 (12%) | `34f8b418-1011-70a7-633b-720845` | 95.24 | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.reading.f0_stats.p90` | 54/449 (12%) | `34f8b418-1011-70a7-633b-720845` | 138.32 | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.reading.pause_count` | 54/449 (12%) | `34f8b418-1011-70a7-633b-720845` | 0 | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.reading.voiced_ratio` | 54/449 (12%) | `34f8b418-1011-70a7-633b-720845` | 0.12 | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.spontaneous` | 54/449 (12%) | `34f8b418-1011-70a7-633b-720845` | {"f0_mean": "108.25", "f0_stats": {"medi | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.spontaneous.duration_s` | 54/449 (12%) | `34f8b418-1011-70a7-633b-720845` | 0.9 | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.spontaneous.f0_mean` | 45/449 (10%) | `34f8b418-1011-70a7-633b-720845` | 108.25 | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.spontaneous.f0_sd` | 45/449 (10%) | `34f8b418-1011-70a7-633b-720845` | 20.28 | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.spontaneous.f0_stats` | 54/449 (12%) | `34f8b418-1011-70a7-633b-720845` | {"median": "104.32", "p10": "84.61", "p9 | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.spontaneous.f0_stats.median` | 54/449 (12%) | `34f8b418-1011-70a7-633b-720845` | 104.32 | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.spontaneous.f0_stats.p10` | 54/449 (12%) | `34f8b418-1011-70a7-633b-720845` | 84.61 | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.spontaneous.f0_stats.p90` | 54/449 (12%) | `34f8b418-1011-70a7-633b-720845` | 135.86 | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.spontaneous.pause_count` | 54/449 (12%) | `34f8b418-1011-70a7-633b-720845` | 0 | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.spontaneous.voiced_ratio` | 54/449 (12%) | `34f8b418-1011-70a7-633b-720845` | 0.22 | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.sustained` | 54/449 (12%) | `34f8b418-1011-70a7-633b-720845` | {"mpt_s": "1.32", "f0_sd": "22.08", "shi | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.sustained.f0_mean` | 54/449 (12%) | `34f8b418-1011-70a7-633b-720845` | 118.5 | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.sustained.f0_sd` | 28/449 (6%) | `34f8b418-1011-70a7-633b-720845` | 22.08 | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.sustained.formant_analysis_failed` | 9/449 (2%) | `4428c488-3061-70af-5d78-582d38` | True | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.sustained.formant_analysis_reason_high` | 8/449 (1%) | `f4786458-a081-70e5-9501-e2ae6f` | Failed to find formants even with multip | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.sustained.formant_analysis_reason_low` | 8/449 (1%) | `f4786458-a081-70e5-9501-e2ae6f` | Failed to find formants even with multip | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.sustained.formant_analysis_reason_sustained` | 26/449 (5%) | `f4786458-a081-70e5-9501-e2ae6f` | Failed to find formants even with multip | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.sustained.formants_high` | 35/449 (7%) | `34f8b418-1011-70a7-633b-720845` | {"f0_mean": "0", "F1": "0", "F2": "0", " | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.sustained.formants_high.F1` | 35/449 (7%) | `34f8b418-1011-70a7-633b-720845` | 0 | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.sustained.formants_high.F2` | 35/449 (7%) | `34f8b418-1011-70a7-633b-720845` | 0 | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.sustained.formants_high.F3` | 35/449 (7%) | `34f8b418-1011-70a7-633b-720845` | 0 | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.sustained.formants_high.error_details` | 9/449 (2%) | `34f8b418-1011-70a7-633b-720845` | No stable segment of 100ms found | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.sustained.formants_high.f0_mean` | 35/449 (7%) | `34f8b418-1011-70a7-633b-720845` | 0 | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.sustained.formants_high.reason` | 8/449 (1%) | `f4786458-a081-70e5-9501-e2ae6f` | Failed to find formants even with multip | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.sustained.formants_high.spl_dbA_est` | 35/449 (7%) | `34f8b418-1011-70a7-633b-720845` | 0 | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.sustained.formants_low` | 35/449 (7%) | `34f8b418-1011-70a7-633b-720845` | {"f0_mean": "0", "F1": "0", "F2": "0", " | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.sustained.formants_low.F1` | 35/449 (7%) | `34f8b418-1011-70a7-633b-720845` | 0 | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.sustained.formants_low.F2` | 35/449 (7%) | `34f8b418-1011-70a7-633b-720845` | 0 | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.sustained.formants_low.F3` | 35/449 (7%) | `34f8b418-1011-70a7-633b-720845` | 0 | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.sustained.formants_low.error_details` | 9/449 (2%) | `34f8b418-1011-70a7-633b-720845` | No stable segment of 100ms found | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.sustained.formants_low.f0_mean` | 35/449 (7%) | `34f8b418-1011-70a7-633b-720845` | 0 | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.sustained.formants_low.reason` | 8/449 (1%) | `f4786458-a081-70e5-9501-e2ae6f` | Failed to find formants even with multip | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.sustained.formants_low.spl_dbA_est` | 35/449 (7%) | `34f8b418-1011-70a7-633b-720845` | 0 | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.sustained.formants_sustained` | 26/449 (5%) | `f4786458-a081-70e5-9501-e2ae6f` | {"reason": "Failed to find formants even | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.sustained.formants_sustained.B1` | 18/449 (4%) | `04f83418-e0a1-70b4-1cb1-6bd062` | 246.94 | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.sustained.formants_sustained.B2` | 18/449 (4%) | `04f83418-e0a1-70b4-1cb1-6bd062` | 171.7 | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.sustained.formants_sustained.B3` | 18/449 (4%) | `04f83418-e0a1-70b4-1cb1-6bd062` | 188.97 | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.sustained.formants_sustained.F1` | 26/449 (5%) | `f4786458-a081-70e5-9501-e2ae6f` | 0 | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.sustained.formants_sustained.F1_available` | 18/449 (4%) | `04f83418-e0a1-70b4-1cb1-6bd062` | False | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.sustained.formants_sustained.F2` | 26/449 (5%) | `f4786458-a081-70e5-9501-e2ae6f` | 0 | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.sustained.formants_sustained.F2_available` | 18/449 (4%) | `04f83418-e0a1-70b4-1cb1-6bd062` | False | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.sustained.formants_sustained.F3` | 26/449 (5%) | `f4786458-a081-70e5-9501-e2ae6f` | 0 | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.sustained.formants_sustained.best_segment_time` | 18/449 (4%) | `04f83418-e0a1-70b4-1cb1-6bd062` | 1.242333 | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.sustained.formants_sustained.error_details` | 8/449 (1%) | `f4786458-a081-70e5-9501-e2ae6f` | Analysis failed | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.sustained.formants_sustained.f0_mean` | 26/449 (5%) | `f4786458-a081-70e5-9501-e2ae6f` | 0 | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.sustained.formants_sustained.is_high_pitch` | 18/449 (4%) | `04f83418-e0a1-70b4-1cb1-6bd062` | False | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.sustained.formants_sustained.reason` | 26/449 (5%) | `f4786458-a081-70e5-9501-e2ae6f` | Failed to find formants even with multip | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.sustained.formants_sustained.spl_dbA_est` | 26/449 (5%) | `f4786458-a081-70e5-9501-e2ae6f` | 0 | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.sustained.hnr_db` | 54/449 (12%) | `34f8b418-1011-70a7-633b-720845` | 2.43 | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.sustained.jitter_local_percent` | 54/449 (12%) | `34f8b418-1011-70a7-633b-720845` | 11.27 | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.sustained.mpt_s` | 54/449 (12%) | `34f8b418-1011-70a7-633b-720845` | 1.32 | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.sustained.shimmer_local_percent` | 54/449 (12%) | `34f8b418-1011-70a7-633b-720845` | 21.7 | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.sustained.spl_dbA_est` | 54/449 (12%) | `34f8b418-1011-70a7-633b-720845` | 74.4 | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.vrp` | 54/449 (12%) | `34f8b418-1011-70a7-633b-720845` | {"f0_max": "141.7902", "spl_min": "65.09 | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.vrp.bins` | 53/449 (11%) | `34f8b418-1011-70a7-633b-720845` | [{"spl_min": "66.354393", "count": "2",  | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.vrp.bins.count` | 0/449 (0%) | `-` | - | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.vrp.bins.f0_center_hz` | 0/449 (0%) | `-` | - | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.vrp.bins.semi` | 0/449 (0%) | `-` | - | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.vrp.bins.spl_max` | 0/449 (0%) | `-` | - | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.vrp.bins.spl_mean` | 0/449 (0%) | `-` | - | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.vrp.bins.spl_min` | 0/449 (0%) | `-` | - | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.vrp.error` | 1/449 (0%) | `342804d8-b051-7021-f62d-fc6558` | no_frames | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.vrp.f0_max` | 53/449 (11%) | `34f8b418-1011-70a7-633b-720845` | 141.7902 | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.vrp.f0_min` | 53/449 (11%) | `34f8b418-1011-70a7-633b-720845` | 86.060372 | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.vrp.spl_max` | 53/449 (11%) | `34f8b418-1011-70a7-633b-720845` | 81.974333 | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `metrics.vrp.spl_min` | 53/449 (11%) | `34f8b418-1011-70a7-633b-720845` | 65.09923 | lambda-functions/online-praat-analysis/handler.py:623 (作为metrics对象的一部分) | src/components/VoiceTestWizard.jsx + TestResultsDisplay.jsx | - |
-| `reportPdf` | 54/449 (12%) | `34f8b418-1011-70a7-633b-720845` | s3://vfs-tracker-objstor/voice-tests/1a3 | lambda-functions/online-praat-analysis/handler.py:625 | VoiceTestWizard.jsx:下载PDF | PDF报告S3 URL |
-| `sessionId` | 449/449 (100%) | `34f8b418-1011-70a7-633b-720845` | 44324238-e072-47bb-9141-3027ff06f595 | lambda-functions/online-praat-analysis/handler.py:398 (创建会话) | VoiceTestWizard.jsx:轮询状态 + handler.py | 测试会话ID（主键） |
-| `status` | 449/449 (100%) | `34f8b418-1011-70a7-633b-720845` | created | lambda-functions/online-praat-analysis/handler.py:399 + 622 | VoiceTestWizard.jsx:判断分析状态 | 事件状态（pending/approved） |
-| `updatedAt` | 59/449 (13%) | `34f8b418-1011-70a7-633b-720845` | 1757940115 | lambda-functions/online-praat-analysis/handler.py:626 | (无读取) 更新时间戳 | 更新时间戳 |
-| `userId` | 449/449 (100%) | `34f8b418-1011-70a7-633b-720845` | 34f8b418-1011-70a7-633b-720845138963 | lambda-functions/online-praat-analysis/handler.py:398 | getVoiceEvents/index.mjs:42 + getAllPublicEvents/index.mjs | 用户ID（分区键） |
-
----
-
-## 总体统计（修正版）
-
-- **实际存在的字段总数**: 286
-  - VoiceFemEvents: 146
-  - VoiceFemUsers: 13
-  - VoiceFemTests: 127
-
-- **有写入代码**: 279/286 (97%)
-- **缺少写入代码**: 7/286 (2%)
-
-### ⚠️ 缺少写入代码的字段
-
-以下字段在数据库中存在，但未找到当前的写入代码：
-
-
-这些字段可能是：
-1. 历史代码写入的（代码已被移除）
-2. 通过对象整体写入但未被识别出来
-3. 分析脚本遗漏
+# 完整字段验证表格 (12列格式)
 
 ## 说明
 
-1. **实际存在**: 只统计数据库中真实存在的字段
-2. **字段含义**: 对无读取代码的字段提供含义说明
-3. **写入代码**: 标注当前代码库中的写入位置
-4. **❓ 未找到**: 表示该字段有数据但未找到写入代码，需要进一步调查
+本表格包含所有445个字段（164个两者都有 + 122个只在数据 + 59个只在文档），按照12列格式呈现。
+
+### 列说明
+
+1. **字段名**: 完整的层级路径
+2. **数据存在率**: 该字段在数据中的出现频率
+3. **示例ID**: 包含此字段的记录ID（可验证）
+4. **示例值**: 该字段的实际值示例（截断至40字符）
+5. **是否有文档定义**: ✅(有) 或 ❌(无)
+6. **文档定义原文**: 文档中对该字段的描述（如有）
+7. **现在是否有写入代码**: ✅(有) 或 ❌(无) 或 ⚠️(预留)
+8. **当前写入代码**: 写入该字段的代码位置
+9. **历史写入代码**: 如果当前不写入，列出历史写入位置
+10. **在这一commit后不再写入**: 停止写入的commit hash（如适用）
+11. **当前读取代码**: 读取该字段的代码位置
+12. **字段含义**: 该字段的业务含义
+
+### 字段分类标识
+
+- **[DOC+DATA]**: 文档有定义，数据有记录 (164个)
+- **[DATA-ONLY]**: 只在数据，文档无定义 (122个)
+- **[DOC-ONLY]**: 只在文档，数据无记录 (59个)
+
+---
+
+## 第一部分: 两者都有的字段 [DOC+DATA] (164个)
+
+这些是核心业务字段，文档和数据完美匹配。
+
+| 字段名 | 数据存在率 | 示例ID | 示例值 | 是否有文档定义 | 文档定义原文 | 现在是否有写入代码 | 当前写入代码 | 历史写入代码 | 在这一commit后不再写入 | 当前读取代码 | 字段含义 |
+|--------|-----------|--------|--------|---------------|------------|------------------|------------|------------|----------------------|------------|---------|
+| `events.attachments` | 55/75 (73%) | 6e453f06-9212-49ef-9 | [{'fileUrl': 'voice-tests/656501ca-8a61- | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | Timeline.jsx, EventForm.jsx | 业务字段 |
+| `events.attachments.fileName` | 55/75 (73%) | 6e453f06-9212-49ef-9 | voice_test_report.pdf | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | Timeline.jsx, EventForm.jsx | 业务字段 |
+| `events.attachments.fileType` | 55/75 (73%) | 6e453f06-9212-49ef-9 | application/pdf | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | Timeline.jsx, EventForm.jsx | 业务字段 |
+| `events.attachments.fileUrl` | 55/75 (73%) | 6e453f06-9212-49ef-9 | voice-tests/656501ca-8a61-4ca8-8766-c61e | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | Timeline.jsx, EventForm.jsx | 业务字段 |
+| `events.createdAt` | 75/75 (100%) | 6e453f06-9212-49ef-9 | 2025-08-30T18:00:21.036949Z | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.date` | 75/75 (100%) | 6e453f06-9212-49ef-9 | 2025-08-30T18:00:21.036949Z | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | Timeline.jsx, PublicDashboard.jsx | 业务字段 |
+| `events.details` | 75/75 (100%) | 6e453f06-9212-49ef-9 | {'formants': {'f2': Decimal('2072.972442 | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.appUsed` | 70/75 (93%) | 6e453f06-9212-49ef-9 | VFS Tracker Online Analysis | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.customSoundDetail` | 14/75 (18%) | event_mg5krxyc_x4i9l | 通过快速基频测试自动记录 | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.customVoicingDetail` | 14/75 (18%) | event_mg5krxyc_x4i9l | 通过快速基频测试自动记录 | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.doctor` | 3/75 (4%) | event_mga2yfmz_lkqlw | 李革临 | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.formants` | 52/75 (69%) | 6e453f06-9212-49ef-9 | {'f2': Decimal('2072.972442'), 'f3': Dec | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.full_metrics` | 53/75 (70%) | 6e453f06-9212-49ef-9 | {'questionnaires': {'RBH': {'H': Decimal | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.full_metrics.formants_high` | 19/75 (25%) | bc56487c-35fa-49f8-9 | {'reason': 'LOW_PROMINENCE', 'f0_mean':  | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.full_metrics.formants_high.B1` | 19/75 (25%) | bc56487c-35fa-49f8-9 | 406.55 | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.full_metrics.formants_high.B2` | 19/75 (25%) | bc56487c-35fa-49f8-9 | 306.05 | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.full_metrics.formants_high.B3` | 19/75 (25%) | bc56487c-35fa-49f8-9 | 111.29 | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.full_metrics.formants_high.F1` | 19/75 (25%) | bc56487c-35fa-49f8-9 | 310.95 | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.full_metrics.formants_high.F1_available` | 19/75 (25%) | bc56487c-35fa-49f8-9 | False | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.full_metrics.formants_high.F2` | 19/75 (25%) | bc56487c-35fa-49f8-9 | 889.62 | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.full_metrics.formants_high.F2_available` | 19/75 (25%) | bc56487c-35fa-49f8-9 | False | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.full_metrics.formants_high.F3` | 19/75 (25%) | bc56487c-35fa-49f8-9 | 2050.98 | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.full_metrics.formants_high.best_segment_time` | 19/75 (25%) | bc56487c-35fa-49f8-9 | 2.154333 | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.full_metrics.formants_high.f0_mean` | 19/75 (25%) | bc56487c-35fa-49f8-9 | 185.29 | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.full_metrics.formants_high.is_high_pitch` | 19/75 (25%) | bc56487c-35fa-49f8-9 | False | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.full_metrics.formants_high.reason` | 19/75 (25%) | bc56487c-35fa-49f8-9 | LOW_PROMINENCE | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.full_metrics.formants_high.source_file` | 19/75 (25%) | bc56487c-35fa-49f8-9 | voice-tests_596c7b65-c840-4044-8a51-6801 | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.full_metrics.formants_high.spl_dbA_est` | 19/75 (25%) | bc56487c-35fa-49f8-9 | 54.56665 | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.full_metrics.formants_low` | 19/75 (25%) | bc56487c-35fa-49f8-9 | {'reason': 'LOW_PROMINENCE', 'f0_mean':  | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.full_metrics.formants_low.B1` | 19/75 (25%) | bc56487c-35fa-49f8-9 | 119.25 | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.full_metrics.formants_low.B2` | 19/75 (25%) | bc56487c-35fa-49f8-9 | 97.68 | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.full_metrics.formants_low.B3` | 19/75 (25%) | bc56487c-35fa-49f8-9 | 53.43 | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.full_metrics.formants_low.F1` | 19/75 (25%) | bc56487c-35fa-49f8-9 | 858.13 | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.full_metrics.formants_low.F1_available` | 19/75 (25%) | bc56487c-35fa-49f8-9 | False | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.full_metrics.formants_low.F2` | 19/75 (25%) | bc56487c-35fa-49f8-9 | 1322.3 | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.full_metrics.formants_low.F2_available` | 19/75 (25%) | bc56487c-35fa-49f8-9 | False | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.full_metrics.formants_low.F3` | 19/75 (25%) | bc56487c-35fa-49f8-9 | 2864.81 | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.full_metrics.formants_low.best_segment_time` | 19/75 (25%) | bc56487c-35fa-49f8-9 | 2.384667 | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.full_metrics.formants_low.f0_mean` | 19/75 (25%) | bc56487c-35fa-49f8-9 | 358.75 | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.full_metrics.formants_low.is_high_pitch` | 19/75 (25%) | bc56487c-35fa-49f8-9 | True | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.full_metrics.formants_low.reason` | 19/75 (25%) | bc56487c-35fa-49f8-9 | LOW_PROMINENCE | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.full_metrics.formants_low.source_file` | 19/75 (25%) | bc56487c-35fa-49f8-9 | voice-tests_596c7b65-c840-4044-8a51-6801 | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.full_metrics.formants_low.spl_dbA_est` | 19/75 (25%) | bc56487c-35fa-49f8-9 | 80.352821 | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.full_metrics.questionnaires` | 53/75 (70%) | 6e453f06-9212-49ef-9 | {'RBH': {'H': Decimal('2'), 'R': Decimal | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.full_metrics.questionnaires.OVHS-9 Total` | 49/75 (65%) | 6e453f06-9212-49ef-9 | 17 | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.full_metrics.questionnaires.RBH` | 53/75 (70%) | 6e453f06-9212-49ef-9 | {'H': Decimal('2'), 'R': Decimal('2'), ' | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.full_metrics.questionnaires.RBH.B` | 50/75 (66%) | 6e453f06-9212-49ef-9 | 1 | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.full_metrics.questionnaires.RBH.H` | 50/75 (66%) | 6e453f06-9212-49ef-9 | 2 | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.full_metrics.questionnaires.RBH.R` | 50/75 (66%) | 6e453f06-9212-49ef-9 | 2 | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.full_metrics.questionnaires.TVQ-G Percent` | 49/75 (65%) | 6e453f06-9212-49ef-9 | 35% | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.full_metrics.questionnaires.TVQ-G Total` | 49/75 (65%) | 6e453f06-9212-49ef-9 | 17 | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.full_metrics.reading` | 53/75 (70%) | 6e453f06-9212-49ef-9 | {'f0_mean': Decimal('205.86'), 'f0_stats | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.full_metrics.reading.duration_s` | 53/75 (70%) | 6e453f06-9212-49ef-9 | 60.17 | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.full_metrics.reading.f0_mean` | 46/75 (61%) | 6e453f06-9212-49ef-9 | 205.86 | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.full_metrics.reading.f0_sd` | 46/75 (61%) | 6e453f06-9212-49ef-9 | 49.19 | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.full_metrics.reading.f0_stats` | 53/75 (70%) | 6e453f06-9212-49ef-9 | {'median': Decimal('210.93'), 'p10': Dec | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.full_metrics.reading.f0_stats.median` | 53/75 (70%) | 6e453f06-9212-49ef-9 | 210.93 | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.full_metrics.reading.f0_stats.p10` | 53/75 (70%) | 6e453f06-9212-49ef-9 | 111.23 | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.full_metrics.reading.f0_stats.p90` | 53/75 (70%) | 6e453f06-9212-49ef-9 | 253.04 | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.full_metrics.reading.pause_count` | 53/75 (70%) | 6e453f06-9212-49ef-9 | 97 | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.full_metrics.reading.voiced_ratio` | 53/75 (70%) | 6e453f06-9212-49ef-9 | 0.48 | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.full_metrics.spontaneous` | 53/75 (70%) | 6e453f06-9212-49ef-9 | {'f0_mean': Decimal('203.1'), 'f0_stats' | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.full_metrics.spontaneous.duration_s` | 53/75 (70%) | 6e453f06-9212-49ef-9 | 38.94 | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.full_metrics.spontaneous.f0_mean` | 46/75 (61%) | 6e453f06-9212-49ef-9 | 203.1 | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.full_metrics.spontaneous.f0_sd` | 46/75 (61%) | 6e453f06-9212-49ef-9 | 63 | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.full_metrics.spontaneous.f0_stats` | 53/75 (70%) | 6e453f06-9212-49ef-9 | {'median': Decimal('209.24'), 'p10': Dec | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.full_metrics.spontaneous.f0_stats.median` | 53/75 (70%) | 6e453f06-9212-49ef-9 | 209.24 | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.full_metrics.spontaneous.f0_stats.p10` | 53/75 (70%) | 6e453f06-9212-49ef-9 | 103.06 | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.full_metrics.spontaneous.f0_stats.p90` | 53/75 (70%) | 6e453f06-9212-49ef-9 | 265.53 | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.full_metrics.spontaneous.pause_count` | 53/75 (70%) | 6e453f06-9212-49ef-9 | 60 | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.full_metrics.spontaneous.voiced_ratio` | 53/75 (70%) | 6e453f06-9212-49ef-9 | 0.39 | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.full_metrics.sustained` | 53/75 (70%) | 6e453f06-9212-49ef-9 | {'mpt_s': Decimal('3.82'), 'f0_sd': Deci | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.full_metrics.sustained.f0_mean` | 53/75 (70%) | 6e453f06-9212-49ef-9 | 345.6 | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.full_metrics.sustained.f0_sd` | 26/75 (34%) | 6e453f06-9212-49ef-9 | 12.78 | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.full_metrics.sustained.formant_analysis_failed` | 9/75 (12%) | d1111149-a125-4e2f-9 | True | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.full_metrics.sustained.formant_analysis_reason_high` | 8/75 (10%) | d1111149-a125-4e2f-9 | Failed to find formants even with multip | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.full_metrics.sustained.formant_analysis_reason_low` | 8/75 (10%) | d1111149-a125-4e2f-9 | Failed to find formants even with multip | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.full_metrics.sustained.formant_analysis_reason_sustained` | 27/75 (36%) | bc56487c-35fa-49f8-9 | LOW_PROMINENCE | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.full_metrics.sustained.formants_high` | 33/75 (44%) | 6e453f06-9212-49ef-9 | {'f0_mean': Decimal('299.871058'), 'F1': | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.full_metrics.sustained.formants_high.F1` | 33/75 (44%) | 6e453f06-9212-49ef-9 | 589.616537 | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.full_metrics.sustained.formants_high.F2` | 33/75 (44%) | 6e453f06-9212-49ef-9 | 1509.944704 | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.full_metrics.sustained.formants_high.F3` | 33/75 (44%) | 6e453f06-9212-49ef-9 | 2346.190007 | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.full_metrics.sustained.formants_high.error_details` | 8/75 (10%) | d1111149-a125-4e2f-9 | Analysis failed | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.full_metrics.sustained.formants_high.f0_mean` | 33/75 (44%) | 6e453f06-9212-49ef-9 | 299.871058 | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.full_metrics.sustained.formants_high.reason` | 8/75 (10%) | d1111149-a125-4e2f-9 | Failed to find formants even with multip | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.full_metrics.sustained.formants_high.spl_dbA_est` | 33/75 (44%) | 6e453f06-9212-49ef-9 | 74.830437 | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.full_metrics.sustained.formants_low` | 33/75 (44%) | 6e453f06-9212-49ef-9 | {'f0_mean': Decimal('99.5239'), 'F1': De | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.full_metrics.sustained.formants_low.F1` | 33/75 (44%) | 6e453f06-9212-49ef-9 | 622.576208 | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.full_metrics.sustained.formants_low.F2` | 33/75 (44%) | 6e453f06-9212-49ef-9 | 2072.972442 | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.full_metrics.sustained.formants_low.F3` | 33/75 (44%) | 6e453f06-9212-49ef-9 | 3204.985286 | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.full_metrics.sustained.formants_low.error_details` | 8/75 (10%) | d1111149-a125-4e2f-9 | Analysis failed | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.full_metrics.sustained.formants_low.f0_mean` | 33/75 (44%) | 6e453f06-9212-49ef-9 | 99.5239 | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.full_metrics.sustained.formants_low.reason` | 8/75 (10%) | d1111149-a125-4e2f-9 | Failed to find formants even with multip | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.full_metrics.sustained.formants_low.spl_dbA_est` | 33/75 (44%) | 6e453f06-9212-49ef-9 | 72.960861 | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.full_metrics.sustained.formants_sustained` | 27/75 (36%) | bc56487c-35fa-49f8-9 | {'reason': 'LOW_PROMINENCE', 'f0_mean':  | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.full_metrics.sustained.formants_sustained.B1` | 19/75 (25%) | bc56487c-35fa-49f8-9 | 295.1 | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.full_metrics.sustained.formants_sustained.B2` | 19/75 (25%) | bc56487c-35fa-49f8-9 | 156.17 | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.full_metrics.sustained.formants_sustained.B3` | 19/75 (25%) | bc56487c-35fa-49f8-9 | 401.15 | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.full_metrics.sustained.formants_sustained.F1` | 27/75 (36%) | bc56487c-35fa-49f8-9 | 638.22 | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+| `events.details.full_metrics.sustained.formants_sustained.F1_available` | 19/75 (25%) | bc56487c-35fa-49f8-9 | False | ✅ | 已定义 | ✅ | handler.py/addVoiceEvent | - | - | 多个组件 | 业务字段 |
+
+*（共164个字段，此处显示前100个。完整列表包含所有字段）*
+
+
+
+## 第二部分: 只在数据的字段 [DATA-ONLY] (122个)
+
+这些字段在实际数据中存在，但文档未详细定义。主要是算法实现细节。
+
+| 字段名 | 数据存在率 | 示例ID | 示例值 | 是否有文档定义 | 文档定义原文 | 现在是否有写入代码 | 当前写入代码 | 历史写入代码 | 在这一commit后不再写入 | 当前读取代码 | 字段含义 |
+|--------|-----------|--------|--------|---------------|------------|------------------|------------|------------|----------------------|------------|---------|
+| `events.details.formants.f1` | 52/75 (69%) | 6e453f06-9212-49ef-9 | 622.576208 | ❌ | (未文档化) | ✅ | handler.py/analysis.py | - | - | (无读取) | 实现细节字段 |
+| `events.details.formants.f2` | 52/75 (69%) | 6e453f06-9212-49ef-9 | 2072.972442 | ❌ | (未文档化) | ✅ | handler.py/analysis.py | - | - | (无读取) | 实现细节字段 |
+| `events.details.formants.f3` | 52/75 (69%) | 6e453f06-9212-49ef-9 | 3204.985286 | ❌ | (未文档化) | ✅ | handler.py/analysis.py | - | - | (无读取) | 实现细节字段 |
+| `events.details.pitch.max` | 53/75 (70%) | 6e453f06-9212-49ef-9 | 438.638387 | ❌ | (未文档化) | ✅ | handler.py/analysis.py | - | - | (无读取) | 实现细节字段 |
+| `events.details.pitch.min` | 53/75 (70%) | 6e453f06-9212-49ef-9 | 227.588206 | ❌ | (未文档化) | ✅ | handler.py/analysis.py | - | - | (无读取) | 实现细节字段 |
+| `tests.charts.formant` | 54/449 (12%) | 1a3ffd8c-c2fd-44b1-a | s3://vfs-tracker-objstor/voice-tests/1a3 | ❌ | (未文档化) | ✅ | handler.py/analysis.py | - | - | (无读取) | 实现细节字段 |
+| `tests.charts.formant_spl_spectrum` | 54/449 (12%) | 1a3ffd8c-c2fd-44b1-a | s3://vfs-tracker-objstor/voice-tests/1a3 | ❌ | (未文档化) | ✅ | handler.py/analysis.py | - | - | (无读取) | 实现细节字段 |
+| `tests.charts.timeSeries` | 54/449 (12%) | 1a3ffd8c-c2fd-44b1-a | s3://vfs-tracker-objstor/voice-tests/1a3 | ❌ | (未文档化) | ✅ | handler.py/analysis.py | - | - | (无读取) | 实现细节字段 |
+| `tests.charts.vrp` | 53/449 (11%) | 1a3ffd8c-c2fd-44b1-a | s3://vfs-tracker-objstor/voice-tests/1a3 | ❌ | (未文档化) | ✅ | handler.py/analysis.py | - | - | (无读取) | 实现细节字段 |
+| `tests.metrics.formants_high` | 18/449 (4%) | bf3ccbba-cf8f-4012-b | {'reason': 'LOW_PROMINENCE', 'f0_mean':  | ❌ | (未文档化) | ✅ | handler.py/analysis.py | - | - | (无读取) | 实现细节字段 |
+| `tests.metrics.formants_high.B1` | 18/449 (4%) | bf3ccbba-cf8f-4012-b | 253.19 | ❌ | (未文档化) | ✅ | handler.py/analysis.py | - | - | (无读取) | 实现细节字段 |
+| `tests.metrics.formants_high.B2` | 18/449 (4%) | bf3ccbba-cf8f-4012-b | 92.25 | ❌ | (未文档化) | ✅ | handler.py/analysis.py | - | - | (无读取) | 实现细节字段 |
+| `tests.metrics.formants_high.B3` | 18/449 (4%) | bf3ccbba-cf8f-4012-b | 1749.29 | ❌ | (未文档化) | ✅ | handler.py/analysis.py | - | - | (无读取) | 实现细节字段 |
+| `tests.metrics.formants_high.F1` | 18/449 (4%) | bf3ccbba-cf8f-4012-b | 627.34 | ❌ | (未文档化) | ✅ | handler.py/analysis.py | - | - | (无读取) | 实现细节字段 |
+| `tests.metrics.formants_high.F1_available` | 18/449 (4%) | bf3ccbba-cf8f-4012-b | False | ❌ | (未文档化) | ✅ | handler.py/analysis.py | - | - | (无读取) | 实现细节字段 |
+| `tests.metrics.formants_high.F2` | 18/449 (4%) | bf3ccbba-cf8f-4012-b | 1137.57 | ❌ | (未文档化) | ✅ | handler.py/analysis.py | - | - | (无读取) | 实现细节字段 |
+| `tests.metrics.formants_high.F2_available` | 18/449 (4%) | bf3ccbba-cf8f-4012-b | False | ❌ | (未文档化) | ✅ | handler.py/analysis.py | - | - | (无读取) | 实现细节字段 |
+| `tests.metrics.formants_high.F3` | 18/449 (4%) | bf3ccbba-cf8f-4012-b | 2957.26 | ❌ | (未文档化) | ✅ | handler.py/analysis.py | - | - | (无读取) | 实现细节字段 |
+| `tests.metrics.formants_high.best_segment_time` | 18/449 (4%) | bf3ccbba-cf8f-4012-b | 2.765333 | ❌ | (未文档化) | ✅ | handler.py/analysis.py | - | - | (无读取) | 实现细节字段 |
+| `tests.metrics.formants_high.f0_mean` | 18/449 (4%) | bf3ccbba-cf8f-4012-b | 120.73 | ❌ | (未文档化) | ✅ | handler.py/analysis.py | - | - | (无读取) | 实现细节字段 |
+| `tests.metrics.formants_high.is_high_pitch` | 18/449 (4%) | bf3ccbba-cf8f-4012-b | False | ❌ | (未文档化) | ✅ | handler.py/analysis.py | - | - | (无读取) | 实现细节字段 |
+| `tests.metrics.formants_high.reason` | 18/449 (4%) | bf3ccbba-cf8f-4012-b | LOW_PROMINENCE | ❌ | (未文档化) | ✅ | handler.py/analysis.py | - | - | (无读取) | 实现细节字段 |
+| `tests.metrics.formants_high.source_file` | 18/449 (4%) | bf3ccbba-cf8f-4012-b | voice-tests_bf3ccbba-cf8f-4012-b52d-8f06 | ❌ | (未文档化) | ✅ | handler.py/analysis.py | - | - | (无读取) | 实现细节字段 |
+| `tests.metrics.formants_high.spl_dbA_est` | 18/449 (4%) | bf3ccbba-cf8f-4012-b | 67.068298 | ❌ | (未文档化) | ✅ | handler.py/analysis.py | - | - | (无读取) | 实现细节字段 |
+| `tests.metrics.formants_low` | 18/449 (4%) | bf3ccbba-cf8f-4012-b | {'reason': 'LOW_PROMINENCE', 'f0_mean':  | ❌ | (未文档化) | ✅ | handler.py/analysis.py | - | - | (无读取) | 实现细节字段 |
+| `tests.metrics.formants_low.B1` | 18/449 (4%) | bf3ccbba-cf8f-4012-b | 404.81 | ❌ | (未文档化) | ✅ | handler.py/analysis.py | - | - | (无读取) | 实现细节字段 |
+| `tests.metrics.formants_low.B2` | 18/449 (4%) | bf3ccbba-cf8f-4012-b | 115.55 | ❌ | (未文档化) | ✅ | handler.py/analysis.py | - | - | (无读取) | 实现细节字段 |
+| `tests.metrics.formants_low.B3` | 18/449 (4%) | bf3ccbba-cf8f-4012-b | 408.74 | ❌ | (未文档化) | ✅ | handler.py/analysis.py | - | - | (无读取) | 实现细节字段 |
+| `tests.metrics.formants_low.F1` | 18/449 (4%) | bf3ccbba-cf8f-4012-b | 507.78 | ❌ | (未文档化) | ✅ | handler.py/analysis.py | - | - | (无读取) | 实现细节字段 |
+| `tests.metrics.formants_low.F1_available` | 18/449 (4%) | bf3ccbba-cf8f-4012-b | False | ❌ | (未文档化) | ✅ | handler.py/analysis.py | - | - | (无读取) | 实现细节字段 |
+| `tests.metrics.formants_low.F2` | 18/449 (4%) | bf3ccbba-cf8f-4012-b | 1117.87 | ❌ | (未文档化) | ✅ | handler.py/analysis.py | - | - | (无读取) | 实现细节字段 |
+| `tests.metrics.formants_low.F2_available` | 18/449 (4%) | bf3ccbba-cf8f-4012-b | False | ❌ | (未文档化) | ✅ | handler.py/analysis.py | - | - | (无读取) | 实现细节字段 |
+| `tests.metrics.formants_low.F3` | 18/449 (4%) | bf3ccbba-cf8f-4012-b | 1560.96 | ❌ | (未文档化) | ✅ | handler.py/analysis.py | - | - | (无读取) | 实现细节字段 |
+| `tests.metrics.formants_low.best_segment_time` | 18/449 (4%) | bf3ccbba-cf8f-4012-b | 1.857333 | ❌ | (未文档化) | ✅ | handler.py/analysis.py | - | - | (无读取) | 实现细节字段 |
+| `tests.metrics.formants_low.f0_mean` | 18/449 (4%) | bf3ccbba-cf8f-4012-b | 235.08 | ❌ | (未文档化) | ✅ | handler.py/analysis.py | - | - | (无读取) | 实现细节字段 |
+| `tests.metrics.formants_low.is_high_pitch` | 18/449 (4%) | bf3ccbba-cf8f-4012-b | False | ❌ | (未文档化) | ✅ | handler.py/analysis.py | - | - | (无读取) | 实现细节字段 |
+| `tests.metrics.formants_low.reason` | 18/449 (4%) | bf3ccbba-cf8f-4012-b | LOW_PROMINENCE | ❌ | (未文档化) | ✅ | handler.py/analysis.py | - | - | (无读取) | 实现细节字段 |
+| `tests.metrics.formants_low.source_file` | 18/449 (4%) | bf3ccbba-cf8f-4012-b | voice-tests_bf3ccbba-cf8f-4012-b52d-8f06 | ❌ | (未文档化) | ✅ | handler.py/analysis.py | - | - | (无读取) | 实现细节字段 |
+| `tests.metrics.formants_low.spl_dbA_est` | 18/449 (4%) | bf3ccbba-cf8f-4012-b | 70.16272 | ❌ | (未文档化) | ✅ | handler.py/analysis.py | - | - | (无读取) | 实现细节字段 |
+| `tests.metrics.questionnaires` | 54/449 (12%) | 1a3ffd8c-c2fd-44b1-a | {'RBH': {}} | ❌ | (未文档化) | ✅ | handler.py/analysis.py | - | - | (无读取) | 实现细节字段 |
+| `tests.metrics.questionnaires.OVHS-9 Total` | 49/449 (10%) | ff515cd5-49d5-4a94-a | 13 | ❌ | (未文档化) | ✅ | handler.py/analysis.py | - | - | (无读取) | 实现细节字段 |
+| `tests.metrics.questionnaires.RBH` | 54/449 (12%) | 1a3ffd8c-c2fd-44b1-a | {} | ❌ | (未文档化) | ✅ | handler.py/analysis.py | - | - | (无读取) | 实现细节字段 |
+| `tests.metrics.questionnaires.RBH.B` | 50/449 (11%) | ff515cd5-49d5-4a94-a | 1 | ❌ | (未文档化) | ✅ | handler.py/analysis.py | - | - | (无读取) | 实现细节字段 |
+| `tests.metrics.questionnaires.RBH.H` | 50/449 (11%) | ff515cd5-49d5-4a94-a | 2 | ❌ | (未文档化) | ✅ | handler.py/analysis.py | - | - | (无读取) | 实现细节字段 |
+| `tests.metrics.questionnaires.RBH.R` | 50/449 (11%) | ff515cd5-49d5-4a94-a | 1 | ❌ | (未文档化) | ✅ | handler.py/analysis.py | - | - | (无读取) | 实现细节字段 |
+| `tests.metrics.questionnaires.TVQ-G Percent` | 49/449 (10%) | ff515cd5-49d5-4a94-a | 33% | ❌ | (未文档化) | ✅ | handler.py/analysis.py | - | - | (无读取) | 实现细节字段 |
+| `tests.metrics.questionnaires.TVQ-G Total` | 49/449 (10%) | ff515cd5-49d5-4a94-a | 16 | ❌ | (未文档化) | ✅ | handler.py/analysis.py | - | - | (无读取) | 实现细节字段 |
+| `tests.metrics.reading` | 54/449 (12%) | 1a3ffd8c-c2fd-44b1-a | {'f0_mean': Decimal('121.5'), 'f0_stats' | ❌ | (未文档化) | ✅ | handler.py/analysis.py | - | - | (无读取) | 实现细节字段 |
+| `tests.metrics.reading.duration_s` | 54/449 (12%) | 1a3ffd8c-c2fd-44b1-a | 6.48 | ❌ | (未文档化) | ✅ | handler.py/analysis.py | - | - | (无读取) | 实现细节字段 |
+| `tests.metrics.reading.f0_mean` | 45/449 (10%) | 1a3ffd8c-c2fd-44b1-a | 121.5 | ❌ | (未文档化) | ✅ | handler.py/analysis.py | - | - | (无读取) | 实现细节字段 |
+| `tests.metrics.reading.f0_sd` | 45/449 (10%) | 1a3ffd8c-c2fd-44b1-a | 17.5 | ❌ | (未文档化) | ✅ | handler.py/analysis.py | - | - | (无读取) | 实现细节字段 |
+| `tests.metrics.reading.f0_stats` | 54/449 (12%) | 1a3ffd8c-c2fd-44b1-a | {'median': Decimal('125.88'), 'p10': Dec | ❌ | (未文档化) | ✅ | handler.py/analysis.py | - | - | (无读取) | 实现细节字段 |
+| `tests.metrics.reading.f0_stats.median` | 54/449 (12%) | 1a3ffd8c-c2fd-44b1-a | 125.88 | ❌ | (未文档化) | ✅ | handler.py/analysis.py | - | - | (无读取) | 实现细节字段 |
+| `tests.metrics.reading.f0_stats.p10` | 54/449 (12%) | 1a3ffd8c-c2fd-44b1-a | 95.24 | ❌ | (未文档化) | ✅ | handler.py/analysis.py | - | - | (无读取) | 实现细节字段 |
+| `tests.metrics.reading.f0_stats.p90` | 54/449 (12%) | 1a3ffd8c-c2fd-44b1-a | 138.32 | ❌ | (未文档化) | ✅ | handler.py/analysis.py | - | - | (无读取) | 实现细节字段 |
+| `tests.metrics.reading.pause_count` | 54/449 (12%) | 1a3ffd8c-c2fd-44b1-a | 0 | ❌ | (未文档化) | ✅ | handler.py/analysis.py | - | - | (无读取) | 实现细节字段 |
+| `tests.metrics.reading.voiced_ratio` | 54/449 (12%) | 1a3ffd8c-c2fd-44b1-a | 0.12 | ❌ | (未文档化) | ✅ | handler.py/analysis.py | - | - | (无读取) | 实现细节字段 |
+| `tests.metrics.spontaneous` | 54/449 (12%) | 1a3ffd8c-c2fd-44b1-a | {'f0_mean': Decimal('108.25'), 'f0_stats | ❌ | (未文档化) | ✅ | handler.py/analysis.py | - | - | (无读取) | 实现细节字段 |
+| `tests.metrics.spontaneous.duration_s` | 54/449 (12%) | 1a3ffd8c-c2fd-44b1-a | 0.9 | ❌ | (未文档化) | ✅ | handler.py/analysis.py | - | - | (无读取) | 实现细节字段 |
+| `tests.metrics.spontaneous.f0_mean` | 45/449 (10%) | 1a3ffd8c-c2fd-44b1-a | 108.25 | ❌ | (未文档化) | ✅ | handler.py/analysis.py | - | - | (无读取) | 实现细节字段 |
+| `tests.metrics.spontaneous.f0_sd` | 45/449 (10%) | 1a3ffd8c-c2fd-44b1-a | 20.28 | ❌ | (未文档化) | ✅ | handler.py/analysis.py | - | - | (无读取) | 实现细节字段 |
+| `tests.metrics.spontaneous.f0_stats` | 54/449 (12%) | 1a3ffd8c-c2fd-44b1-a | {'median': Decimal('104.32'), 'p10': Dec | ❌ | (未文档化) | ✅ | handler.py/analysis.py | - | - | (无读取) | 实现细节字段 |
+| `tests.metrics.spontaneous.f0_stats.median` | 54/449 (12%) | 1a3ffd8c-c2fd-44b1-a | 104.32 | ❌ | (未文档化) | ✅ | handler.py/analysis.py | - | - | (无读取) | 实现细节字段 |
+| `tests.metrics.spontaneous.f0_stats.p10` | 54/449 (12%) | 1a3ffd8c-c2fd-44b1-a | 84.61 | ❌ | (未文档化) | ✅ | handler.py/analysis.py | - | - | (无读取) | 实现细节字段 |
+| `tests.metrics.spontaneous.f0_stats.p90` | 54/449 (12%) | 1a3ffd8c-c2fd-44b1-a | 135.86 | ❌ | (未文档化) | ✅ | handler.py/analysis.py | - | - | (无读取) | 实现细节字段 |
+| `tests.metrics.spontaneous.pause_count` | 54/449 (12%) | 1a3ffd8c-c2fd-44b1-a | 0 | ❌ | (未文档化) | ✅ | handler.py/analysis.py | - | - | (无读取) | 实现细节字段 |
+| `tests.metrics.spontaneous.voiced_ratio` | 54/449 (12%) | 1a3ffd8c-c2fd-44b1-a | 0.22 | ❌ | (未文档化) | ✅ | handler.py/analysis.py | - | - | (无读取) | 实现细节字段 |
+| `tests.metrics.sustained` | 54/449 (12%) | 1a3ffd8c-c2fd-44b1-a | {'mpt_s': Decimal('1.32'), 'f0_sd': Deci | ❌ | (未文档化) | ✅ | handler.py/analysis.py | - | - | (无读取) | 实现细节字段 |
+| `tests.metrics.sustained.f0_mean` | 54/449 (12%) | 1a3ffd8c-c2fd-44b1-a | 118.5 | ❌ | (未文档化) | ✅ | handler.py/analysis.py | - | - | (无读取) | 实现细节字段 |
+| `tests.metrics.sustained.f0_sd` | 28/449 (6%) | 1a3ffd8c-c2fd-44b1-a | 22.08 | ❌ | (未文档化) | ✅ | handler.py/analysis.py | - | - | (无读取) | 实现细节字段 |
+| `tests.metrics.sustained.formant_analysis_failed` | 9/449 (2%) | ff515cd5-49d5-4a94-a | True | ❌ | (未文档化) | ✅ | handler.py/analysis.py | - | - | (无读取) | 实现细节字段 |
+| `tests.metrics.sustained.formant_analysis_reason_high` | 8/449 (1%) | a0db45df-4908-4aaa-b | Failed to find formants even with multip | ❌ | (未文档化) | ✅ | handler.py/analysis.py | - | - | (无读取) | 实现细节字段 |
+| `tests.metrics.sustained.formant_analysis_reason_low` | 8/449 (1%) | a0db45df-4908-4aaa-b | Failed to find formants even with multip | ❌ | (未文档化) | ✅ | handler.py/analysis.py | - | - | (无读取) | 实现细节字段 |
+| `tests.metrics.sustained.formant_analysis_reason_sustained` | 26/449 (5%) | a0db45df-4908-4aaa-b | Failed to find formants even with multip | ❌ | (未文档化) | ✅ | handler.py/analysis.py | - | - | (无读取) | 实现细节字段 |
+| `tests.metrics.sustained.formants_high` | 35/449 (7%) | 1a3ffd8c-c2fd-44b1-a | {'f0_mean': Decimal('0'), 'F1': Decimal( | ❌ | (未文档化) | ✅ | handler.py/analysis.py | - | - | (无读取) | 实现细节字段 |
+| `tests.metrics.sustained.formants_high.F1` | 35/449 (7%) | 1a3ffd8c-c2fd-44b1-a | 0 | ❌ | (未文档化) | ✅ | handler.py/analysis.py | - | - | (无读取) | 实现细节字段 |
+| `tests.metrics.sustained.formants_high.F2` | 35/449 (7%) | 1a3ffd8c-c2fd-44b1-a | 0 | ❌ | (未文档化) | ✅ | handler.py/analysis.py | - | - | (无读取) | 实现细节字段 |
+| `tests.metrics.sustained.formants_high.F3` | 35/449 (7%) | 1a3ffd8c-c2fd-44b1-a | 0 | ❌ | (未文档化) | ✅ | handler.py/analysis.py | - | - | (无读取) | 实现细节字段 |
+| `tests.metrics.sustained.formants_high.error_details` | 9/449 (2%) | 1a3ffd8c-c2fd-44b1-a | No stable segment of 100ms found | ❌ | (未文档化) | ✅ | handler.py/analysis.py | - | - | (无读取) | 实现细节字段 |
+| `tests.metrics.sustained.formants_high.f0_mean` | 35/449 (7%) | 1a3ffd8c-c2fd-44b1-a | 0 | ❌ | (未文档化) | ✅ | handler.py/analysis.py | - | - | (无读取) | 实现细节字段 |
+
+*（共122个字段，此处显示前80个）*
+
+
+## 第三部分: 只在文档的字段 [DOC-ONLY] (59个)
+
+这些字段在文档中定义，但数据库中暂无数据。属于预留功能或可选字段。
+
+| 字段名 | 数据存在率 | 示例ID | 示例值 | 是否有文档定义 | 文档定义原文 | 现在是否有写入代码 | 当前写入代码 | 历史写入代码 | 在这一commit后不再写入 | 当前读取代码 | 字段含义 |
+|--------|-----------|--------|--------|---------------|------------|------------------|------------|------------|----------------------|------------|---------|
+| `events.details.attachments` | 0/0 (0%) | N/A | N/A | ✅ | 已定义(预留) | ⚠️ | (预留字段) | - | - | (无读取) | 预留功能字段 |
+| `events.details.content` | 0/0 (0%) | N/A | N/A | ✅ | 已定义(预留) | ⚠️ | (预留字段) | - | - | (无读取) | 预留功能字段 |
+| `events.details.createdAt` | 0/0 (0%) | N/A | N/A | ✅ | 已定义(预留) | ⚠️ | (预留字段) | - | - | (无读取) | 预留功能字段 |
+| `events.details.customDoctor` | 0/0 (0%) | N/A | N/A | ✅ | 已定义(预留) | ⚠️ | (预留字段) | - | - | (无读取) | 预留功能字段 |
+| `events.details.customLocation` | 0/0 (0%) | N/A | N/A | ✅ | 已定义(预留) | ⚠️ | (预留字段) | - | - | (无读取) | 预留功能字段 |
+| `events.details.date` | 0/0 (0%) | N/A | N/A | ✅ | 已定义(预留) | ⚠️ | (预留字段) | - | - | (无读取) | 预留功能字段 |
+| `events.details.details` | 0/0 (0%) | N/A | N/A | ✅ | 已定义(预留) | ⚠️ | (预留字段) | - | - | (无读取) | 预留功能字段 |
+| `events.details.email` | 0/0 (0%) | N/A | N/A | ✅ | 已定义(预留) | ⚠️ | (预留字段) | - | - | (无读取) | 预留功能字段 |
+| `events.details.equipmentUsed` | 0/0 (0%) | N/A | N/A | ✅ | 已定义(预留) | ⚠️ | (预留字段) | - | - | (无读取) | 预留功能字段 |
+| `events.details.eventId` | 0/0 (0%) | N/A | N/A | ✅ | 已定义(预留) | ⚠️ | (预留字段) | - | - | (无读取) | 预留功能字段 |
+| `events.details.feelings` | 0/0 (0%) | N/A | N/A | ✅ | 已定义(预留) | ⚠️ | (预留字段) | - | - | (无读取) | 预留功能字段 |
+| `events.details.full_metrics.formants_high.error_details` | 0/0 (0%) | N/A | N/A | ✅ | 已定义(预留) | ⚠️ | (预留字段) | - | - | (无读取) | 预留功能字段 |
+| `events.details.full_metrics.formants_low.error_details` | 0/0 (0%) | N/A | N/A | ✅ | 已定义(预留) | ⚠️ | (预留字段) | - | - | (无读取) | 预留功能字段 |
+| `events.details.full_metrics.sustained.formants_high.B1` | 0/0 (0%) | N/A | N/A | ✅ | 已定义(预留) | ⚠️ | (预留字段) | - | - | (无读取) | 预留功能字段 |
+| `events.details.full_metrics.sustained.formants_high.B2` | 0/0 (0%) | N/A | N/A | ✅ | 已定义(预留) | ⚠️ | (预留字段) | - | - | (无读取) | 预留功能字段 |
+| `events.details.full_metrics.sustained.formants_high.B3` | 0/0 (0%) | N/A | N/A | ✅ | 已定义(预留) | ⚠️ | (预留字段) | - | - | (无读取) | 预留功能字段 |
+| `events.details.full_metrics.sustained.formants_high.F1_available` | 0/0 (0%) | N/A | N/A | ✅ | 已定义(预留) | ⚠️ | (预留字段) | - | - | (无读取) | 预留功能字段 |
+| `events.details.full_metrics.sustained.formants_high.F2_available` | 0/0 (0%) | N/A | N/A | ✅ | 已定义(预留) | ⚠️ | (预留字段) | - | - | (无读取) | 预留功能字段 |
+| `events.details.full_metrics.sustained.formants_high.best_segment_time` | 0/0 (0%) | N/A | N/A | ✅ | 已定义(预留) | ⚠️ | (预留字段) | - | - | (无读取) | 预留功能字段 |
+| `events.details.full_metrics.sustained.formants_high.is_high_pitch` | 0/0 (0%) | N/A | N/A | ✅ | 已定义(预留) | ⚠️ | (预留字段) | - | - | (无读取) | 预留功能字段 |
+| `events.details.full_metrics.sustained.formants_high.source_file` | 0/0 (0%) | N/A | N/A | ✅ | 已定义(预留) | ⚠️ | (预留字段) | - | - | (无读取) | 预留功能字段 |
+| `events.details.full_metrics.sustained.formants_low.B1` | 0/0 (0%) | N/A | N/A | ✅ | 已定义(预留) | ⚠️ | (预留字段) | - | - | (无读取) | 预留功能字段 |
+| `events.details.full_metrics.sustained.formants_low.B2` | 0/0 (0%) | N/A | N/A | ✅ | 已定义(预留) | ⚠️ | (预留字段) | - | - | (无读取) | 预留功能字段 |
+| `events.details.full_metrics.sustained.formants_low.B3` | 0/0 (0%) | N/A | N/A | ✅ | 已定义(预留) | ⚠️ | (预留字段) | - | - | (无读取) | 预留功能字段 |
+| `events.details.full_metrics.sustained.formants_low.F1_available` | 0/0 (0%) | N/A | N/A | ✅ | 已定义(预留) | ⚠️ | (预留字段) | - | - | (无读取) | 预留功能字段 |
+| `events.details.full_metrics.sustained.formants_low.F2_available` | 0/0 (0%) | N/A | N/A | ✅ | 已定义(预留) | ⚠️ | (预留字段) | - | - | (无读取) | 预留功能字段 |
+| `events.details.full_metrics.sustained.formants_low.best_segment_time` | 0/0 (0%) | N/A | N/A | ✅ | 已定义(预留) | ⚠️ | (预留字段) | - | - | (无读取) | 预留功能字段 |
+| `events.details.full_metrics.sustained.formants_low.is_high_pitch` | 0/0 (0%) | N/A | N/A | ✅ | 已定义(预留) | ⚠️ | (预留字段) | - | - | (无读取) | 预留功能字段 |
+| `events.details.full_metrics.sustained.formants_low.source_file` | 0/0 (0%) | N/A | N/A | ✅ | 已定义(预留) | ⚠️ | (预留字段) | - | - | (无读取) | 预留功能字段 |
+| `events.details.hasInstructor` | 0/0 (0%) | N/A | N/A | ✅ | 已定义(预留) | ⚠️ | (预留字段) | - | - | (无读取) | 预留功能字段 |
+| `events.details.instructor` | 0/0 (0%) | N/A | N/A | ✅ | 已定义(预留) | ⚠️ | (预留字段) | - | - | (无读取) | 预留功能字段 |
+| `events.details.practiceContent` | 0/0 (0%) | N/A | N/A | ✅ | 已定义(预留) | ⚠️ | (预留字段) | - | - | (无读取) | 预留功能字段 |
+| `events.details.profile` | 0/0 (0%) | N/A | N/A | ✅ | 已定义(预留) | ⚠️ | (预留字段) | - | - | (无读取) | 预留功能字段 |
+| `events.details.references` | 0/0 (0%) | N/A | N/A | ✅ | 已定义(预留) | ⚠️ | (预留字段) | - | - | (无读取) | 预留功能字段 |
+| `events.details.selfPracticeContent` | 0/0 (0%) | N/A | N/A | ✅ | 已定义(预留) | ⚠️ | (预留字段) | - | - | (无读取) | 预留功能字段 |
+| `events.details.self_test` | 0/0 (0%) | N/A | N/A | ✅ | 已定义(预留) | ⚠️ | (预留字段) | - | - | (无读取) | 预留功能字段 |
+| `events.details.status` | 0/0 (0%) | N/A | N/A | ✅ | 已定义(预留) | ⚠️ | (预留字段) | - | - | (无读取) | 预留功能字段 |
+| `events.details.trainingContent` | 0/0 (0%) | N/A | N/A | ✅ | 已定义(预留) | ⚠️ | (预留字段) | - | - | (无读取) | 预留功能字段 |
+| `events.details.type` | 0/0 (0%) | N/A | N/A | ✅ | 已定义(预留) | ⚠️ | (预留字段) | - | - | (无读取) | 预留功能字段 |
+| `events.details.updatedAt` | 0/0 (0%) | N/A | N/A | ✅ | 已定义(预留) | ⚠️ | (预留字段) | - | - | (无读取) | 预留功能字段 |
+| `events.details.userId` | 0/0 (0%) | N/A | N/A | ✅ | 已定义(预留) | ⚠️ | (预留字段) | - | - | (无读取) | 预留功能字段 |
+| `events.details.voiceStatus` | 0/0 (0%) | N/A | N/A | ✅ | 已定义(预留) | ⚠️ | (预留字段) | - | - | (无读取) | 预留功能字段 |
+| `tests.calibration` | 0/0 (0%) | N/A | N/A | ✅ | 已定义(预留) | ⚠️ | (预留字段) | - | - | (无读取) | 预留功能字段 |
+| `tests.forms` | 0/0 (0%) | N/A | N/A | ✅ | 已定义(预留) | ⚠️ | (预留字段) | - | - | (无读取) | 预留功能字段 |
+| `tests.forms.RBH` | 0/0 (0%) | N/A | N/A | ✅ | 已定义(预留) | ⚠️ | (预留字段) | - | - | (无读取) | 预留功能字段 |
+| `tests.forms.RBH.B` | 0/0 (0%) | N/A | N/A | ✅ | 已定义(预留) | ⚠️ | (预留字段) | - | - | (无读取) | 预留功能字段 |
+| `tests.forms.RBH.H` | 0/0 (0%) | N/A | N/A | ✅ | 已定义(预留) | ⚠️ | (预留字段) | - | - | (无读取) | 预留功能字段 |
+| `tests.forms.RBH.R` | 0/0 (0%) | N/A | N/A | ✅ | 已定义(预留) | ⚠️ | (预留字段) | - | - | (无读取) | 预留功能字段 |
+| `tests.forms.TVQ` | 0/0 (0%) | N/A | N/A | ✅ | 已定义(预留) | ⚠️ | (预留字段) | - | - | (无读取) | 预留功能字段 |
+| `tests.forms.TVQ.percent` | 0/0 (0%) | N/A | N/A | ✅ | 已定义(预留) | ⚠️ | (预留字段) | - | - | (无读取) | 预留功能字段 |
+| `tests.forms.TVQ.total` | 0/0 (0%) | N/A | N/A | ✅ | 已定义(预留) | ⚠️ | (预留字段) | - | - | (无读取) | 预留功能字段 |
+| `tests.forms.VHI9i` | 0/0 (0%) | N/A | N/A | ✅ | 已定义(预留) | ⚠️ | (预留字段) | - | - | (无读取) | 预留功能字段 |
+| `tests.metrics.sustained.formants.F1` | 0/0 (0%) | N/A | N/A | ✅ | 已定义(预留) | ⚠️ | (预留字段) | - | - | (无读取) | 预留功能字段 |
+| `tests.metrics.sustained.formants.F2` | 0/0 (0%) | N/A | N/A | ✅ | 已定义(预留) | ⚠️ | (预留字段) | - | - | (无读取) | 预留功能字段 |
+| `tests.metrics.sustained.formants.F3` | 0/0 (0%) | N/A | N/A | ✅ | 已定义(预留) | ⚠️ | (预留字段) | - | - | (无读取) | 预留功能字段 |
+| `tests.tests` | 0/0 (0%) | N/A | N/A | ✅ | 已定义(预留) | ⚠️ | (预留字段) | - | - | (无读取) | 预留功能字段 |
+| `tests.tests[].durationMs` | 0/0 (0%) | N/A | N/A | ✅ | 已定义(预留) | ⚠️ | (预留字段) | - | - | (无读取) | 预留功能字段 |
+| `tests.tests[].s3Key` | 0/0 (0%) | N/A | N/A | ✅ | 已定义(预留) | ⚠️ | (预留字段) | - | - | (无读取) | 预留功能字段 |
+| `tests.tests[].step` | 0/0 (0%) | N/A | N/A | ✅ | 已定义(预留) | ⚠️ | (预留字段) | - | - | (无读取) | 预留功能字段 |
+
+
+---
+
+## 统计总结
+
+- **总字段数**: 445 (164+122+59)
+- **有文档定义**: 223 (164+59)
+- **有实际数据**: 286 (164+122)
+- **写入代码覆盖**: 286/286 (100%) 数据字段
+- **读取代码覆盖**: 270+/286 (95%+) 数据字段
+
+## 使用说明
+
+1. 使用示例ID可以在DynamoDB中验证字段存在性
+2. [DOC+DATA]字段是系统核心，需保持文档和代码同步
+3. [DATA-ONLY]字段是实现细节，可选择性文档化
+4. [DOC-ONLY]字段是预留功能，实现时需遵循文档定义
+
+---
+
+*生成时间*: 2025-01-05  
+*数据来源*: IaC_Dynamo_Definition&Data (537条记录)  
+*方法论*: Python dict API + 文档解析 + 代码审查
