@@ -1,0 +1,304 @@
+
+table,field,data_count,data_ratio,example_id,example_value,doc_defined,current_write,current_read,data_required,doc_required,requirement_match,doc_meaning
+events,attachments,55,0.7333333333333333,6e453f06-9212-49ef-9015-36fd5dfe19c6,"[{'fileUrl': 'voice-tests/656501ca-8a61-4ca8-8766-c61e0eab8e6a/report.pdf', 'fileType': 'application/pdf', 'fileName': 'voice_test_report.pdf'}]",True,Yes,Yes,No,No,Yes,附件数组，包含与事件相关的文件
+events,attachments.fileName,57,0.76,6e453f06-9212-49ef-9015-36fd5dfe19c6,voice_test_report.pdf,True,Yes,Yes,No,No,Yes,附件的原始文件名
+events,attachments.fileType,57,0.76,6e453f06-9212-49ef-9015-36fd5dfe19c6,application/pdf,True,Yes,Yes,No,No,Yes,附件的 MIME 类型
+events,attachments.fileUrl,57,0.76,6e453f06-9212-49ef-9015-36fd5dfe19c6,voice-tests/656501ca-8a61-4ca8-8766-c61e0eab8e6a/report.pdf,True,Yes,Yes,No,No,Yes,附件的存储地址URL
+events,createdAt,75,1.0,6e453f06-9212-49ef-9015-36fd5dfe19c6,2025-08-30T18:00:21.036949Z,True,Yes,Yes,Yes,Yes,Yes,创建时间的ISO字符串或时间戳
+events,date,75,1.0,6e453f06-9212-49ef-9015-36fd5dfe19c6,2025-08-30T18:00:21.036949Z,True,Yes,Yes,Yes,Yes,Yes,事件发生的日期
+events,details,75,1.0,6e453f06-9212-49ef-9015-36fd5dfe19c6,"{'formants': {'f2': 2072.972442, 'f3': 3204.985286, 'f1': 622.576208}, 'notes': 'VFS Tracker Voice Analysis Tools 自动生成报告', 'appUsed': 'VFS Tracker Online Analysis', 'jitter': 0.64, 'full_metrics': {'q",True,Yes,Yes,Yes,Yes,Yes,事件详细信息，包括测量数据和自定义字段
+events,details.appUsed,70,0.9333333333333332,6e453f06-9212-49ef-9015-36fd5dfe19c6,VFS Tracker Online Analysis,True,Yes,Yes,No,No,Yes,使用的测音应用或练习应用
+events,details.content,0,0.0,,,True,No,No,No,No,Yes,
+events,details.customDoctor,0,0.0,,,True,No,No,No,No,Yes,自定义医生信息
+events,details.customLocation,0,0.0,,,True,No,No,No,No,Yes,自定义地点信息
+events,details.customSoundDetail,14,0.1866666666666666,event_mg5krxyc_x4i9lnkng,通过快速基频测试自动记录,True,Yes,Yes,No,No,Yes,
+events,details.customVoicingDetail,14,0.1866666666666666,event_mg5krxyc_x4i9lnkng,通过快速基频测试自动记录,True,Yes,Yes,No,No,Yes,
+events,details.doctor,3,0.04,event_mga2yfmz_lkqlwwxt6,李革临,True,Yes,Yes,No,No,Yes,医生姓名或机构
+events,details.equipmentUsed,0,0.0,,,True,No,No,No,No,Yes,使用的设备
+events,details.feelings,0,0.0,,,True,No,No,No,No,Yes,用户记录的感受或参考信息
+events,details.formants,52,0.6933333333333334,6e453f06-9212-49ef-9015-36fd5dfe19c6,"{'f2': 2072.972442, 'f3': 3204.985286, 'f1': 622.576208}",True,Yes,Yes,No,No,Yes,共振峰数据
+events,details.formants.f1,52,0.6933333333333334,6e453f06-9212-49ef-9015-36fd5dfe19c6,622.576208,True,Yes,Yes,No,No,Yes,
+events,details.formants.f2,52,0.6933333333333334,6e453f06-9212-49ef-9015-36fd5dfe19c6,2072.972442,True,Yes,Yes,No,No,Yes,
+events,details.formants.f3,52,0.6933333333333334,6e453f06-9212-49ef-9015-36fd5dfe19c6,3204.985286,True,Yes,Yes,No,No,Yes,
+events,details.full_metrics,53,0.7066666666666667,6e453f06-9212-49ef-9015-36fd5dfe19c6,"{'questionnaires': {'RBH': {'H': 2, 'R': 2, 'B': 1}, 'TVQ-G Total': 17, 'TVQ-G Percent': '35%', 'OVHS-9 Total': 17}, 'reading': {'f0_mean': 205.86, 'f0_stats': {'median': 210.93, 'p10': 111.23, 'p90':",True,Yes,Yes,No,No,Yes,
+events,details.full_metrics.formants_high,19,0.2533333333333333,bc56487c-35fa-49f8-9e76-22cf174cf2ff,"{'reason': 'LOW_PROMINENCE', 'f0_mean': 185.29, 'F1': 310.95, 'F2': 889.62, 'F3': 2050.98, 'spl_dbA_est': 54.56665, 'F1_available': False, 'source_file': 'voice-tests_596c7b65-c840-4044-8a51-68016b6da",True,Yes,Yes,No,No,Yes,共振峰数据
+events,details.full_metrics.formants_high.B1,19,0.2533333333333333,bc56487c-35fa-49f8-9e76-22cf174cf2ff,406.55,True,Yes,Yes,No,No,Yes,
+events,details.full_metrics.formants_high.B2,19,0.2533333333333333,bc56487c-35fa-49f8-9e76-22cf174cf2ff,306.05,True,Yes,Yes,No,No,Yes,
+events,details.full_metrics.formants_high.B3,19,0.2533333333333333,bc56487c-35fa-49f8-9e76-22cf174cf2ff,111.29,True,Yes,Yes,No,No,Yes,
+events,details.full_metrics.formants_high.F1,19,0.2533333333333333,bc56487c-35fa-49f8-9e76-22cf174cf2ff,310.95,True,Yes,Yes,No,No,Yes,
+events,details.full_metrics.formants_high.F1_available,19,0.2533333333333333,bc56487c-35fa-49f8-9e76-22cf174cf2ff,False,True,Yes,Yes,No,No,Yes,
+events,details.full_metrics.formants_high.F2,19,0.2533333333333333,bc56487c-35fa-49f8-9e76-22cf174cf2ff,889.62,True,Yes,Yes,No,No,Yes,
+events,details.full_metrics.formants_high.F2_available,19,0.2533333333333333,bc56487c-35fa-49f8-9e76-22cf174cf2ff,False,True,Yes,Yes,No,No,Yes,
+events,details.full_metrics.formants_high.F3,19,0.2533333333333333,bc56487c-35fa-49f8-9e76-22cf174cf2ff,2050.98,True,Yes,Yes,No,No,Yes,
+events,details.full_metrics.formants_high.best_segment_time,19,0.2533333333333333,bc56487c-35fa-49f8-9e76-22cf174cf2ff,2.154333,True,Yes,Yes,No,No,Yes,
+events,details.full_metrics.formants_high.f0_mean,19,0.2533333333333333,bc56487c-35fa-49f8-9e76-22cf174cf2ff,185.29,True,Yes,Yes,No,No,Yes,基频均值
+events,details.full_metrics.formants_high.is_high_pitch,19,0.2533333333333333,bc56487c-35fa-49f8-9e76-22cf174cf2ff,False,True,Yes,Yes,No,No,Yes,音高
+events,details.full_metrics.formants_high.reason,19,0.2533333333333333,bc56487c-35fa-49f8-9e76-22cf174cf2ff,LOW_PROMINENCE,True,Yes,Yes,No,No,Yes,
+events,details.full_metrics.formants_high.source_file,19,0.2533333333333333,bc56487c-35fa-49f8-9e76-22cf174cf2ff,voice-tests_596c7b65-c840-4044-8a51-68016b6dabed_raw_4_4_1.wav,True,Yes,Yes,No,No,Yes,
+events,details.full_metrics.formants_high.spl_dbA_est,19,0.2533333333333333,bc56487c-35fa-49f8-9e76-22cf174cf2ff,54.56665,True,Yes,Yes,No,No,Yes,
+events,details.full_metrics.formants_low,19,0.2533333333333333,bc56487c-35fa-49f8-9e76-22cf174cf2ff,"{'reason': 'LOW_PROMINENCE', 'f0_mean': 358.75, 'F1': 858.13, 'F2': 1322.3, 'F3': 2864.81, 'spl_dbA_est': 80.352821, 'F1_available': False, 'source_file': 'voice-tests_596c7b65-c840-4044-8a51-68016b6d",True,Yes,Yes,No,No,Yes,共振峰数据
+events,details.full_metrics.formants_low.B1,19,0.2533333333333333,bc56487c-35fa-49f8-9e76-22cf174cf2ff,119.25,True,Yes,Yes,No,No,Yes,
+events,details.full_metrics.formants_low.B2,19,0.2533333333333333,bc56487c-35fa-49f8-9e76-22cf174cf2ff,97.68,True,Yes,Yes,No,No,Yes,
+events,details.full_metrics.formants_low.B3,19,0.2533333333333333,bc56487c-35fa-49f8-9e76-22cf174cf2ff,53.43,True,Yes,Yes,No,No,Yes,
+events,details.full_metrics.formants_low.F1,19,0.2533333333333333,bc56487c-35fa-49f8-9e76-22cf174cf2ff,858.13,True,Yes,Yes,No,No,Yes,
+events,details.full_metrics.formants_low.F1_available,19,0.2533333333333333,bc56487c-35fa-49f8-9e76-22cf174cf2ff,False,True,Yes,Yes,No,No,Yes,
+events,details.full_metrics.formants_low.F2,19,0.2533333333333333,bc56487c-35fa-49f8-9e76-22cf174cf2ff,1322.3,True,Yes,Yes,No,No,Yes,
+events,details.full_metrics.formants_low.F2_available,19,0.2533333333333333,bc56487c-35fa-49f8-9e76-22cf174cf2ff,False,True,Yes,Yes,No,No,Yes,
+events,details.full_metrics.formants_low.F3,19,0.2533333333333333,bc56487c-35fa-49f8-9e76-22cf174cf2ff,2864.81,True,Yes,Yes,No,No,Yes,
+events,details.full_metrics.formants_low.best_segment_time,19,0.2533333333333333,bc56487c-35fa-49f8-9e76-22cf174cf2ff,2.384667,True,Yes,Yes,No,No,Yes,
+events,details.full_metrics.formants_low.f0_mean,19,0.2533333333333333,bc56487c-35fa-49f8-9e76-22cf174cf2ff,358.75,True,Yes,Yes,No,No,Yes,基频均值
+events,details.full_metrics.formants_low.is_high_pitch,19,0.2533333333333333,bc56487c-35fa-49f8-9e76-22cf174cf2ff,True,True,Yes,Yes,No,No,Yes,音高
+events,details.full_metrics.formants_low.reason,19,0.2533333333333333,bc56487c-35fa-49f8-9e76-22cf174cf2ff,LOW_PROMINENCE,True,Yes,Yes,No,No,Yes,
+events,details.full_metrics.formants_low.source_file,19,0.2533333333333333,bc56487c-35fa-49f8-9e76-22cf174cf2ff,voice-tests_596c7b65-c840-4044-8a51-68016b6dabed_raw_4_4_2.wav,True,Yes,Yes,No,No,Yes,
+events,details.full_metrics.formants_low.spl_dbA_est,19,0.2533333333333333,bc56487c-35fa-49f8-9e76-22cf174cf2ff,80.352821,True,Yes,Yes,No,No,Yes,
+events,details.full_metrics.questionnaires,53,0.7066666666666667,6e453f06-9212-49ef-9015-36fd5dfe19c6,"{'RBH': {'H': 2, 'R': 2, 'B': 1}, 'TVQ-G Total': 17, 'TVQ-G Percent': '35%', 'OVHS-9 Total': 17}",True,Yes,Yes,No,No,Yes,
+events,details.full_metrics.questionnaires.OVHS-9 Total,49,0.6533333333333333,6e453f06-9212-49ef-9015-36fd5dfe19c6,17,True,Yes,Yes,No,No,Yes,
+events,details.full_metrics.questionnaires.RBH,53,0.7066666666666667,6e453f06-9212-49ef-9015-36fd5dfe19c6,"{'H': 2, 'R': 2, 'B': 1}",True,Yes,Yes,No,No,Yes,
+events,details.full_metrics.questionnaires.RBH.B,50,0.6666666666666666,6e453f06-9212-49ef-9015-36fd5dfe19c6,1,True,Yes,Yes,No,No,Yes,
+events,details.full_metrics.questionnaires.RBH.H,50,0.6666666666666666,6e453f06-9212-49ef-9015-36fd5dfe19c6,2,True,Yes,Yes,No,No,Yes,
+events,details.full_metrics.questionnaires.RBH.R,50,0.6666666666666666,6e453f06-9212-49ef-9015-36fd5dfe19c6,2,True,Yes,Yes,No,No,Yes,
+events,details.full_metrics.questionnaires.TVQ-G Percent,49,0.6533333333333333,6e453f06-9212-49ef-9015-36fd5dfe19c6,35%,True,Yes,Yes,No,No,Yes,
+events,details.full_metrics.questionnaires.TVQ-G Total,49,0.6533333333333333,6e453f06-9212-49ef-9015-36fd5dfe19c6,17,True,Yes,Yes,No,No,Yes,
+events,details.full_metrics.reading,53,0.7066666666666667,6e453f06-9212-49ef-9015-36fd5dfe19c6,"{'f0_mean': 205.86, 'f0_stats': {'median': 210.93, 'p10': 111.23, 'p90': 253.04}, 'f0_sd': 49.19, 'voiced_ratio': 0.48, 'duration_s': 60.17, 'pause_count': 97}",True,Yes,Yes,No,No,Yes,
+events,details.full_metrics.reading.duration_s,53,0.7066666666666667,6e453f06-9212-49ef-9015-36fd5dfe19c6,60.17,True,Yes,Yes,No,No,Yes,
+events,details.full_metrics.reading.f0_mean,46,0.6133333333333333,6e453f06-9212-49ef-9015-36fd5dfe19c6,205.86,True,Yes,Yes,No,No,Yes,基频均值
+events,details.full_metrics.reading.f0_sd,46,0.6133333333333333,6e453f06-9212-49ef-9015-36fd5dfe19c6,49.19,True,Yes,Yes,No,No,Yes,
+events,details.full_metrics.reading.f0_stats,53,0.7066666666666667,6e453f06-9212-49ef-9015-36fd5dfe19c6,"{'median': 210.93, 'p10': 111.23, 'p90': 253.04}",True,Yes,Yes,No,No,Yes,
+events,details.full_metrics.reading.f0_stats.median,53,0.7066666666666667,6e453f06-9212-49ef-9015-36fd5dfe19c6,210.93,True,Yes,Yes,No,No,Yes,
+events,details.full_metrics.reading.f0_stats.p10,53,0.7066666666666667,6e453f06-9212-49ef-9015-36fd5dfe19c6,111.23,True,Yes,Yes,No,No,Yes,
+events,details.full_metrics.reading.f0_stats.p90,53,0.7066666666666667,6e453f06-9212-49ef-9015-36fd5dfe19c6,253.04,True,Yes,Yes,No,No,Yes,
+events,details.full_metrics.reading.pause_count,53,0.7066666666666667,6e453f06-9212-49ef-9015-36fd5dfe19c6,97,True,Yes,Yes,No,No,Yes,
+events,details.full_metrics.reading.voiced_ratio,53,0.7066666666666667,6e453f06-9212-49ef-9015-36fd5dfe19c6,0.48,True,Yes,Yes,No,No,Yes,
+events,details.full_metrics.spontaneous,53,0.7066666666666667,6e453f06-9212-49ef-9015-36fd5dfe19c6,"{'f0_mean': 203.1, 'f0_stats': {'median': 209.24, 'p10': 103.06, 'p90': 265.53}, 'f0_sd': 63, 'voiced_ratio': 0.39, 'duration_s': 38.94, 'pause_count': 60}",True,Yes,Yes,No,No,Yes,
+events,details.full_metrics.spontaneous.duration_s,53,0.7066666666666667,6e453f06-9212-49ef-9015-36fd5dfe19c6,38.94,True,Yes,Yes,No,No,Yes,
+events,details.full_metrics.spontaneous.f0_mean,46,0.6133333333333333,6e453f06-9212-49ef-9015-36fd5dfe19c6,203.1,True,Yes,Yes,No,No,Yes,基频均值
+events,details.full_metrics.spontaneous.f0_sd,46,0.6133333333333333,6e453f06-9212-49ef-9015-36fd5dfe19c6,63,True,Yes,Yes,No,No,Yes,
+events,details.full_metrics.spontaneous.f0_stats,53,0.7066666666666667,6e453f06-9212-49ef-9015-36fd5dfe19c6,"{'median': 209.24, 'p10': 103.06, 'p90': 265.53}",True,Yes,Yes,No,No,Yes,
+events,details.full_metrics.spontaneous.f0_stats.median,53,0.7066666666666667,6e453f06-9212-49ef-9015-36fd5dfe19c6,209.24,True,Yes,Yes,No,No,Yes,
+events,details.full_metrics.spontaneous.f0_stats.p10,53,0.7066666666666667,6e453f06-9212-49ef-9015-36fd5dfe19c6,103.06,True,Yes,Yes,No,No,Yes,
+events,details.full_metrics.spontaneous.f0_stats.p90,53,0.7066666666666667,6e453f06-9212-49ef-9015-36fd5dfe19c6,265.53,True,Yes,Yes,No,No,Yes,
+events,details.full_metrics.spontaneous.pause_count,53,0.7066666666666667,6e453f06-9212-49ef-9015-36fd5dfe19c6,60,True,Yes,Yes,No,No,Yes,
+events,details.full_metrics.spontaneous.voiced_ratio,53,0.7066666666666667,6e453f06-9212-49ef-9015-36fd5dfe19c6,0.39,True,Yes,Yes,No,No,Yes,
+events,details.full_metrics.sustained,53,0.7066666666666667,6e453f06-9212-49ef-9015-36fd5dfe19c6,"{'mpt_s': 3.82, 'f0_sd': 12.78, 'shimmer_local_percent': 3.98, 'formants_high': {'f0_mean': 299.871058, 'F1': 589.616537, 'F2': 1509.944704, 'F3': 2346.190007, 'spl_dbA_est': 74.830437}, 'f0_mean': 34",True,Yes,Yes,No,No,Yes,
+events,details.full_metrics.sustained.f0_mean,53,0.7066666666666667,6e453f06-9212-49ef-9015-36fd5dfe19c6,345.6,True,Yes,Yes,No,No,Yes,基频均值
+events,details.full_metrics.sustained.f0_sd,26,0.3466666666666667,6e453f06-9212-49ef-9015-36fd5dfe19c6,12.78,True,Yes,Yes,No,No,Yes,
+events,details.full_metrics.sustained.formant_analysis_failed,9,0.12,d1111149-a125-4e2f-9556-26aae3e8366e,True,True,Yes,Yes,No,No,Yes,共振峰数据
+events,details.full_metrics.sustained.formant_analysis_reason_high,8,0.1066666666666666,d1111149-a125-4e2f-9556-26aae3e8366e,Failed to find formants even with multiple parameter sets.,True,Yes,Yes,No,No,Yes,共振峰数据
+events,details.full_metrics.sustained.formant_analysis_reason_low,8,0.1066666666666666,d1111149-a125-4e2f-9556-26aae3e8366e,Failed to find formants even with multiple parameter sets.,True,Yes,Yes,No,No,Yes,共振峰数据
+events,details.full_metrics.sustained.formant_analysis_reason_sustained,27,0.36,bc56487c-35fa-49f8-9e76-22cf174cf2ff,LOW_PROMINENCE,True,Yes,Yes,No,No,Yes,共振峰数据
+events,details.full_metrics.sustained.formants_high,33,0.44,6e453f06-9212-49ef-9015-36fd5dfe19c6,"{'f0_mean': 299.871058, 'F1': 589.616537, 'F2': 1509.944704, 'F3': 2346.190007, 'spl_dbA_est': 74.830437}",True,Yes,Yes,No,No,Yes,共振峰数据
+events,details.full_metrics.sustained.formants_high.F1,33,0.44,6e453f06-9212-49ef-9015-36fd5dfe19c6,589.616537,True,Yes,Yes,No,No,Yes,
+events,details.full_metrics.sustained.formants_high.F2,33,0.44,6e453f06-9212-49ef-9015-36fd5dfe19c6,1509.944704,True,Yes,Yes,No,No,Yes,
+events,details.full_metrics.sustained.formants_high.F3,33,0.44,6e453f06-9212-49ef-9015-36fd5dfe19c6,2346.190007,True,Yes,Yes,No,No,Yes,
+events,details.full_metrics.sustained.formants_high.error_details,8,0.1066666666666666,d1111149-a125-4e2f-9556-26aae3e8366e,Analysis failed,True,Yes,Yes,No,No,Yes,
+events,details.full_metrics.sustained.formants_high.f0_mean,33,0.44,6e453f06-9212-49ef-9015-36fd5dfe19c6,299.871058,True,Yes,Yes,No,No,Yes,基频均值
+events,details.full_metrics.sustained.formants_high.reason,8,0.1066666666666666,d1111149-a125-4e2f-9556-26aae3e8366e,Failed to find formants even with multiple parameter sets.,True,Yes,Yes,No,No,Yes,
+events,details.full_metrics.sustained.formants_high.spl_dbA_est,33,0.44,6e453f06-9212-49ef-9015-36fd5dfe19c6,74.830437,True,Yes,Yes,No,No,Yes,
+events,details.full_metrics.sustained.formants_low,33,0.44,6e453f06-9212-49ef-9015-36fd5dfe19c6,"{'f0_mean': 99.5239, 'F1': 622.576208, 'F2': 2072.972442, 'F3': 3204.985286, 'spl_dbA_est': 72.960861}",True,Yes,Yes,No,No,Yes,共振峰数据
+events,details.full_metrics.sustained.formants_low.F1,33,0.44,6e453f06-9212-49ef-9015-36fd5dfe19c6,622.576208,True,Yes,Yes,No,No,Yes,
+events,details.full_metrics.sustained.formants_low.F2,33,0.44,6e453f06-9212-49ef-9015-36fd5dfe19c6,2072.972442,True,Yes,Yes,No,No,Yes,
+events,details.full_metrics.sustained.formants_low.F3,33,0.44,6e453f06-9212-49ef-9015-36fd5dfe19c6,3204.985286,True,Yes,Yes,No,No,Yes,
+events,details.full_metrics.sustained.formants_low.error_details,8,0.1066666666666666,d1111149-a125-4e2f-9556-26aae3e8366e,Analysis failed,True,Yes,Yes,No,No,Yes,
+events,details.full_metrics.sustained.formants_low.f0_mean,33,0.44,6e453f06-9212-49ef-9015-36fd5dfe19c6,99.5239,True,Yes,Yes,No,No,Yes,基频均值
+events,details.full_metrics.sustained.formants_low.reason,8,0.1066666666666666,d1111149-a125-4e2f-9556-26aae3e8366e,Failed to find formants even with multiple parameter sets.,True,Yes,Yes,No,No,Yes,
+events,details.full_metrics.sustained.formants_low.spl_dbA_est,33,0.44,6e453f06-9212-49ef-9015-36fd5dfe19c6,72.960861,True,Yes,Yes,No,No,Yes,
+events,details.full_metrics.sustained.formants_sustained,27,0.36,bc56487c-35fa-49f8-9e76-22cf174cf2ff,"{'reason': 'LOW_PROMINENCE', 'f0_mean': 179.49, 'F1': 638.22, 'F2': 1156.48, 'F3': 2600.09, 'spl_dbA_est': 64.486183, 'F1_available': False, 'B1': 295.1, 'B2': 156.17, 'B3': 401.15, 'is_high_pitch': F",True,Yes,Yes,No,No,Yes,共振峰数据
+events,details.full_metrics.sustained.formants_sustained.B1,19,0.2533333333333333,bc56487c-35fa-49f8-9e76-22cf174cf2ff,295.1,True,Yes,Yes,No,No,Yes,
+events,details.full_metrics.sustained.formants_sustained.B2,19,0.2533333333333333,bc56487c-35fa-49f8-9e76-22cf174cf2ff,156.17,True,Yes,Yes,No,No,Yes,
+events,details.full_metrics.sustained.formants_sustained.B3,19,0.2533333333333333,bc56487c-35fa-49f8-9e76-22cf174cf2ff,401.15,True,Yes,Yes,No,No,Yes,
+events,details.full_metrics.sustained.formants_sustained.F1,27,0.36,bc56487c-35fa-49f8-9e76-22cf174cf2ff,638.22,True,Yes,Yes,No,No,Yes,
+events,details.full_metrics.sustained.formants_sustained.F1_available,19,0.2533333333333333,bc56487c-35fa-49f8-9e76-22cf174cf2ff,False,True,Yes,Yes,No,No,Yes,
+events,details.full_metrics.sustained.formants_sustained.F2,27,0.36,bc56487c-35fa-49f8-9e76-22cf174cf2ff,1156.48,True,Yes,Yes,No,No,Yes,
+events,details.full_metrics.sustained.formants_sustained.F2_available,19,0.2533333333333333,bc56487c-35fa-49f8-9e76-22cf174cf2ff,False,True,Yes,Yes,No,No,Yes,
+events,details.full_metrics.sustained.formants_sustained.F3,27,0.36,bc56487c-35fa-49f8-9e76-22cf174cf2ff,2600.09,True,Yes,Yes,No,No,Yes,
+events,details.full_metrics.sustained.formants_sustained.best_segment_time,19,0.2533333333333333,bc56487c-35fa-49f8-9e76-22cf174cf2ff,3.347667,True,Yes,Yes,No,No,Yes,
+events,details.full_metrics.sustained.formants_sustained.error_details,8,0.1066666666666666,d1111149-a125-4e2f-9556-26aae3e8366e,Analysis failed,True,Yes,Yes,No,No,Yes,
+events,details.full_metrics.sustained.formants_sustained.f0_mean,27,0.36,bc56487c-35fa-49f8-9e76-22cf174cf2ff,179.49,True,Yes,Yes,No,No,Yes,基频均值
+events,details.full_metrics.sustained.formants_sustained.is_high_pitch,19,0.2533333333333333,bc56487c-35fa-49f8-9e76-22cf174cf2ff,False,True,Yes,Yes,No,No,Yes,音高
+events,details.full_metrics.sustained.formants_sustained.reason,27,0.36,bc56487c-35fa-49f8-9e76-22cf174cf2ff,LOW_PROMINENCE,True,Yes,Yes,No,No,Yes,
+events,details.full_metrics.sustained.formants_sustained.spl_dbA_est,27,0.36,bc56487c-35fa-49f8-9e76-22cf174cf2ff,64.486183,True,Yes,Yes,No,No,Yes,
+events,details.full_metrics.sustained.hnr_db,53,0.7066666666666667,6e453f06-9212-49ef-9015-36fd5dfe19c6,19.1,True,Yes,Yes,No,No,Yes,
+events,details.full_metrics.sustained.jitter_local_percent,53,0.7066666666666667,6e453f06-9212-49ef-9015-36fd5dfe19c6,0.64,True,Yes,Yes,No,No,Yes,
+events,details.full_metrics.sustained.mpt_s,53,0.7066666666666667,6e453f06-9212-49ef-9015-36fd5dfe19c6,3.82,True,Yes,Yes,No,No,Yes,
+events,details.full_metrics.sustained.shimmer_local_percent,53,0.7066666666666667,6e453f06-9212-49ef-9015-36fd5dfe19c6,3.98,True,Yes,Yes,No,No,Yes,
+events,details.full_metrics.sustained.spl_dbA_est,53,0.7066666666666667,6e453f06-9212-49ef-9015-36fd5dfe19c6,74.84,True,Yes,Yes,No,No,Yes,
+events,details.full_metrics.vrp,53,0.7066666666666667,6e453f06-9212-49ef-9015-36fd5dfe19c6,"{'f0_max': 438.638387, 'spl_min': 68.339275, 'f0_min': 227.588206, 'bins': [{'spl_min': 81.305534, 'count': 4, 'semi': 54, 'f0_center_hz': 184.997211, 'spl_max': 81.523567, 'spl_mean': 81.395294}, {'s",True,Yes,Yes,No,No,Yes,
+events,details.full_metrics.vrp.bins,52,0.6933333333333334,6e453f06-9212-49ef-9015-36fd5dfe19c6,"[{'spl_min': 81.305534, 'count': 4, 'semi': 54, 'f0_center_hz': 184.997211, 'spl_max': 81.523567, 'spl_mean': 81.395294}, {'spl_min': 79.20919, 'count': 15, 'semi': 55, 'f0_center_hz': 195.997718, 'sp",True,Yes,Yes,No,No,Yes,
+events,details.full_metrics.vrp.bins.count,1441,19.21333333333333,6e453f06-9212-49ef-9015-36fd5dfe19c6,4,True,Yes,Yes,Yes,No,No,
+events,details.full_metrics.vrp.bins.f0_center_hz,1441,19.21333333333333,6e453f06-9212-49ef-9015-36fd5dfe19c6,184.997211,True,Yes,Yes,Yes,No,No,
+events,details.full_metrics.vrp.bins.semi,1441,19.21333333333333,6e453f06-9212-49ef-9015-36fd5dfe19c6,54,True,Yes,Yes,Yes,No,No,
+events,details.full_metrics.vrp.bins.spl_max,1441,19.21333333333333,6e453f06-9212-49ef-9015-36fd5dfe19c6,81.523567,True,Yes,Yes,Yes,No,No,
+events,details.full_metrics.vrp.bins.spl_mean,1441,19.21333333333333,6e453f06-9212-49ef-9015-36fd5dfe19c6,81.395294,True,Yes,Yes,Yes,No,No,
+events,details.full_metrics.vrp.bins.spl_min,1441,19.21333333333333,6e453f06-9212-49ef-9015-36fd5dfe19c6,81.305534,True,Yes,Yes,Yes,No,No,
+events,details.full_metrics.vrp.error,1,0.0133333333333333,f5c64bb1-0738-478c-8b81-a5a464860124,no_frames,True,Yes,Yes,No,No,Yes,
+events,details.full_metrics.vrp.f0_max,52,0.6933333333333334,6e453f06-9212-49ef-9015-36fd5dfe19c6,438.638387,True,Yes,Yes,No,No,Yes,基频最大值
+events,details.full_metrics.vrp.f0_min,52,0.6933333333333334,6e453f06-9212-49ef-9015-36fd5dfe19c6,227.588206,True,Yes,Yes,No,No,Yes,基频最小值
+events,details.full_metrics.vrp.spl_max,52,0.6933333333333334,6e453f06-9212-49ef-9015-36fd5dfe19c6,81.980774,True,Yes,Yes,No,No,Yes,
+events,details.full_metrics.vrp.spl_min,52,0.6933333333333334,6e453f06-9212-49ef-9015-36fd5dfe19c6,68.339275,True,Yes,Yes,No,No,Yes,
+events,details.fundamentalFrequency,72,0.96,6e453f06-9212-49ef-9015-36fd5dfe19c6,203.1,True,Yes,Yes,No,No,Yes,
+events,details.hasInstructor,0,0.0,,,True,No,No,No,No,Yes,
+events,details.hnr,53,0.7066666666666667,6e453f06-9212-49ef-9015-36fd5dfe19c6,19.1,True,Yes,Yes,No,No,Yes,谐噪比 (HNR)
+events,details.instructor,0,0.0,,,True,No,No,No,No,Yes,指导者姓名
+events,details.jitter,55,0.7333333333333333,6e453f06-9212-49ef-9015-36fd5dfe19c6,0.64,True,Yes,Yes,No,No,Yes,基频抖动 (jitter)
+events,details.location,5,0.0666666666666666,event_mga2yfmz_lkqlwwxt6,友谊医院,True,Yes,Yes,No,No,Yes,事件发生地点
+events,details.notes,67,0.8933333333333333,6e453f06-9212-49ef-9015-36fd5dfe19c6,VFS Tracker Voice Analysis Tools 自动生成报告,True,Yes,Yes,No,No,Yes,用户备注
+events,details.pitch,53,0.7066666666666667,6e453f06-9212-49ef-9015-36fd5dfe19c6,"{'max': 438.638387, 'min': 227.588206}",True,Yes,Yes,No,No,Yes,音高
+events,details.pitch.max,53,0.7066666666666667,6e453f06-9212-49ef-9015-36fd5dfe19c6,438.638387,True,Yes,Yes,No,No,Yes,
+events,details.pitch.min,53,0.7066666666666667,6e453f06-9212-49ef-9015-36fd5dfe19c6,227.588206,True,Yes,Yes,No,No,Yes,
+events,details.practiceContent,0,0.0,,,True,No,No,No,No,Yes,练习或训练内容
+events,details.references,0,0.0,,,True,No,No,No,No,Yes,用户记录的感受或参考信息
+events,details.selfPracticeContent,0,0.0,,,True,No,No,No,No,Yes,练习或训练内容
+events,details.shimmer,55,0.7333333333333333,6e453f06-9212-49ef-9015-36fd5dfe19c6,3.98,True,Yes,Yes,No,No,Yes,振幅抖动 (shimmer)
+events,details.sound,19,0.2533333333333333,event_mg5krxyc_x4i9lnkng,['其他'],True,Yes,Yes,No,No,Yes,录音类型，如aa或ee
+events,details.trainingContent,0,0.0,,,True,No,No,No,No,Yes,练习或训练内容
+events,details.voiceStatus,0,0.0,,,True,No,No,No,No,Yes,用户记录的感受或参考信息
+events,details.voicing,19,0.2533333333333333,event_mg5krxyc_x4i9lnkng,['其他'],True,Yes,Yes,No,No,Yes,发声类型，如日常语音或练习语音
+events,eventId,75,1.0,6e453f06-9212-49ef-9015-36fd5dfe19c6,6e453f06-9212-49ef-9015-36fd5dfe19c6,True,Yes,Yes,Yes,Yes,Yes,事件ID，唯一标识事件
+events,status,75,1.0,6e453f06-9212-49ef-9015-36fd5dfe19c6,approved,True,Yes,Yes,Yes,Yes,Yes,事件状态，例如 pending、approved
+events,type,75,1.0,6e453f06-9212-49ef-9015-36fd5dfe19c6,self_test,True,Yes,Yes,Yes,Yes,Yes,事件类型（如 self_test、surgery 等）
+events,updatedAt,75,1.0,6e453f06-9212-49ef-9015-36fd5dfe19c6,2025-08-30T18:00:22.848Z,True,Yes,Yes,Yes,Yes,Yes,最后更新时间的ISO字符串或时间戳
+events,userId,75,1.0,6e453f06-9212-49ef-9015-36fd5dfe19c6,d4987458-e051-70e2-ed7d-1d40223d789f,True,Yes,Yes,Yes,Yes,Yes,用户ID，表示数据记录所属的用户
+tests,calibration,0,0.0,,,True,No,No,No,No,Yes,预留字段：校准信息，暂未实现
+tests,charts,54,0.1202672605790645,1a3ffd8c-c2fd-44b1-aa72-e844f85fc6ae,"{'timeSeries': 's3://vfs-tracker-objstor/voice-tests/1a3ffd8c-c2fd-44b1-aa72-e844f85fc6ae/artifacts/timeSeries.png', 'formant': 's3://vfs-tracker-objstor/voice-tests/1a3ffd8c-c2fd-44b1-aa72-e844f85fc6",True,Yes,Yes,No,No,Yes,图表数据对象
+tests,charts.formant,54,0.1202672605790645,1a3ffd8c-c2fd-44b1-aa72-e844f85fc6ae,s3://vfs-tracker-objstor/voice-tests/1a3ffd8c-c2fd-44b1-aa72-e844f85fc6ae/artifacts/formant.png,True,Yes,Yes,No,No,Yes,共振峰数据
+tests,charts.formant_spl_spectrum,54,0.1202672605790645,1a3ffd8c-c2fd-44b1-aa72-e844f85fc6ae,s3://vfs-tracker-objstor/voice-tests/1a3ffd8c-c2fd-44b1-aa72-e844f85fc6ae/artifacts/formant_spl_spectrum.png,True,Yes,Yes,No,No,Yes,共振峰数据
+tests,charts.timeSeries,54,0.1202672605790645,1a3ffd8c-c2fd-44b1-aa72-e844f85fc6ae,s3://vfs-tracker-objstor/voice-tests/1a3ffd8c-c2fd-44b1-aa72-e844f85fc6ae/artifacts/timeSeries.png,True,Yes,Yes,No,No,Yes,
+tests,charts.vrp,53,0.1180400890868596,1a3ffd8c-c2fd-44b1-aa72-e844f85fc6ae,s3://vfs-tracker-objstor/voice-tests/1a3ffd8c-c2fd-44b1-aa72-e844f85fc6ae/artifacts/vrp.png,True,Yes,Yes,No,No,Yes,
+tests,createdAt,449,1.0,44324238-e072-47bb-9141-3027ff06f595,1759471754,True,Yes,Yes,Yes,Yes,Yes,创建时间的ISO字符串或时间戳
+tests,errorMessage,10,0.0222717149220489,5c5103fc-febb-449c-b0e7-6a3cfd2dd05c,Float types are not supported. Use Decimal types instead.,True,Yes,Yes,No,No,Yes,错误信息
+tests,forms,0,0.0,,,True,No,No,No,No,Yes,预留字段：用户填写的表单内容，暂未实现
+tests,metrics,54,0.1202672605790645,1a3ffd8c-c2fd-44b1-aa72-e844f85fc6ae,"{'questionnaires': {'RBH': {}}, 'reading': {'f0_mean': 121.5, 'f0_stats': {'median': 125.88, 'p10': 95.24, 'p90': 138.32}, 'f0_sd': 17.5, 'voiced_ratio': 0.12, 'duration_s': 6.48, 'pause_count': 0}, '",True,Yes,Yes,No,No,Yes,测量结果汇总对象
+tests,metrics.dsi,0,0.0,,,True,No,No,No,No,Yes,预留字段：声音障碍指数(DSI)，暂未实现
+tests,metrics.formants_high,18,0.0400890868596882,bf3ccbba-cf8f-4012-b52d-8f06ee20473f,"{'reason': 'LOW_PROMINENCE', 'f0_mean': 120.73, 'F1': 627.34, 'F2': 1137.57, 'F3': 2957.26, 'spl_dbA_est': 67.068298, 'F1_available': False, 'source_file': 'voice-tests_bf3ccbba-cf8f-4012-b52d-8f06ee2",True,Yes,Yes,No,No,Yes,共振峰数据
+tests,metrics.formants_high.B1,18,0.0400890868596882,bf3ccbba-cf8f-4012-b52d-8f06ee20473f,253.19,True,Yes,Yes,No,No,Yes,
+tests,metrics.formants_high.B2,18,0.0400890868596882,bf3ccbba-cf8f-4012-b52d-8f06ee20473f,92.25,True,Yes,Yes,No,No,Yes,
+tests,metrics.formants_high.B3,18,0.0400890868596882,bf3ccbba-cf8f-4012-b52d-8f06ee20473f,1749.29,True,Yes,Yes,No,No,Yes,
+tests,metrics.formants_high.F1,18,0.0400890868596882,bf3ccbba-cf8f-4012-b52d-8f06ee20473f,627.34,True,Yes,Yes,No,No,Yes,
+tests,metrics.formants_high.F1_available,18,0.0400890868596882,bf3ccbba-cf8f-4012-b52d-8f06ee20473f,False,True,Yes,Yes,No,No,Yes,
+tests,metrics.formants_high.F2,18,0.0400890868596882,bf3ccbba-cf8f-4012-b52d-8f06ee20473f,1137.57,True,Yes,Yes,No,No,Yes,
+tests,metrics.formants_high.F2_available,18,0.0400890868596882,bf3ccbba-cf8f-4012-b52d-8f06ee20473f,False,True,Yes,Yes,No,No,Yes,
+tests,metrics.formants_high.F3,18,0.0400890868596882,bf3ccbba-cf8f-4012-b52d-8f06ee20473f,2957.26,True,Yes,Yes,No,No,Yes,
+tests,metrics.formants_high.best_segment_time,18,0.0400890868596882,bf3ccbba-cf8f-4012-b52d-8f06ee20473f,2.765333,True,Yes,Yes,No,No,Yes,
+tests,metrics.formants_high.f0_mean,18,0.0400890868596882,bf3ccbba-cf8f-4012-b52d-8f06ee20473f,120.73,True,Yes,Yes,No,No,Yes,基频均值
+tests,metrics.formants_high.is_high_pitch,18,0.0400890868596882,bf3ccbba-cf8f-4012-b52d-8f06ee20473f,False,True,Yes,Yes,No,No,Yes,音高
+tests,metrics.formants_high.reason,18,0.0400890868596882,bf3ccbba-cf8f-4012-b52d-8f06ee20473f,LOW_PROMINENCE,True,Yes,Yes,No,No,Yes,
+tests,metrics.formants_high.source_file,18,0.0400890868596882,bf3ccbba-cf8f-4012-b52d-8f06ee20473f,voice-tests_bf3ccbba-cf8f-4012-b52d-8f06ee20473f_raw_4_4_1.wav,True,Yes,Yes,No,No,Yes,
+tests,metrics.formants_high.spl_dbA_est,18,0.0400890868596882,bf3ccbba-cf8f-4012-b52d-8f06ee20473f,67.068298,True,Yes,Yes,No,No,Yes,
+tests,metrics.formants_low,18,0.0400890868596882,bf3ccbba-cf8f-4012-b52d-8f06ee20473f,"{'reason': 'LOW_PROMINENCE', 'f0_mean': 235.08, 'F1': 507.78, 'F2': 1117.87, 'F3': 1560.96, 'spl_dbA_est': 70.16272, 'F1_available': False, 'source_file': 'voice-tests_bf3ccbba-cf8f-4012-b52d-8f06ee20",True,Yes,Yes,No,No,Yes,共振峰数据
+tests,metrics.formants_low.B1,18,0.0400890868596882,bf3ccbba-cf8f-4012-b52d-8f06ee20473f,404.81,True,Yes,Yes,No,No,Yes,
+tests,metrics.formants_low.B2,18,0.0400890868596882,bf3ccbba-cf8f-4012-b52d-8f06ee20473f,115.55,True,Yes,Yes,No,No,Yes,
+tests,metrics.formants_low.B3,18,0.0400890868596882,bf3ccbba-cf8f-4012-b52d-8f06ee20473f,408.74,True,Yes,Yes,No,No,Yes,
+tests,metrics.formants_low.F1,18,0.0400890868596882,bf3ccbba-cf8f-4012-b52d-8f06ee20473f,507.78,True,Yes,Yes,No,No,Yes,
+tests,metrics.formants_low.F1_available,18,0.0400890868596882,bf3ccbba-cf8f-4012-b52d-8f06ee20473f,False,True,Yes,Yes,No,No,Yes,
+tests,metrics.formants_low.F2,18,0.0400890868596882,bf3ccbba-cf8f-4012-b52d-8f06ee20473f,1117.87,True,Yes,Yes,No,No,Yes,
+tests,metrics.formants_low.F2_available,18,0.0400890868596882,bf3ccbba-cf8f-4012-b52d-8f06ee20473f,False,True,Yes,Yes,No,No,Yes,
+tests,metrics.formants_low.F3,18,0.0400890868596882,bf3ccbba-cf8f-4012-b52d-8f06ee20473f,1560.96,True,Yes,Yes,No,No,Yes,
+tests,metrics.formants_low.best_segment_time,18,0.0400890868596882,bf3ccbba-cf8f-4012-b52d-8f06ee20473f,1.857333,True,Yes,Yes,No,No,Yes,
+tests,metrics.formants_low.f0_mean,18,0.0400890868596882,bf3ccbba-cf8f-4012-b52d-8f06ee20473f,235.08,True,Yes,Yes,No,No,Yes,基频均值
+tests,metrics.formants_low.is_high_pitch,18,0.0400890868596882,bf3ccbba-cf8f-4012-b52d-8f06ee20473f,False,True,Yes,Yes,No,No,Yes,音高
+tests,metrics.formants_low.reason,18,0.0400890868596882,bf3ccbba-cf8f-4012-b52d-8f06ee20473f,LOW_PROMINENCE,True,Yes,Yes,No,No,Yes,
+tests,metrics.formants_low.source_file,18,0.0400890868596882,bf3ccbba-cf8f-4012-b52d-8f06ee20473f,voice-tests_bf3ccbba-cf8f-4012-b52d-8f06ee20473f_raw_4_4_2.wav,True,Yes,Yes,No,No,Yes,
+tests,metrics.formants_low.spl_dbA_est,18,0.0400890868596882,bf3ccbba-cf8f-4012-b52d-8f06ee20473f,70.16272,True,Yes,Yes,No,No,Yes,
+tests,metrics.questionnaires,54,0.1202672605790645,1a3ffd8c-c2fd-44b1-aa72-e844f85fc6ae,{'RBH': {}},True,Yes,Yes,No,No,Yes,
+tests,metrics.questionnaires.OVHS-9 Total,49,0.1091314031180401,ff515cd5-49d5-4a94-a416-f046da263e79,13,True,Yes,Yes,No,No,Yes,
+tests,metrics.questionnaires.RBH,54,0.1202672605790645,1a3ffd8c-c2fd-44b1-aa72-e844f85fc6ae,{},True,Yes,Yes,No,No,Yes,
+tests,metrics.questionnaires.RBH.B,50,0.111358574610245,ff515cd5-49d5-4a94-a416-f046da263e79,1,True,Yes,Yes,No,No,Yes,
+tests,metrics.questionnaires.RBH.H,50,0.111358574610245,ff515cd5-49d5-4a94-a416-f046da263e79,2,True,Yes,Yes,No,No,Yes,
+tests,metrics.questionnaires.RBH.R,50,0.111358574610245,ff515cd5-49d5-4a94-a416-f046da263e79,1,True,Yes,Yes,No,No,Yes,
+tests,metrics.questionnaires.TVQ-G Percent,49,0.1091314031180401,ff515cd5-49d5-4a94-a416-f046da263e79,33%,True,Yes,Yes,No,No,Yes,
+tests,metrics.questionnaires.TVQ-G Total,49,0.1091314031180401,ff515cd5-49d5-4a94-a416-f046da263e79,16,True,Yes,Yes,No,No,Yes,
+tests,metrics.reading,54,0.1202672605790645,1a3ffd8c-c2fd-44b1-aa72-e844f85fc6ae,"{'f0_mean': 121.5, 'f0_stats': {'median': 125.88, 'p10': 95.24, 'p90': 138.32}, 'f0_sd': 17.5, 'voiced_ratio': 0.12, 'duration_s': 6.48, 'pause_count': 0}",True,Yes,Yes,No,No,Yes,
+tests,metrics.reading.duration_s,54,0.1202672605790645,1a3ffd8c-c2fd-44b1-aa72-e844f85fc6ae,6.48,True,Yes,Yes,No,No,Yes,
+tests,metrics.reading.f0_mean,45,0.1002227171492204,1a3ffd8c-c2fd-44b1-aa72-e844f85fc6ae,121.5,True,Yes,Yes,No,No,Yes,基频均值
+tests,metrics.reading.f0_sd,45,0.1002227171492204,1a3ffd8c-c2fd-44b1-aa72-e844f85fc6ae,17.5,True,Yes,Yes,No,No,Yes,
+tests,metrics.reading.f0_stats,54,0.1202672605790645,1a3ffd8c-c2fd-44b1-aa72-e844f85fc6ae,"{'median': 125.88, 'p10': 95.24, 'p90': 138.32}",True,Yes,Yes,No,No,Yes,
+tests,metrics.reading.f0_stats.median,54,0.1202672605790645,1a3ffd8c-c2fd-44b1-aa72-e844f85fc6ae,125.88,True,Yes,Yes,No,No,Yes,
+tests,metrics.reading.f0_stats.p10,54,0.1202672605790645,1a3ffd8c-c2fd-44b1-aa72-e844f85fc6ae,95.24,True,Yes,Yes,No,No,Yes,
+tests,metrics.reading.f0_stats.p90,54,0.1202672605790645,1a3ffd8c-c2fd-44b1-aa72-e844f85fc6ae,138.32,True,Yes,Yes,No,No,Yes,
+tests,metrics.reading.pause_count,54,0.1202672605790645,1a3ffd8c-c2fd-44b1-aa72-e844f85fc6ae,0,True,Yes,Yes,No,No,Yes,
+tests,metrics.reading.voiced_ratio,54,0.1202672605790645,1a3ffd8c-c2fd-44b1-aa72-e844f85fc6ae,0.12,True,Yes,Yes,No,No,Yes,
+tests,metrics.spontaneous,54,0.1202672605790645,1a3ffd8c-c2fd-44b1-aa72-e844f85fc6ae,"{'f0_mean': 108.25, 'f0_stats': {'median': 104.32, 'p10': 84.61, 'p90': 135.86}, 'f0_sd': 20.28, 'voiced_ratio': 0.22, 'duration_s': 0.9, 'pause_count': 0}",True,Yes,Yes,No,No,Yes,
+tests,metrics.spontaneous.duration_s,54,0.1202672605790645,1a3ffd8c-c2fd-44b1-aa72-e844f85fc6ae,0.9,True,Yes,Yes,No,No,Yes,
+tests,metrics.spontaneous.f0_mean,45,0.1002227171492204,1a3ffd8c-c2fd-44b1-aa72-e844f85fc6ae,108.25,True,Yes,Yes,No,No,Yes,基频均值
+tests,metrics.spontaneous.f0_sd,45,0.1002227171492204,1a3ffd8c-c2fd-44b1-aa72-e844f85fc6ae,20.28,True,Yes,Yes,No,No,Yes,
+tests,metrics.spontaneous.f0_stats,54,0.1202672605790645,1a3ffd8c-c2fd-44b1-aa72-e844f85fc6ae,"{'median': 104.32, 'p10': 84.61, 'p90': 135.86}",True,Yes,Yes,No,No,Yes,
+tests,metrics.spontaneous.f0_stats.median,54,0.1202672605790645,1a3ffd8c-c2fd-44b1-aa72-e844f85fc6ae,104.32,True,Yes,Yes,No,No,Yes,
+tests,metrics.spontaneous.f0_stats.p10,54,0.1202672605790645,1a3ffd8c-c2fd-44b1-aa72-e844f85fc6ae,84.61,True,Yes,Yes,No,No,Yes,
+tests,metrics.spontaneous.f0_stats.p90,54,0.1202672605790645,1a3ffd8c-c2fd-44b1-aa72-e844f85fc6ae,135.86,True,Yes,Yes,No,No,Yes,
+tests,metrics.spontaneous.pause_count,54,0.1202672605790645,1a3ffd8c-c2fd-44b1-aa72-e844f85fc6ae,0,True,Yes,Yes,No,No,Yes,
+tests,metrics.spontaneous.voiced_ratio,54,0.1202672605790645,1a3ffd8c-c2fd-44b1-aa72-e844f85fc6ae,0.22,True,Yes,Yes,No,No,Yes,
+tests,metrics.sustained,54,0.1202672605790645,1a3ffd8c-c2fd-44b1-aa72-e844f85fc6ae,"{'mpt_s': 1.32, 'f0_sd': 22.08, 'shimmer_local_percent': 21.7, 'formants_high': {'f0_mean': 0, 'F1': 0, 'F2': 0, 'F3': 0, 'spl_dbA_est': 0, 'error_details': 'No stable segment of 100ms found'}, 'f0_me",True,Yes,Yes,No,No,Yes,
+tests,metrics.sustained.f0_mean,54,0.1202672605790645,1a3ffd8c-c2fd-44b1-aa72-e844f85fc6ae,118.5,True,Yes,Yes,No,No,Yes,基频均值
+tests,metrics.sustained.f0_sd,28,0.0623608017817371,1a3ffd8c-c2fd-44b1-aa72-e844f85fc6ae,22.08,True,Yes,Yes,No,No,Yes,
+tests,metrics.sustained.formant_analysis_failed,9,0.0200445434298441,ff515cd5-49d5-4a94-a416-f046da263e79,True,True,Yes,Yes,No,No,Yes,共振峰数据
+tests,metrics.sustained.formant_analysis_reason_high,8,0.0178173719376391,a0db45df-4908-4aaa-b9cb-036372e34aab,Failed to find formants even with multiple parameter sets.,True,Yes,Yes,No,No,Yes,共振峰数据
+tests,metrics.sustained.formant_analysis_reason_low,8,0.0178173719376391,a0db45df-4908-4aaa-b9cb-036372e34aab,Failed to find formants even with multiple parameter sets.,True,Yes,Yes,No,No,Yes,共振峰数据
+tests,metrics.sustained.formant_analysis_reason_sustained,26,0.0579064587973273,a0db45df-4908-4aaa-b9cb-036372e34aab,Failed to find formants even with multiple parameter sets.,True,Yes,Yes,No,No,Yes,共振峰数据
+tests,metrics.sustained.formants_high,35,0.0779510022271715,1a3ffd8c-c2fd-44b1-aa72-e844f85fc6ae,"{'f0_mean': 0, 'F1': 0, 'F2': 0, 'F3': 0, 'spl_dbA_est': 0, 'error_details': 'No stable segment of 100ms found'}",True,Yes,Yes,No,No,Yes,共振峰数据
+tests,metrics.sustained.formants_high.F1,35,0.0779510022271715,1a3ffd8c-c2fd-44b1-aa72-e844f85fc6ae,0,True,Yes,Yes,No,No,Yes,
+tests,metrics.sustained.formants_high.F2,35,0.0779510022271715,1a3ffd8c-c2fd-44b1-aa72-e844f85fc6ae,0,True,Yes,Yes,No,No,Yes,
+tests,metrics.sustained.formants_high.F3,35,0.0779510022271715,1a3ffd8c-c2fd-44b1-aa72-e844f85fc6ae,0,True,Yes,Yes,No,No,Yes,
+tests,metrics.sustained.formants_high.error_details,9,0.0200445434298441,1a3ffd8c-c2fd-44b1-aa72-e844f85fc6ae,No stable segment of 100ms found,True,Yes,Yes,No,No,Yes,
+tests,metrics.sustained.formants_high.f0_mean,35,0.0779510022271715,1a3ffd8c-c2fd-44b1-aa72-e844f85fc6ae,0,True,Yes,Yes,No,No,Yes,基频均值
+tests,metrics.sustained.formants_high.reason,8,0.0178173719376391,a0db45df-4908-4aaa-b9cb-036372e34aab,Failed to find formants even with multiple parameter sets.,True,Yes,Yes,No,No,Yes,
+tests,metrics.sustained.formants_high.spl_dbA_est,35,0.0779510022271715,1a3ffd8c-c2fd-44b1-aa72-e844f85fc6ae,0,True,Yes,Yes,No,No,Yes,
+tests,metrics.sustained.formants_low,35,0.0779510022271715,1a3ffd8c-c2fd-44b1-aa72-e844f85fc6ae,"{'f0_mean': 0, 'F1': 0, 'F2': 0, 'F3': 0, 'spl_dbA_est': 0, 'error_details': 'No stable segment of 100ms found'}",True,Yes,Yes,No,No,Yes,共振峰数据
+tests,metrics.sustained.formants_low.F1,35,0.0779510022271715,1a3ffd8c-c2fd-44b1-aa72-e844f85fc6ae,0,True,Yes,Yes,No,No,Yes,
+tests,metrics.sustained.formants_low.F2,35,0.0779510022271715,1a3ffd8c-c2fd-44b1-aa72-e844f85fc6ae,0,True,Yes,Yes,No,No,Yes,
+tests,metrics.sustained.formants_low.F3,35,0.0779510022271715,1a3ffd8c-c2fd-44b1-aa72-e844f85fc6ae,0,True,Yes,Yes,No,No,Yes,
+tests,metrics.sustained.formants_low.error_details,9,0.0200445434298441,1a3ffd8c-c2fd-44b1-aa72-e844f85fc6ae,No stable segment of 100ms found,True,Yes,Yes,No,No,Yes,
+tests,metrics.sustained.formants_low.f0_mean,35,0.0779510022271715,1a3ffd8c-c2fd-44b1-aa72-e844f85fc6ae,0,True,Yes,Yes,No,No,Yes,基频均值
+tests,metrics.sustained.formants_low.reason,8,0.0178173719376391,a0db45df-4908-4aaa-b9cb-036372e34aab,Failed to find formants even with multiple parameter sets.,True,Yes,Yes,No,No,Yes,
+tests,metrics.sustained.formants_low.spl_dbA_est,35,0.0779510022271715,1a3ffd8c-c2fd-44b1-aa72-e844f85fc6ae,0,True,Yes,Yes,No,No,Yes,
+tests,metrics.sustained.formants_sustained,26,0.0579064587973273,a0db45df-4908-4aaa-b9cb-036372e34aab,"{'reason': 'Failed to find formants even with multiple parameter sets.', 'error_details': 'Analysis failed', 'f0_mean': 0, 'F1': 0, 'F2': 0, 'F3': 0, 'spl_dbA_est': 0}",True,Yes,Yes,No,No,Yes,共振峰数据
+tests,metrics.sustained.formants_sustained.B1,18,0.0400890868596882,bf3ccbba-cf8f-4012-b52d-8f06ee20473f,246.94,True,Yes,Yes,No,No,Yes,
+tests,metrics.sustained.formants_sustained.B2,18,0.0400890868596882,bf3ccbba-cf8f-4012-b52d-8f06ee20473f,171.7,True,Yes,Yes,No,No,Yes,
+tests,metrics.sustained.formants_sustained.B3,18,0.0400890868596882,bf3ccbba-cf8f-4012-b52d-8f06ee20473f,188.97,True,Yes,Yes,No,No,Yes,
+tests,metrics.sustained.formants_sustained.F1,26,0.0579064587973273,a0db45df-4908-4aaa-b9cb-036372e34aab,0,True,Yes,Yes,No,No,Yes,
+tests,metrics.sustained.formants_sustained.F1_available,18,0.0400890868596882,bf3ccbba-cf8f-4012-b52d-8f06ee20473f,False,True,Yes,Yes,No,No,Yes,
+tests,metrics.sustained.formants_sustained.F2,26,0.0579064587973273,a0db45df-4908-4aaa-b9cb-036372e34aab,0,True,Yes,Yes,No,No,Yes,
+tests,metrics.sustained.formants_sustained.F2_available,18,0.0400890868596882,bf3ccbba-cf8f-4012-b52d-8f06ee20473f,False,True,Yes,Yes,No,No,Yes,
+tests,metrics.sustained.formants_sustained.F3,26,0.0579064587973273,a0db45df-4908-4aaa-b9cb-036372e34aab,0,True,Yes,Yes,No,No,Yes,
+tests,metrics.sustained.formants_sustained.best_segment_time,18,0.0400890868596882,bf3ccbba-cf8f-4012-b52d-8f06ee20473f,1.242333,True,Yes,Yes,No,No,Yes,
+tests,metrics.sustained.formants_sustained.error_details,8,0.0178173719376391,a0db45df-4908-4aaa-b9cb-036372e34aab,Analysis failed,True,Yes,Yes,No,No,Yes,
+tests,metrics.sustained.formants_sustained.f0_mean,26,0.0579064587973273,a0db45df-4908-4aaa-b9cb-036372e34aab,0,True,Yes,Yes,No,No,Yes,基频均值
+tests,metrics.sustained.formants_sustained.is_high_pitch,18,0.0400890868596882,bf3ccbba-cf8f-4012-b52d-8f06ee20473f,False,True,Yes,Yes,No,No,Yes,音高
+tests,metrics.sustained.formants_sustained.reason,26,0.0579064587973273,a0db45df-4908-4aaa-b9cb-036372e34aab,Failed to find formants even with multiple parameter sets.,True,Yes,Yes,No,No,Yes,
+tests,metrics.sustained.formants_sustained.spl_dbA_est,26,0.0579064587973273,a0db45df-4908-4aaa-b9cb-036372e34aab,0,True,Yes,Yes,No,No,Yes,
+tests,metrics.sustained.hnr_db,54,0.1202672605790645,1a3ffd8c-c2fd-44b1-aa72-e844f85fc6ae,2.43,True,Yes,Yes,No,No,Yes,
+tests,metrics.sustained.jitter_local_percent,54,0.1202672605790645,1a3ffd8c-c2fd-44b1-aa72-e844f85fc6ae,11.27,True,Yes,Yes,No,No,Yes,
+tests,metrics.sustained.mpt_s,54,0.1202672605790645,1a3ffd8c-c2fd-44b1-aa72-e844f85fc6ae,1.32,True,Yes,Yes,No,No,Yes,
+tests,metrics.sustained.shimmer_local_percent,54,0.1202672605790645,1a3ffd8c-c2fd-44b1-aa72-e844f85fc6ae,21.7,True,Yes,Yes,No,No,Yes,
+tests,metrics.sustained.spl_dbA_est,54,0.1202672605790645,1a3ffd8c-c2fd-44b1-aa72-e844f85fc6ae,74.4,True,Yes,Yes,No,No,Yes,
+tests,metrics.vrp,54,0.1202672605790645,1a3ffd8c-c2fd-44b1-aa72-e844f85fc6ae,"{'f0_max': 141.7902, 'spl_min': 65.09923, 'f0_min': 86.060372, 'bins': [{'spl_min': 66.354393, 'count': 2, 'semi': 39, 'f0_center_hz': 77.781746, 'spl_max': 80.109703, 'spl_mean': 73.232048}, {'spl_mi",True,Yes,Yes,No,No,Yes,
+tests,metrics.vrp.bins,53,0.1180400890868596,1a3ffd8c-c2fd-44b1-aa72-e844f85fc6ae,"[{'spl_min': 66.354393, 'count': 2, 'semi': 39, 'f0_center_hz': 77.781746, 'spl_max': 80.109703, 'spl_mean': 73.232048}, {'spl_min': 63.742653, 'count': 6, 'semi': 40, 'f0_center_hz': 82.406889, 'spl_",True,Yes,Yes,No,No,Yes,
+tests,metrics.vrp.bins.count,1463,3.258351893095768,1a3ffd8c-c2fd-44b1-aa72-e844f85fc6ae,2,True,Yes,Yes,Yes,No,No,
+tests,metrics.vrp.bins.f0_center_hz,1463,3.258351893095768,1a3ffd8c-c2fd-44b1-aa72-e844f85fc6ae,77.781746,True,Yes,Yes,Yes,No,No,
+tests,metrics.vrp.bins.semi,1463,3.258351893095768,1a3ffd8c-c2fd-44b1-aa72-e844f85fc6ae,39,True,Yes,Yes,Yes,No,No,
+tests,metrics.vrp.bins.spl_max,1463,3.258351893095768,1a3ffd8c-c2fd-44b1-aa72-e844f85fc6ae,80.109703,True,Yes,Yes,Yes,No,No,
+tests,metrics.vrp.bins.spl_mean,1463,3.258351893095768,1a3ffd8c-c2fd-44b1-aa72-e844f85fc6ae,73.232048,True,Yes,Yes,Yes,No,No,
+tests,metrics.vrp.bins.spl_min,1463,3.258351893095768,1a3ffd8c-c2fd-44b1-aa72-e844f85fc6ae,66.354393,True,Yes,Yes,Yes,No,No,
+tests,metrics.vrp.error,1,0.0022271714922048,fdc92885-76a0-4d41-9fa1-64f2167e4511,no_frames,True,Yes,Yes,No,No,Yes,
+tests,metrics.vrp.f0_max,53,0.1180400890868596,1a3ffd8c-c2fd-44b1-aa72-e844f85fc6ae,141.7902,True,Yes,Yes,No,No,Yes,基频最大值
+tests,metrics.vrp.f0_min,53,0.1180400890868596,1a3ffd8c-c2fd-44b1-aa72-e844f85fc6ae,86.060372,True,Yes,Yes,No,No,Yes,基频最小值
+tests,metrics.vrp.spl_max,53,0.1180400890868596,1a3ffd8c-c2fd-44b1-aa72-e844f85fc6ae,81.974333,True,Yes,Yes,No,No,Yes,
+tests,metrics.vrp.spl_min,53,0.1180400890868596,1a3ffd8c-c2fd-44b1-aa72-e844f85fc6ae,65.09923,True,Yes,Yes,No,No,Yes,
+tests,reportPdf,54,0.1202672605790645,1a3ffd8c-c2fd-44b1-aa72-e844f85fc6ae,s3://vfs-tracker-objstor/voice-tests/1a3ffd8c-c2fd-44b1-aa72-e844f85fc6ae/report.pdf,True,Yes,Yes,No,No,Yes,报告的PDF文件路径或URL
+tests,sessionId,449,1.0,44324238-e072-47bb-9141-3027ff06f595,44324238-e072-47bb-9141-3027ff06f595,True,Yes,Yes,Yes,Yes,Yes,测试会话的唯一编号
+tests,status,449,1.0,44324238-e072-47bb-9141-3027ff06f595,created,True,Yes,Yes,Yes,Yes,Yes,事件状态，例如 pending、approved
+tests,tests,0,0.0,,,True,No,No,No,No,Yes,预留字段：测试列表，暂未实现
+tests,updatedAt,59,0.131403118040089,1a3ffd8c-c2fd-44b1-aa72-e844f85fc6ae,1757940115,True,Yes,Yes,No,No,Yes,最后更新时间的ISO字符串或时间戳
+tests,userId,449,1.0,44324238-e072-47bb-9141-3027ff06f595,34f8b418-1011-70a7-633b-720845138963,True,Yes,Yes,Yes,Yes,Yes,用户ID，表示数据记录所属的用户
+users,createdAt,11,0.8461538461538461,0488a4b8-5041-70cc-2c96-f8f422bb04cd,2025-10-03T00:01:51.479Z,True,Yes,Yes,No,Yes,No,创建时间的ISO字符串或时间戳
+users,email,11,0.8461538461538461,0488a4b8-5041-70cc-2c96-f8f422bb04cd,2586618121@qq.com,True,Yes,Yes,No,Yes,No,用户电子邮箱，与 Cognito 同步
+users,profile,13,1.0,0488a4b8-5041-70cc-2c96-f8f422bb04cd,"{'nickname': 'Main包', 'name': 'Main包', 'bio': '', 'isNamePublic': True, 'areSocialsPublic': True, 'socials': [{'platform': 'Twitter', 'handle': '@Lem_PackageMain'}]}",True,Yes,Yes,Yes,Yes,Yes,用户个人资料
+users,profile.areSocialsPublic,13,1.0,0488a4b8-5041-70cc-2c96-f8f422bb04cd,True,True,Yes,Yes,Yes,Yes,Yes,是否公开社交账户链接
+users,profile.bio,11,0.8461538461538461,0488a4b8-5041-70cc-2c96-f8f422bb04cd,,False,Yes,Yes,No,No,Yes,用户自我介绍，不应存在，将删除
+users,profile.isNamePublic,13,1.0,0488a4b8-5041-70cc-2c96-f8f422bb04cd,True,True,Yes,Yes,Yes,Yes,Yes,是否公开用户名称
+users,profile.name,13,1.0,0488a4b8-5041-70cc-2c96-f8f422bb04cd,Main包,True,Yes,Yes,Yes,Yes,Yes,用户在公共仪表板上显示的名字
+users,profile.nickname,11,0.8461538461538461,0488a4b8-5041-70cc-2c96-f8f422bb04cd,Main包,True,Yes,Yes,No,Yes,No,用户昵称，与 Cognito 保持一致
+users,profile.socials,13,1.0,0488a4b8-5041-70cc-2c96-f8f422bb04cd,"[{'platform': 'Twitter', 'handle': '@Lem_PackageMain'}]",True,Yes,Yes,Yes,No,No,用户社交信息列表
+users,profile.socials.handle,7,0.5384615384615384,0488a4b8-5041-70cc-2c96-f8f422bb04cd,@Lem_PackageMain,True,Yes,Yes,No,No,Yes,社交账号的用户名或Handle
+users,profile.socials.platform,7,0.5384615384615384,0488a4b8-5041-70cc-2c96-f8f422bb04cd,Twitter,True,Yes,Yes,No,No,Yes,社交账号的平台，如Twitter
+users,updatedAt,13,1.0,0488a4b8-5041-70cc-2c96-f8f422bb04cd,2025-10-03T00:01:51.479Z,True,Yes,Yes,Yes,Yes,Yes,最后更新时间的ISO字符串或时间戳
+users,userId,13,1.0,0488a4b8-5041-70cc-2c96-f8f422bb04cd,0488a4b8-5041-70cc-2c96-f8f422bb04cd,True,Yes,Yes,Yes,Yes,Yes,用户ID，表示数据记录所属的用户
