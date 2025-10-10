@@ -21,6 +21,7 @@ import EnhancedDataCharts from './components/EnhancedDataCharts';
 import VoiceTestWizard from './components/VoiceTestWizard'; // 新增导入
 import QuickF0Test from './components/QuickF0Test'; // 新增导入
 import ScalePractice from './components/ScalePractice'; // 新增导入
+import VFSEffectPreview from './components/VFSEffectPreview'; // VFS效果预览
 import RegionSwitchBanner from './components/RegionSwitchBanner.jsx';
 import NoteFrequencyTool from './components/NoteFrequencyTool.jsx';
 
@@ -185,6 +186,7 @@ const AppContent = () => {
           <Route path="/" element={<Home />} />
           <Route path="/dashboard" element={<PublicDashboard />} />
           <Route path="/note-frequency-tool" element={<NoteFrequencyTool />} />
+          <Route path="/vfs-effect-preview" element={<VFSEffectPreview />} />
           <Route path="/posts" element={<PostList />} />
           <Route path="/docs" element={<PostViewer />} />
           {/* Route for testing the new timeline component independently */}
