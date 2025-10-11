@@ -7,6 +7,7 @@ import { v4 as uuidv4 } from 'uuid';
 import mockData from './mock_data.json';
 import { isProductionReady as globalIsProductionReady, logEnvReadiness } from './env.js';
 import { ApiError, AuthenticationError, ServiceError, UploadError } from './utils/apiError.js';
+import { withAutoTimeout, isTimeoutError } from './utils/timeout.js';
 
 /**
  * [CN] 用于缓存用户个人资料的本地存储键。
@@ -25,19 +26,24 @@ const isProductionReady = () => {
 };
 
 /**
- * [CN] 发送一个公共的 GET 请求。
+ * [CN] 发送一个公共的 GET 请求 (带超时控制)。
  * @param {string} path - 请求的 API 路径。
  * @returns {Promise<any>} 一个解析为 API 响应 JSON 的 Promise。
- * @throws {ApiError} 如果请求失败，则抛出 ApiError。
+ * @throws {ApiError} 如果请求失败或超时，则抛出 ApiError。
  */
 async function simpleGet(path) {
   console.log('[simpleGet] making public request to:', path);
   try {
     const op = get({ apiName: 'api', path });
-    const { body } = await op.response;
-    return body.json();
+    // 使用自动超时配置
+    return await withAutoTimeout(op, { method: 'GET', path });
   } catch (error) {
     console.error(`[simpleGet] 请求失败: ${path}`, error);
+    // 如果是超时错误,直接抛出 (已经是 ApiError)
+    if (isTimeoutError(error)) {
+      throw error;
+    }
+    // 其他错误转换为 ApiError
     throw ApiError.from(error, {
       requestMethod: 'GET',
       requestPath: path,
@@ -47,11 +53,11 @@ async function simpleGet(path) {
 }
 
 /**
- * [CN] 发送一个经过身份验证的 GET 请求。
+ * [CN] 发送一个经过身份验证的 GET 请求 (带超时控制)。
  * @param {string} path - 请求的 API 路径。
  * @returns {Promise<any>} 一个解析为 API 响应数据的 Promise。
  * @throws {AuthenticationError} 如果用户未通过身份验证，则抛出 AuthenticationError。
- * @throws {ApiError} 如果请求失败，则抛出 ApiError。
+ * @throws {ApiError} 如果请求失败或超时，则抛出 ApiError。
  */
 async function authenticatedGet(path) {
   console.log('[authenticatedGet] making authenticated request to:', path);
@@ -74,8 +80,8 @@ async function authenticatedGet(path) {
         }
       }
     });
-    const { body } = await op.response;
-    const result = await body.json();
+    // 使用自动超时配置
+    const result = await withAutoTimeout(op, { method: 'GET', path });
     console.log('✅ API调用成功，使用了ID token');
     if (result.data) {
       return result.data;
@@ -85,6 +91,10 @@ async function authenticatedGet(path) {
     return result;
   } catch (error) {
     console.error('❌ 使用ID token API调用失败:', error);
+    // 如果是超时错误,直接抛出
+    if (isTimeoutError(error)) {
+      throw error;
+    }
     throw ApiError.from(error, {
       requestMethod: 'GET',
       requestPath: path,
@@ -94,12 +104,12 @@ async function authenticatedGet(path) {
 }
 
 /**
- * [CN] 发送一个经过身份验证的 POST 请求。
+ * [CN] 发送一个经过身份验证的 POST 请求 (带超时控制)。
  * @param {string} path - 请求的 API 路径。
  * @param {object} bodyData - 要在请求正文中发送的数据。
  * @returns {Promise<any>} 一个解析为 API 响应 JSON 的 Promise。
  * @throws {AuthenticationError} 如果用户未通过身份验证。
- * @throws {ApiError} 如果请求失败。
+ * @throws {ApiError} 如果请求失败或超时。
  */
 async function authenticatedPost(path, bodyData) {
   console.log('[authenticatedPost] making authenticated request to:', path);
@@ -126,10 +136,14 @@ async function authenticatedPost(path, bodyData) {
         }
       }
     });
-    const { body } = await op.response;
-    return body.json();
+    // 使用自动超时配置
+    return await withAutoTimeout(op, { method: 'POST', path });
   } catch (error) {
     console.error(`[authenticatedPost] 请求失败: ${path}`, error);
+    // 如果是超时错误,直接抛出
+    if (isTimeoutError(error)) {
+      throw error;
+    }
     throw ApiError.from(error, {
       requestMethod: 'POST',
       requestPath: path,
@@ -140,12 +154,12 @@ async function authenticatedPost(path, bodyData) {
 }
 
 /**
- * [CN] 发送一个经过身份验证的 PUT 请求。
+ * [CN] 发送一个经过身份验证的 PUT 请求 (带超时控制)。
  * @param {string} path - 请求的 API 路径。
  * @param {object} bodyData - 要在请求正文中发送的数据。
  * @returns {Promise<any>} 一个解析为 API 响应 JSON 的 Promise。
  * @throws {AuthenticationError} 如果用户未通过身份验证。
- * @throws {ApiError} 如果请求失败。
+ * @throws {ApiError} 如果请求失败或超时。
  */
 async function authenticatedPut(path, bodyData) {
   console.log('[authenticatedPut] making authenticated request to:', path);
@@ -170,10 +184,14 @@ async function authenticatedPut(path, bodyData) {
         }
       }
     });
-    const { body } = await op.response;
-    return body.json();
+    // 使用自动超时配置
+    return await withAutoTimeout(op, { method: 'PUT', path });
   } catch (error) {
     console.error(`[authenticatedPut] 请求失败: ${path}`, error);
+    // 如果是超时错误,直接抛出
+    if (isTimeoutError(error)) {
+      throw error;
+    }
     throw ApiError.from(error, {
       requestMethod: 'PUT',
       requestPath: path,
@@ -184,11 +202,11 @@ async function authenticatedPut(path, bodyData) {
 }
 
 /**
- * [CN] 发送一个经过身份验证的 DELETE 请求。
+ * [CN] 发送一个经过身份验证的 DELETE 请求 (带超时控制)。
  * @param {string} path - 请求的 API 路径。
  * @returns {Promise<any>} 一个解析为 API 响应 JSON 的 Promise。
  * @throws {AuthenticationError} 如果用户未通过身份验证。
- * @throws {ApiError} 如果请求失败。
+ * @throws {ApiError} 如果请求失败或超时。
  */
 async function authenticatedDelete(path) {
   console.log('[authenticatedDelete] making authenticated request to:', path);
@@ -212,10 +230,14 @@ async function authenticatedDelete(path) {
         }
       }
     });
-    const { body } = await op.response;
-    return body.json();
+    // 使用自动超时配置
+    return await withAutoTimeout(op, { method: 'DELETE', path });
   } catch (error) {
     console.error(`[authenticatedDelete] 请求失败: ${path}`, error);
+    // 如果是超时错误,直接抛出
+    if (isTimeoutError(error)) {
+      throw error;
+    }
     throw ApiError.from(error, {
       requestMethod: 'DELETE',
       requestPath: path,

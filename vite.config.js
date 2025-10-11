@@ -53,4 +53,51 @@ export default defineConfig({
     host: true,
     port: 3000,
   },
+  // Vitest 测试配置
+  test: {
+    globals: true,
+    environment: 'jsdom',
+    setupFiles: './src/test-utils/setup.js',
+    // 设置测试环境变量 - 让 isProductionReady() 返回 true
+    env: {
+      VITE_COGNITO_USER_POOL_ID: 'us-east-1_TEST123456',
+      VITE_COGNITO_USER_POOL_WEB_CLIENT_ID: 'test-client-id-123456',
+      VITE_AWS_REGION: 'us-east-1',
+      VITE_API_ENDPOINT: 'https://test-api.execute-api.us-east-1.amazonaws.com',
+      VITE_API_STAGE: 'dev',
+      VITE_S3_BUCKET: 'test-vfs-tracker-bucket',
+    },
+    include: [
+      'tests/**/*.test.{js,jsx}',
+      'src/**/*.test.{js,jsx}'
+    ],
+    exclude: [
+      'node_modules',
+      'dist',
+      'tests/legacy/**',
+      '.idea',
+      '.git',
+      'build'
+    ],
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'json', 'html', 'lcov'],
+      include: ['src/**/*.{js,jsx}'],
+      exclude: [
+        'src/main.jsx',
+        'src/**/*.test.{js,jsx}',
+        'src/test-utils/**',
+        'src/mock_data.json',
+        'src/assets/**',
+      ],
+      thresholds: {
+        lines: 50,
+        functions: 50,
+        branches: 40,
+        statements: 50,
+      }
+    },
+    testTimeout: 10000,
+    hookTimeout: 10000,
+  },
 })

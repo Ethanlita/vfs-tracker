@@ -22,3 +22,80 @@
   
 ## 前端组件
 - **样式**: 注意UI的美观，创建和修改页面组件时要确保其外观风格和这个项目中其他地方一致。样式要符合Tailwind CSS的最佳实践。
+
+## 测试框架 / Testing Framework
+- **测试技术栈 / Testing Stack**: 
+  - **Vitest**: 测试运行器,使用 jsdom 环境模拟浏览器 DOM
+  - **React Testing Library**: React 组件测试
+  - **MSW (Mock Service Worker)**: 网络级请求拦截和模拟
+  - **Joi**: Schema 定义和数据验证
+  
+- **测试类型 / Test Types**:
+  - **单元测试 / Unit Tests** (`tests/unit/`): 测试独立函数、schema 验证
+    - 运行: `npm run test:unit`
+    - 所有单元测试应该通过 ✅
+  - **集成测试 / Integration Tests** (`tests/integration/`): 测试 API 和组件的完整流程
+    - 运行: `npm run test:integration`
+    - ⚠️ 部分失败是预期的 - 这些测试定义了 Phase 3.2 的重构规范
+  - **契约测试 / Contract Tests** (`tests/contract/`): 验证真实 API 遵守数据契约
+    - 运行: `npm run test:contract`
+    - ⚠️ 需要完整的 AWS 环境变量配置（见 `docs/CONTRACT_TEST_ENVIRONMENT.md`）
+    - ⚠️ `.env.contract` 中的测试账户是**真实有效的**，不是占位符！
+
+- **Schema 定义 / Schema Definitions** (`src/api/schemas.js`):
+  - 使用 Joi 定义所有数据结构
+  - Schemas 是整个项目的数据契约,必须先更新 schemas 再修改 API
+  - 包括: User, Profile, Event (所有类型), API Responses
+  - 提供 `validateData(data, schema)` 辅助函数
+
+- **测试数据 / Test Fixtures** (`src/test-utils/fixtures/`):
+  - **用户 fixtures**: complete-profile, minimal-profile, public-profile, private-profile
+  - **事件 fixtures**: self-test (complete, minimal), surgery, feeling-log 等
+  - 所有 fixtures 必须符合对应的 schema 定义
+  - 中央导出: `import { fixtures } from 'src/test-utils/fixtures'`
+
+- **MSW Handlers** (`src/test-utils/mocks/msw-handlers.js`):
+  - 定义了 9 个 API 端点的 mock handlers
+  - 在测试中自动拦截网络请求
+  - 可以在单个测试中使用 `server.use()` 覆盖默认行为
+
+- **编写测试的规则 / Test Writing Rules**:
+  1. **新功能必须有测试**: 添加新 API 或组件时,同时创建对应的测试
+  2. **Schema 先行**: 先在 `schemas.js` 中定义数据结构,然后编写验证测试
+  3. **使用 fixtures**: 不要在测试中手动构造测试数据,使用或创建 fixtures
+  4. **测试独立性**: 每个测试应该独立运行,不依赖其他测试的状态
+  5. **描述性命名**: 测试名称应该清楚描述测试的场景和预期结果
+  6. **AAA 模式**: Arrange (准备) → Act (执行) → Assert (断言)
+
+- **测试工具函数 / Test Utilities**:
+  - `src/test-utils/test-helpers.js`: 通用测试辅助函数
+  - `src/test-utils/custom-render.jsx`: React 组件渲染包装器
+  - `src/test-utils/mocks/amplify-auth.js`: Amplify Auth mock
+
+- **重要文档 / Important Docs**:
+  - 📖 [测试架构与工作流程](docs/TESTING_ARCHITECTURE.md) - **三层防御体系**和 Schema 驱动开发完整说明
+  - 📖 [完整测试指南](docs/TESTING_GUIDE.md) - 详细的测试编写和运行指南
+  - 📖 [契约测试说明](tests/contract/README.md) - 契约测试最佳实践
+  - � [契约测试环境配置](docs/CONTRACT_TEST_ENVIRONMENT.md) - **真实测试环境详情** (重要！)
+  - �📊 [Phase 3.1 状态报告](tests/PHASE3.1_STATUS.md) - 测试框架实施状态
+
+- **规范驱动开发 / Specification-Driven Development**:
+  - Phase 3.1 的集成测试定义了**理想的 API 和组件接口**
+  - ✅ **当前状态**: 所有测试通过 (94/94, 100%)
+  - 函数命名已统一: 测试使用实际的函数名 (`getAllEvents`, `getEventsByUserId`)
+  - Schema 作为单一真实来源，确保 Mock 和真实 API 100% 一致
+
+- **测试前检查 / Pre-Test Checklist**:
+  ```bash
+  # 1. 运行单元测试确保 schemas 正确
+  npm run test:unit
+  
+  # 2. 如果修改了 API,运行相关集成测试
+  npm test -- tests/integration/api/
+  
+  # 3. 如果修改了组件,运行组件测试
+  npm test -- tests/integration/components/
+  
+  # 4. 查看覆盖率报告
+  npm run test:coverage
+  ```

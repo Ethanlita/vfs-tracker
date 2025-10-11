@@ -1,6 +1,68 @@
 # VFS Tracker
 
-一个用于记录与分析 VFS（Voice Feminization Surgery）相关语音事件的开源应用。前端基于 React + Vite，样式采用 Tailwind CSS；在具备云配置时通过 AWS Serverless（Cognito、API Gateway、Lambda、DynamoDB）提供鉴权、API 与存储。缺省情况下使用本地模拟数据运行，无需云账号即可体验。
+一个用于记录与分析 VFS（Voice Feminization Surgery）相关语音事件的开## 测试 (Testing)
+
+项目使用 **Vitest + jsdom + MSW + React Testing Library** 构建现代化测试框架。
+
+### 快速开始
+```bash
+# 运行所有测试 (交互式)
+npm test
+
+# 运行测试并生成覆盖率报告
+npm run test:coverage
+
+# 可视化测试 UI
+npm run test:ui
+
+# 只运行单元测试 (快速验证)
+npm run test:unit
+
+# 只运行集成测试
+npm run test:integration
+
+# 运行契约测试 (需要真实 API 配置)
+npm run test:contract
+```
+
+### 测试架构
+- **Unit Tests** (单元测试): 测试独立函数和 schema 验证
+  - ✅ `tests/unit/api/schemas.test.js` - 全部 28 个测试通过
+- **Integration Tests** (集成测试): 使用 MSW 模拟 API 调用测试完整流程
+  - `tests/integration/api/` - API 层集成测试
+  - `tests/integration/components/` - React 组件集成测试
+  - ⚠️ 部分失败是预期的 - 这些测试定义了 Phase 3.2 的重构规范
+- **Contract Tests** (契约测试): 调用真实 API 验证数据契约
+  - `tests/contract/api-contract.test.js`
+  - 需要完整的 AWS 环境变量配置
+
+### 重要文档
+- 📖 **[完整测试指南](docs/TESTING_GUIDE.md)** - 500+ 行详细文档
+- 📖 **[契约测试说明](tests/contract/README.md)** - 契约测试使用指南
+- 📊 **[Phase 3.1 状态报告](tests/PHASE3.1_STATUS.md)** - 测试框架实施状态
+
+### 测试数据
+- **Schemas** (`src/api/schemas.js`): 使用 Joi 定义所有数据结构的契约
+- **Fixtures** (`src/test-utils/fixtures/`): 丰富的测试数据
+  - 4 种用户 profiles (complete, minimal, public, private)
+  - 5 种事件 fixtures (self_test, surgery, feeling_log 等)
+- **MSW Handlers** (`src/test-utils/mocks/`): 模拟 API 响应
+
+> 💡 **注意**: 集成测试的部分失败是预期的。这些测试采用**规范驱动开发 (Specification-Driven Development)** 方法，定义了理想的 API 和组件接口。Phase 3.2 将重构实际代码以匹配这些规范。详见 [Phase 3.1 状态报告](tests/PHASE3.1_STATUS.md)。
+
+## 环境变量与 isProductionReady
+
+项目通过 isProductionReady 决定是否启用真实云服务：
+- 必需变量（全部存在且非空才视为"生产就绪" Production Ready）：
+  - VITE_COGNITO_USER_POOL_ID
+  - VITE_COGNITO_USER_POOL_WEB_CLIENT_ID
+  - VITE_AWS_REGION
+  - VITE_API_ENDPOINT（统一 API 入口，例如 https://api.vfs-tracker.app）
+  - VITE_S3_BUCKET（用户文件所使用的 S3 Bucket 名称）
+- 可选变量：
+  - VITE_GOOGLE_GEMINI_API（用于生成 AI 鼓励消息，仅生产环境使用）
+
+> isProductionReady 会在上述任意一个配置缺失时返回 `false`，前端自动落入"开发模式"。只要全部配置齐全，就会被视为生产模式并走真实云端流程。t + Vite，样式采用 Tailwind CSS；在具备云配置时通过 AWS Serverless（Cognito、API Gateway、Lambda、DynamoDB）提供鉴权、API 与存储。缺省情况下使用本地模拟数据运行，无需云账号即可体验。
 
 - **在线演示与文档**: 请参考本仓库主页、[架构文档](ARCHITECTURE.md)和[API文档](API_Gateway_Documentation.md)。
 - **代码许可与贡献**: 参见 [CONTRIBUTION.md](CONTRIBUTION.md)。
