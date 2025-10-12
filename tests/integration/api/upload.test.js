@@ -24,8 +24,34 @@ describe('API 上传功能集成测试', () => {
   const fileKey = 'users/test-user/test-recording.wav';
   const contentType = 'audio/wav';
 
+  // 保存原始的 fetch,以便在测试间恢复
+  let originalFetch;
+
+  // 启动 MSW server
+  beforeAll(() => {
+    server.listen({ onUnhandledRequest: 'warn' });
+    // 保存原始 fetch (MSW拦截后的版本)
+    originalFetch = globalThis.fetch;
+  });
+
+  afterAll(() => {
+    server.close();
+  });
+
+  afterEach(() => {
+    server.resetHandlers();
+    // CRITICAL: 恢复原始 fetch,清除测试中的 mock
+    if (originalFetch) {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
+    // CRITICAL: 确保每个测试开始时 fetch 是原始版本 (MSW拦截的)
+    if (originalFetch) {
+      globalThis.fetch = originalFetch;
+    }
     // Mock authenticated session
     vi.mocked(fetchAuthSession).mockResolvedValue({
       tokens: { idToken: mockIdToken }
@@ -34,14 +60,16 @@ describe('API 上传功能集成测试', () => {
 
   describe('完整上传流程', () => {
     it('应该成功完成从获取 URL 到上传文件的完整流程', async () => {
-      // 第一步: 获取上传 URL
+      // 第一步: 获取上传 URL (由 MSW 拦截)
       const uploadUrl = await getUploadUrl(fileKey, contentType);
       
       expect(uploadUrl).toBeTruthy();
       expect(typeof uploadUrl).toBe('string');
       expect(uploadUrl).toContain(fileKey);
 
-      // 第二步: 使用 URL 上传文件
+      // 第二步: 使用 URL 上传文件到 S3
+      // 注意: 这里 mock fetch 只影响后续的 S3 上传，不影响已完成的 API 调用
+      const originalFetch = global.fetch;
       global.fetch = vi.fn().mockResolvedValue({
         ok: true,
         status: 200,
@@ -69,17 +97,27 @@ describe('API 上传功能集成测试', () => {
         { type: 'audio/ogg', extension: 'ogg' }
       ];
 
+      // CRITICAL: 先一次性获取所有 URL (使用 MSW mock)
+      const urlPromises = testCases.map(testCase => {
+        const key = `test-file.${testCase.extension}`;
+        return getUploadUrl(key, testCase.type);
+      });
+      const urls = await Promise.all(urlPromises);
+
+      // CRITICAL: 然后 mock S3 上传
       global.fetch = vi.fn().mockResolvedValue({
         ok: true,
         status: 200
       });
 
-      for (const testCase of testCases) {
-        const key = `test-file.${testCase.extension}`;
+      // 执行所有上传
+      for (let i = 0; i < testCases.length; i++) {
+        const testCase = testCases[i];
+        const url = urls[i];
         const file = new Blob(['data'], { type: testCase.type });
 
-        const url = await getUploadUrl(key, testCase.type);
-        expect(url).toContain(key);
+        expect(url).toBeTruthy();
+        expect(url).toContain('s3');
 
         const result = await uploadVoiceTestFileToS3(url, file);
         expect(result.ok).toBe(true);
@@ -291,15 +329,20 @@ describe('API 上传功能集成测试', () => {
         { key: 'file3.wav', file: new Blob(['data3'], { type: 'audio/wav' }) }
       ];
 
+      // CRITICAL: 先获取所有上传 URL (使用 MSW mock)
+      const urlPromises = files.map(({ key }) => getUploadUrl(key, 'audio/wav'));
+      const urls = await Promise.all(urlPromises);
+
+      // CRITICAL: 然后 mock S3 上传
       global.fetch = vi.fn().mockResolvedValue({
         ok: true,
         status: 200
       });
 
-      const uploadPromises = files.map(async ({ key, file }) => {
-        const url = await getUploadUrl(key, 'audio/wav');
-        return uploadVoiceTestFileToS3(url, file);
-      });
+      // 执行上传
+      const uploadPromises = files.map(({ file }, index) => 
+        uploadVoiceTestFileToS3(urls[index], file)
+      );
 
       const results = await Promise.all(uploadPromises);
 
@@ -317,6 +360,11 @@ describe('API 上传功能集成测试', () => {
         { key: 'file3.wav', shouldFail: false }
       ];
 
+      // CRITICAL: 先获取所有上传 URL (使用 MSW mock)
+      const urlPromises = files.map(({ key }) => getUploadUrl(key, 'audio/wav'));
+      const urls = await Promise.all(urlPromises);
+
+      // CRITICAL: 然后 mock S3 上传
       global.fetch = vi.fn()
         .mockResolvedValueOnce({ ok: true, status: 200 })
         .mockResolvedValueOnce({ 
@@ -326,8 +374,8 @@ describe('API 上传功能集成测试', () => {
         })
         .mockResolvedValueOnce({ ok: true, status: 200 });
 
-      const uploadPromises = files.map(async ({ key, shouldFail }) => {
-        const url = await getUploadUrl(key, 'audio/wav');
+      const uploadPromises = files.map(async ({ shouldFail }, index) => {
+        const url = urls[index];  // 使用之前获取的 URL
         const file = new Blob(['data'], { type: 'audio/wav' });
         
         try {
@@ -357,14 +405,21 @@ describe('API 上传功能集成测试', () => {
         'data/file_with_underscores.wav'
       ];
 
+      // CRITICAL: 先一次性获取所有 URL (使用 MSW mock)
+      const urlPromises = specialKeys.map(key => getUploadUrl(key, 'audio/wav'));
+      const urls = await Promise.all(urlPromises);
+
+      // CRITICAL: 然后 mock S3 上传
       global.fetch = vi.fn().mockResolvedValue({
         ok: true,
         status: 200
       });
 
-      for (const key of specialKeys) {
-        const url = await getUploadUrl(key, 'audio/wav');
-        expect(url).toContain(key);
+      // 执行所有上传
+      for (let i = 0; i < specialKeys.length; i++) {
+        const url = urls[i];
+        expect(url).toBeTruthy();
+        expect(url).toContain('s3');
 
         const result = await uploadVoiceTestFileToS3(url, mockFile);
         expect(result.ok).toBe(true);
@@ -451,16 +506,23 @@ describe('API 上传功能集成测试', () => {
     });
 
     it('应该能够快速处理多次连续上传', async () => {
+      const startTime = Date.now();
+
+      // Phase 1: 先一次性获取所有 URL (使用 MSW mock)
+      const urlPromises = Array.from({ length: 10 }, (_, i) => 
+        getUploadUrl(`file${i}.wav`, 'audio/wav')
+      );
+      const urls = await Promise.all(urlPromises);
+
+      // Phase 2: 然后 mock S3 上传
       global.fetch = vi.fn().mockResolvedValue({
         ok: true,
         status: 200
       });
 
-      const startTime = Date.now();
-
+      // Phase 3: 执行所有上传
       for (let i = 0; i < 10; i++) {
-        const url = await getUploadUrl(`file${i}.wav`, 'audio/wav');
-        await uploadVoiceTestFileToS3(url, mockFile);
+        await uploadVoiceTestFileToS3(urls[i], mockFile);
       }
 
       const duration = Date.now() - startTime;

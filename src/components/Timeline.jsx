@@ -340,7 +340,7 @@ const Timeline = () => {
   const actions = generateTimelineActions(timelineEvents);
 
   return (
-    <div className="dashboard-container relative px-3 sm:px-0">
+    <div className="dashboard-container relative px-3 sm:px-0" data-testid="timeline">
       {/* 装饰性背景元素 */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-pink-300 rounded-full mix-blend-multiply filter blur-xl opacity-30 animate-blob"></div>

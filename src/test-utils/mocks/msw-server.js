@@ -12,5 +12,18 @@ import { handlers } from './msw-handlers.js';
  */
 export const server = setupServer(...handlers);
 
+// 添加事件监听器来调试请求拦截
+server.events.on('request:start', ({ request }) => {
+  console.log('[MSW Event] Request intercepted:', request.method, request.url);
+});
+
+server.events.on('request:match', ({ request }) => {
+  console.log('[MSW Event] Request matched handler:', request.method, request.url);
+});
+
+server.events.on('request:unhandled', ({ request }) => {
+  console.log('[MSW Event] Unhandled request:', request.method, request.url);
+});
+
 // 导出便捷方法
 export const { use, resetHandlers, restoreHandlers, close, listen } = server;
