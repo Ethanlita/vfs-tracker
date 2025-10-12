@@ -30,14 +30,82 @@ vi.mock('aws-amplify/api', () => {
     const fetchPromise = globalThis.fetch(url, options);
     
     return {
-      response: fetchPromise.then(response => ({
-        statusCode: response.status,
-        body: {
-          json: () => response.json(),
-          text: () => response.text(),
-          blob: () => response.blob(),
+      response: fetchPromise.then(async response => {
+        console.log('[Amplify Mock] Raw response object keys:', Object.keys(response));
+        console.log('[Amplify Mock] Response type:', typeof response);
+        console.log('[Amplify Mock] Is Response instance:', response instanceof Response);
+        console.log('[Amplify Mock] Has json method:', typeof response.json);
+        console.log('[Amplify Mock] Has text method:', typeof response.text);
+        console.log('[Amplify Mock] Has headers:', !!response.headers);
+        console.log('[Amplify Mock] Received response:', {
+          status: response.status,
+          ok: response.ok,
+          statusText: response.statusText
+        });
+        
+        // 预先读取响应数据 (因为 Response body 只能读取一次)
+        let responseData;
+        // 安全地访问 headers
+        const contentType = response.headers?.get ? response.headers.get('content-type') : null;
+        console.log('[Amplify Mock] Content-Type header:', contentType);
+        console.log('[Amplify Mock] Attempting to parse response...');
+        
+        try {
+          if (contentType && contentType.includes('application/json')) {
+            console.log('[Amplify Mock] Parsing as JSON...');
+            responseData = await response.json();
+            console.log('[Amplify Mock] Parsed JSON responseData:', responseData);
+          } else {
+            console.log('[Amplify Mock] Parsing as text...');
+            responseData = await response.text();
+            console.log('[Amplify Mock] Parsed text responseData:', responseData);
+          }
+        } catch (error) {
+          // 如果读取失败,使用空对象
+          console.error('[Amplify Mock] ERROR parsing response!');
+          console.error('[Amplify Mock] Error type:', error.constructor.name);
+          console.error('[Amplify Mock] Error message:', error.message);
+          console.error('[Amplify Mock] Error stack:', error.stack);
+          responseData = null;
         }
-      }))
+        
+        // 对于错误响应,抛出错误
+        if (!response.ok) {
+          const errorMessage = 
+            responseData?.error || 
+            responseData?.message || 
+            (typeof responseData === 'string' ? responseData : null) ||
+            response.statusText ||
+            'Request failed';
+          
+          const error = new Error(errorMessage);
+          error.statusCode = response.status;
+          error.status = response.status;
+          error.$metadata = { httpStatusCode: response.status };
+          throw error;
+        }
+        
+        // 成功响应: 返回缓存的数据
+        // 确保 headers 是一个对象，提供 get 方法
+        // 如果 response.headers 不存在或没有 get 方法,创建一个 Mock Headers 对象
+        const headers = response.headers || {
+          get: () => null,
+          has: () => false,
+          entries: () => [],
+          keys: () => [],
+          values: () => [],
+        };
+        
+        return {
+          statusCode: response.status,
+          headers: headers,
+          body: {
+            json: () => Promise.resolve(responseData),
+            text: () => Promise.resolve(typeof responseData === 'string' ? responseData : JSON.stringify(responseData)),
+            blob: () => Promise.reject(new Error('Blob not supported in test environment')),
+          }
+        };
+      })
     };
   };
 
@@ -55,6 +123,8 @@ vi.mock('aws-amplify/api', () => {
     post: vi.fn(({ apiName, path, options = {} }) => {
       const baseUrl = getFullApiEndpoint();
       const url = `${baseUrl}${path}`;
+      console.log('[Amplify Mock] POST request to:', url);
+      console.log('[Amplify Mock] Request body:', options.body);
       
       return createAmplifyResponse(url, {
         method: 'POST',

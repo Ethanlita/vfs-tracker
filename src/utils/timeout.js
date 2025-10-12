@@ -159,7 +159,21 @@ export function withTimeout(promise, timeoutMs, context = {}) {
  * });
  */
 export async function withAmplifyTimeout(operation, timeoutMs, context = {}) {
-  const responsePromise = operation.response.then(({ body }) => body.json());
+  const responsePromise = operation.response
+    .then(({ body }) => {
+      console.log('[withAmplifyTimeout] Got body, calling body.json()');
+      return body.json();
+    })
+    .then(data => {
+      console.log('[withAmplifyTimeout] Parsed JSON data:', data);
+      return data;
+    })
+    .catch(error => {
+      console.error('[withAmplifyTimeout] Error:', error);
+      // 如果 response promise 被 reject,直接重新抛出
+      // 这样错误会被 withTimeout 或外层 catch 捕获
+      throw error;
+    });
   return withTimeout(responsePromise, timeoutMs, context);
 }
 

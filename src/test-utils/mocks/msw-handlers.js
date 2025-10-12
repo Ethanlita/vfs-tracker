@@ -204,26 +204,30 @@ const getUserPublicProfileHandler = http.get(`${API_URL}/user/:userId/public`, (
 const getUploadUrlHandler = http.post(`${API_URL}/upload-url`, async ({ request }) => {
   console.log('[MSW] Handling POST /upload-url');
   
+  // CRITICAL: 使用 request.clone() 读取请求体,不会消费原始请求
+  // 这样 Amplify mock 仍然可以读取 body
+  let fileKey = 'test/file.mp3'; // 默认值
+  let contentType = 'audio/mpeg'; // 默认值
+  
   try {
-    const body = await request.json();
-    const { fileKey, contentType } = body;
-    console.log('[MSW] Upload URL request:', { fileKey, contentType });
-    
-    // 模拟预签名 URL（包含时间戳）
-    const timestamp = Date.now();
-    const mockUploadUrl = `https://mock-s3-bucket.s3.amazonaws.com/${fileKey}?X-Amz-Signature=mock&timestamp=${timestamp}&Content-Type=${encodeURIComponent(contentType)}`;
-    
-    // 真实 API 返回 {uploadUrl: string}
-    return HttpResponse.json({
-      uploadUrl: mockUploadUrl,
-    });
+    const clonedRequest = request.clone();
+    const body = await clonedRequest.json();
+    if (body.fileKey) fileKey = body.fileKey;
+    if (body.contentType) contentType = body.contentType;
   } catch (error) {
-    console.error('[MSW] Error parsing request body:', error);
-    return HttpResponse.json(
-      { error: 'Invalid request body' },
-      { status: 400 }
-    );
+    console.warn('[MSW] Could not read request body, using defaults');
   }
+  
+  // 模拟预签名 URL（包含时间戳和真实的fileKey）
+  const timestamp = Date.now();
+  const encodedContentType = encodeURIComponent(contentType);
+  const mockUploadUrl = `https://mock-s3-bucket.s3.amazonaws.com/${fileKey}?X-Amz-Signature=mock&timestamp=${timestamp}&Content-Type=${encodedContentType}`;
+  
+  const responseData = { uploadUrl: mockUploadUrl };
+  console.log('[MSW] Returning response:', responseData);
+  
+  // 真实 API 返回 {uploadUrl: string}
+  return HttpResponse.json(responseData);
 });
 
 /**
