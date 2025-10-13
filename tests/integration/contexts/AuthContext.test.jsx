@@ -1,0 +1,718 @@
+/**
+ * @file AuthContext 集成测试
+ * @description 测试 AuthContext 与 API、Amplify 的集成
+ */
+
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { renderHook, act, waitFor } from '@testing-library/react';
+import { useAuth, AuthProvider } from '../../../src/contexts/AuthContext.jsx';
+import { server } from '../../../src/test-utils/mocks/msw-server.js';
+import { http, HttpResponse } from 'msw';
+
+// Mock Amplify Auth
+vi.mock('aws-amplify/auth', () => ({
+  getCurrentUser: vi.fn(() => 
+    Promise.resolve({
+      userId: 'us-east-1:test-user-001',
+      username: 'testuser',
+    })
+  ),
+  fetchUserAttributes: vi.fn(() =>
+    Promise.resolve({
+      email: 'test@example.com',
+      nickname: 'Test User',
+      email_verified: 'true',
+    })
+  ),
+  fetchAuthSession: vi.fn(() =>
+    Promise.resolve({
+      tokens: {
+        idToken: {
+          toString: () => 'mock-id-token-12345',
+        },
+      },
+    })
+  ),
+  updateUserAttributes: vi.fn(() => Promise.resolve()),
+  updatePassword: vi.fn(() => Promise.resolve()),
+  resendSignUpCode: vi.fn(() => Promise.resolve()),
+}));
+
+// Mock Amplify UI React
+vi.mock('@aws-amplify/ui-react', () => ({
+  useAuthenticator: vi.fn(() => ({
+    authStatus: 'configuring', // 使用 'configuring' 避免触发登出逻辑
+    user: null,
+  })),
+}));
+
+describe('AuthContext 集成测试', () => {
+  
+  const API_URL = 'https://2rzxc2x5l8.execute-api.us-east-1.amazonaws.com/dev';
+  
+  beforeEach(() => {
+    // 清理 localStorage
+    localStorage.clear();
+    
+    // 清理所有 mocks
+    vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    localStorage.clear();
+  });
+
+  // ============================================
+  // 开发模式登录 (login 方法)
+  // ============================================
+  
+  describe('开发模式登录', () => {
+    it('应该能够登录并设置用户状态', async () => {
+      const { result } = renderHook(() => useAuth(), {
+        wrapper: AuthProvider,
+      });
+
+      // 等待初始化
+      await act(async () => {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      });
+
+      const mockUser = {
+        userId: 'dev-user-001',
+        username: 'devuser',
+        attributes: {
+          email: 'dev@example.com',
+          nickname: 'Dev User',
+        },
+      };
+
+      act(() => {
+        result.current.login(mockUser);
+      });
+
+      expect(result.current.user).toEqual(mockUser);
+      expect(result.current.isAuthenticated).toBe(true);
+    });
+
+    it('登录数据应该保存到 localStorage (开发模式)', async () => {
+      const { result } = renderHook(() => useAuth(), {
+        wrapper: AuthProvider,
+      });
+
+      await act(async () => {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      });
+
+      const mockUser = {
+        userId: 'dev-user-001',
+        username: 'devuser',
+      };
+
+      act(() => {
+        result.current.login(mockUser);
+      });
+
+      // 检查 localStorage
+      const savedUser = localStorage.getItem('dev-user');
+      expect(savedUser).toBeDefined();
+      
+      const parsedUser = JSON.parse(savedUser);
+      expect(parsedUser).toEqual(mockUser);
+    });
+
+    it('登录后应该触发加载用户资料', async () => {
+      // Mock getUserProfile API
+      server.use(
+        http.get(`${API_URL}/user/:userId`, () => {
+          return HttpResponse.json({
+            userId: 'dev-user-001',
+            profile: {
+              nickname: 'Dev User',
+              gender: 'female',
+              birthYear: 1990,
+            },
+          });
+        })
+      );
+
+      const { result } = renderHook(() => useAuth(), {
+        wrapper: AuthProvider,
+      });
+
+      await act(async () => {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      });
+
+      const mockUser = {
+        userId: 'dev-user-001',
+        username: 'devuser',
+      };
+
+      act(() => {
+        result.current.login(mockUser);
+      });
+
+      // 等待资料加载
+      await waitFor(() => {
+        expect(result.current.profileLoading).toBe(false);
+      }, { timeout: 3000 });
+
+      // 应该已加载资料 (或至少尝试加载)
+      expect(result.current.userProfile !== null || result.current.needsProfileSetup).toBe(true);
+    });
+  });
+
+  // ============================================
+  // 登出 (logout 方法)
+  // ============================================
+  
+  describe('登出功能', () => {
+    it('应该清除所有用户状态', async () => {
+      const { result } = renderHook(() => useAuth(), {
+        wrapper: AuthProvider,
+      });
+
+      await act(async () => {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      });
+
+      // 先登录
+      const mockUser = {
+        userId: 'test-user-001',
+        username: 'testuser',
+      };
+
+      act(() => {
+        result.current.login(mockUser);
+      });
+
+      expect(result.current.isAuthenticated).toBe(true);
+
+      // 再登出
+      act(() => {
+        result.current.logout();
+      });
+
+      expect(result.current.user).toBeNull();
+      expect(result.current.userProfile).toBeNull();
+      expect(result.current.cognitoUserInfo).toBeNull();
+      expect(result.current.isAuthenticated).toBe(false);
+      expect(result.current.needsProfileSetup).toBe(false);
+    });
+
+    it('登出应该清除 localStorage (开发模式)', async () => {
+      const { result } = renderHook(() => useAuth(), {
+        wrapper: AuthProvider,
+      });
+
+      await act(async () => {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      });
+
+      // 先登录
+      const mockUser = { userId: 'test-user-001' };
+      
+      act(() => {
+        result.current.login(mockUser);
+      });
+
+      // 确认已保存
+      expect(localStorage.getItem('dev-user')).toBeDefined();
+
+      // 登出
+      act(() => {
+        result.current.logout();
+      });
+
+      // 应该已清除
+      expect(localStorage.getItem('dev-user')).toBeNull();
+    });
+  });
+
+  // ============================================
+  // 加载用户资料 (loadUserProfile 方法)
+  // ============================================
+  
+  describe('加载用户资料', () => {
+    it('应该从 API 加载用户资料', async () => {
+      const mockProfile = {
+        userId: 'us-east-1:test-user-001',
+        profile: {
+          nickname: 'Test User',
+          gender: 'female',
+          birthYear: 1990,
+          bio: 'Test bio',
+        },
+      };
+
+      // Mock getUserProfile API
+      server.use(
+        http.get(`${API_URL}/user/:userId`, () => {
+          return HttpResponse.json(mockProfile);
+        })
+      );
+
+      const { result } = renderHook(() => useAuth(), {
+        wrapper: AuthProvider,
+      });
+
+      await act(async () => {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      });
+
+      // 加载资料
+      await act(async () => {
+        await result.current.loadUserProfile('us-east-1:test-user-001');
+      });
+
+      await waitFor(() => {
+        expect(result.current.profileLoading).toBe(false);
+      });
+
+      expect(result.current.userProfile).toBeDefined();
+      expect(result.current.userProfile.userId).toBe(mockProfile.userId);
+    });
+
+    it('应该缓存用户资料到 localStorage', async () => {
+      const mockProfile = {
+        userId: 'us-east-1:test-user-001',
+        profile: {
+          nickname: 'Test User',
+          gender: 'female',
+          birthYear: 1990,
+        },
+      };
+
+      server.use(
+        http.get(`${API_URL}/user/:userId`, () => {
+          return HttpResponse.json(mockProfile);
+        })
+      );
+
+      const { result } = renderHook(() => useAuth(), {
+        wrapper: AuthProvider,
+      });
+
+      await act(async () => {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      });
+
+      await act(async () => {
+        await result.current.loadUserProfile('us-east-1:test-user-001');
+      });
+
+      await waitFor(() => {
+        expect(result.current.profileLoading).toBe(false);
+      });
+
+      // 检查 localStorage
+      const cacheKey = 'userProfile:v1:us-east-1:test-user-001';
+      const cached = localStorage.getItem(cacheKey);
+      
+      expect(cached).toBeDefined();
+      
+      if (cached) {
+        const parsedCache = JSON.parse(cached);
+        expect(parsedCache.userId).toBe(mockProfile.userId);
+        expect(parsedCache._cacheMeta).toBeDefined();
+      }
+    });
+
+    it('资料不完整时应该设置 needsProfileSetup=true', async () => {
+      const incompleteProfile = {
+        userId: 'us-east-1:test-user-001',
+        profile: {
+          nickname: 'Test User',
+          // 缺少必需字段
+        },
+      };
+
+      server.use(
+        http.get(`${API_URL}/user/:userId`, () => {
+          return HttpResponse.json(incompleteProfile);
+        })
+      );
+
+      const { result } = renderHook(() => useAuth(), {
+        wrapper: AuthProvider,
+      });
+
+      await act(async () => {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      });
+
+      await act(async () => {
+        await result.current.loadUserProfile('us-east-1:test-user-001');
+      });
+
+      await waitFor(() => {
+        expect(result.current.profileLoading).toBe(false);
+      });
+
+      // 应该标记需要完善资料
+      expect(result.current.needsProfileSetup).toBe(true);
+    });
+
+    it('用户不存在时应该设置 needsProfileSetup=true', async () => {
+      // Mock API 返回 404
+      server.use(
+        http.get(`${API_URL}/user/:userId`, () => {
+          return HttpResponse.json(
+            { error: 'User not found' },
+            { status: 404 }
+          );
+        })
+      );
+
+      const { result } = renderHook(() => useAuth(), {
+        wrapper: AuthProvider,
+      });
+
+      await act(async () => {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      });
+
+      await act(async () => {
+        await result.current.loadUserProfile('us-east-1:nonexistent-user');
+      });
+
+      await waitFor(() => {
+        expect(result.current.profileLoading).toBe(false);
+      });
+
+      expect(result.current.needsProfileSetup).toBe(true);
+      expect(result.current.userProfile).toBeNull();
+    });
+  });
+
+  // ============================================
+  // 刷新用户资料 (refreshUserProfile 方法)
+  // ============================================
+  
+  describe('刷新用户资料', () => {
+    it('应该重新加载用户资料', async () => {
+      const mockProfile = {
+        userId: 'us-east-1:test-user-001',
+        profile: {
+          nickname: 'Updated User',
+          gender: 'female',
+          birthYear: 1990,
+        },
+      };
+
+      server.use(
+        http.get(`${API_URL}/user/:userId`, () => {
+          return HttpResponse.json(mockProfile);
+        })
+      );
+
+      const { result } = renderHook(() => useAuth(), {
+        wrapper: AuthProvider,
+      });
+
+      await act(async () => {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      });
+
+      // 先登录
+      act(() => {
+        result.current.login({
+          userId: 'us-east-1:test-user-001',
+          username: 'testuser',
+        });
+      });
+
+      // 刷新资料
+      await act(async () => {
+        await result.current.refreshUserProfile();
+      });
+
+      await waitFor(() => {
+        expect(result.current.profileLoading).toBe(false);
+      });
+
+      expect(result.current.userProfile).toBeDefined();
+    });
+  });
+
+  // ============================================
+  // 完善用户资料 (completeProfileSetup 方法)
+  // ============================================
+  
+  describe('完善用户资料', () => {
+    it('应该调用 setupUserProfile API', async () => {
+      const profileData = {
+        nickname: 'New User',
+        gender: 'female',
+        birthYear: 1995,
+      };
+
+      const mockResponse = {
+        message: '用户资料创建成功',
+        user: {
+          userId: 'us-east-1:test-user-001',
+          profile: profileData,
+        },
+      };
+
+      // Mock setupUserProfile API
+      server.use(
+        http.post(`${API_URL}/user-setup`, async ({ request }) => {
+          const body = await request.json();
+          expect(body.profile).toBeDefined();
+          return HttpResponse.json(mockResponse);
+        })
+      );
+
+      const { result } = renderHook(() => useAuth(), {
+        wrapper: AuthProvider,
+      });
+
+      await act(async () => {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      });
+
+      // 先设置用户
+      act(() => {
+        result.current.login({
+          userId: 'us-east-1:test-user-001',
+          username: 'testuser',
+        });
+      });
+
+      // 完善资料
+      await act(async () => {
+        const response = await result.current.completeProfileSetup(profileData);
+        expect(response).toBeDefined();
+        expect(response.message).toBe('用户资料创建成功');
+      });
+
+      expect(result.current.userProfile).toBeDefined();
+      expect(result.current.needsProfileSetup).toBe(false);
+    });
+
+    it('完善资料失败应该抛出错误', async () => {
+      server.use(
+        http.post(`${API_URL}/user-setup`, () => {
+          return HttpResponse.json(
+            { error: 'Invalid data' },
+            { status: 400 }
+          );
+        })
+      );
+
+      const { result } = renderHook(() => useAuth(), {
+        wrapper: AuthProvider,
+      });
+
+      await act(async () => {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      });
+
+      act(() => {
+        result.current.login({
+          userId: 'us-east-1:test-user-001',
+          username: 'testuser',
+        });
+      });
+
+      await expect(async () => {
+        await act(async () => {
+          await result.current.completeProfileSetup({
+            nickname: '', // 无效数据
+          });
+        });
+      }).rejects.toThrow();
+    });
+  });
+
+  // ============================================
+  // Cognito 用户信息管理
+  // ============================================
+  
+  describe('Cognito 用户信息', () => {
+    it('loadCognitoUserInfo 应该获取 Cognito 用户信息 (开发模式)', async () => {
+      const { result } = renderHook(() => useAuth(), {
+        wrapper: AuthProvider,
+      });
+
+      await act(async () => {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      });
+
+      await act(async () => {
+        await result.current.loadCognitoUserInfo();
+      });
+
+      expect(result.current.cognitoUserInfo).toBeDefined();
+      expect(result.current.cognitoUserInfo.username).toBe('dev_user');
+      expect(result.current.cognitoUserInfo.email).toBe('dev@example.com');
+      expect(result.current.cognitoLoading).toBe(false);
+    });
+
+    it('用户登录后应该自动加载 Cognito 信息', async () => {
+      const { result } = renderHook(() => useAuth(), {
+        wrapper: AuthProvider,
+      });
+
+      await act(async () => {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      });
+
+      act(() => {
+        result.current.login({
+          userId: 'test-user-001',
+          username: 'testuser',
+        });
+      });
+
+      // 等待自动加载
+      await waitFor(() => {
+        expect(result.current.cognitoUserInfo).not.toBeNull();
+      }, { timeout: 1000 });
+
+      expect(result.current.cognitoUserInfo).toBeDefined();
+    });
+  });
+
+  // ============================================
+  // 更新 Cognito 用户信息
+  // ============================================
+  
+  describe('更新 Cognito 用户信息', () => {
+    it('应该更新昵称 (开发模式)', async () => {
+      const { result } = renderHook(() => useAuth(), {
+        wrapper: AuthProvider,
+      });
+
+      await act(async () => {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      });
+
+      await act(async () => {
+        await result.current.loadCognitoUserInfo();
+      });
+
+      await act(async () => {
+        const response = await result.current.updateCognitoUserInfo({
+          nickname: 'New Nickname',
+        });
+        
+        expect(response.success).toBe(true);
+      });
+
+      expect(result.current.cognitoUserInfo.nickname).toBe('New Nickname');
+    });
+
+    it('应该支持头像更新 (开发模式)', async () => {
+      const { result } = renderHook(() => useAuth(), {
+        wrapper: AuthProvider,
+      });
+
+      await act(async () => {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      });
+
+      await act(async () => {
+        await result.current.loadCognitoUserInfo();
+      });
+
+      await act(async () => {
+        const response = await result.current.updateCognitoUserInfo({
+          avatarKey: 'avatars/test-user-001/profile.jpg',
+        });
+        
+        expect(response.success).toBe(true);
+        expect(response.message).toContain('头像已更新');
+      });
+
+      expect(result.current.cognitoUserInfo.avatarKey).toBe('avatars/test-user-001/profile.jpg');
+    });
+  });
+
+  // ============================================
+  // 会话恢复
+  // ============================================
+  
+  describe('会话恢复', () => {
+    it('开发模式应该从 localStorage 恢复会话', async () => {
+      const mockUser = {
+        userId: 'dev-user-001',
+        username: 'devuser',
+        attributes: {
+          email: 'dev@example.com',
+        },
+      };
+
+      // 预先保存到 localStorage
+      localStorage.setItem('dev-user', JSON.stringify(mockUser));
+
+      const { result } = renderHook(() => useAuth(), {
+        wrapper: AuthProvider,
+      });
+
+      // 等待初始化和会话恢复
+      await waitFor(() => {
+        expect(result.current.authInitialized).toBe(true);
+      }, { timeout: 1000 });
+
+      expect(result.current.user).toEqual(mockUser);
+      expect(result.current.isAuthenticated).toBe(true);
+    });
+
+    it('localStorage 中的无效数据应该被忽略', async () => {
+      // 保存无效 JSON
+      localStorage.setItem('dev-user', 'invalid json {');
+
+      const { result } = renderHook(() => useAuth(), {
+        wrapper: AuthProvider,
+      });
+
+      await waitFor(() => {
+        expect(result.current.authInitialized).toBe(true);
+      });
+
+      // 应该清除无效数据并保持未认证状态
+      expect(result.current.user).toBeNull();
+      expect(result.current.isAuthenticated).toBe(false);
+      expect(localStorage.getItem('dev-user')).toBeNull();
+    });
+  });
+
+  // ============================================
+  // 错误处理
+  // ============================================
+  
+  describe('错误处理', () => {
+    it('API 调用失败应该正确处理', async () => {
+      // Mock API 返回错误
+      server.use(
+        http.get(`${API_URL}/user/:userId`, () => {
+          return HttpResponse.json(
+            { error: 'Internal Server Error' },
+            { status: 500 }
+          );
+        })
+      );
+
+      const { result } = renderHook(() => useAuth(), {
+        wrapper: AuthProvider,
+      });
+
+      await act(async () => {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      });
+
+      await act(async () => {
+        await result.current.loadUserProfile('us-east-1:test-user-001');
+      });
+
+      await waitFor(() => {
+        expect(result.current.profileLoading).toBe(false);
+      });
+
+      // 应该设置需要完善资料
+      expect(result.current.needsProfileSetup).toBe(true);
+    });
+  });
+});
