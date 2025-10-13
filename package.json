@@ -7,7 +7,7 @@
     "dev": "node scripts/generate-posts-list.js && vite",
     "prebuild": "node scripts/generate-posts-list.js",
     "build": "vite build",
-    "test": "vitest",
+    "test": "vitest run",
     "test:ui": "vitest --ui",
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
