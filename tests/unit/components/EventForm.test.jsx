@@ -90,6 +90,7 @@ describe('EventForm 组件测试', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.clearAllTimers(); // 清理所有未完成的定时器，防止测试环境销毁后触发
   });
 
   // --- 1. 基础渲染测试 (3-5 tests) ---
