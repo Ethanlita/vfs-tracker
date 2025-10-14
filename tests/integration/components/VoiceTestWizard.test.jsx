@@ -233,9 +233,8 @@ describe('VoiceTestWizard Component', () => {
     });
   });
 
-  // 录音步骤测试过于复杂，暂时跳过
-  // 这些测试需要完整的步骤导航逻辑，包括文件上传模拟
-  describe.skip('录音步骤', () => {
+  // 录音步骤测试 - 测试录音功能和文件上传
+  describe('录音步骤', () => {
     beforeEach(async () => {
       render(<VoiceTestWizard />);
 
@@ -252,12 +251,16 @@ describe('VoiceTestWizard Component', () => {
       });
     });
 
-    it('应该显示录音组件', () => {
-      expect(screen.getByTestId('recorder')).toBeInTheDocument();
+    it('应该显示录音组件', async () => {
+      await waitFor(() => {
+        expect(screen.getByTestId('recorder')).toBeInTheDocument();
+      });
     });
 
-    it('应该显示录音进度', () => {
-      expect(screen.getByText(/进度:/i)).toBeInTheDocument();
+    it('应该显示录音进度', async () => {
+      await waitFor(() => {
+        expect(screen.getByText(/进度:/i)).toBeInTheDocument();
+      });
     });
 
     it('录音完成应该上传文件', async () => {
@@ -301,12 +304,13 @@ describe('VoiceTestWizard Component', () => {
       await user.click(recordButton);
 
       await waitFor(() => {
-        expect(screen.getByText(/重试上传/i)).toBeInTheDocument();
+        expect(screen.getByText(/上传失败/i)).toBeInTheDocument();
       });
 
       api.uploadVoiceTestFileToS3.mockResolvedValueOnce(undefined);
 
-      const retryButton = screen.getByRole('button', { name: /重试上传/i });
+      // 按钮文本是"重试"而不是"重试上传"
+      const retryButton = screen.getByRole('button', { name: /^重试$/i });
       await user.click(retryButton);
 
       await waitFor(() => {
@@ -328,22 +332,35 @@ describe('VoiceTestWizard Component', () => {
 
     it('完成所有录音后"下一步"按钮应该可用', async () => {
       // 这个步骤需要2个录音
-      const recordButton = screen.getByRole('button', { name: /模拟录音完成/i });
       
       // 第一个录音
-      await user.click(recordButton);
+      const recordButton1 = screen.getByRole('button', { name: /模拟录音完成/i });
+      await user.click(recordButton1);
+      
+      // 等待第一次上传完成和UI更新
       await waitFor(() => {
-        expect(screen.getByText(/进度: 1/i)).toBeInTheDocument();
+        expect(api.uploadVoiceTestFileToS3).toHaveBeenCalledTimes(1);
+      });
+      
+      // 等待组件重新渲染显示新的进度
+      await waitFor(() => {
+        expect(screen.getByText(/进度.*1.*2/i)).toBeInTheDocument();
       });
 
       // 第二个录音
-      await user.click(recordButton);
+      const recordButton2 = screen.getByRole('button', { name: /模拟录音完成/i });
+      await user.click(recordButton2);
+      
+      // 等待第二次上传完成
       await waitFor(() => {
-        expect(screen.getByText(/进度: 2/i)).toBeInTheDocument();
+        expect(api.uploadVoiceTestFileToS3).toHaveBeenCalledTimes(2);
       });
 
-      const nextButton = screen.getByRole('button', { name: /下一步/i });
-      expect(nextButton).not.toBeDisabled();
+      // 验证所有录音完成后"下一步"按钮可用
+      await waitFor(() => {
+        const nextButton = screen.getByRole('button', { name: /下一步/i });
+        expect(nextButton).not.toBeDisabled();
+      });
     });
 
     it('未完成所有录音时"下一步"应该被禁用', () => {
@@ -352,28 +369,65 @@ describe('VoiceTestWizard Component', () => {
     });
   });
 
-  // 问卷步骤测试过于复杂，暂时跳过
-  describe.skip('问卷步骤', () => {
-    beforeEach(async () => {
+  // 问卷步骤测试 - 测试主观量表填写
+  // 通过快速模拟录音和导航到达问卷步骤
+  describe('问卷步骤', () => {
+    /**
+     * 辅助函数:快速导航到问卷步骤
+     * 自动完成所有需要录音的步骤
+     */
+    const navigateToSurveyStep = async () => {
       render(<VoiceTestWizard />);
 
+      // 等待初始化完成
       await waitFor(() => {
         expect(screen.getByText(/说明与同意/i)).toBeInTheDocument();
       });
 
-      // 跳到问卷步骤（第7步）
-      // 这里简化处理，多次点击下一步
-      for (let i = 0; i < 7; i++) {
-        const nextButton = screen.getByRole('button', { name: /下一步/i });
-        await user.click(nextButton);
-        await act(async () => {
-          await new Promise(resolve => setTimeout(resolve, 50));
+      // 步骤0: 说明与同意 - 点击下一步
+      let nextButton = screen.getByRole('button', { name: /下一步/i });
+      await user.click(nextButton);
+      
+      // 步骤1-6: 所有需要录音的步骤
+      // 步骤1: 设备与环境校准 (需要2个录音)
+      for (let step = 1; step <= 6; step++) {
+        await waitFor(() => {
+          expect(screen.getByTestId('recorder')).toBeInTheDocument();
         });
+        
+        // 获取当前步骤需要的录音数量
+        const stepInfo = screen.getByText(/进度:/i).textContent;
+        const match = stepInfo.match(/(\d+)/g);
+        const totalRecordings = match ? parseInt(match[1]) : 1;
+        
+        // 完成所有需要的录音
+        for (let i = 0; i < totalRecordings; i++) {
+          const recordButton = screen.getByRole('button', { name: /模拟录音完成/i });
+          await user.click(recordButton);
+          
+          // 等待上传完成
+          await waitFor(() => {
+            expect(api.uploadVoiceTestFileToS3).toHaveBeenCalled();
+          });
+        }
+        
+        // 点击下一步进入下一个步骤
+        await waitFor(() => {
+          const btn = screen.getByRole('button', { name: /下一步/i });
+          expect(btn).not.toBeDisabled();
+        });
+        nextButton = screen.getByRole('button', { name: /下一步/i });
+        await user.click(nextButton);
       }
 
+      // 应该到达问卷步骤(步骤7)
       await waitFor(() => {
         expect(screen.getByText(/主观量表/i)).toBeInTheDocument();
-      }, { timeout: 3000 });
+      }, { timeout: 5000 });
+    };
+
+    beforeEach(async () => {
+      await navigateToSurveyStep();
     });
 
     it('应该显示三个问卷组件', () => {
@@ -417,27 +471,72 @@ describe('VoiceTestWizard Component', () => {
     });
   });
 
-  // 报告生成步骤测试过于复杂，暂时跳过
-  describe.skip('报告生成步骤', () => {
-    beforeEach(async () => {
+  // 报告生成步骤测试 - 测试分析和结果展示
+  // 通过快速模拟录音和导航到达报告生成步骤
+  describe('报告生成步骤', () => {
+    /**
+     * 辅助函数:快速导航到报告生成步骤
+     * 自动完成所有需要录音的步骤和问卷步骤
+     */
+    const navigateToReportStep = async () => {
       render(<VoiceTestWizard />);
 
+      // 等待初始化完成
       await waitFor(() => {
         expect(screen.getByText(/说明与同意/i)).toBeInTheDocument();
       });
 
-      // 跳到最后一步
-      for (let i = 0; i < 8; i++) {
-        const nextButton = screen.getByRole('button', { name: /下一步|提交|跳过/i });
-        await user.click(nextButton);
-        await act(async () => {
-          await new Promise(resolve => setTimeout(resolve, 50));
+      // 步骤0: 说明与同意 - 点击下一步
+      let nextButton = screen.getByRole('button', { name: /下一步/i });
+      await user.click(nextButton);
+      
+      // 步骤1-6: 所有需要录音的步骤
+      for (let step = 1; step <= 6; step++) {
+        await waitFor(() => {
+          expect(screen.getByTestId('recorder')).toBeInTheDocument();
         });
+        
+        // 获取当前步骤需要的录音数量
+        const stepInfo = screen.getByText(/进度:/i).textContent;
+        const match = stepInfo.match(/(\d+)/g);
+        const totalRecordings = match ? parseInt(match[1]) : 1;
+        
+        // 完成所有需要的录音
+        for (let i = 0; i < totalRecordings; i++) {
+          const recordButton = screen.getByRole('button', { name: /模拟录音完成/i });
+          await user.click(recordButton);
+          
+          // 等待上传完成
+          await waitFor(() => {
+            expect(api.uploadVoiceTestFileToS3).toHaveBeenCalled();
+          });
+        }
+        
+        // 点击下一步进入下一个步骤
+        await waitFor(() => {
+          const btn = screen.getByRole('button', { name: /下一步/i });
+          expect(btn).not.toBeDisabled();
+        });
+        nextButton = screen.getByRole('button', { name: /下一步/i });
+        await user.click(nextButton);
       }
 
+      // 步骤7: 问卷步骤 - 点击"跳过"
+      await waitFor(() => {
+        expect(screen.getByText(/主观量表/i)).toBeInTheDocument();
+      });
+      
+      const skipButton = screen.getByRole('button', { name: /跳过/i });
+      await user.click(skipButton);
+
+      // 应该到达报告生成步骤(步骤8)
       await waitFor(() => {
         expect(screen.getByText(/结果确认与报告生成/i)).toBeInTheDocument();
-      }, { timeout: 3000 });
+      }, { timeout: 5000 });
+    };
+
+    beforeEach(async () => {
+      await navigateToReportStep();
     });
 
     it('应该显示"生成报告"按钮', () => {
@@ -471,19 +570,21 @@ describe('VoiceTestWizard Component', () => {
     });
 
     it('分析完成应该显示结果', async () => {
+      // Mock分析完成的结果
       api.getVoiceTestResults.mockResolvedValue({ status: 'done' });
 
       const generateButton = screen.getByRole('button', { name: /生成报告/i });
       await user.click(generateButton);
 
-      // 触发轮询
-      await act(async () => {
-        vi.advanceTimersByTime(3000);
+      // 等待分析开始
+      await waitFor(() => {
+        expect(api.requestVoiceTestAnalyze).toHaveBeenCalled();
       });
 
+      // 等待轮询获取结果并显示测试结果组件
       await waitFor(() => {
         expect(screen.getByTestId('test-results')).toBeInTheDocument();
-      });
+      }, { timeout: 5000 });
     });
 
     it('分析失败应该显示错误和重试按钮', async () => {
@@ -516,35 +617,76 @@ describe('VoiceTestWizard Component', () => {
     });
   });
 
-  // 组件卸载清理测试依赖步骤导航，暂时跳过
-  describe.skip('组件卸载清理', () => {
+  // 组件卸载清理测试 - 测试内存泄漏预防
+  describe('组件卸载清理', () => {
     it('卸载时应该清除轮询定时器', async () => {
       const { unmount } = render(<VoiceTestWizard />);
 
+      // 等待初始化完成
       await waitFor(() => {
         expect(api.createVoiceTestSession).toHaveBeenCalled();
       });
 
-      // 开始分析（会启动轮询）
-      for (let i = 0; i < 8; i++) {
-        const nextButton = screen.getByRole('button', { name: /下一步|提交|跳过/i });
-        await user.click(nextButton);
-        await act(async () => {
-          await new Promise(resolve => setTimeout(resolve, 50));
+      // 快速导航到报告生成步骤
+      await waitFor(() => {
+        expect(screen.getByText(/说明与同意/i)).toBeInTheDocument();
+      });
+
+      // 步骤0: 点击下一步
+      let nextButton = screen.getByRole('button', { name: /下一步/i });
+      await user.click(nextButton);
+      
+      // 步骤1-6: 完成录音步骤
+      for (let step = 1; step <= 6; step++) {
+        await waitFor(() => {
+          expect(screen.getByTestId('recorder')).toBeInTheDocument();
         });
+        
+        const stepInfo = screen.getByText(/进度:/i).textContent;
+        const match = stepInfo.match(/(\d+)/g);
+        const totalRecordings = match ? parseInt(match[1]) : 1;
+        
+        for (let i = 0; i < totalRecordings; i++) {
+          const recordButton = screen.getByRole('button', { name: /模拟录音完成/i });
+          await user.click(recordButton);
+          await waitFor(() => {
+            expect(api.uploadVoiceTestFileToS3).toHaveBeenCalled();
+          });
+        }
+        
+        await waitFor(() => {
+          const btn = screen.getByRole('button', { name: /下一步/i });
+          expect(btn).not.toBeDisabled();
+        });
+        nextButton = screen.getByRole('button', { name: /下一步/i });
+        await user.click(nextButton);
       }
 
+      // 步骤7: 跳过问卷
+      await waitFor(() => {
+        expect(screen.getByText(/主观量表/i)).toBeInTheDocument();
+      });
+      const skipButton = screen.getByRole('button', { name: /跳过/i });
+      await user.click(skipButton);
+
+      // 步骤8: 开始分析(会启动轮询)
       await waitFor(() => {
         expect(screen.getByText(/结果确认与报告生成/i)).toBeInTheDocument();
-      }, { timeout: 3000 });
+      });
 
       const generateButton = screen.getByRole('button', { name: /生成报告/i });
       await user.click(generateButton);
 
-      // 卸载组件
+      // 等待分析开始
+      await waitFor(() => {
+        expect(api.requestVoiceTestAnalyze).toHaveBeenCalled();
+      });
+
+      // 卸载组件 - 如果定时器没有正确清除,可能会导致内存泄漏或错误
       unmount();
 
       // 验证没有报错（定时器已清除）
+      // 如果组件没有正确清理,这里可能会有警告或错误
       expect(true).toBe(true);
     });
   });
