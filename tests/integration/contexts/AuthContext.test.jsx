@@ -251,7 +251,7 @@ describe('AuthContext 集成测试', () => {
 
       // Mock getUserProfile API - 直接匹配完整路径(包含冒号)
       server.use(
-        http.get('https://test-api.execute-api.us-east-1.amazonaws.com/dev/user/us-east-1:test-user-001', () => {
+        http.get('https://2rzxc2x5l8.execute-api.us-east-1.amazonaws.com/dev/user/us-east-1:test-user-001', () => {
           console.log('[MSW Override] Returning test-user-001 profile');
           return HttpResponse.json(mockProfile);
         })
@@ -290,7 +290,7 @@ describe('AuthContext 集成测试', () => {
 
       // 覆盖默认 handler - 直接匹配完整路径
       server.use(
-        http.get('https://test-api.execute-api.us-east-1.amazonaws.com/dev/user/us-east-1:test-user-001', () => {
+        http.get('https://2rzxc2x5l8.execute-api.us-east-1.amazonaws.com/dev/user/us-east-1:test-user-001', () => {
           console.log('[MSW Override] Returning test-user-001 profile for cache test');
           return HttpResponse.json(mockProfile);
         })
@@ -336,7 +336,7 @@ describe('AuthContext 集成测试', () => {
 
       // 覆盖默认 handler - 直接匹配完整路径
       server.use(
-        http.get('https://test-api.execute-api.us-east-1.amazonaws.com/dev/user/us-east-1:test-user-001', () => {
+        http.get('https://2rzxc2x5l8.execute-api.us-east-1.amazonaws.com/dev/user/us-east-1:test-user-001', () => {
           console.log('[MSW Override] Returning incomplete profile');
           return HttpResponse.json(incompleteProfile);
         })
@@ -365,7 +365,7 @@ describe('AuthContext 集成测试', () => {
     it('用户不存在时应该设置 needsProfileSetup=true', async () => {
       // Mock API 返回 404 - 覆盖默认 handler - 直接匹配完整路径
       server.use(
-        http.get('https://test-api.execute-api.us-east-1.amazonaws.com/dev/user/us-east-1:nonexistent-user', () => {
+        http.get('https://2rzxc2x5l8.execute-api.us-east-1.amazonaws.com/dev/user/us-east-1:nonexistent-user', () => {
           console.log('[MSW Override] Returning 404 for nonexistent user');
           return HttpResponse.json(
             { error: 'User not found' },
@@ -412,7 +412,7 @@ describe('AuthContext 集成测试', () => {
 
       // 覆盖默认 handler - 直接匹配完整路径
       server.use(
-        http.get('https://test-api.execute-api.us-east-1.amazonaws.com/dev/user/us-east-1:test-user-001', () => {
+        http.get('https://2rzxc2x5l8.execute-api.us-east-1.amazonaws.com/dev/user/us-east-1:test-user-001', () => {
           console.log('[MSW Override] Returning updated profile for refresh test');
           return HttpResponse.json(mockProfile);
         })
@@ -469,7 +469,7 @@ describe('AuthContext 集成测试', () => {
 
       // Mock setupUserProfile API - 直接匹配完整路径(注意路径是 /user/profile-setup)
       server.use(
-        http.post('https://test-api.execute-api.us-east-1.amazonaws.com/dev/user/profile-setup', async ({ request }) => {
+        http.post('https://2rzxc2x5l8.execute-api.us-east-1.amazonaws.com/dev/user/profile-setup', async ({ request }) => {
           console.log('[MSW Override] Handling POST /user/profile-setup');
           const body = await request.json();
           expect(body.profile).toBeDefined();
@@ -479,7 +479,7 @@ describe('AuthContext 集成测试', () => {
       
       // 同时 mock getUserProfile 以便后续验证 - 直接匹配完整路径
       server.use(
-        http.get('https://test-api.execute-api.us-east-1.amazonaws.com/dev/user/us-east-1:test-user-001', () => {
+        http.get('https://2rzxc2x5l8.execute-api.us-east-1.amazonaws.com/dev/user/us-east-1:test-user-001', () => {
           console.log('[MSW Override] Returning user profile after setup');
           return HttpResponse.json(mockResponse.user);
         })
@@ -717,7 +717,7 @@ describe('AuthContext 集成测试', () => {
     it('API 调用失败应该正确处理', async () => {
       // Mock API 返回错误 - 覆盖默认 handler - 直接匹配完整路径
       server.use(
-        http.get('https://test-api.execute-api.us-east-1.amazonaws.com/dev/user/us-east-1:test-user-001', () => {
+        http.get('https://2rzxc2x5l8.execute-api.us-east-1.amazonaws.com/dev/user/us-east-1:test-user-001', () => {
           console.log('[MSW Override] Returning 500 error');
           return HttpResponse.json(
             { error: 'Internal Server Error' },
