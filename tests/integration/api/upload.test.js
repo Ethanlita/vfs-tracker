@@ -157,7 +157,7 @@ describe('API 上传功能集成测试', () => {
       let capturedRequestBody = null;
 
       server.use(
-        http.post('https://test-api.execute-api.us-east-1.amazonaws.com/dev/upload-url', async ({ request }) => {
+        http.post('https://2rzxc2x5l8.execute-api.us-east-1.amazonaws.com/dev/upload-url', async ({ request }) => {
           capturedRequestBody = await request.json();
           
           return HttpResponse.json({
@@ -180,7 +180,7 @@ describe('API 上传功能集成测试', () => {
       let capturedAuthHeader = null;
 
       server.use(
-        http.post('https://test-api.execute-api.us-east-1.amazonaws.com/dev/upload-url', ({ request }) => {
+        http.post('https://2rzxc2x5l8.execute-api.us-east-1.amazonaws.com/dev/upload-url', ({ request }) => {
           capturedAuthHeader = request.headers.get('Authorization');
           
           return HttpResponse.json({
@@ -216,7 +216,7 @@ describe('API 上传功能集成测试', () => {
   describe('错误处理', () => {
     it('获取 URL 失败时应该提供清晰的错误信息', async () => {
       server.use(
-        http.post('https://test-api.execute-api.us-east-1.amazonaws.com/dev/upload-url', () => {
+        http.post('https://2rzxc2x5l8.execute-api.us-east-1.amazonaws.com/dev/upload-url', () => {
           return new HttpResponse(null, {
             status: 500,
             statusText: 'Internal Server Error'
