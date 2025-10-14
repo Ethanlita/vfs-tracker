@@ -484,7 +484,7 @@ describe('AuthContext 集成测试', () => {
 
     it('完善资料失败应该抛出错误', async () => {
       server.use(
-        http.post(`${API_URL}/user-setup`, () => {
+        http.post(`${API_URL}/user/profile-setup`, () => {
           return HttpResponse.json(
             { error: 'Invalid data' },
             { status: 400 }
@@ -510,7 +510,7 @@ describe('AuthContext 集成测试', () => {
       await expect(async () => {
         await act(async () => {
           await result.current.completeProfileSetup({
-            nickname: '', // 无效数据
+            profile: { name: '' } // 无效数据 - name为空
           });
         });
       }).rejects.toThrow();
