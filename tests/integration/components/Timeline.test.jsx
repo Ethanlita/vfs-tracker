@@ -158,108 +158,6 @@ describe('Timeline 组件集成测试', () => {
     });
   });
   
-  describe.skip('时间线连接线', () => {
-    // 跳过原因: Timeline组件使用左边框(border-left)而非独立的连接线元素
-    // Timeline显示的是按天分组的活动列表,不是传统的时间轴设计
-    // 组件使用 border-l-4 border-pink-400 来视觉上表示时间流
-    
-    it('应该显示连接各个事件的线条', () => {
-      renderWithProviders(<Timeline events={mockPrivateEvents} />);
-      
-      // 查找时间线连接线（通常是一个 SVG 线条或 div）
-      const timelineLine = document.querySelector('[class*="timeline-line"]') ||
-                          document.querySelector('svg line');
-      
-      if (mockPrivateEvents.length > 1) {
-        expect(timelineLine).toBeInTheDocument();
-      }
-    });
-    
-    it('连接线应该贯穿所有事件', async () => {
-      renderWithProviders(<Timeline events={mockPrivateEvents} />);
-      
-      await waitFor(() => {
-        const timelineItems = screen.getAllByRole('article') || 
-                             screen.getAllByTestId(/timeline-item/i);
-        
-        if (timelineItems.length > 1) {
-          // 验证时间线结构
-          expect(timelineItems.length).toBe(mockPrivateEvents.length);
-        }
-      });
-    });
-  });
-  
-  describe.skip('用户交互', () => {
-    // 跳过原因: Timeline组件的事件项不可点击,没有展开/导航功能
-    // 组件设计为简单的活动列表展示,没有交互行为
-    // 事件项只是纯文本显示: 时间 + 描述(如"14:30 进行了自我测试")
-    
-    it('点击事件应该展开详情', async () => {
-      const user = userEvent.setup();
-      renderWithProviders(<Timeline events={mockPrivateEvents} expandable={true} />);
-      
-      await waitFor(() => {
-        expect(screen.getAllByRole('article').length).toBeGreaterThan(0);
-      });
-      
-      // 点击第一个事件
-      const firstItem = screen.getAllByRole('article')[0];
-      await user.click(firstItem);
-      
-      // 验证展开了更多信息
-      await waitFor(() => {
-        // 应该显示更详细的信息，如描述、附件等
-        expect(firstItem.textContent.length).toBeGreaterThan(0);
-      });
-    });
-    
-    it('应该支持导航到事件详情页', async () => {
-      const user = userEvent.setup();
-      const onEventClick = vi.fn();
-      
-      renderWithProviders(
-        <Timeline events={mockPrivateEvents} onEventClick={onEventClick} />
-      );
-      
-      await waitFor(() => {
-        expect(screen.getAllByRole('article').length).toBeGreaterThan(0);
-      });
-      
-      // 点击查看详情按钮或事件本身
-      const detailButton = screen.queryAllByRole('button', { name: /查看详情/i })[0] ||
-                          screen.getAllByRole('article')[0];
-      
-      await user.click(detailButton);
-      
-      expect(onEventClick).toHaveBeenCalled();
-    });
-    
-    it('应该支持滚动到特定日期', async () => {
-      const scrollToDate = vi.fn();
-      
-      renderWithProviders(
-        <Timeline 
-          events={mockPrivateEvents} 
-          onScrollToDate={scrollToDate}
-          showDatePicker={true}
-        />
-      );
-      
-      // 查找日期选择器
-      const datePicker = screen.queryByRole('combobox') || 
-                        screen.queryByLabelText(/选择日期/i);
-      
-      if (datePicker) {
-        const user = userEvent.setup();
-        await user.click(datePicker);
-        
-        // 选择一个日期
-        // 这需要根据实际的日期选择器实现来调整
-      }
-    });
-  });
-  
   describe('时间分组', () => {
     it('应该按月份分组显示事件', async () => {
       // Timeline不接受groupBy prop,它固定使用"今天/昨天/日期"分组
@@ -404,8 +302,7 @@ describe('Timeline 组件集成测试', () => {
       
       renderWithProviders(<Timeline events={mockPrivateEvents} />);
       
-      const timeline = screen.getByTestId('timeline') || 
-                      screen.getByRole('region', { name: /时间线/i });
+      const timeline = screen.getByTestId('timeline');
       expect(timeline).toBeInTheDocument();
     });
     
@@ -415,83 +312,8 @@ describe('Timeline 组件集成测试', () => {
       
       renderWithProviders(<Timeline events={mockPrivateEvents} />);
       
-      const timeline = screen.getByTestId('timeline') || 
-                      screen.getByRole('region', { name: /时间线/i });
+      const timeline = screen.getByTestId('timeline');
       expect(timeline).toBeInTheDocument();
-    });
-  });
-  
-  // ⚠️ 注意：Timeline 组件是自包含的，不接受 events, loading, error props
-  // 以下测试基于错误的组件接口假设，已跳过
-  describe.skip('加载和错误状态', () => {
-    it('加载时应该显示骨架屏', () => {
-      renderWithProviders(<Timeline events={[]} loading={true} />);
-      
-      expect(screen.getByText(/加载中/i) || 
-             screen.getByRole('progressbar') ||
-             document.querySelector('[class*="skeleton"]')).toBeInTheDocument();
-    });
-    
-    it('应该处理加载错误', () => {
-      const errorMessage = '加载时间线失败';
-      renderWithProviders(
-        <Timeline events={[]} error={errorMessage} />
-      );
-      
-      expect(screen.getByText(errorMessage)).toBeInTheDocument();
-    });
-  });
-  
-  // ⚠️ 注意：Timeline 组件不接受 events, lazyLoad props
-  // 性能优化功能未实现，这些测试已跳过
-  describe.skip('性能优化', () => {
-    it('应该支持懒加载历史事件', async () => {
-      const manyEvents = Array(100).fill(null).map((_, i) => ({
-        ...mockPrivateEvents[0],
-        eventId: `event-${i}`,
-        timestamp: new Date(Date.now() - i * 86400000).toISOString(),
-      }));
-      
-      renderWithProviders(
-        <Timeline events={manyEvents} lazyLoad={true} />
-      );
-      
-      await waitFor(() => {
-        // 初始应该只加载一部分事件
-        const items = screen.getAllByRole('article') || 
-                     screen.getAllByTestId(/timeline-item/i);
-        expect(items.length).toBeLessThanOrEqual(20);
-      });
-    });
-    
-    it('滚动到底部应该加载更多事件', async () => {
-      const manyEvents = Array(50).fill(null).map((_, i) => ({
-        ...mockPrivateEvents[0],
-        eventId: `event-${i}`,
-        timestamp: new Date(Date.now() - i * 86400000).toISOString(),
-      }));
-      
-      renderWithProviders(
-        <Timeline events={manyEvents} lazyLoad={true} />
-      );
-      
-      await waitFor(() => {
-        const items = screen.getAllByRole('article');
-        expect(items.length).toBeGreaterThan(0);
-      });
-      
-      // 滚动到底部
-      const timeline = screen.getByTestId('timeline') || 
-                      screen.getByRole('region', { name: /时间线/i });
-      
-      timeline.scrollTop = timeline.scrollHeight;
-      timeline.dispatchEvent(new Event('scroll'));
-      
-      await waitFor(() => {
-        // 应该加载了更多事件
-        const newItems = screen.getAllByRole('article');
-        expect(newItems.length).toBeGreaterThan(10);
-      });
     });
   });
 });

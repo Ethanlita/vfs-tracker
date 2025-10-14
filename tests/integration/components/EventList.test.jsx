@@ -144,28 +144,6 @@ describe('EventList 组件集成测试', () => {
   });
   
   describe('用户交互', () => {
-    it.skip('点击事件应该能够查看详情', async () => {
-      // 跳过原因: EventList是纯展示组件,不接受onEventClick prop,没有点击交互功能
-      // EventList只接受events prop,唯一的交互是"下载附件"按钮
-      const user = userEvent.setup();
-      const onEventClick = vi.fn();
-      
-      renderWithProviders(
-        <EventList events={mockPrivateEvents} onEventClick={onEventClick} />
-      );
-      
-      await waitFor(() => {
-        expect(screen.getAllByRole('listitem').length).toBeGreaterThan(0);
-      });
-      
-      // 点击第一个事件
-      const firstEvent = screen.getAllByRole('listitem')[0];
-      await user.click(firstEvent);
-      
-      // 验证回调被调用
-      expect(onEventClick).toHaveBeenCalledTimes(1);
-    });
-    
     it('应该支持删除事件操作', async () => {
       const user = userEvent.setup();
       const onEventDelete = vi.fn();
@@ -268,47 +246,12 @@ describe('EventList 组件集成测试', () => {
     });
   });
   
-  // ⚠️ 注意：EventList 组件不接受 loading prop
-  // 加载状态由父组件管理，这些测试已跳过
-  describe.skip('加载状态', () => {
-    it('加载时应该显示加载指示器', () => {
-      renderWithProviders(<EventList events={[]} loading={true} />);
-      
-      expect(screen.getByText(/加载中/i) || screen.getByRole('progressbar')).toBeInTheDocument();
-    });
-    
-    it('加载完成后应该隐藏加载指示器', async () => {
-      const { rerender } = renderWithProviders(
-        <EventList events={[]} loading={true} />
-      );
-      
-      expect(screen.getByText(/加载中/i)).toBeInTheDocument();
-      
-      rerender(<EventList events={mockPrivateEvents} loading={false} />);
-      
-      await waitFor(() => {
-        expect(screen.queryByText(/加载中/i)).not.toBeInTheDocument();
-      });
-    });
-  });
-  
   describe('错误处理', () => {
     it('当传入无效数据时应该优雅处理', () => {
       // 不应该崩溃
       expect(() => {
         renderWithProviders(<EventList events={null} />);
       }).not.toThrow();
-    });
-    
-    // ⚠️ 注意：EventList 组件不接受 error prop
-    // 错误处理由父组件管理，此测试已跳过
-    it.skip('应该显示错误消息', () => {
-      const errorMessage = '加载事件失败';
-      renderWithProviders(
-        <EventList events={[]} error={errorMessage} />
-      );
-      
-      expect(screen.getByText(errorMessage)).toBeInTheDocument();
     });
   });
   
@@ -355,26 +298,6 @@ describe('EventList 组件集成测试', () => {
       
       await waitFor(() => {
         expect(screen.getAllByRole('listitem').length).toBeGreaterThan(0);
-      });
-    });
-    
-    it.skip('应该支持虚拟滚动以提高性能', async () => {
-      // 跳过原因: EventList没有实现虚拟滚动功能,所有事件都会完整渲染到DOM
-      // 这是未来可能的性能优化需求,但当前不支持
-      const manyEvents = Array(1000).fill(null).map((_, i) => ({
-        ...mockPrivateEvents[0],
-        eventId: `event-${i}`,
-      }));
-      
-      renderWithProviders(
-        <EventList events={manyEvents} virtualScroll={true} />
-      );
-      
-      await waitFor(() => {
-        // 如果启用了虚拟滚动，DOM 中的元素应该少于总数
-        const renderedItems = screen.getAllByRole('listitem');
-        // 虚拟滚动应该只渲染可见区域的元素
-        expect(renderedItems.length).toBeLessThan(manyEvents.length);
       });
     });
   });
