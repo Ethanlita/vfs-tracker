@@ -108,6 +108,77 @@ const deleteEventHandler = http.delete(`${API_URL}/event/:eventId`, ({ params })
   });
 });
 
+// ==================== AI Services API Handlers ====================
+
+/**
+ * POST /gemini-proxy - 调用 Gemini AI 代理
+ * 接收: {prompt}
+ * 返回: {success: true, response: string} 或 {success: false, error: string}
+ */
+const callGeminiProxyHandler = http.post(`${API_URL}/gemini-proxy`, async ({ request }) => {
+  console.log('[MSW] Handling POST /gemini-proxy');
+  
+  try {
+    const body = await request.json();
+    const { prompt } = body;
+    console.log('[MSW] Gemini prompt:', prompt);
+    
+    // 模拟 AI 响应
+    const mockResponse = '这是一个来自模拟 Gemini AI 的鼓励性消息！继续保持良好的声音健康习惯。✨';
+    
+    return HttpResponse.json({
+      success: true,
+      response: mockResponse,
+    });
+  } catch (error) {
+    console.error('[MSW] Error parsing request body:', error);
+    return HttpResponse.json(
+      { success: false, error: 'Invalid request body' },
+      { status: 400 }
+    );
+  }
+});
+
+/**
+ * POST /recommend-songs - 获取歌曲推荐
+ * 接收: {lowestNote, highestNote}
+ * 返回: {success: true, recommendations: [...]} 或 {success: false, error: string}
+ */
+const getSongRecommendationsHandler = http.post(`${API_URL}/recommend-songs`, async ({ request }) => {
+  console.log('[MSW] Handling POST /recommend-songs');
+  
+  try {
+    const body = await request.json();
+    const { lowestNote, highestNote } = body;
+    console.log('[MSW] Song recommendation request:', { lowestNote, highestNote });
+    
+    // 模拟歌曲推荐
+    const mockRecommendations = [
+      {
+        songName: '月亮代表我的心',
+        artist: '邓丽君',
+        reason: '这首歌的音域非常适合您当前的声音范围，旋律优美舒缓。'
+      },
+      {
+        songName: '晴天',
+        artist: '周杰伦',
+        reason: '歌曲音域适中，适合日常练习和演唱。'
+      }
+    ];
+    
+    return HttpResponse.json({
+      success: true,
+      recommendations: mockRecommendations,
+    });
+  } catch (error) {
+    console.error('[MSW] Error parsing request body:', error);
+    return HttpResponse.json(
+      { success: false, error: 'Invalid request body' },
+      { status: 400 }
+    );
+  }
+});
+
 // ==================== User Profile API Handlers ====================
 
 /**
@@ -191,6 +262,179 @@ const getUserPublicProfileHandler = http.get(`${API_URL}/user/:userId/public`, (
       socials: user.profile.areSocialsPublic ? (user.profile.socials || []) : [],
     }
   });
+});
+
+/**
+ * POST /user/profile-setup - 新用户资料设置
+ * 接收: {profile: {name, isNamePublic, socials, areSocialsPublic}}
+ * 返回: {message, user, isNewUser}
+ */
+const setupUserProfileHandler = http.post(`${API_URL}/user/profile-setup`, async ({ request }) => {
+  console.log('[MSW] Handling POST /user/profile-setup');
+  
+  try {
+    const body = await request.json();
+    const profile = body.profile || {
+      name: '',
+      isNamePublic: false,
+      socials: [],
+      areSocialsPublic: false
+    };
+    
+    console.log('[MSW] Profile setup data:', profile);
+    
+    // 创建新用户
+    const newUser = {
+      userId: `us-east-1:new-user-${Date.now()}`,
+      email: 'newuser@example.com',
+      profile: profile,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    
+    return HttpResponse.json({
+      message: 'User profile setup completed successfully',
+      user: newUser,
+      isNewUser: true,
+    });
+  } catch (error) {
+    console.error('[MSW] Error parsing request body:', error);
+    return HttpResponse.json(
+      { error: 'Invalid request body' },
+      { status: 400 }
+    );
+  }
+});
+
+// ==================== Voice Test API Handlers ====================
+
+/**
+ * POST /sessions - 创建嗓音测试会话
+ * 接收: {userId?}
+ * 返回: {sessionId}
+ */
+const createVoiceTestSessionHandler = http.post(`${API_URL}/sessions`, async ({ request }) => {
+  console.log('[MSW] Handling POST /sessions');
+  
+  try {
+    const body = await request.json().catch(() => ({}));
+    const { userId } = body;
+    console.log('[MSW] Create session for userId:', userId);
+    
+    // 生成 UUID v4 格式的 sessionId
+    const sessionId = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+      const r = Math.random() * 16 | 0;
+      const v = c === 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
+    
+    return HttpResponse.json({ sessionId });
+  } catch (error) {
+    console.error('[MSW] Error in create session:', error);
+    return HttpResponse.json(
+      { error: 'Failed to create session' },
+      { status: 500 }
+    );
+  }
+});
+
+/**
+ * POST /uploads - 获取嗓音测试上传 URL
+ * 接收: {sessionId, step, fileName, contentType}
+ * 返回: {putUrl, objectKey}
+ */
+const getVoiceTestUploadUrlHandler = http.post(`${API_URL}/uploads`, async ({ request }) => {
+  console.log('[MSW] Handling POST /uploads');
+  
+  try {
+    const body = await request.json();
+    const { sessionId, step, fileName, contentType } = body;
+    console.log('[MSW] Upload URL request:', { sessionId, step, fileName, contentType });
+    
+    // 构造对象键
+    const objectKey = `voice-tests/mock-user/${sessionId}/raw/${step}/${fileName}`;
+    
+    // 生成预签名 URL
+    const timestamp = Date.now();
+    const putUrl = `https://mock-s3-bucket.s3.amazonaws.com/${objectKey}?X-Amz-Signature=mock&timestamp=${timestamp}&Content-Type=${encodeURIComponent(contentType)}`;
+    
+    return HttpResponse.json({
+      putUrl,
+      objectKey,
+    });
+  } catch (error) {
+    console.error('[MSW] Error parsing request body:', error);
+    return HttpResponse.json(
+      { error: 'Invalid request body' },
+      { status: 400 }
+    );
+  }
+});
+
+/**
+ * POST /analyze - 请求嗓音测试分析
+ * 接收: {sessionId, calibration, forms}
+ * 返回: {status, sessionId}
+ */
+const requestVoiceTestAnalyzeHandler = http.post(`${API_URL}/analyze`, async ({ request }) => {
+  console.log('[MSW] Handling POST /analyze');
+  
+  try {
+    const body = await request.json();
+    const { sessionId, calibration, forms } = body;
+    console.log('[MSW] Analyze request:', { sessionId, calibration, forms });
+    
+    // 模拟排队状态
+    return HttpResponse.json({
+      status: 'queued',
+      sessionId,
+    });
+  } catch (error) {
+    console.error('[MSW] Error parsing request body:', error);
+    return HttpResponse.json(
+      { error: 'Invalid request body' },
+      { status: 400 }
+    );
+  }
+});
+
+/**
+ * GET /results/:sessionId - 获取嗓音测试结果
+ * 返回: {status, results?, ...}
+ */
+let resultCallCount = 0; // 模拟轮询计数器
+
+const getVoiceTestResultsHandler = http.get(`${API_URL}/results/:sessionId`, ({ params }) => {
+  const { sessionId } = params;
+  console.log(`[MSW] Handling GET /results/${sessionId}`);
+  
+  resultCallCount++;
+  
+  // 前两次返回 processing，之后返回 done
+  if (resultCallCount <= 2) {
+    return HttpResponse.json({
+      status: 'processing',
+      sessionId,
+      progress: resultCallCount * 50,
+    });
+  } else {
+    // 重置计数器（用于下一个会话）
+    resultCallCount = 0;
+    
+    return HttpResponse.json({
+      status: 'done',
+      sessionId,
+      results: {
+        pitch: {
+          average: 220.5,
+          range: { min: 180, max: 300 }
+        },
+        jitter: 0.45,
+        shimmer: 2.1,
+        quality: 'good',
+      },
+    });
+  }
 });
 
 // ==================== Upload API Handlers ====================
@@ -290,10 +534,21 @@ export const handlers = [
   addEventHandler,
   deleteEventHandler,
   
+  // AI Services APIs
+  callGeminiProxyHandler,
+  getSongRecommendationsHandler,
+  
   // User Profile APIs
   getUserProfileHandler,
   updateUserProfileHandler,
   getUserPublicProfileHandler,
+  setupUserProfileHandler,
+  
+  // Voice Test APIs
+  createVoiceTestSessionHandler,
+  getVoiceTestUploadUrlHandler,
+  requestVoiceTestAnalyzeHandler,
+  getVoiceTestResultsHandler,
   
   // Upload APIs
   getUploadUrlHandler,
@@ -307,9 +562,16 @@ export {
   getUserEventsHandler,
   addEventHandler,
   deleteEventHandler,
+  callGeminiProxyHandler,
+  getSongRecommendationsHandler,
   getUserProfileHandler,
   updateUserProfileHandler,
   getUserPublicProfileHandler,
+  setupUserProfileHandler,
+  createVoiceTestSessionHandler,
+  getVoiceTestUploadUrlHandler,
+  requestVoiceTestAnalyzeHandler,
+  getVoiceTestResultsHandler,
   getUploadUrlHandler,
   getFileUrlHandler,
   getAvatarUrlHandler,

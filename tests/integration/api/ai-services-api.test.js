@@ -1,0 +1,187 @@
+/**
+ * @file AI Services API 集成测试
+ * @description 测试 AI 相关服务 API 的调用和响应
+ * 
+ * 当前 API 接口:
+ * - callGeminiProxy(prompt) - 调用 Gemini AI 代理
+ * - getEncouragingMessage(userData) - 获取鼓励消息
+ * - getSongRecommendations({lowestNote, highestNote}) - 获取歌曲推荐
+ */
+
+import { describe, it, expect, beforeEach } from 'vitest';
+import { 
+  callGeminiProxy, 
+  getEncouragingMessage, 
+  getSongRecommendations 
+} from '../../../src/api.js';
+import { setAuthenticated } from '../../../src/test-utils/mocks/amplify-auth.js';
+
+describe('AI Services API 集成测试', () => {
+  beforeEach(() => {
+    setAuthenticated({
+      userId: 'us-east-1:complete-user-001',
+      email: 'complete@example.com',
+      nickname: 'Complete User'
+    });
+  });
+
+  describe('callGeminiProxy', () => {
+    it('应该成功调用 Gemini 代理并返回响应', async () => {
+      const prompt = '请给我一句鼓励的话';
+      const response = await callGeminiProxy(prompt);
+
+      expect(response).toBeDefined();
+      expect(typeof response).toBe('string');
+      expect(response.length).toBeGreaterThan(0);
+    });
+
+    it('应该能处理不同类型的提示词', async () => {
+      const prompts = [
+        '简短的问候',
+        '请分析用户的声音健康状况',
+        '根据用户数据提供建议'
+      ];
+
+      for (const prompt of prompts) {
+        const response = await callGeminiProxy(prompt);
+        expect(response).toBeDefined();
+        expect(typeof response).toBe('string');
+      }
+    });
+
+    it('应该返回非空字符串', async () => {
+      const prompt = '测试';
+      const response = await callGeminiProxy(prompt);
+
+      expect(response.trim().length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('getEncouragingMessage', () => {
+    it('当用户有事件数据时应该返回鼓励消息', async () => {
+      const userData = {
+        events: [
+          {
+            type: 'self-test',
+            date: '2025-01-10',
+            details: { pitch: 220, jitter: 0.5 },
+            createdAt: '2025-01-10T10:00:00.000Z'
+          }
+        ]
+      };
+
+      const message = await getEncouragingMessage(userData);
+
+      expect(message).toBeDefined();
+      expect(typeof message).toBe('string');
+      expect(message.length).toBeGreaterThan(0);
+    });
+
+    it('当用户没有事件数据时应该返回默认消息', async () => {
+      const userData = { events: [] };
+
+      const message = await getEncouragingMessage(userData);
+
+      expect(message).toBeDefined();
+      expect(typeof message).toBe('string');
+    });
+
+    it('当 userData 为空时应该返回默认消息', async () => {
+      const message = await getEncouragingMessage(null);
+
+      expect(message).toBeDefined();
+      expect(typeof message).toBe('string');
+    });
+
+    it('应该处理多个事件记录', async () => {
+      const userData = {
+        events: [
+          {
+            type: 'self-test',
+            date: '2025-01-10',
+            details: { pitch: 220 },
+            createdAt: '2025-01-10T10:00:00.000Z'
+          },
+          {
+            type: 'surgery',
+            date: '2025-01-05',
+            details: { surgeryType: 'vocal cord surgery' },
+            createdAt: '2025-01-05T08:00:00.000Z'
+          },
+          {
+            type: 'feeling-log',
+            date: '2025-01-08',
+            details: { mood: 'good' },
+            createdAt: '2025-01-08T12:00:00.000Z'
+          }
+        ]
+      };
+
+      const message = await getEncouragingMessage(userData);
+
+      expect(message).toBeDefined();
+      expect(typeof message).toBe('string');
+      expect(message.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('getSongRecommendations', () => {
+    it('应该成功获取歌曲推荐', async () => {
+      const range = {
+        lowestNote: 'C3',
+        highestNote: 'C5'
+      };
+
+      const recommendations = await getSongRecommendations(range);
+
+      expect(recommendations).toBeDefined();
+      expect(Array.isArray(recommendations)).toBe(true);
+    });
+
+    it('返回的推荐应该包含必要的字段', async () => {
+      const range = {
+        lowestNote: 'A2',
+        highestNote: 'A4'
+      };
+
+      const recommendations = await getSongRecommendations(range);
+
+      expect(recommendations.length).toBeGreaterThan(0);
+      recommendations.forEach(song => {
+        expect(song).toHaveProperty('songName');
+        expect(song).toHaveProperty('artist');
+        expect(song).toHaveProperty('reason');
+        expect(typeof song.songName).toBe('string');
+        expect(typeof song.artist).toBe('string');
+        expect(typeof song.reason).toBe('string');
+      });
+    });
+
+    it('应该能处理不同的音域范围', async () => {
+      const testRanges = [
+        { lowestNote: 'C3', highestNote: 'C5' },
+        { lowestNote: 'G2', highestNote: 'G4' },
+        { lowestNote: 'E3', highestNote: 'E5' }
+      ];
+
+      for (const range of testRanges) {
+        const recommendations = await getSongRecommendations(range);
+        expect(Array.isArray(recommendations)).toBe(true);
+        expect(recommendations.length).toBeGreaterThan(0);
+      }
+    });
+
+    it('推荐理由应该是非空字符串', async () => {
+      const range = {
+        lowestNote: 'D3',
+        highestNote: 'D5'
+      };
+
+      const recommendations = await getSongRecommendations(range);
+
+      recommendations.forEach(song => {
+        expect(song.reason.trim().length).toBeGreaterThan(0);
+      });
+    });
+  });
+});
