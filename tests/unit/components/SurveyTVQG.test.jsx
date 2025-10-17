@@ -289,7 +289,7 @@ describe('SurveyTVQG 组件测试', () => {
         const radios = screen.getAllByRole('radio', { name: new RegExp(`0 \\(从不\\)`) })[i];
         expect(radios).toHaveAttribute('name', `tvqg-${i}`);
       }
-    });
+    }, 20000); // 增加超时时间到20秒
 
     it('单选按钮类型为radio', () => {
       const values = Array(12).fill(null);

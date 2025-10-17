@@ -214,6 +214,11 @@ describe('uploadVoiceTestFileToS3', () => {
       // 确保 VITE_FORCE_REAL 未设置
       delete import.meta.env.VITE_FORCE_REAL;
     });
+    
+    afterEach(() => {
+      // 清理环境变量
+      delete import.meta.env.VITE_FORCE_REAL;
+    });
 
     it('应模拟上传成功', async () => {
       const result = await uploadVoiceTestFileToS3(mockPutUrl, mockFile);

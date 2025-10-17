@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 
 /**
  * @en A reusable audio recorder component that uses the MediaRecorder API.
@@ -221,7 +221,15 @@ const Recorder = ({ onRecordingComplete, onStartRecording, onStopRecording, onDi
   };
 
   const levelLoop = () => {
-    if (!analyserRef.current) return;
+    // 如果 analyser 或 stream 已被清理，停止循环
+    if (!analyserRef.current || !streamRef.current) {
+      if (rafRef.current) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
+      return;
+    }
+    
     const analyser = analyserRef.current;
     const buffer = new Uint8Array(analyser.fftSize);
     analyser.getByteTimeDomainData(buffer);
@@ -275,6 +283,32 @@ const Recorder = ({ onRecordingComplete, onStartRecording, onStopRecording, onDi
       intervalRef.current = null;
     }
   };
+
+  // 组件卸载时清理所有资源
+  useEffect(() => {
+    return () => {
+      // 清理动画帧
+      if (rafRef.current) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
+      // 清理定时器
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+      // 清理媒体流
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+        streamRef.current = null;
+      }
+      // 清理音频上下文
+      if (audioCtxRef.current) {
+        audioCtxRef.current.close().catch(e => console.error('[Recorder] 组件卸载时关闭 AudioContext 失败:', e));
+        audioCtxRef.current = null;
+      }
+    };
+  }, []);
 
   const remaining = Math.max(0, maxDurationSec - elapsedSec);
   const progressPct = Math.min(100, (elapsedSec / maxDurationSec) * 100);

@@ -14,6 +14,7 @@ describe('RegionSwitchBanner 组件测试', () => {
   let localStorageMock;
   let originalLocation;
   let originalNavigator;
+  let originalIntl;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -32,6 +33,17 @@ describe('RegionSwitchBanner 组件测试', () => {
     
     // Save original navigator
     originalNavigator = navigator;
+
+    // Save original Intl
+    originalIntl = global.Intl;
+
+    // Mock Intl.DateTimeFormat to return non-China timezone by default
+    global.Intl = {
+      ...global.Intl,
+      DateTimeFormat: vi.fn(() => ({
+        resolvedOptions: () => ({ timeZone: 'America/New_York' }),
+      })),
+    };
   });
 
   afterEach(() => {
@@ -42,6 +54,7 @@ describe('RegionSwitchBanner 组件测试', () => {
       writable: true,
       configurable: true,
     });
+    global.Intl = originalIntl;
   });
 
   describe('基础渲染', () => {

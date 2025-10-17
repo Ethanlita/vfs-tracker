@@ -8,35 +8,15 @@ import { renderHook, act, waitFor } from '@testing-library/react';
 import { useAuth, AuthProvider } from '../../../src/contexts/AuthContext.jsx';
 import { server } from '../../../src/test-utils/mocks/msw-server.js';
 import { http, HttpResponse } from 'msw';
+import { 
+  getCurrentUser, 
+  fetchUserAttributes, 
+  fetchAuthSession,
+  updateUserAttributes 
+} from 'aws-amplify/auth';
 
-// Mock Amplify Auth
-vi.mock('aws-amplify/auth', () => ({
-  getCurrentUser: vi.fn(() => 
-    Promise.resolve({
-      userId: 'us-east-1:test-user-001',
-      username: 'testuser',
-    })
-  ),
-  fetchUserAttributes: vi.fn(() =>
-    Promise.resolve({
-      email: 'test@example.com',
-      nickname: 'Test User',
-      email_verified: 'true',
-    })
-  ),
-  fetchAuthSession: vi.fn(() =>
-    Promise.resolve({
-      tokens: {
-        idToken: {
-          toString: () => 'mock-id-token-12345',
-        },
-      },
-    })
-  ),
-  updateUserAttributes: vi.fn(() => Promise.resolve()),
-  updatePassword: vi.fn(() => Promise.resolve()),
-  resendSignUpCode: vi.fn(() => Promise.resolve()),
-}));
+// 使用 setup.js 中的全局 mock
+vi.mock('aws-amplify/auth');
 
 // Mock Amplify UI React
 vi.mock('@aws-amplify/ui-react', () => ({
@@ -56,6 +36,28 @@ describe('AuthContext 集成测试', () => {
     
     // 清理所有 mocks
     vi.clearAllMocks();
+    
+    // 设置默认的 auth mock 行为
+    vi.mocked(getCurrentUser).mockResolvedValue({
+      userId: 'us-east-1:test-user-001',
+      username: 'testuser',
+    });
+    
+    vi.mocked(fetchUserAttributes).mockResolvedValue({
+      email: 'test@example.com',
+      nickname: 'Test User',
+      email_verified: 'true',
+    });
+    
+    vi.mocked(fetchAuthSession).mockResolvedValue({
+      tokens: {
+        idToken: {
+          toString: () => 'mock-id-token-12345',
+        },
+      },
+    });
+    
+    vi.mocked(updateUserAttributes).mockResolvedValue();
   });
 
   afterEach(() => {

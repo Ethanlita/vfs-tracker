@@ -9,11 +9,16 @@ import userEvent from '@testing-library/user-event';
 import { renderWithProviders } from '../../../src/test-utils/custom-render.jsx';
 import EventList from '../../../src/components/EventList.jsx';
 import { mockPublicEvents, mockPrivateEvents } from '../../../src/test-utils/fixtures/index.js';
+import { fetchAuthSession } from 'aws-amplify/auth';
 
-// Mock Amplify Auth
-vi.mock('aws-amplify/auth', () => ({
-  fetchAuthSession: vi.fn(() => 
-    Promise.resolve({
+// 使用 setup.js 中的全局 mock
+vi.mock('aws-amplify/auth');
+
+describe('EventList 组件集成测试', () => {
+  
+  beforeEach(() => {
+    // 设置默认的 auth mock 行为
+    vi.mocked(fetchAuthSession).mockResolvedValue({
       tokens: {
         idToken: {
           toString: () => 'mock-id-token',
@@ -25,11 +30,8 @@ vi.mock('aws-amplify/auth', () => ({
           },
         },
       },
-    })
-  ),
-}));
-
-describe('EventList 组件集成测试', () => {
+    });
+  });
   
   describe('基本渲染', () => {
     it('应该成功渲染事件列表', async () => {
@@ -144,105 +146,104 @@ describe('EventList 组件集成测试', () => {
   });
   
   describe('用户交互', () => {
-    it('应该支持删除事件操作', async () => {
+    it('应该支持下载附件', async () => {
       const user = userEvent.setup();
-      const onEventDelete = vi.fn();
-      
-      renderWithProviders(
-        <EventList 
-          events={mockPrivateEvents} 
-          onEventDelete={onEventDelete}
-          showDeleteButton={true}
-        />
+      // 查找有附件的事件
+      const eventWithAttachment = mockPrivateEvents.find(e => 
+        Array.isArray(e.attachments) && e.attachments.length > 0
       );
       
-      await waitFor(() => {
-        // 查找删除按钮
-        const deleteButtons = screen.queryAllByRole('button', { name: /删除/i });
-        if (deleteButtons.length > 0) {
-          expect(deleteButtons.length).toBeGreaterThan(0);
-        }
-      });
+      if (eventWithAttachment) {
+        // Mock window.open
+        const mockOpen = vi.fn();
+        const originalOpen = window.open;
+        window.open = mockOpen;
+        
+        renderWithProviders(<EventList events={[eventWithAttachment]} />);
+        
+        await waitFor(() => {
+          // 查找下载按钮
+          const downloadButtons = screen.getAllByRole('button', { name: /下载附件/i });
+          expect(downloadButtons.length).toBeGreaterThan(0);
+        });
+        
+        // 恢复 window.open
+        window.open = originalOpen;
+      }
     });
     
-    it('应该支持编辑事件操作', async () => {
+    it('应该在下载时显示加载状态', async () => {
       const user = userEvent.setup();
-      const onEventEdit = vi.fn();
-      
-      renderWithProviders(
-        <EventList 
-          events={mockPrivateEvents} 
-          onEventEdit={onEventEdit}
-          showEditButton={true}
-        />
+      const eventWithAttachment = mockPrivateEvents.find(e => 
+        Array.isArray(e.attachments) && e.attachments.length > 0
       );
       
-      await waitFor(() => {
-        // 查找编辑按钮
-        const editButtons = screen.queryAllByRole('button', { name: /编辑/i });
-        if (editButtons.length > 0) {
-          expect(editButtons.length).toBeGreaterThan(0);
-        }
-      });
+      if (eventWithAttachment) {
+        renderWithProviders(<EventList events={[eventWithAttachment]} />);
+        
+        await waitFor(() => {
+          // 使用 getAllByRole 因为可能有多个附件
+          const downloadButtons = screen.getAllByRole('button', { name: /下载附件/i });
+          expect(downloadButtons.length).toBeGreaterThan(0);
+          // 验证至少第一个按钮可用
+          expect(downloadButtons[0]).toBeInTheDocument();
+        });
+      }
     });
   });
   
   describe('过滤和排序', () => {
-    it('应该支持按类型过滤事件', async () => {
-      renderWithProviders(
-        <EventList 
-          events={mockPrivateEvents}
-          filterType="self_test"
-        />
-      );
+    it('应该正确显示已过滤的事件列表', async () => {
+      // EventList 组件本身不进行过滤，过滤应该在传入 events 前完成
+      const filteredEvents = mockPrivateEvents.filter(e => e.type === 'self_test');
+      renderWithProviders(<EventList events={filteredEvents} />);
       
       await waitFor(() => {
         const displayedEvents = screen.getAllByRole('listitem');
-        // 所有显示的事件应该是 self_test 类型
-        // 这需要根据实际组件实现来验证
-        expect(displayedEvents.length).toBeGreaterThan(0);
+        // 验证显示的事件数量与过滤后的数量一致
+        expect(displayedEvents.length).toBe(filteredEvents.length);
+        // 验证所有显示的事件都包含"自我测试"类型文本
+        const selfTestTexts = screen.getAllByText(/自我测试/i);
+        expect(selfTestTexts.length).toBeGreaterThan(0);
       });
     });
     
-    it('应该支持按日期排序', async () => {
-      renderWithProviders(
-        <EventList 
-          events={mockPrivateEvents}
-          sortBy="date"
-          sortOrder="desc"
-        />
+    it('应该正确显示已排序的事件列表', async () => {
+      // EventList 按传入顺序显示事件，排序应该在传入前完成
+      const sortedEvents = [...mockPrivateEvents].sort((a, b) => 
+        new Date(b.createdAt) - new Date(a.createdAt)
       );
+      renderWithProviders(<EventList events={sortedEvents} />);
       
       await waitFor(() => {
         const displayedEvents = screen.getAllByRole('listitem');
-        expect(displayedEvents.length).toBeGreaterThan(0);
-        // 验证顺序（最新的在前）
-      });
-    });
-    
-    it('应该支持搜索功能', async () => {
-      const user = userEvent.setup();
-      
-      renderWithProviders(
-        <EventList 
-          events={mockPrivateEvents}
-          showSearch={true}
-        />
-      );
-      
-      // 查找搜索输入框
-      const searchInput = screen.queryByRole('searchbox') || 
-                         screen.queryByPlaceholderText(/搜索/i);
-      
-      if (searchInput) {
-        await user.type(searchInput, '测试');
+        expect(displayedEvents.length).toBe(sortedEvents.length);
         
-        await waitFor(() => {
-          // 验证搜索结果
-          const displayedEvents = screen.getAllByRole('listitem');
-          expect(displayedEvents.length).toBeGreaterThanOrEqual(0);
-        });
-      }
+        // 验证第一个事件的日期（最新的）
+        const firstDate = new Date(sortedEvents[0].createdAt).toLocaleDateString();
+        expect(screen.getByText(firstDate)).toBeInTheDocument();
+      });
+    });
+    
+    it('应该能够显示搜索匹配的事件', async () => {
+      // EventList 不提供搜索UI，搜索过滤应该由父组件完成
+      const searchKeyword = '测试';
+      const searchedEvents = mockPrivateEvents.filter(e => 
+        (e.notes && e.notes.includes(searchKeyword)) ||
+        (e.details?.notes && e.details.notes.includes(searchKeyword))
+      );
+      
+      renderWithProviders(<EventList events={searchedEvents} />);
+      
+      await waitFor(() => {
+        const displayedEvents = screen.getAllByRole('listitem');
+        expect(displayedEvents.length).toBe(searchedEvents.length);
+        // 验证至少有一个事件包含搜索关键词（使用 getAllByText 因为可能匹配多个）
+        if (searchedEvents.length > 0) {
+          const matchingElements = screen.getAllByText(new RegExp(searchKeyword, 'i'));
+          expect(matchingElements.length).toBeGreaterThan(0);
+        }
+      });
     });
   });
   
@@ -256,24 +257,34 @@ describe('EventList 组件集成测试', () => {
   });
   
   describe('响应式设计', () => {
-    it('在移动端应该调整布局', () => {
+    it('在移动端应该调整布局', async () => {
       // 设置窄屏幕
       global.innerWidth = 375;
       global.dispatchEvent(new Event('resize'));
       
       renderWithProviders(<EventList events={mockPrivateEvents} />);
       
+      // 等待 loading 状态消失
+      await waitFor(() => {
+        expect(screen.queryByText(/正在加载用户资料/i)).not.toBeInTheDocument();
+      });
+      
       // 验证移动端布局（这需要根据实际组件实现）
       const eventList = screen.getByRole('list') || screen.getByTestId('event-list');
       expect(eventList).toBeInTheDocument();
     });
     
-    it('在桌面端应该显示完整信息', () => {
+    it('在桌面端应该显示完整信息', async () => {
       // 设置宽屏幕
       global.innerWidth = 1920;
       global.dispatchEvent(new Event('resize'));
       
       renderWithProviders(<EventList events={mockPrivateEvents} />);
+      
+      // 等待 loading 状态消失
+      await waitFor(() => {
+        expect(screen.queryByText(/正在加载用户资料/i)).not.toBeInTheDocument();
+      });
       
       const eventList = screen.getByRole('list') || screen.getByTestId('event-list');
       expect(eventList).toBeInTheDocument();

@@ -9,11 +9,16 @@ import userEvent from '@testing-library/user-event';
 import { renderWithProviders } from '../../../src/test-utils/custom-render.jsx';
 import Timeline from '../../../src/components/Timeline.jsx';
 import { mockPrivateEvents } from '../../../src/test-utils/fixtures/index.js';
+import { fetchAuthSession } from 'aws-amplify/auth';
 
-// Mock Amplify Auth
-vi.mock('aws-amplify/auth', () => ({
-  fetchAuthSession: vi.fn(() => 
-    Promise.resolve({
+// 使用 setup.js 中的全局 mock
+vi.mock('aws-amplify/auth');
+
+describe('Timeline 组件集成测试', () => {
+
+  beforeEach(() => {
+    // 设置默认的 auth mock 行为
+    vi.mocked(fetchAuthSession).mockResolvedValue({
       tokens: {
         idToken: {
           toString: () => 'mock-id-token',
@@ -25,11 +30,8 @@ vi.mock('aws-amplify/auth', () => ({
           },
         },
       },
-    })
-  ),
-}));
-
-describe('Timeline 组件集成测试', () => {
+    });
+  });
 
   describe('基本渲染', () => {
     it('应该成功渲染时间线', async () => {
@@ -296,21 +298,31 @@ describe('Timeline 组件集成测试', () => {
   });
   
   describe('响应式设计', () => {
-    it('在移动端应该使用紧凑布局', () => {
+    it('在移动端应该使用紧凑布局', async () => {
       global.innerWidth = 375;
       global.dispatchEvent(new Event('resize'));
       
       renderWithProviders(<Timeline events={mockPrivateEvents} />);
       
+      // 等待 loading 状态消失
+      await waitFor(() => {
+        expect(screen.queryByText(/正在加载用户资料/i)).not.toBeInTheDocument();
+      });
+      
       const timeline = screen.getByTestId('timeline');
       expect(timeline).toBeInTheDocument();
     });
     
-    it('在桌面端应该显示完整信息', () => {
+    it('在桌面端应该显示完整信息', async () => {
       global.innerWidth = 1920;
       global.dispatchEvent(new Event('resize'));
       
       renderWithProviders(<Timeline events={mockPrivateEvents} />);
+      
+      // 等待 loading 状态消失
+      await waitFor(() => {
+        expect(screen.queryByText(/正在加载用户资料/i)).not.toBeInTheDocument();
+      });
       
       const timeline = screen.getByTestId('timeline');
       expect(timeline).toBeInTheDocument();

@@ -4,8 +4,13 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { renderHook, act } from '@testing-library/react';
+import { renderHook, act, waitFor } from '@testing-library/react';
 import { useAuth, AuthProvider } from '../../../src/contexts/AuthContext.jsx';
+import {
+  getCurrentUser,
+  fetchUserAttributes,
+  fetchAuthSession,
+} from 'aws-amplify/auth';
 
 /**
  * Mock @aws-amplify/ui-react
@@ -23,6 +28,16 @@ describe('AuthContext 单元测试', () => {
   beforeEach(() => {
     // 清理 localStorage
     localStorage.clear();
+    
+    // Mock Amplify auth methods to reject (no user logged in)
+    vi.mocked(getCurrentUser).mockRejectedValue(new Error('No current user'));
+    vi.mocked(fetchUserAttributes).mockRejectedValue(new Error('No current user'));
+    vi.mocked(fetchAuthSession).mockResolvedValue({
+      tokens: undefined,
+      credentials: undefined,
+      identityId: undefined,
+      userSub: undefined,
+    });
   });
 
   afterEach(() => {
@@ -34,9 +49,14 @@ describe('AuthContext 单元测试', () => {
   // ============================================
   
   describe('useAuth Hook', () => {
-    it('应该在 Provider 内返回 context 对象', () => {
+    it('应该在 Provider 内返回 context 对象', async () => {
       const { result } = renderHook(() => useAuth(), {
         wrapper: AuthProvider,
+      });
+      
+      // 等待 AuthProvider 初始化完成
+      await waitFor(() => {
+        expect(result.current).not.toBeNull();
       });
       
       expect(result.current).toBeDefined();
