@@ -52,12 +52,21 @@ const EventManager = ({ events, onEventDeleted }) => { // 移除未使用参数
     if (!events) return [];
 
     let filtered = events.filter(event => {
-      // 搜索过滤
       const searchLower = searchTerm.toLowerCase();
+
+      const matchesDetailFields = Object.values(event.details || {}).some((value) => {
+        if (typeof value === 'string') {
+          return value.toLowerCase().includes(searchLower);
+        }
+        if (Array.isArray(value)) {
+          return value.some((item) => typeof item === 'string' && item.toLowerCase().includes(searchLower));
+        }
+        return false;
+      });
+
       const matchesSearch = !searchTerm ||
         (event.type && event.type.toLowerCase().includes(searchLower)) ||
-        (event.details?.notes && event.details.notes.toLowerCase().includes(searchLower)) ||
-        (event.details?.content && event.details.content.toLowerCase().includes(searchLower)) ||
+        matchesDetailFields ||
         getTypeConfig(event.type).label.toLowerCase().includes(searchLower);
 
       // 类型过滤
@@ -157,7 +166,7 @@ const EventManager = ({ events, onEventDeleted }) => { // 移除未使用参数
         onEventDeleted(eventId);
       }
 
-      // 关���详情弹窗
+      // 关闭详情弹窗
       setShowDetails(false);
 
       // 提示用户成功

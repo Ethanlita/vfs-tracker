@@ -76,8 +76,8 @@
   - 📖 [测试架构与工作流程](docs/TESTING_ARCHITECTURE.md) - **三层防御体系**和 Schema 驱动开发完整说明
   - 📖 [完整测试指南](docs/TESTING_GUIDE.md) - 详细的测试编写和运行指南
   - 📖 [契约测试说明](tests/contract/README.md) - 契约测试最佳实践
-  - � [契约测试环境配置](docs/CONTRACT_TEST_ENVIRONMENT.md) - **真实测试环境详情** (重要！)
-  - �📊 [Phase 3.1 状态报告](tests/PHASE3.1_STATUS.md) - 测试框架实施状态
+  - 🔒 [契约测试环境配置](docs/CONTRACT_TEST_ENVIRONMENT.md) - **真实测试环境详情** (重要！)
+  - 📊 [Phase 3.1 状态报告](tests/PHASE3.1_STATUS.md) - 测试框架实施状态
 
 - **规范驱动开发 / Specification-Driven Development**:
   - Phase 3.1 的集成测试定义了**理想的 API 和组件接口**

@@ -164,12 +164,25 @@ vi.mock('aws-amplify/api', () => {
 
 // Mock aws-amplify/auth - 使用我们的 auth mock
 vi.mock('aws-amplify/auth', () => {
-  const { mockFetchAuthSession, mockSignOut, mockSignIn } = 
-    require('./mocks/amplify-auth.js');
+  const { 
+    mockFetchAuthSession, 
+    mockSignOut, 
+    mockSignIn,
+    mockGetCurrentUser,
+    mockFetchUserAttributes,
+    mockUpdateUserAttributes,
+    mockSignUp,
+    mockConfirmSignUp
+  } = require('./mocks/amplify-auth.js');
   return {
     fetchAuthSession: mockFetchAuthSession,
     signOut: mockSignOut,
     signIn: mockSignIn,
+    getCurrentUser: mockGetCurrentUser,
+    fetchUserAttributes: mockFetchUserAttributes,
+    updateUserAttributes: mockUpdateUserAttributes,
+    signUp: mockSignUp,
+    confirmSignUp: mockConfirmSignUp,
   };
 });
 

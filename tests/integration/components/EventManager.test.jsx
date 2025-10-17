@@ -146,17 +146,15 @@ describe('EventManager 组件集成测试', () => {
       expect(screen.getByText('自我测试')).toBeInTheDocument();
     });
 
-    // 注：搜索医院名称的测试暂时跳过，因为搜索功能需要搜索 details.hospital 字段
-    // 但测试数据中没有正确的嵌套结构
-    it.skip('应该能够搜索医院名称（待修复）', async () => {
+    it('应该能够搜索医院名称', async () => {
       render(<EventManager events={mockEvents} onEventDeleted={mockOnEventDeleted} />);
       
       const searchInput = screen.getByPlaceholderText('搜索事件...');
       await user.clear(searchInput);
       await user.type(searchInput, '北京协和医院');
-      
-      // 验证医院检测事件可见
+
       await waitFor(() => {
+        expect(screen.getByText(/显示.*1.*\/.*5.*个事件/)).toBeInTheDocument();
         expect(screen.getByText('医院检测')).toBeInTheDocument();
       });
     });
