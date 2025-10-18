@@ -100,7 +100,8 @@ export default defineConfig({
         statements: 50,
       }
     },
-    testTimeout: 10000,
-    hookTimeout: 10000,
+    // 覆盖率工具会显著降低执行速度（5-10倍），需要更长的超时时间
+    testTimeout: process.env.COVERAGE ? 30000 : 10000,  // coverage模式: 30s, 普通模式: 10s
+    hookTimeout: process.env.COVERAGE ? 20000 : 10000,  // coverage模式: 20s, 普通模式: 10s
   },
 })
