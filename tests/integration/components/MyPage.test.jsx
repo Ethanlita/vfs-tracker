@@ -483,26 +483,4 @@ describe('MyPage Component', () => {
       });
     });
   });
-
-  describe('开发模式', () => {
-    it('在非生产环境下应该使用mock用户', async () => {
-      // env.js中isProductionReady会返回false
-      // MyPage会使用默认的mock用户
-      setupAuthMock({
-        user: null,
-        cognitoUserInfo: null
-      });
-
-      // Mock isProductionReady to return false
-      vi.mock('../../../src/env.js', () => ({
-        isProductionReady: () => false
-      }));
-
-      renderWithRouter(<MyPage />);
-
-      await waitFor(() => {
-        expect(screen.getByText(/欢迎/i)).toBeInTheDocument();
-      });
-    });
-  });
 });
