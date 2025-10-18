@@ -43,26 +43,21 @@ vi.mock('../../../src/utils/avatar', () => ({
   generateAvatar: vi.fn(() => 'data:image/svg+xml;base64,mock-avatar-data')
 }));
 
-// Mock FileReader
-global.FileReader = class {
-  readAsDataURL(blob) {
-    this.onload({ target: { result: 'data:image/png;base64,mock-image-data' } });
-  }
-};
-
-// Mock Image
-global.Image = class {
-  constructor() {
-    setTimeout(() => {
-      if (this.onload) this.onload();
-    }, 0);
-  }
-};
-
 describe('SecureFileUpload Component', () => {
   const user = userEvent.setup();
   const mockUser = { userId: 'test-user-123', username: 'testuser', email: 'test@example.com' };
   const mockOnFileUpdate = vi.fn();
+
+  // 保存原始全局对象
+  let originalFileReader;
+  let originalImage;
+  let originalFetch;
+
+  beforeAll(() => {
+    // 保存原始全局对象引用
+    originalFileReader = global.FileReader;
+    originalImage = global.Image;
+  });
 
   /**
    * 创建测试文件
@@ -81,12 +76,44 @@ describe('SecureFileUpload Component', () => {
     api.getUploadUrl.mockResolvedValue('https://s3.example.com/upload-url');
     api.getFileUrl.mockResolvedValue('https://s3.example.com/file-url');
     api.getAvatarUrl.mockResolvedValue('https://s3.example.com/avatar-url');
+    
+    // 保存原始fetch
+    originalFetch = global.fetch;
     global.fetch = vi.fn().mockResolvedValue({ ok: true });
+
+    // Mock FileReader
+    global.FileReader = class {
+      readAsDataURL(blob) {
+        this.onload({ target: { result: 'data:image/png;base64,mock-image-data' } });
+      }
+    };
+
+    // Mock Image
+    global.Image = class {
+      constructor() {
+        setTimeout(() => {
+          if (this.onload) this.onload();
+        }, 0);
+      }
+    };
   };
 
   beforeEach(() => {
     vi.clearAllMocks();
     setupMocks();
+  });
+
+  afterEach(() => {
+    // 恢复原始全局对象
+    if (originalFileReader) {
+      global.FileReader = originalFileReader;
+    }
+    if (originalImage) {
+      global.Image = originalImage;
+    }
+    if (originalFetch) {
+      global.fetch = originalFetch;
+    }
   });
 
   describe('基础渲染', () => {

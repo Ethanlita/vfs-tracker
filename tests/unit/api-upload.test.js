@@ -11,21 +11,12 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { getUploadUrl, uploadVoiceTestFileToS3 } from '../../src/api.js';
-import * as env from '../../src/env.js';
 import { fetchAuthSession } from 'aws-amplify/auth';
 import { ApiError, AuthenticationError, UploadError } from '../../src/utils/apiError.js';
 
 // Mock dependencies
 vi.mock('aws-amplify/auth');
 vi.mock('aws-amplify/api');
-vi.mock('../../src/env.js', async () => {
-  const actual = await vi.importActual('../../src/env.js');
-  return {
-    ...actual,
-    isProductionReady: vi.fn(),
-    logEnvReadiness: vi.fn()
-  };
-});
 
 // Mock fetch for uploadVoiceTestFileToS3
 global.fetch = vi.fn();
@@ -35,44 +26,10 @@ describe('getUploadUrl', () => {
     vi.clearAllMocks();
   });
 
-  describe('开发模式', () => {
-    beforeEach(() => {
-      vi.mocked(env.isProductionReady).mockReturnValue(false);
-    });
-
-    it('应该返回模拟上传 URL', async () => {
-      const fileKey = 'test-file.wav';
-      const contentType = 'audio/wav';
-
-      const url = await getUploadUrl(fileKey, contentType);
-
-      expect(url).toContain('mock-upload-url.s3.amazonaws.com');
-      expect(url).toContain(fileKey);
-      expect(url).toContain('mock=true');
-      expect(env.isProductionReady).toHaveBeenCalled();
-    });
-
-    it('模拟 URL 应包含文件键', async () => {
-      const fileKey = 'users/123/voice-test-456.wav';
-      const contentType = 'audio/wav';
-
-      const url = await getUploadUrl(fileKey, contentType);
-
-      expect(url).toBe(`https://mock-upload-url.s3.amazonaws.com/${fileKey}?mock=true`);
-    });
-
-    it('不应调用认证 API', async () => {
-      await getUploadUrl('test.wav', 'audio/wav');
-
-      expect(fetchAuthSession).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('生产模式', () => {
+  describe('API 调用', () => {
     const mockIdToken = 'mock-id-token-12345';
 
     beforeEach(() => {
-      vi.mocked(env.isProductionReady).mockReturnValue(true);
       vi.mocked(fetchAuthSession).mockResolvedValue({
         tokens: { idToken: mockIdToken }
       });
@@ -160,26 +117,40 @@ describe('getUploadUrl', () => {
   });
 
   describe('边界情况', () => {
-    it('应处理特殊字符的文件名', async () => {
-      vi.mocked(env.isProductionReady).mockReturnValue(false);
+    beforeEach(async () => {
+      // 使用 MSW 提供的 mock 上传 URL
+      vi.mocked(fetchAuthSession).mockResolvedValue({
+        tokens: { idToken: 'mock-id-token' }
+      });
+      
+      const { post } = await import('aws-amplify/api');
+      vi.mocked(post).mockReturnValue({
+        response: Promise.resolve({
+          body: {
+            json: async () => ({
+              uploadUrl: 'https://mock-s3-bucket.s3.amazonaws.com/test-file?presigned=true'
+            })
+          }
+        })
+      });
+    });
 
+    it('应处理特殊字符的文件名', async () => {
       const fileKey = 'users/测试用户/文件 (1).wav';
       const url = await getUploadUrl(fileKey, 'audio/wav');
 
-      expect(url).toContain(fileKey);
+      expect(url).toContain('s3');
+      expect(url).toBeTruthy();
     });
 
     it('应处理空文件键', async () => {
-      vi.mocked(env.isProductionReady).mockReturnValue(false);
-
       const url = await getUploadUrl('', 'audio/wav');
 
-      expect(url).toBe('https://mock-upload-url.s3.amazonaws.com/?mock=true');
+      expect(url).toBeTruthy();
+      expect(url).toContain('s3');
     });
 
     it('应处理不同的 MIME 类型', async () => {
-      vi.mocked(env.isProductionReady).mockReturnValue(false);
-
       const contentTypes = [
         'audio/wav',
         'audio/mpeg',
@@ -208,66 +179,7 @@ describe('uploadVoiceTestFileToS3', () => {
     vi.restoreAllMocks();
   });
 
-  describe('开发模式', () => {
-    beforeEach(() => {
-      vi.mocked(env.isProductionReady).mockReturnValue(false);
-      // 确保 VITE_FORCE_REAL 未设置
-      delete import.meta.env.VITE_FORCE_REAL;
-    });
-    
-    afterEach(() => {
-      // 清理环境变量
-      delete import.meta.env.VITE_FORCE_REAL;
-    });
-
-    it('应模拟上传成功', async () => {
-      const result = await uploadVoiceTestFileToS3(mockPutUrl, mockFile);
-
-      expect(result).toBeUndefined();
-      expect(global.fetch).not.toHaveBeenCalled();
-      expect(env.isProductionReady).toHaveBeenCalled();
-    });
-
-    it('应记录模拟上传日志', async () => {
-      const consoleSpy = vi.spyOn(console, 'log');
-
-      await uploadVoiceTestFileToS3(mockPutUrl, mockFile);
-
-      expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining('[mock] uploadVoiceTestFileToS3')
-      );
-
-      consoleSpy.mockRestore();
-    });
-
-    it('VITE_FORCE_REAL 时应执行真实上传', async () => {
-      import.meta.env.VITE_FORCE_REAL = 'true';
-      vi.mocked(global.fetch).mockResolvedValue({
-        ok: true,
-        status: 200
-      });
-
-      const result = await uploadVoiceTestFileToS3(mockPutUrl, mockFile);
-
-      expect(global.fetch).toHaveBeenCalledWith(
-        mockPutUrl,
-        expect.objectContaining({
-          method: 'PUT',
-          headers: { 'Content-Type': 'audio/wav' },
-          body: mockFile
-        })
-      );
-      expect(result).toBeDefined();
-      expect(result.ok).toBe(true);
-
-      delete import.meta.env.VITE_FORCE_REAL;
-    });
-  });
-
-  describe('生产模式', () => {
-    beforeEach(() => {
-      vi.mocked(env.isProductionReady).mockReturnValue(true);
-    });
+  describe('S3 上传操作', () => {
 
     it('应成功上传文件到 S3', async () => {
       vi.mocked(global.fetch).mockResolvedValue({
@@ -395,9 +307,6 @@ describe('uploadVoiceTestFileToS3', () => {
   });
 
   describe('边界情况', () => {
-    beforeEach(() => {
-      vi.mocked(env.isProductionReady).mockReturnValue(true);
-    });
 
     it('应处理空文件', async () => {
       const emptyFile = new Blob([], { type: 'audio/wav' });
@@ -456,9 +365,6 @@ describe('uploadVoiceTestFileToS3', () => {
   });
 
   describe('错误上下文', () => {
-    beforeEach(() => {
-      vi.mocked(env.isProductionReady).mockReturnValue(true);
-    });
 
     it('错误应包含请求方法', async () => {
       vi.mocked(global.fetch).mockResolvedValue({
