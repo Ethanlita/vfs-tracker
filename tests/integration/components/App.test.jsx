@@ -57,13 +57,6 @@ vi.mock('../../../src/contexts/AuthContext', async () => {
   };
 });
 
-// Mock env.js
-const mockIsProductionReady = vi.fn();
-
-vi.mock('../../../src/env.js', () => ({
-  isProductionReady: () => mockIsProductionReady()
-}));
-
 // Mock all page components
 vi.mock('../../../src/components/Layout', () => ({
   default: ({ children }) => <div data-testid="layout">{children}</div>
@@ -149,10 +142,9 @@ describe('App Component', () => {
   const user = userEvent.setup();
 
   /**
-   * 设置默认的开发模式 mock
+   * 设置默认的未认证状态 mock
    */
-  const setupDevMode = () => {
-    mockIsProductionReady.mockReturnValue(false);
+  const setupDefaultAuth = () => {
     mockUseAuth.mockReturnValue({
       isAuthenticated: false,
       needsProfileSetup: false,
@@ -162,10 +154,9 @@ describe('App Component', () => {
   };
 
   /**
-   * 设置生产模式 mock
+   * 设置已认证用户 mock
    */
-  const setupProductionMode = (authStatus = 'unauthenticated') => {
-    mockIsProductionReady.mockReturnValue(true);
+  const setupAuthenticatedUser = (authStatus = 'unauthenticated') => {
     mockAuthStatus.mockReturnValue(authStatus);
     mockUseAuth.mockReturnValue({
       isAuthenticated: authStatus === 'authenticated',
@@ -177,12 +168,12 @@ describe('App Component', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    setupDevMode(); // 默认使用开发模式
+    setupDefaultAuth(); // 默认未认证状态
   });
 
   describe('基础渲染', () => {
     it('在开发模式下应该渲染应用', () => {
-      setupDevMode();
+      setupDefaultAuth();
       
       render(
         <MemoryRouter initialEntries={['/']}>
@@ -195,7 +186,7 @@ describe('App Component', () => {
     });
 
     it('在生产模式下应该包含 Authenticator.Provider', () => {
-      setupProductionMode();
+      setupAuthenticatedUser();
       
       render(
         <MemoryRouter initialEntries={['/']}>
@@ -208,7 +199,7 @@ describe('App Component', () => {
     });
 
     it('应该渲染 RegionSwitchBanner', () => {
-      setupDevMode();
+      setupDefaultAuth();
       
       render(
         <MemoryRouter initialEntries={['/']}>
@@ -222,7 +213,7 @@ describe('App Component', () => {
 
   describe('公开路由', () => {
     it('应该渲染首页 (/)', () => {
-      setupDevMode();
+      setupDefaultAuth();
       
       render(
         <MemoryRouter initialEntries={['/']}>
@@ -234,7 +225,7 @@ describe('App Component', () => {
     });
 
     it('应该渲染公开仪表板 (/dashboard)', () => {
-      setupDevMode();
+      setupDefaultAuth();
       
       render(
         <MemoryRouter initialEntries={['/dashboard']}>
@@ -246,7 +237,7 @@ describe('App Component', () => {
     });
 
     it('应该渲染文章列表 (/posts)', () => {
-      setupDevMode();
+      setupDefaultAuth();
       
       render(
         <MemoryRouter initialEntries={['/posts']}>
@@ -258,7 +249,7 @@ describe('App Component', () => {
     });
 
     it('应该渲染文档查看器 (/docs)', () => {
-      setupDevMode();
+      setupDefaultAuth();
       
       render(
         <MemoryRouter initialEntries={['/docs']}>
@@ -270,7 +261,7 @@ describe('App Component', () => {
     });
 
     it('应该渲染音频工具 (/note-frequency-tool)', () => {
-      setupDevMode();
+      setupDefaultAuth();
       
       render(
         <MemoryRouter initialEntries={['/note-frequency-tool']}>
@@ -282,7 +273,7 @@ describe('App Component', () => {
     });
 
     it('应该渲染时间轴测试页面 (/timeline-test)', () => {
-      setupDevMode();
+      setupDefaultAuth();
       
       render(
         <MemoryRouter initialEntries={['/timeline-test']}>
@@ -294,7 +285,7 @@ describe('App Component', () => {
     });
 
     it('应该渲染开发模式测试页面 (/dev-test)', () => {
-      setupDevMode();
+      setupDefaultAuth();
       
       render(
         <MemoryRouter initialEntries={['/dev-test']}>
@@ -306,107 +297,9 @@ describe('App Component', () => {
     });
   });
 
-  describe('保护路由 - 开发模式', () => {
-    it('开发模式下应该允许访问保护路由', () => {
-      setupDevMode();
-      
-      render(
-        <MemoryRouter initialEntries={['/mypage']}>
-          <App />
-        </MemoryRouter>
-      );
-
-      expect(screen.getByTestId('mypage')).toBeInTheDocument();
-    });
-
-    it('开发模式下应该渲染添加事件页面', () => {
-      setupDevMode();
-      
-      render(
-        <MemoryRouter initialEntries={['/add-event']}>
-          <App />
-        </MemoryRouter>
-      );
-
-      expect(screen.getByTestId('add-event')).toBeInTheDocument();
-    });
-
-    it('开发模式下应该渲染事件管理页面', () => {
-      setupDevMode();
-      
-      render(
-        <MemoryRouter initialEntries={['/event-manager']}>
-          <App />
-        </MemoryRouter>
-      );
-
-      expect(screen.getByTestId('event-manager')).toBeInTheDocument();
-    });
-
-    it('开发模式下应该渲染资料管理页面', () => {
-      setupDevMode();
-      
-      render(
-        <MemoryRouter initialEntries={['/profile-manager']}>
-          <App />
-        </MemoryRouter>
-      );
-
-      expect(screen.getByTestId('profile-manager')).toBeInTheDocument();
-    });
-
-    it('开发模式下应该渲染资料设置向导', () => {
-      setupDevMode();
-      
-      render(
-        <MemoryRouter initialEntries={['/profile-setup-wizard']}>
-          <App />
-        </MemoryRouter>
-      );
-
-      expect(screen.getByTestId('profile-setup-wizard')).toBeInTheDocument();
-    });
-
-    it('开发模式下应该渲染嗓音测试向导', () => {
-      setupDevMode();
-      
-      render(
-        <MemoryRouter initialEntries={['/voice-test']}>
-          <App />
-        </MemoryRouter>
-      );
-
-      expect(screen.getByTestId('voice-test-wizard')).toBeInTheDocument();
-    });
-
-    it('开发模式下应该渲染快速基频测试', () => {
-      setupDevMode();
-      
-      render(
-        <MemoryRouter initialEntries={['/quick-f0-test']}>
-          <App />
-        </MemoryRouter>
-      );
-
-      expect(screen.getByTestId('quick-f0-test')).toBeInTheDocument();
-    });
-
-    it('开发模式下应该渲染音阶练习页面', () => {
-      setupDevMode();
-      
-      render(
-        <MemoryRouter initialEntries={['/scale-practice']}>
-          <App />
-        </MemoryRouter>
-      );
-
-      expect(screen.getByTestId('scale-practice')).toBeInTheDocument();
-    });
-  });
-
-  describe('保护路由 - 生产模式', () => {
-    it('生产模式下未认证用户应该被重定向到首页', () => {
-      setupProductionMode('unauthenticated');
+  describe('保护路由', () => {
+    it('未认证用户应该被重定向到首页', () => {
+      setupAuthenticatedUser('unauthenticated');
       
       render(
         <MemoryRouter initialEntries={['/mypage']}>
@@ -419,8 +312,8 @@ describe('App Component', () => {
       expect(screen.queryByTestId('mypage')).not.toBeInTheDocument();
     });
 
-    it('生产模式下认证用户应该能访问保护路由', () => {
-      setupProductionMode('authenticated');
+    it('认证用户应该能访问保护路由', () => {
+      setupAuthenticatedUser('authenticated');
       
       render(
         <MemoryRouter initialEntries={['/mypage']}>
@@ -431,8 +324,8 @@ describe('App Component', () => {
       expect(screen.getByTestId('mypage')).toBeInTheDocument();
     });
 
-    it('生产模式下配置中状态应该显示加载指示器', () => {
-      setupProductionMode('configuring');
+    it('配置中状态应该显示加载指示器', () => {
+      setupAuthenticatedUser('configuring');
       
       render(
         <MemoryRouter initialEntries={['/mypage']}>
@@ -446,7 +339,7 @@ describe('App Component', () => {
 
   describe('资料设置引导', () => {
     it('需要设置资料时应该自动跳转到向导页面', async () => {
-      mockIsProductionReady.mockReturnValue(false);
+      mockAuthStatus.mockReturnValue('authenticated');
       mockUseAuth.mockReturnValue({
         isAuthenticated: true,
         needsProfileSetup: true,
@@ -467,7 +360,7 @@ describe('App Component', () => {
     });
 
     it('资料加载中时不应该跳转', () => {
-      mockIsProductionReady.mockReturnValue(false);
+      mockAuthStatus.mockReturnValue('authenticated');
       mockUseAuth.mockReturnValue({
         isAuthenticated: true,
         needsProfileSetup: true,
@@ -489,7 +382,7 @@ describe('App Component', () => {
 
   describe('Service Worker 更新横幅', () => {
     it('收到更新事件时应该显示横幅', async () => {
-      setupDevMode();
+      setupDefaultAuth();
       
       render(
         <MemoryRouter initialEntries={['/']}>
@@ -507,7 +400,7 @@ describe('App Component', () => {
     });
 
     it('点击立即刷新按钮应该重新加载页面', async () => {
-      setupDevMode();
+      setupDefaultAuth();
       const mockReload = vi.fn();
       Object.defineProperty(window, 'location', {
         value: { reload: mockReload },
@@ -535,7 +428,7 @@ describe('App Component', () => {
     });
 
     it('点击稍后提醒应该隐藏横幅', async () => {
-      setupDevMode();
+      setupDefaultAuth();
       
       render(
         <MemoryRouter initialEntries={['/']}>
@@ -562,7 +455,7 @@ describe('App Component', () => {
 
   describe('未知路由', () => {
     it('应该将未知路径重定向到首页', () => {
-      setupDevMode();
+      setupDefaultAuth();
       
       render(
         <MemoryRouter initialEntries={['/unknown-route']}>
@@ -581,8 +474,7 @@ describe('App Component', () => {
         writable: true,
         value: false
       });
-
-      mockIsProductionReady.mockReturnValue(false);
+      mockAuthStatus.mockReturnValue('authenticated');
       mockUseAuth.mockReturnValue({
         isAuthenticated: true,
         needsProfileSetup: true,
