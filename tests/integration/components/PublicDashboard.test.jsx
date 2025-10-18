@@ -338,9 +338,9 @@ describe('PublicDashboard Component', () => {
         expect(api.getUserPublicProfile).toHaveBeenCalledWith('user1');
       });
 
-      // 抽屉中应该显示用户名
+      // 抽屉中应该显示用户名（使用role和aria-label）
       await waitFor(() => {
-        const drawer = document.querySelector('.fixed.inset-0.z-50');
+        const drawer = screen.getByRole('dialog', { name: /用户公开资料/i });
         expect(drawer).toBeInTheDocument();
         expect(within(drawer).getByText('用户1')).toBeInTheDocument();
         expect(within(drawer).getByText('user1')).toBeInTheDocument();
@@ -393,13 +393,12 @@ describe('PublicDashboard Component', () => {
       });
 
       // 点击关闭按钮
-      const closeButton = screen.getByRole('button', { name: /关闭/i });
+      const closeButton = screen.getByRole('button', { name: /关闭用户资料/i });
       await user.click(closeButton);
 
       // 抽屉应该消失
       await waitFor(() => {
-        const drawer = document.querySelector('.fixed.inset-0.z-50');
-        expect(drawer).not.toBeInTheDocument();
+        expect(screen.queryByRole('dialog', { name: /用户公开资料/i })).not.toBeInTheDocument();
       });
     });
 
@@ -422,14 +421,17 @@ describe('PublicDashboard Component', () => {
         expect(api.getUserPublicProfile).toHaveBeenCalled();
       });
 
-      // 点击背景遮罩
-      const overlay = document.querySelector('.absolute.inset-0.bg-black\\/30');
+      // 点击背景遮罩（通过dialog外部点击）
+      const dialog = screen.getByRole('dialog', { name: /用户公开资料/i });
+      // 获取dialog的父元素（fixed inset-0 z-50层）
+      const dialogContainer = dialog;
+      // 点击遮罩层（在dialog内部通过aria-hidden="true"标记）
+      const overlay = dialogContainer.querySelector('[aria-hidden="true"]');
       await user.click(overlay);
 
       // 抽屉应该消失
       await waitFor(() => {
-        const drawer = document.querySelector('.fixed.inset-0.z-50');
-        expect(drawer).not.toBeInTheDocument();
+        expect(screen.queryByRole('dialog', { name: /用户公开资料/i })).not.toBeInTheDocument();
       });
     });
   });

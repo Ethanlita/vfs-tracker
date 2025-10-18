@@ -209,91 +209,122 @@ describe('Timeline 组件集成测试', () => {
     });
   });
   
-  describe('过滤功能', () => {
-    it('应该支持按事件类型过滤', async () => {
-      const user = userEvent.setup();
+  describe('数据可视化', () => {
+    it('应该在有基频数据时显示趋势图表', async () => {
+      // Timeline组件自动获取数据并生成图表,不需要传入props
+      renderWithProviders(<Timeline />);
       
-      renderWithProviders(
-        <Timeline events={mockPrivateEvents} showFilters={true} />
-      );
+      // 等待加载完成
+      await waitFor(() => {
+        expect(screen.queryByText(/正在加载图表/i)).not.toBeInTheDocument();
+      }, { timeout: 3000 });
       
-      // 查找过滤选项
-      const filterButton = screen.queryByRole('button', { name: /筛选/i });
+      // 验证图表卡片标题存在
+      expect(screen.getByText('声音频率图表')).toBeInTheDocument();
       
-      if (filterButton) {
-        await user.click(filterButton);
+      // 验证Chart.js的canvas元素存在（如果有基频数据）
+      // 或验证空状态提示（如果无基频数据）
+      await waitFor(() => {
+        const canvas = document.querySelector('canvas');
+        const emptyState = screen.queryByText(/暂无图表数据/i);
         
-        // 选择自测类型
-        const selfTestFilter = screen.queryByRole('checkbox', { name: /自我测试/i });
-        if (selfTestFilter) {
-          await user.click(selfTestFilter);
-          
-          await waitFor(() => {
-            // 验证只显示自测事件
-            const items = screen.getAllByRole('article');
-            expect(items.length).toBeGreaterThan(0);
-          });
-        }
-      }
+        // 两者至少存在一个
+        expect(canvas || emptyState).toBeTruthy();
+      });
     });
     
-    it('应该支持按日期范围过滤', async () => {
-      const user = userEvent.setup();
+    it('应该显示图表标题和描述', async () => {
+      renderWithProviders(<Timeline />);
       
-      renderWithProviders(
-        <Timeline events={mockPrivateEvents} showDateRange={true} />
-      );
+      // 等待组件完全加载
+      await waitFor(() => {
+        expect(screen.queryByText(/正在加载用户资料/i)).not.toBeInTheDocument();
+      }, { timeout: 3000 });
       
-      // 查找日期范围选择器
-      const startDateInput = screen.queryByLabelText(/开始日期/i);
-      const endDateInput = screen.queryByLabelText(/结束日期/i);
-      
-      if (startDateInput && endDateInput) {
-        await user.type(startDateInput, '2024-01-01');
-        await user.type(endDateInput, '2024-12-31');
-        
-        await waitFor(() => {
-          // 验证过滤结果
-          const items = screen.getAllByRole('article');
-          expect(items.length).toBeGreaterThanOrEqual(0);
-        });
-      }
+      // 验证图表卡片的标题和描述文本
+      expect(screen.getByText('声音频率图表')).toBeInTheDocument();
+      expect(screen.getByText(/查看您的声音基频随时间的变化/i)).toBeInTheDocument();
     });
   });
   
-  describe('数据可视化', () => {
-    it('应该显示趋势图表', () => {
-      renderWithProviders(
-        <Timeline events={mockPrivateEvents} showChart={true} />
-      );
+  describe('时间轴活动显示', () => {
+    it('应该显示最近活动卡片', async () => {
+      renderWithProviders(<Timeline />);
       
-      // 查找图表元素
-      const chart = screen.queryByRole('img', { name: /趋势图/i }) ||
-                   document.querySelector('canvas') ||
-                   document.querySelector('svg[class*="chart"]');
+      await waitFor(() => {
+        expect(screen.queryByText(/正在加载活动/i)).not.toBeInTheDocument();
+      }, { timeout: 3000 });
       
-      if (chart) {
-        expect(chart).toBeInTheDocument();
-      }
+      // 验证"最近活动"标题存在
+      expect(screen.getByText('最近活动')).toBeInTheDocument();
+      expect(screen.getByText(/查看您最近的嗓音相关活动记录/i)).toBeInTheDocument();
     });
     
-    it('图表应该反映事件的关键指标', async () => {
-      const selfTestEvents = mockPrivateEvents.filter(e => 
-        e.type === 'self_test' && e.details?.full_metrics
-      );
+    it('应该按日期分组显示活动', async () => {
+      renderWithProviders(<Timeline />);
       
-      if (selfTestEvents.length > 1) {
-        renderWithProviders(
-          <Timeline events={selfTestEvents} showChart={true} chartMetric="pitch" />
-        );
+      await waitFor(() => {
+        expect(screen.queryByText(/正在加载活动/i)).not.toBeInTheDocument();
+      }, { timeout: 3000 });
+      
+      // Timeline使用"今天"、"昨天"或日期格式分组
+      // 验证至少有日期标题或空状态存在
+      await waitFor(() => {
+        const dayHeaders = screen.queryAllByText(/今天|昨天|\d+月\d+日/);
+        const emptyState = screen.queryByText(/暂无最近活动/i);
         
-        await waitFor(() => {
-          // 验证图表显示了基频数据
-          const chart = document.querySelector('canvas') || 
-                       document.querySelector('svg[class*="chart"]');
-          expect(chart).toBeInTheDocument();
-        });
-      }
+        // 有数据时显示日期分组,无数据时显示空状态
+        expect(dayHeaders.length > 0 || emptyState).toBeTruthy();
+      });
+    });
+    
+    it('应该显示活动描述文本', async () => {
+      renderWithProviders(<Timeline />);
+      
+      await waitFor(() => {
+        expect(screen.queryByText(/正在加载活动/i)).not.toBeInTheDocument();
+      }, { timeout: 3000 });
+      
+      // 验证活动描述存在（如果有数据）
+      // Timeline显示中文描述如"进行了自我测试"、"完成了医院检测"等
+      await waitFor(() => {
+        const activities = screen.queryAllByText(/进行了|完成了|参加了|记录了/);
+        const emptyState = screen.queryByText(/暂无最近活动/i);
+        
+        // 有数据时有活动描述,无数据时有空状态提示
+        expect(activities.length > 0 || emptyState).toBeTruthy();
+      });
+    });
+  });
+  
+  describe('AI鼓励消息', () => {
+    it('应该显示AI头像', async () => {
+      renderWithProviders(<Timeline />);
+      
+      // 等待组件完全加载
+      await waitFor(() => {
+        expect(screen.queryByText(/正在加载用户资料/i)).not.toBeInTheDocument();
+      }, { timeout: 3000 });
+      
+      // 验证AI头像存在
+      const avatar = screen.getByAltText('AI Assistant');
+      expect(avatar).toBeInTheDocument();
+      expect(avatar).toHaveAttribute('src', '/img.png');
+    });
+    
+    it('应该显示AI消息内容', async () => {
+      renderWithProviders(<Timeline />);
+      
+      // AI消息可能在加载中或已显示
+      // 等待加载完成后应该有文本内容（默认消息或API返回的消息）
+      await waitFor(() => {
+        // 查找包含中文文本的元素（AI消息区域）
+        const messageArea = screen.queryByText(/持续跟踪|持续进步|加油/i);
+        const loadingDots = document.querySelector('.animate-bounce');
+        
+        // 加载中或已显示消息
+        expect(messageArea || loadingDots).toBeTruthy();
+      }, { timeout: 3000 });
     });
   });
   

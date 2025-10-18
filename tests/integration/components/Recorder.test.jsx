@@ -20,6 +20,34 @@ describe('Recorder Component', () => {
   let onStopRecordingMock;
   let onDiscardRecordingMock;
 
+  // 保存原始全局对象
+  let originalAudioContext;
+  let originalWebkitAudioContext;
+  let originalOfflineAudioContext;
+  let originalMediaRecorder;
+  let originalGetUserMedia;
+  let originalRequestAnimationFrame;
+  let originalCancelAnimationFrame;
+  let originalCreateObjectURL;
+  let originalRevokeObjectURL;
+  let originalConfirm;
+  let originalAlert;
+
+  beforeAll(() => {
+    // 保存原始全局对象引用
+    originalAudioContext = global.AudioContext;
+    originalWebkitAudioContext = global.webkitAudioContext;
+    originalOfflineAudioContext = global.OfflineAudioContext;
+    originalMediaRecorder = global.MediaRecorder;
+    originalGetUserMedia = global.navigator?.mediaDevices?.getUserMedia;
+    originalRequestAnimationFrame = global.requestAnimationFrame;
+    originalCancelAnimationFrame = global.cancelAnimationFrame;
+    originalCreateObjectURL = global.URL?.createObjectURL;
+    originalRevokeObjectURL = global.URL?.revokeObjectURL;
+    originalConfirm = global.confirm;
+    originalAlert = global.alert;
+  });
+
   beforeEach(() => {
     // 重置所有mock
     onRecordingCompleteMock = vi.fn();
@@ -119,6 +147,41 @@ describe('Recorder Component', () => {
   afterEach(() => {
     cleanup(); // 清理之前渲染的组件
     vi.clearAllMocks();
+
+    // 恢复原始全局对象
+    if (originalAudioContext !== undefined) {
+      global.AudioContext = originalAudioContext;
+    }
+    if (originalWebkitAudioContext !== undefined) {
+      global.webkitAudioContext = originalWebkitAudioContext;
+    }
+    if (originalOfflineAudioContext !== undefined) {
+      global.OfflineAudioContext = originalOfflineAudioContext;
+    }
+    if (originalMediaRecorder !== undefined) {
+      global.MediaRecorder = originalMediaRecorder;
+    }
+    if (originalGetUserMedia !== undefined && global.navigator?.mediaDevices) {
+      global.navigator.mediaDevices.getUserMedia = originalGetUserMedia;
+    }
+    if (originalRequestAnimationFrame !== undefined) {
+      global.requestAnimationFrame = originalRequestAnimationFrame;
+    }
+    if (originalCancelAnimationFrame !== undefined) {
+      global.cancelAnimationFrame = originalCancelAnimationFrame;
+    }
+    if (originalCreateObjectURL !== undefined && global.URL) {
+      global.URL.createObjectURL = originalCreateObjectURL;
+    }
+    if (originalRevokeObjectURL !== undefined && global.URL) {
+      global.URL.revokeObjectURL = originalRevokeObjectURL;
+    }
+    if (originalConfirm !== undefined) {
+      global.confirm = originalConfirm;
+    }
+    if (originalAlert !== undefined) {
+      global.alert = originalAlert;
+    }
     vi.clearAllTimers();
   });
 
