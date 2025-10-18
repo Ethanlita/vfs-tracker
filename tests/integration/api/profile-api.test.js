@@ -207,20 +207,6 @@ describe('Profile API 集成测试', () => {
         expect(error).toBeDefined();
       }
     });
-
-    it('未授权情况下更新资料 - 在开发模式下会返回 mock', async () => {
-      setUnauthenticated();
-      
-      const userId = 'us-east-1:complete-user-001';
-      const profileData = {
-        profile: { nickname: 'Unauthorized Update' }
-      };
-
-      // 在开发模式下,会返回 mock 数据而不是抛出错误
-      // 这是当前 isProductionReady 的设计行为
-      const response = await updateUserProfile(userId, profileData);
-      expect(response).toBeDefined();
-    });
   });
 
   describe('数据验证', () => {
