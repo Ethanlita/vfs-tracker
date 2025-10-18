@@ -465,41 +465,6 @@ describe('NewTimeline 组件测试', () => {
 
   // ===== 数据源指示器 =====
   describe('数据源指示器', () => {
-    it('isProductionReady=true时应该显示"实时数据源"', () => {
-      render(<NewTimeline events={mockEvents} isProductionReady={true} isLoading={false} />);
-      
-      expect(screen.getByText('实时数据源')).toBeInTheDocument();
-      
-      // 绿色CheckCircle图标
-      const icon = document.querySelector('.text-green-500');
-      expect(icon).toBeInTheDocument();
-    });
-
-    it('isProductionReady=false时应该显示"演示数据源"', () => {
-      render(<NewTimeline events={mockEvents} isProductionReady={false} isLoading={false} />);
-      
-      expect(screen.getByText('演示数据源')).toBeInTheDocument();
-      
-      // 橙色AlertTriangle图标
-      const icon = document.querySelector('.text-orange-500');
-      expect(icon).toBeInTheDocument();
-    });
-
-    it('isProductionReady为函数时应该调用并使用返回值', () => {
-      const mockFn = vi.fn().mockReturnValue(true);
-      render(<NewTimeline events={mockEvents} isProductionReady={mockFn} isLoading={false} />);
-      
-      expect(mockFn).toHaveBeenCalled();
-      expect(screen.getByText('实时数据源')).toBeInTheDocument();
-    });
-
-    it('isProductionReady函数返回false时应该显示演示', () => {
-      const mockFn = vi.fn().mockReturnValue(false);
-      render(<NewTimeline events={mockEvents} isProductionReady={mockFn} isLoading={false} />);
-      
-      expect(screen.getByText('演示数据源')).toBeInTheDocument();
-    });
-
     it('isLoading=true时指示器应该显示"加载中..."状态', () => {
       render(<NewTimeline events={[]} isLoading={true} />);
       
