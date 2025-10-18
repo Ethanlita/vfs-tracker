@@ -57,9 +57,6 @@ describe('AddEvent 组件测试', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     
-    // 默认: 生产模式
-    vi.mocked(env.isProductionReady).mockReturnValue(true);
-    
     // 默认: 已认证用户
     mockUseAuth.mockReturnValue({
       user: {
@@ -232,14 +229,6 @@ describe('AddEvent 组件测试', () => {
       expect(container.querySelector('.bg-pink-300')).toBeInTheDocument();
       expect(container.querySelector('.bg-purple-300')).toBeInTheDocument();
       expect(container.querySelector('.bg-blue-300')).toBeInTheDocument();
-    });
-  });
-
-  describe('环境检查', () => {
-    it('应该调用isProductionReady检查环境', () => {
-      renderAddEvent();
-      
-      expect(env.isProductionReady).toHaveBeenCalled();
     });
   });
 });

@@ -425,18 +425,4 @@ describe('EventManagerPage Component', () => {
       });
     });
   });
-
-  describe('环境配置', () => {
-    it('应该将 isProductionReady 传递给 EventManager', async () => {
-      renderWithRouter(<EventManagerPage />);
-
-      await waitFor(() => {
-        expect(api.getEventsByUserId).toHaveBeenCalled();
-      });
-
-      // EventManager 应该接收到 isProductionReady prop
-      // 由于 EventManager 是实际渲染的，我们可以验证它的行为
-      // 但这更多是 EventManager 的测试范畴
-    });
-  });
 });

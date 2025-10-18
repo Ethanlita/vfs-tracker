@@ -59,11 +59,8 @@ describe('EventForm 组件测试', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    // 使用生产模式 - 开发模式将在Phase 4废弃
-    vi.mocked(env.isProductionReady).mockReturnValue(true);
     
-    // Mock API - 生产模式需要
-    // API应该echo回提交的数据,加上服务器生成的字段
+    // Mock API - echo回提交的数据,加上服务器生成的字段
     vi.mocked(api.addEvent).mockImplementation(async (eventData) => ({
       item: {
         eventId: 'test-event-123',
@@ -510,7 +507,6 @@ describe('EventForm 组件测试', () => {
 
   it('应该处理API调用', async () => {
     const user = userEvent.setup();
-    vi.mocked(env.isProductionReady).mockReturnValue(true);
     vi.mocked(api.addEvent).mockResolvedValue({
       item: { eventId: 'api-test-123' }
     });
