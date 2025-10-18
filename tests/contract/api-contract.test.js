@@ -14,8 +14,15 @@ import * as schemas from '../../src/api/schemas.js';
 let amplifyConfigured = false;
 let currentSession = null;
 
-// 环境检查
-function isProductionReady() {
+/**
+ * 检查契约测试所需的环境变量是否完整配置
+ * 
+ * @returns {boolean} 所有必需变量都存在时返回 true
+ * @note 这是契约测试的**前置条件检查**，不是"开发模式"判断
+ * @note 契约测试必须调用真实 API，环境不满足时应该 skip 而非 mock
+ * @context Phase 3.2 P2.2: 重命名以避免与"开发模式废除"混淆
+ */
+function hasRequiredEnvVars() {
   return !!(
     import.meta.env.VITE_COGNITO_USER_POOL_ID &&
     import.meta.env.VITE_COGNITO_USER_POOL_WEB_CLIENT_ID &&
@@ -24,6 +31,10 @@ function isProductionReady() {
   );
 }
 
+/**
+ * 检查是否配置了测试用户凭证
+ * @returns {boolean} 测试凭证存在时返回 true
+ */
 function hasTestCredentials() {
   return !!(
     import.meta.env.TEST_USER_EMAIL &&
@@ -37,8 +48,9 @@ function getApiEndpoint() {
   return stage ? `${baseUrl}/${stage}` : baseUrl;
 }
 
-const skipIfNotConfigured = isProductionReady() ? it : it.skip;
-const skipIfNotAuthenticated = (isProductionReady() && hasTestCredentials()) ? it : it.skip;
+// 契约测试前置条件：环境变量完整才执行，否则跳过
+const skipIfNotConfigured = hasRequiredEnvVars() ? it : it.skip;
+const skipIfNotAuthenticated = (hasRequiredEnvVars() && hasTestCredentials()) ? it : it.skip;
 
 // 配置 Amplify
 async function configureAmplify() {
@@ -112,7 +124,7 @@ async function signInTestUser() {
 describe('API Contract 测试', () => {
   
   beforeAll(async () => {
-    if (isProductionReady()) {
+    if (hasRequiredEnvVars()) {
       console.log('\n✅ 契约测试环境配置完成');
       console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
       console.log(`🌐 API Endpoint: ${import.meta.env.VITE_API_ENDPOINT}`);
@@ -123,7 +135,7 @@ describe('API Contract 测试', () => {
       console.log('   可能会产生费用和数据修改\n');
     }
     
-    console.log(`✓ 生产环境配置已就绪`);
+    console.log(`✓ 环境配置已就绪`);
     console.log(`✓ 测试用户凭证已配置`);
   });
   
