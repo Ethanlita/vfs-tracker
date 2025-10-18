@@ -2,6 +2,12 @@
  * 单元测试: src/env.js
  * 
  * 测试环境配置和 API endpoint 管理函数
+ * 
+ * @deprecated 此文件测试 isProductionReady 函数及相关环境配置逻辑
+ * @note Phase 3.2 P2.2: 保留此测试以验证历史行为,等待 Phase 4 完成后删除
+ * @see Phase 4 计划 - 彻底废除开发模式 (ROADMAP.md)
+ * @context 当前 isProductionReady 在测试中已移除依赖,但源代码中仍在使用
+ *          Phase 4 将移除所有源代码中的 isProductionReady 调用,届时删除此文件
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
