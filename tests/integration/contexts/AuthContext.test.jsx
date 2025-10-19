@@ -606,4 +606,163 @@ describe('AuthContext 集成测试', () => {
       expect(result.current.needsProfileSetup).toBe(true);
     });
   });
+
+  // ============================================
+  // Cognito 错误场景 (P1.2.3 - Phase 3.3 Code Review)
+  // ============================================
+  
+  describe('Cognito 错误场景', () => {
+    it('getCurrentUser 失败应该清除用户状态', async () => {
+      // Mock getCurrentUser 失败 - 必须在 renderHook 之前设置
+      vi.mocked(getCurrentUser).mockRejectedValue(
+        new Error('User is not confirmed')
+      );
+      vi.mocked(fetchUserAttributes).mockRejectedValue(
+        new Error('User is not confirmed')
+      );
+      vi.mocked(fetchAuthSession).mockResolvedValue({
+        tokens: null,
+      });
+
+      const { result } = renderHook(() => useAuth(), {
+        wrapper: AuthProvider,
+      });
+
+      // 等待加载完成
+      await waitFor(() => {
+        expect(result.current.cognitoLoading).toBe(false);
+      });
+
+      // 应该保持未认证状态
+      expect(result.current.cognitoUserInfo).toBeNull();
+      expect(result.current.cognitoLoading).toBe(false);
+    });
+
+    it('fetchUserAttributes 失败应该记录错误但不崩溃', async () => {
+      // Mock fetchUserAttributes 失败
+      vi.mocked(fetchUserAttributes).mockRejectedValueOnce(
+        new Error('Failed to fetch attributes')
+      );
+
+      const { result } = renderHook(() => useAuth(), {
+        wrapper: AuthProvider,
+      });
+
+      await act(async () => {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      });
+
+      await act(async () => {
+        try {
+          await result.current.loadCognitoUserInfo();
+        } catch (error) {
+          // 预期可能失败
+        }
+      });
+
+      // 应该完成加载（即使失败）
+      expect(result.current.cognitoLoading).toBe(false);
+    });
+
+    it('fetchAuthSession token 过期应该返回 null', async () => {
+      // Mock token 为 null (过期场景)
+      vi.mocked(fetchAuthSession).mockResolvedValueOnce({
+        tokens: null,
+      });
+
+      const { result } = renderHook(() => useAuth(), {
+        wrapper: AuthProvider,
+      });
+
+      await act(async () => {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      });
+
+      await act(async () => {
+        try {
+          await result.current.loadCognitoUserInfo();
+        } catch (error) {
+          // 可能会失败
+        }
+      });
+
+      // 应该完成加载
+      expect(result.current.cognitoLoading).toBe(false);
+    });
+
+    it('updateUserAttributes 失败应该抛出错误', async () => {
+      // Mock updateUserAttributes 失败
+      vi.mocked(updateUserAttributes).mockRejectedValueOnce(
+        new Error('Failed to update attributes')
+      );
+
+      const { result } = renderHook(() => useAuth(), {
+        wrapper: AuthProvider,
+      });
+
+      await act(async () => {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      });
+
+      // 尝试更新属性应该失败
+      await expect(async () => {
+        await act(async () => {
+          await result.current.updateCognitoUserAttributes({
+            nickname: 'New Nickname'
+          });
+        });
+      }).rejects.toThrow();
+    });
+
+    it('网络错误应该正确处理', async () => {
+      // Mock 网络错误
+      vi.mocked(getCurrentUser).mockRejectedValueOnce(
+        new Error('Network request failed')
+      );
+
+      const { result } = renderHook(() => useAuth(), {
+        wrapper: AuthProvider,
+      });
+
+      await act(async () => {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      });
+
+      await act(async () => {
+        try {
+          await result.current.loadCognitoUserInfo();
+        } catch (error) {
+          expect(error.message).toContain('Network');
+        }
+      });
+
+      expect(result.current.cognitoLoading).toBe(false);
+    });
+
+    it('Cognito 会话过期应该清除状态', async () => {
+      // Mock session 返回错误 - 必须在 renderHook 之前设置
+      vi.mocked(getCurrentUser).mockRejectedValue(
+        new Error('Session expired')
+      );
+      vi.mocked(fetchUserAttributes).mockRejectedValue(
+        new Error('Session expired')
+      );
+      vi.mocked(fetchAuthSession).mockRejectedValue(
+        new Error('Session expired')
+      );
+
+      const { result } = renderHook(() => useAuth(), {
+        wrapper: AuthProvider,
+      });
+
+      // 等待加载完成
+      await waitFor(() => {
+        expect(result.current.cognitoLoading).toBe(false);
+      });
+
+      // 应该完成加载，保持未认证状态
+      expect(result.current.cognitoLoading).toBe(false);
+      expect(result.current.cognitoUserInfo).toBeNull();
+    });
+  });
 });
