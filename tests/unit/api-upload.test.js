@@ -18,9 +18,6 @@ import { ApiError, AuthenticationError, UploadError } from '../../src/utils/apiE
 vi.mock('aws-amplify/auth');
 vi.mock('aws-amplify/api');
 
-// Mock fetch for uploadVoiceTestFileToS3
-global.fetch = vi.fn();
-
 describe('getUploadUrl', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -169,14 +166,22 @@ describe('getUploadUrl', () => {
 describe('uploadVoiceTestFileToS3', () => {
   const mockPutUrl = 'https://s3.amazonaws.com/bucket/key?presigned=true';
   const mockFile = new Blob(['test audio data'], { type: 'audio/wav' });
+  
+  // 备份原始 global.fetch
+  let originalFetch;
 
   beforeEach(() => {
     vi.clearAllMocks();
+    // 保存原始 fetch
+    originalFetch = global.fetch;
+    // 创建 mock fetch
     global.fetch = vi.fn();
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
+    // 恢复原始 fetch
+    global.fetch = originalFetch;
   });
 
   describe('S3 上传操作', () => {

@@ -15,6 +15,18 @@ vi.mock('../../../src/utils/attachments.js', () => ({
 import { resolveAttachmentUrl } from '../../../src/utils/attachments.js';
 
 describe('EventList 组件测试', () => {
+  // 备份原始的 window.open
+  let originalOpen;
+
+  beforeAll(() => {
+    originalOpen = window.open;
+  });
+
+  afterAll(() => {
+    // 恢复原始的 window.open
+    window.open = originalOpen;
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     // Mock window.open
