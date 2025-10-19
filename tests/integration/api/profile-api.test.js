@@ -4,6 +4,7 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
+import { http, HttpResponse } from 'msw';
 import { getUserProfile, updateUserProfile, getUserPublicProfile } from '../../../src/api.js';
 import { profileSchema, socialAccountSchema } from '../../../src/api/schemas.js';
 import { 
@@ -15,6 +16,10 @@ import {
   setAuthenticated, 
   setUnauthenticated 
 } from '../../../src/test-utils/mocks/amplify-auth.js';
+import { server } from '../../../src/test-utils/mocks/msw-server.js';
+import { ApiError } from '../../../src/utils/apiError.js';
+
+const API_URL = 'https://2rzxc2x5l8.execute-api.us-east-1.amazonaws.com/dev';
 
 describe('Profile API 集成测试', () => {
   beforeEach(() => {
@@ -195,17 +200,218 @@ describe('Profile API 集成测试', () => {
     it('获取不存在的用户公共资料应该返回 404', async () => {
       const userId = 'us-east-1:nonexistent-user';
       
-      // 注意：在测试环境中，MSW 返回 404 但 Amplify API 可能将其视为成功响应
-      // 真实 API 会抛出错误，但在测试中我们检查错误消息
+      // 注意:在测试环境中,MSW 返回 404 但 Amplify API 可能将其视为成功响应
+      // 真实 API 会抛出错误,但在测试中我们检查错误消息
       try {
         const response = await getUserPublicProfile(userId);
-        // 如果返回成功，检查是否包含错误消息
+        // 如果返回成功,检查是否包含错误消息
         expect(response).toHaveProperty('message');
         expect(response.message).toContain('not found');
       } catch (error) {
-        // 如果抛出错误也是可以的（真实 API 行为）
+        // 如果抛出错误也是可以的(真实 API 行为)
         expect(error).toBeDefined();
       }
+    });
+  });
+
+  describe('错误状态码处理 (P1.2.4 - Phase 3.3 Code Review)', () => {
+    const testUserId = 'us-east-1:test-user';
+    const profileData = { profile: { nickname: '测试用户', name: '张三' } };
+
+    describe('getUserProfile 错误状态码', () => {
+      it('应该处理 401 未授权错误', async () => {
+        server.use(
+          http.get(`${API_URL}/user/${testUserId}`, () => {
+            return HttpResponse.json(
+              { error: 'Unauthorized', message: 'Token 已过期' },
+              { status: 401 }
+            );
+          })
+        );
+
+        try {
+          await getUserProfile(testUserId);
+          expect.fail('Should have thrown ApiError');
+        } catch (error) {
+          expect(error).toBeInstanceOf(ApiError);
+          expect(error.statusCode).toBe(401);
+        }
+      });
+
+      it('应该处理 403 禁止访问错误', async () => {
+        server.use(
+          http.get(`${API_URL}/user/${testUserId}`, () => {
+            return HttpResponse.json(
+              { error: 'Forbidden', message: '无权访问此用户资料' },
+              { status: 403 }
+            );
+          })
+        );
+
+        try {
+          await getUserProfile(testUserId);
+          expect.fail('Should have thrown ApiError');
+        } catch (error) {
+          expect(error).toBeInstanceOf(ApiError);
+          expect(error.statusCode).toBe(403);
+        }
+      });
+
+      it('应该处理 404 用户不存在错误', async () => {
+        server.use(
+          http.get(`${API_URL}/user/${testUserId}`, () => {
+            return HttpResponse.json(
+              { error: 'Not Found', message: '用户不存在' },
+              { status: 404 }
+            );
+          })
+        );
+
+        try {
+          await getUserProfile(testUserId);
+          expect.fail('Should have thrown ApiError');
+        } catch (error) {
+          expect(error).toBeInstanceOf(ApiError);
+          expect(error.statusCode).toBe(404);
+        }
+      });
+
+      it('应该处理 500 服务器错误', async () => {
+        server.use(
+          http.get(`${API_URL}/user/${testUserId}`, () => {
+            return HttpResponse.json(
+              { error: 'Internal Server Error', message: '数据库查询失败' },
+              { status: 500 }
+            );
+          })
+        );
+
+        try {
+          await getUserProfile(testUserId);
+          expect.fail('Should have thrown ApiError');
+        } catch (error) {
+          expect(error).toBeInstanceOf(ApiError);
+          expect(error.statusCode).toBe(500);
+        }
+      });
+    });
+
+    describe('updateUserProfile 错误状态码', () => {
+      it('应该处理 401 未授权错误', async () => {
+        server.use(
+          http.put(`${API_URL}/user/${testUserId}`, () => {
+            return HttpResponse.json(
+              { error: 'Unauthorized', message: 'Token 已过期' },
+              { status: 401 }
+            );
+          })
+        );
+
+        try {
+          await updateUserProfile(testUserId, profileData);
+          expect.fail('Should have thrown ApiError');
+        } catch (error) {
+          expect(error).toBeInstanceOf(ApiError);
+          expect(error.statusCode).toBe(401);
+        }
+      });
+
+      it('应该处理 403 禁止访问错误', async () => {
+        server.use(
+          http.put(`${API_URL}/user/${testUserId}`, () => {
+            return HttpResponse.json(
+              { error: 'Forbidden', message: '无权修改此用户资料' },
+              { status: 403 }
+            );
+          })
+        );
+
+        try {
+          await updateUserProfile(testUserId, profileData);
+          expect.fail('Should have thrown ApiError');
+        } catch (error) {
+          expect(error).toBeInstanceOf(ApiError);
+          expect(error.statusCode).toBe(403);
+        }
+      });
+
+      it('应该处理 400 数据验证错误', async () => {
+        server.use(
+          http.put(`${API_URL}/user/${testUserId}`, () => {
+            return HttpResponse.json(
+              { error: 'Bad Request', message: '资料数据格式错误' },
+              { status: 400 }
+            );
+          })
+        );
+
+        try {
+          await updateUserProfile(testUserId, profileData);
+          expect.fail('Should have thrown ApiError');
+        } catch (error) {
+          expect(error).toBeInstanceOf(ApiError);
+          expect(error.statusCode).toBe(400);
+        }
+      });
+
+      it('应该处理 500 服务器错误', async () => {
+        server.use(
+          http.put(`${API_URL}/user/${testUserId}`, () => {
+            return HttpResponse.json(
+              { error: 'Internal Server Error', message: '更新失败' },
+              { status: 500 }
+            );
+          })
+        );
+
+        try {
+          await updateUserProfile(testUserId, profileData);
+          expect.fail('Should have thrown ApiError');
+        } catch (error) {
+          expect(error).toBeInstanceOf(ApiError);
+          expect(error.statusCode).toBe(500);
+        }
+      });
+    });
+
+    describe('getUserPublicProfile 错误状态码', () => {
+      it('应该处理 404 用户不存在错误', async () => {
+        server.use(
+          http.get(`${API_URL}/user/${testUserId}/public`, () => {
+            return HttpResponse.json(
+              { error: 'Not Found', message: '用户不存在' },
+              { status: 404 }
+            );
+          })
+        );
+
+        try {
+          await getUserPublicProfile(testUserId);
+          expect.fail('Should have thrown ApiError');
+        } catch (error) {
+          expect(error).toBeInstanceOf(ApiError);
+          expect(error.statusCode).toBe(404);
+        }
+      });
+
+      it('应该处理 500 服务器错误', async () => {
+        server.use(
+          http.get(`${API_URL}/user/${testUserId}/public`, () => {
+            return HttpResponse.json(
+              { error: 'Internal Server Error', message: '数据库查询失败' },
+              { status: 500 }
+            );
+          })
+        );
+
+        try {
+          await getUserPublicProfile(testUserId);
+          expect.fail('Should have thrown ApiError');
+        } catch (error) {
+          expect(error).toBeInstanceOf(ApiError);
+          expect(error.statusCode).toBe(500);
+        }
+      });
     });
   });
 

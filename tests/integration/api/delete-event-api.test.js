@@ -7,8 +7,13 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
+import { http, HttpResponse } from 'msw';
 import { deleteEvent } from '../../../src/api.js';
 import { setAuthenticated } from '../../../src/test-utils/mocks/amplify-auth.js';
+import { server } from '../../../src/test-utils/mocks/msw-server.js';
+import { ApiError } from '../../../src/utils/apiError.js';
+
+const API_URL = 'https://2rzxc2x5l8.execute-api.us-east-1.amazonaws.com/dev';
 
 describe('Delete Event API 集成测试', () => {
   beforeEach(() => {
@@ -67,6 +72,88 @@ describe('Delete Event API 集成测试', () => {
         expect(result).toBeDefined();
         expect(result.message).toBeDefined();
       }
+    });
+  });
+
+  describe('错误处理 (P1.2.4 - Phase 3.3 Code Review)', () => {
+    const testEventId = 'test-event-001';
+
+    describe('deleteEvent 错误状态码', () => {
+      it('应该处理 401 未授权错误', async () => {
+        server.use(
+          http.delete(`${API_URL}/event/${testEventId}`, () => {
+            return HttpResponse.json(
+              { error: 'Unauthorized', message: 'Token 已过期' },
+              { status: 401 }
+            );
+          })
+        );
+
+        try {
+          await deleteEvent(testEventId);
+          expect.fail('Should have thrown ApiError');
+        } catch (error) {
+          expect(error).toBeInstanceOf(ApiError);
+          expect(error.statusCode).toBe(401);
+        }
+      });
+
+      it('应该处理 403 禁止访问错误', async () => {
+        server.use(
+          http.delete(`${API_URL}/event/${testEventId}`, () => {
+            return HttpResponse.json(
+              { error: 'Forbidden', message: '无权删除此事件' },
+              { status: 403 }
+            );
+          })
+        );
+
+        try {
+          await deleteEvent(testEventId);
+          expect.fail('Should have thrown ApiError');
+        } catch (error) {
+          expect(error).toBeInstanceOf(ApiError);
+          expect(error.statusCode).toBe(403);
+        }
+      });
+
+      it('应该处理 404 事件不存在错误', async () => {
+        server.use(
+          http.delete(`${API_URL}/event/${testEventId}`, () => {
+            return HttpResponse.json(
+              { error: 'Not Found', message: '事件不存在' },
+              { status: 404 }
+            );
+          })
+        );
+
+        try {
+          await deleteEvent(testEventId);
+          expect.fail('Should have thrown ApiError');
+        } catch (error) {
+          expect(error).toBeInstanceOf(ApiError);
+          expect(error.statusCode).toBe(404);
+        }
+      });
+
+      it('应该处理 500 服务器错误', async () => {
+        server.use(
+          http.delete(`${API_URL}/event/${testEventId}`, () => {
+            return HttpResponse.json(
+              { error: 'Internal Server Error', message: '删除失败' },
+              { status: 500 }
+            );
+          })
+        );
+
+        try {
+          await deleteEvent(testEventId);
+          expect.fail('Should have thrown ApiError');
+        } catch (error) {
+          expect(error).toBeInstanceOf(ApiError);
+          expect(error.statusCode).toBe(500);
+        }
+      });
     });
   });
 });
