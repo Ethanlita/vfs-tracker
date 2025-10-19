@@ -249,8 +249,11 @@ describe('PendingSyncButton 组件测试', () => {
       const queue = [{ eventData: { type: 'self-test' } }];
       localStorageMock.getItem.mockReturnValue(JSON.stringify(queue));
       
-      // 让addEvent挂起一段时间
-      api.addEvent.mockImplementation(() => new Promise(resolve => setTimeout(resolve, 100)));
+      // 让 addEvent 返回一个挂起的 Promise
+      let resolveSync;
+      api.addEvent.mockImplementation(() => new Promise(resolve => {
+        resolveSync = resolve;
+      }));
       
       render(<PendingSyncButton />);
       
@@ -259,6 +262,9 @@ describe('PendingSyncButton 组件测试', () => {
       
       // 同步中应该显示"同步中..."
       expect(screen.getByRole('button', { name: '同步中...' })).toBeDisabled();
+      
+      // 完成同步以避免挂起
+      resolveSync({ item: { eventId: '123' } });
     });
   });
 

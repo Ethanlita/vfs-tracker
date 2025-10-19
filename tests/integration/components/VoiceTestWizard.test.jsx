@@ -322,10 +322,10 @@ describe('VoiceTestWizard Component', () => {
       const discardButton = screen.getByRole('button', { name: /模拟放弃录音/i });
       await user.click(discardButton);
 
-      // 等待一下确保没有上传
-      await act(async () => {
-        await new Promise(resolve => setTimeout(resolve, 100));
-      });
+      // 等待确保没有触发上传
+      await waitFor(() => {
+        expect(api.getVoiceTestUploadUrl).not.toHaveBeenCalled();
+      }, { timeout: 200 });
 
       expect(api.getVoiceTestUploadUrl).not.toHaveBeenCalled();
     });

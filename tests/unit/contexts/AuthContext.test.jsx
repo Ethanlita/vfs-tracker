@@ -92,9 +92,8 @@ describe('AuthContext 单元测试', () => {
       });
 
       // 等待初始化完成
-      await act(async () => {
-        // AuthProvider 会在 mount 时执行 checkExistingAuth
-        await new Promise(resolve => setTimeout(resolve, 100));
+      await waitFor(() => {
+        expect(result.current.authInitialized).toBe(true);
       });
 
       expect(result.current.user).toBeNull();
@@ -111,9 +110,9 @@ describe('AuthContext 单元测试', () => {
         wrapper: AuthProvider,
       });
 
-      // 初始化需要一些时间
-      await act(async () => {
-        await new Promise(resolve => setTimeout(resolve, 100));
+      // 等待初始化完成
+      await waitFor(() => {
+        expect(result.current.authInitialized).toBe(true);
       });
 
       expect(result.current.authInitialized).toBe(true);
@@ -130,8 +129,8 @@ describe('AuthContext 单元测试', () => {
         wrapper: AuthProvider,
       });
 
-      await act(async () => {
-        await new Promise(resolve => setTimeout(resolve, 100));
+      await waitFor(() => {
+        expect(result.current.authInitialized).toBe(true);
       });
 
       expect(result.current.user).toBeNull();
@@ -143,8 +142,8 @@ describe('AuthContext 单元测试', () => {
         wrapper: AuthProvider,
       });
 
-      await act(async () => {
-        await new Promise(resolve => setTimeout(resolve, 100));
+      await waitFor(() => {
+        expect(result.current.authInitialized).toBe(true);
       });
 
       // 初始状态: 无用户,isAuthenticated 应为 false
@@ -163,8 +162,8 @@ describe('AuthContext 单元测试', () => {
         wrapper: AuthProvider,
       });
 
-      await act(async () => {
-        await new Promise(resolve => setTimeout(resolve, 100));
+      await waitFor(() => {
+        expect(result.current.authInitialized).toBe(true);
       });
 
       // 认证方法
@@ -195,8 +194,8 @@ describe('AuthContext 单元测试', () => {
         wrapper: AuthProvider,
       });
 
-      await act(async () => {
-        await new Promise(resolve => setTimeout(resolve, 100));
+      await waitFor(() => {
+        expect(result.current.authInitialized).toBe(true);
       });
 
       // null 或 object

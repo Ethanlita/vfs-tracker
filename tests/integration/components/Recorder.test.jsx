@@ -650,9 +650,7 @@ describe('Recorder Component', () => {
       const startButton = screen.getByRole('button', { name: /开始录音/i });
       await user.click(startButton);
 
-      // 等待音频分析开始
-      await new Promise(resolve => setTimeout(resolve, 100));
-
+      // 等待音频分析开始并显示平均电平
       await waitFor(() => {
         expect(screen.getByText(/平均电平/i)).toBeInTheDocument();
       }, { timeout: 2000 });
@@ -664,9 +662,7 @@ describe('Recorder Component', () => {
       const startButton = screen.getByRole('button', { name: /开始录音/i });
       await user.click(startButton);
 
-      // 等待音频分析开始
-      await new Promise(resolve => setTimeout(resolve, 100));
-
+      // 等待音频分析开始并显示峰值
       await waitFor(() => {
         expect(screen.getByText(/峰值/i)).toBeInTheDocument();
       }, { timeout: 2000 });

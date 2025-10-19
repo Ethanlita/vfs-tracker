@@ -74,9 +74,9 @@ describe('AuthContext 集成测试', () => {
         wrapper: AuthProvider,
       });
 
-      // 等待初始化
-      await act(async () => {
-        await new Promise(resolve => setTimeout(resolve, 100));
+      // 等待初始化完成
+      await waitFor(() => {
+        expect(result.current.authInitialized).toBe(true);
       });
 
       const mockUser = {
@@ -115,8 +115,8 @@ describe('AuthContext 集成测试', () => {
         wrapper: AuthProvider,
       });
 
-      await act(async () => {
-        await new Promise(resolve => setTimeout(resolve, 100));
+      await waitFor(() => {
+        expect(result.current.authInitialized).toBe(true);
       });
 
       const mockUser = {
@@ -148,8 +148,8 @@ describe('AuthContext 集成测试', () => {
         wrapper: AuthProvider,
       });
 
-      await act(async () => {
-        await new Promise(resolve => setTimeout(resolve, 100));
+      await waitFor(() => {
+        expect(result.current.authInitialized).toBe(true);
       });
 
       // 先登录
@@ -181,8 +181,8 @@ describe('AuthContext 集成测试', () => {
         wrapper: AuthProvider,
       });
 
-      await act(async () => {
-        await new Promise(resolve => setTimeout(resolve, 100));
+      await waitFor(() => {
+        expect(result.current.authInitialized).toBe(true);
       });
 
       // 先登录
@@ -233,8 +233,8 @@ describe('AuthContext 集成测试', () => {
         wrapper: AuthProvider,
       });
 
-      await act(async () => {
-        await new Promise(resolve => setTimeout(resolve, 100));
+      await waitFor(() => {
+        expect(result.current.authInitialized).toBe(true);
       });
 
       // 加载资料
@@ -272,8 +272,8 @@ describe('AuthContext 集成测试', () => {
         wrapper: AuthProvider,
       });
 
-      await act(async () => {
-        await new Promise(resolve => setTimeout(resolve, 100));
+      await waitFor(() => {
+        expect(result.current.authInitialized).toBe(true);
       });
 
       await act(async () => {
@@ -318,8 +318,8 @@ describe('AuthContext 集成测试', () => {
         wrapper: AuthProvider,
       });
 
-      await act(async () => {
-        await new Promise(resolve => setTimeout(resolve, 100));
+      await waitFor(() => {
+        expect(result.current.authInitialized).toBe(true);
       });
 
       await act(async () => {
@@ -350,8 +350,8 @@ describe('AuthContext 集成测试', () => {
         wrapper: AuthProvider,
       });
 
-      await act(async () => {
-        await new Promise(resolve => setTimeout(resolve, 100));
+      await waitFor(() => {
+        expect(result.current.authInitialized).toBe(true);
       });
 
       await act(async () => {
@@ -394,8 +394,8 @@ describe('AuthContext 集成测试', () => {
         wrapper: AuthProvider,
       });
 
-      await act(async () => {
-        await new Promise(resolve => setTimeout(resolve, 100));
+      await waitFor(() => {
+        expect(result.current.authInitialized).toBe(true);
       });
 
       // 先登录
@@ -461,8 +461,8 @@ describe('AuthContext 集成测试', () => {
         wrapper: AuthProvider,
       });
 
-      await act(async () => {
-        await new Promise(resolve => setTimeout(resolve, 100));
+      await waitFor(() => {
+        expect(result.current.authInitialized).toBe(true);
       });
 
       // 先设置用户
@@ -498,8 +498,8 @@ describe('AuthContext 集成测试', () => {
         wrapper: AuthProvider,
       });
 
-      await act(async () => {
-        await new Promise(resolve => setTimeout(resolve, 100));
+      await waitFor(() => {
+        expect(result.current.authInitialized).toBe(true);
       });
 
       act(() => {
@@ -529,8 +529,8 @@ describe('AuthContext 集成测试', () => {
         wrapper: AuthProvider,
       });
 
-      await act(async () => {
-        await new Promise(resolve => setTimeout(resolve, 100));
+      await waitFor(() => {
+        expect(result.current.authInitialized).toBe(true);
       });
 
       await act(async () => {
@@ -549,8 +549,8 @@ describe('AuthContext 集成测试', () => {
         wrapper: AuthProvider,
       });
 
-      await act(async () => {
-        await new Promise(resolve => setTimeout(resolve, 100));
+      await waitFor(() => {
+        expect(result.current.authInitialized).toBe(true);
       });
 
       act(() => {
@@ -590,8 +590,8 @@ describe('AuthContext 集成测试', () => {
         wrapper: AuthProvider,
       });
 
-      await act(async () => {
-        await new Promise(resolve => setTimeout(resolve, 100));
+      await waitFor(() => {
+        expect(result.current.authInitialized).toBe(true);
       });
 
       await act(async () => {
@@ -648,8 +648,8 @@ describe('AuthContext 集成测试', () => {
         wrapper: AuthProvider,
       });
 
-      await act(async () => {
-        await new Promise(resolve => setTimeout(resolve, 100));
+      await waitFor(() => {
+        expect(result.current.authInitialized).toBe(true);
       });
 
       await act(async () => {
@@ -674,8 +674,8 @@ describe('AuthContext 集成测试', () => {
         wrapper: AuthProvider,
       });
 
-      await act(async () => {
-        await new Promise(resolve => setTimeout(resolve, 100));
+      await waitFor(() => {
+        expect(result.current.authInitialized).toBe(true);
       });
 
       await act(async () => {
@@ -700,8 +700,8 @@ describe('AuthContext 集成测试', () => {
         wrapper: AuthProvider,
       });
 
-      await act(async () => {
-        await new Promise(resolve => setTimeout(resolve, 100));
+      await waitFor(() => {
+        expect(result.current.authInitialized).toBe(true);
       });
 
       // 尝试更新属性应该失败
@@ -724,8 +724,8 @@ describe('AuthContext 集成测试', () => {
         wrapper: AuthProvider,
       });
 
-      await act(async () => {
-        await new Promise(resolve => setTimeout(resolve, 100));
+      await waitFor(() => {
+        expect(result.current.authInitialized).toBe(true);
       });
 
       await act(async () => {

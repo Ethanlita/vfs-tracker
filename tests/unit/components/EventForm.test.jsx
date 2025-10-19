@@ -478,9 +478,20 @@ describe('EventForm 组件测试', () => {
   it('应该在提交时显示加载状态', async () => {
     const user = userEvent.setup();
 
-    // 模拟延迟的API调用
+    // 模拟延迟的API调用 - 使用 Promise 延迟而不是 setTimeout
+    let resolvePromise;
     vi.mocked(api.addEvent).mockImplementation(
-      () => new Promise(resolve => setTimeout(() => resolve({ item: { eventId: '123', userId: 'test-user-123', type: 'self_test', date: new Date().toISOString(), details: {} } }), 100))
+      () => new Promise(resolve => {
+        resolvePromise = () => resolve({ 
+          item: { 
+            eventId: '123', 
+            userId: 'test-user-123', 
+            type: 'self_test', 
+            date: new Date().toISOString(), 
+            details: {} 
+          } 
+        });
+      })
     );
 
     renderEventForm();
@@ -500,6 +511,14 @@ describe('EventForm 组件测试', () => {
 
     await waitFor(() => {
       expect(submitButton).toBeDisabled();
+    });
+
+    // 完成 Promise 以结束测试
+    resolvePromise();
+    
+    // 等待状态更新
+    await waitFor(() => {
+      expect(submitButton).not.toBeDisabled();
     });
   });
 
