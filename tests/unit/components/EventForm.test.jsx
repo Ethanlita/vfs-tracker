@@ -592,6 +592,75 @@ describe('EventForm 组件测试', () => {
       expect(mockOnEventAdded).not.toHaveBeenCalled();
     });
 
+    it('应该阻止未填写声音状态的自我测试提交', async () => {
+      const user = userEvent.setup();
+      mockOnEventAdded.mockClear();
+
+      renderEventForm();
+
+      // 只填写发声方式，不填写声音状态
+      const voicingCheckbox = screen.getByLabelText('没夹');
+      await user.click(voicingCheckbox);
+
+      // 提交表单
+      const submitButton = screen.getByRole('button', { name: /添加新事件/ });
+      await user.click(submitButton);
+
+      // 验证提交被阻止
+      expect(api.addEvent).not.toHaveBeenCalled();
+      expect(mockOnEventAdded).not.toHaveBeenCalled();
+
+      // 验证显示错误消息
+      await waitFor(() => {
+        expect(screen.getByText(/请至少选择一项声音状态/)).toBeInTheDocument();
+      });
+    });
+
+    it('应该阻止未填写发声方式的自我测试提交', async () => {
+      const user = userEvent.setup();
+      mockOnEventAdded.mockClear();
+
+      renderEventForm();
+
+      // 只填写声音状态，不填写发声方式
+      const soundCheckbox = screen.getByLabelText('好');
+      await user.click(soundCheckbox);
+
+      // 提交表单
+      const submitButton = screen.getByRole('button', { name: /添加新事件/ });
+      await user.click(submitButton);
+
+      // 验证提交被阻止
+      expect(api.addEvent).not.toHaveBeenCalled();
+      expect(mockOnEventAdded).not.toHaveBeenCalled();
+
+      // 验证显示错误消息
+      await waitFor(() => {
+        expect(screen.getByText(/请至少选择一项发声方式/)).toBeInTheDocument();
+      });
+    });
+
+    it('应该阻止未填写声音状态和发声方式的自我测试提交（多个错误）', async () => {
+      const user = userEvent.setup();
+      mockOnEventAdded.mockClear();
+
+      renderEventForm();
+
+      // 不填写任何必填字段，直接提交
+      const submitButton = screen.getByRole('button', { name: /添加新事件/ });
+      await user.click(submitButton);
+
+      // 验证提交被阻止
+      expect(api.addEvent).not.toHaveBeenCalled();
+      expect(mockOnEventAdded).not.toHaveBeenCalled();
+
+      // 验证显示错误消息（两个错误应该合并显示，用分号连接）
+      await waitFor(() => {
+        const errorMessage = screen.getByText(/请至少选择一项声音状态；请至少选择一项发声方式/);
+        expect(errorMessage).toBeInTheDocument();
+      });
+    });
+
     // TODO: 添加更多错误场景测试
     // - 显示错误消息UI (需要先 mock ApiErrorNotice 或使用真实组件)
     // - 网络错误处理

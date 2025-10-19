@@ -423,6 +423,124 @@ describe('API Schemas 单元测试', () => {
     });
   });
 
+  // ==================== testSessionSchema 测试 ====================
+
+  describe('testSessionSchema', () => {
+    it('应该接受有效的完整测试会话数据', () => {
+      const validSession = {
+        sessionId: '123e4567-e89b-12d3-a456-426614174000',
+        userId: 'us-east-1:12345678-1234-1234-1234-123456789012',
+        status: 'done',
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        metrics: {
+          fundamentalFrequency: 180,
+          shimmer: 3.5,
+          jitter: 1.2,
+          hnr: 18.5,
+          formants: { f1: 800, f2: 2200, f3: 3000 },
+          pitch: { max: 350, min: 100 }
+        },
+        charts: {
+          pitchContourChart: 'charts/session-123/pitch.png',
+          spectrogramChart: 'charts/session-123/spectrogram.png',
+          waveformChart: 'charts/session-123/waveform.png'
+        },
+        reportPdf: 'reports/session-123/report.pdf'
+      };
+
+      const result = validateData(schemas.testSession, validSession);
+      if (!result.valid) {
+        console.log('Validation errors:', JSON.stringify(result.errors, null, 2));
+      }
+      expect(result.valid).toBe(true);
+    });
+
+    it('应该接受最小必填字段的测试会话', () => {
+      const minimalSession = {
+        sessionId: 'a1b2c3d4-e5f6-4a5b-8c9d-0e1f2a3b4c5d',
+        userId: 'us-east-1:98765432-abcd-ef01-2345-6789abcdef01',
+        status: 'created',
+        createdAt: 1234567890
+      };
+
+      const result = validateData(schemas.testSession, minimalSession);
+      expect(result.valid).toBe(true);
+    });
+
+    it('应该接受所有有效的状态值', () => {
+      const validStatuses = ['created', 'processing', 'done', 'failed'];
+      
+      validStatuses.forEach(status => {
+        const session = {
+          sessionId: '11111111-2222-3333-4444-555555555555',
+          userId: 'us-east-1:aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',
+          status,
+          createdAt: Date.now()
+        };
+        
+        const result = validateData(schemas.testSession, session);
+        expect(result.valid).toBe(true, `Status "${status}" should be valid`);
+      });
+    });
+
+    it('应该拒绝缺少必填字段的测试会话', () => {
+      const invalidSessions = [
+        { userId: 'us-east-1:12345678-1234-1234-1234-123456789012', status: 'done', createdAt: Date.now() }, // 缺少 sessionId
+        { sessionId: 'a1b2c3d4-e5f6-4a5b-8c9d-0e1f2a3b4c5d', status: 'done', createdAt: Date.now() }, // 缺少 userId
+        { sessionId: 'a1b2c3d4-e5f6-4a5b-8c9d-0e1f2a3b4c5d', userId: 'us-east-1:12345678-1234-1234-1234-123456789012', createdAt: Date.now() }, // 缺少 status
+        { sessionId: 'a1b2c3d4-e5f6-4a5b-8c9d-0e1f2a3b4c5d', userId: 'us-east-1:12345678-1234-1234-1234-123456789012', status: 'done' } // 缺少 createdAt
+      ];
+
+      invalidSessions.forEach((session, index) => {
+        const result = validateData(schemas.testSession, session);
+        expect(result.valid).toBe(false, `Invalid session ${index} should fail validation`);
+      });
+    });
+
+    it('应该拒绝无效的状态值', () => {
+      const session = {
+        sessionId: 'a1b2c3d4-e5f6-4a5b-8c9d-0e1f2a3b4c5d',
+        userId: 'us-east-1:12345678-1234-1234-1234-123456789012',
+        status: 'invalid_status',
+        createdAt: Date.now()
+      };
+
+      const result = validateData(schemas.testSession, session);
+      expect(result.valid).toBe(false);
+      // 检查错误消息中包含 status 字段的错误
+      const statusError = result.errors.find(err => err.path === 'status');
+      expect(statusError).toBeTruthy();
+      expect(statusError.message).toContain('must be one of');
+    });
+
+    it('应该接受带错误信息的失败会话', () => {
+      const failedSession = {
+        sessionId: 'ffffffff-1111-2222-3333-444444444444',
+        userId: 'us-east-1:12345678-1234-1234-1234-123456789012',
+        status: 'failed',
+        createdAt: Date.now(),
+        errorMessage: '音频文件损坏，无法处理'
+      };
+
+      const result = validateData(schemas.testSession, failedSession);
+      expect(result.valid).toBe(true);
+    });
+
+    it('应该接受 ISO 8601 格式的时间戳', () => {
+      const session = {
+        sessionId: '12341234-5678-90ab-cdef-123456789abc',
+        userId: 'us-east-1:12345678-1234-1234-1234-123456789012',
+        status: 'done',
+        createdAt: '2024-01-15T10:30:00.000Z',
+        updatedAt: '2024-01-15T11:00:00.000Z'
+      };
+
+      const result = validateData(schemas.testSession, session);
+      expect(result.valid).toBe(true);
+    });
+  });
+
   // ==================== Schema-Fixture 同步检查 ====================
   
   describe('Schema-Fixture 同步检查', () => {

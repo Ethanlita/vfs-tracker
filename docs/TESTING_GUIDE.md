@@ -730,7 +730,59 @@ afterEach(() => {
 });
 ```
 
-### 6. 合理使用 Mock
+### 6. 全局对象清理规范
+
+**问题背景**：测试中修改全局对象（如 `window.innerWidth`）会污染全局状态，导致后续测试失败。
+
+**解决方案**：使用 `beforeEach` 和 `afterEach` 保存和恢复全局对象：
+
+```javascript
+describe('响应式组件测试', () => {
+  let originalInnerWidth;
+
+  // 保存原始值
+  beforeEach(() => {
+    originalInnerWidth = window.innerWidth;
+  });
+
+  // 每个测试后恢复原始值
+  afterEach(() => {
+    window.innerWidth = originalInnerWidth;
+  });
+
+  it('应该在移动端显示简化视图', () => {
+    // 修改全局对象进行测试
+    window.innerWidth = 375;
+    window.dispatchEvent(new Event('resize'));
+    
+    // 测试逻辑...
+  });
+
+  it('应该在桌面端显示完整视图', () => {
+    // 修改全局对象进行测试
+    window.innerWidth = 1024;
+    window.dispatchEvent(new Event('resize'));
+    
+    // 测试逻辑...
+    // afterEach 会自动恢复 innerWidth
+  });
+});
+```
+
+**常见需要清理的全局对象**：
+- `window.innerWidth` / `window.innerHeight`
+- `window.matchMedia`
+- `navigator.userAgent`
+- `document.cookie`
+- `performance.now`（注意：避免在测试中依赖性能计时）
+
+**最佳实践**：
+1. ✅ **总是恢复全局状态**：防止测试间污染
+2. ✅ **使用 beforeEach/afterEach**：自动化清理过程
+3. ✅ **测试行为而非性能**：避免使用 `performance.now()` 进行时间断言
+4. ❌ **不要依赖测试执行顺序**：每个测试应该独立运行
+
+### 7. 合理使用 Mock
 
 只 mock 必要的部分：
 
@@ -744,7 +796,60 @@ vi.mock('aws-amplify/auth', () => ({
 // 避免 mock 被测试的代码本身
 ```
 
-### 7. 异步测试
+### 8. 测试行为而非实现细节
+
+**问题背景**：测试实现细节（如 console.log 输出）会导致脆弱的测试，代码重构时容易失败。
+
+**反模式**：
+
+```javascript
+// ❌ 不要测试 console.log 输出
+it('应该记录调试信息', () => {
+  const consoleSpy = vi.spyOn(console, 'log');
+  
+  myFunction();
+  
+  expect(consoleSpy).toHaveBeenCalledWith(
+    expect.stringContaining('debug info')
+  );
+});
+```
+
+**正确做法**：
+
+```javascript
+// ✅ 测试实际行为和结果
+it('应该正确处理用户数据', () => {
+  const result = myFunction(userData);
+  
+  // 验证函数的输出或副作用
+  expect(result.userId).toBe(userData.userId);
+  expect(result.isValid).toBe(true);
+});
+
+// ✅ 如果需要验证日志，使用专门的日志库并 mock
+const logger = {
+  debug: vi.fn(),
+  error: vi.fn()
+};
+
+it('应该记录错误', () => {
+  processData(invalidData, logger);
+  
+  expect(logger.error).toHaveBeenCalledWith(
+    expect.objectContaining({ code: 'INVALID_DATA' })
+  );
+});
+```
+
+**最佳实践**：
+1. ✅ **测试公共 API**：组件的 props、返回值、DOM 输出
+2. ✅ **测试用户可见的行为**：屏幕上显示的内容、交互响应
+3. ❌ **不要测试内部状态**：私有变量、内部函数调用
+4. ❌ **不要测试 console 输出**：除非是专门的日志功能
+5. ❌ **不要依赖性能计时**：`performance.now()` 测试在不同环境下不稳定
+
+### 9. 异步测试
 
 正确处理异步操作：
 
@@ -772,7 +877,7 @@ test('wrong async test', () => {
 });
 ```
 
-### 8. 测试覆盖率
+### 10. 测试覆盖率
 
 追求有意义的覆盖率，而非 100%：
 

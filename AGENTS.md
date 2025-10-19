@@ -66,6 +66,9 @@
   4. **测试独立性**: 每个测试应该独立运行,不依赖其他测试的状态
   5. **描述性命名**: 测试名称应该清楚描述测试的场景和预期结果
   6. **AAA 模式**: Arrange (准备) → Act (执行) → Assert (断言)
+  7. **全局对象清理**: 修改全局对象（如 `window.innerWidth`）时,使用 `beforeEach/afterEach` 恢复原始值
+  8. **测试行为而非实现**: 不要测试 `console.log` 输出、内部状态或性能计时
+  9. **避免不稳定的测试**: 不使用 `performance.now()` 进行时间断言,不依赖测试执行顺序
 
 - **测试工具函数 / Test Utilities**:
   - `src/test-utils/test-helpers.js`: 通用测试辅助函数
