@@ -16,14 +16,6 @@ const AddEvent = () => {
   // @zh 专门使用 AuthContext - 它已经使用了 Amplify v6 标准 API
   const { user: authContextUser } = useAuth();
 
-  console.log('📍 [验证点20] AddEvent组件用户信息来源验证:', {
-    source: 'AuthContext (使用Amplify v6标准API)',
-    authContextUser: !!authContextUser,
-    userIdFromContext: authContextUser?.userId,
-    emailFromContext: authContextUser?.attributes?.email,
-    混合来源检查: '无 - 仅使用AuthContext'
-  });
-
   const [showSuccessMessage, setShowSuccessMessage] = useState(false);
 
   const handleEventAdded = () => {

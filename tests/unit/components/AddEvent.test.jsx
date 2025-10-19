@@ -185,23 +185,6 @@ describe('AddEvent 组件测试', () => {
   });
 
   describe('用户认证', () => {
-    it('应该从AuthContext获取用户信息', () => {
-      const consoleSpy = vi.spyOn(console, 'log');
-      
-      renderAddEvent();
-      
-      expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining('[验证点20]'),
-        expect.objectContaining({
-          source: expect.stringContaining('AuthContext'),
-          authContextUser: true,
-          userIdFromContext: 'test-user-123'
-        })
-      );
-      
-      consoleSpy.mockRestore();
-    });
-
     it('应该在用户未认证时也能渲染页面', () => {
       mockUseAuth.mockReturnValue({
         user: null,

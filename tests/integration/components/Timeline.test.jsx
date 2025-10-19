@@ -329,6 +329,19 @@ describe('Timeline 组件集成测试', () => {
   });
   
   describe('响应式设计', () => {
+    const originalInnerWidth = global.innerWidth;
+    
+    beforeEach(() => {
+      // 恢复默认宽度
+      global.innerWidth = originalInnerWidth;
+    });
+    
+    afterEach(() => {
+      // 确保每个测试后恢复原始宽度
+      global.innerWidth = originalInnerWidth;
+      global.dispatchEvent(new Event('resize'));
+    });
+    
     it('在移动端应该使用紧凑布局', async () => {
       global.innerWidth = 375;
       global.dispatchEvent(new Event('resize'));

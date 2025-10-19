@@ -5,7 +5,7 @@ import { useAsync } from '../utils/useAsync.js';
 import SecureFileUpload from './SecureFileUpload';
 import { useAuth } from '../contexts/AuthContext.jsx';
 import { resolveAttachmentLinks } from '../utils/attachments.js';
-import { AuthenticationError, ensureAppError } from '../utils/apiError.js';
+import { AuthenticationError, ensureAppError, AppError } from '../utils/apiError.js';
 import { ApiErrorNotice } from './ApiErrorNotice.jsx';
 
 /**
@@ -23,14 +23,6 @@ const EventForm = ({ onEventAdded }) => {
   // @en Use AuthContext exclusively - it already uses Amplify v6 standard APIs
   // @zh 专门使用 AuthContext - 它已经使用了 Amplify v6 标准 API
   const { user: authContextUser } = useAuth();
-
-  console.log('📍 [验证点20] EventForm组件用户信息来源验证:', {
-    source: 'AuthContext (使用Amplify v6标准API)',
-    authContextUser: !!authContextUser,
-    userIdFromContext: authContextUser?.userId,
-    emailFromContext: authContextUser?.attributes?.email,
-    混合来源检查: '无 - 仅使用AuthContext'
-  });
 
   const user = authContextUser || {
     attributes: {
@@ -418,6 +410,33 @@ const EventForm = ({ onEventAdded }) => {
   const handleSubmit = (e) => {
     e.preventDefault();
     if (submitAsync.loading) return; // 防抖
+    
+    // 验证必填的 checkbox 组字段（仅对 self_test 和 feeling_log 类型）
+    if (eventType === 'self_test' || eventType === 'feeling_log') {
+      const errors = [];
+      
+      // 检查声音状态
+      if (!formData.sound || formData.sound.length === 0) {
+        errors.push('请至少选择一项声音状态');
+      }
+      
+      // 检查发声方式
+      if (!formData.voicing || formData.voicing.length === 0) {
+        errors.push('请至少选择一项发声方式');
+      }
+      
+      // 如果有验证错误，显示并阻止提交
+      if (errors.length > 0) {
+        const errorMessage = errors.join('；');
+        setErrorState(new AppError(errorMessage, {
+          type: 'VALIDATION_ERROR',
+          requestMethod: 'POST',
+          requestPath: '/events'
+        }));
+        return;
+      }
+    }
+    
     submitAsync.execute()
       .then(newEvent => {
         if (newEvent) {
