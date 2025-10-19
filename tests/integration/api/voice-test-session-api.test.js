@@ -10,6 +10,7 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
+import { http, HttpResponse } from 'msw';
 import { 
   createVoiceTestSession,
   getVoiceTestUploadUrl,
@@ -17,6 +18,10 @@ import {
   getVoiceTestResults
 } from '../../../src/api.js';
 import { setAuthenticated } from '../../../src/test-utils/mocks/amplify-auth.js';
+import { server } from '../../../src/test-utils/mocks/msw-server.js';
+import { ApiError } from '../../../src/utils/apiError.js';
+
+const API_URL = 'https://2rzxc2x5l8.execute-api.us-east-1.amazonaws.com/dev';
 
 describe('Voice Test Session API 集成测试', () => {
   beforeEach(() => {
@@ -255,6 +260,228 @@ describe('Voice Test Session API 集成测试', () => {
       // 4. 获取结果
       const results = await getVoiceTestResults(session.sessionId);
       expect(results.status).toBeDefined();
+    });
+  });
+
+  describe('错误状态码处理 (P1.2.4 - Phase 3.3 Code Review)', () => {
+    const testSessionId = 'test-session-001';
+    const testUserId = 'us-east-1:test-user';
+
+    describe('createVoiceTestSession 错误状态码', () => {
+      it('应该处理 401 未授权错误', async () => {
+        server.use(
+          http.post(`${API_URL}/sessions`, () => {
+            return HttpResponse.json(
+              { error: 'Unauthorized', message: 'Token 已过期' },
+              { status: 401 }
+            );
+          })
+        );
+
+        try {
+          await createVoiceTestSession(testUserId);
+          expect.fail('Should have thrown ApiError');
+        } catch (error) {
+          expect(error).toBeInstanceOf(ApiError);
+          expect(error.statusCode).toBe(401);
+        }
+      });
+
+      it('应该处理 429 请求限流错误', async () => {
+        server.use(
+          http.post(`${API_URL}/sessions`, () => {
+            return HttpResponse.json(
+              { error: 'Too Many Requests', message: '创建会话过于频繁' },
+              { status: 429 }
+            );
+          })
+        );
+
+        try {
+          await createVoiceTestSession(testUserId);
+          expect.fail('Should have thrown ApiError');
+        } catch (error) {
+          expect(error).toBeInstanceOf(ApiError);
+          expect(error.statusCode).toBe(429);
+        }
+      });
+
+      it('应该处理 500 服务器错误', async () => {
+        server.use(
+          http.post(`${API_URL}/sessions`, () => {
+            return HttpResponse.json(
+              { error: 'Internal Server Error', message: '会话创建失败' },
+              { status: 500 }
+            );
+          })
+        );
+
+        try {
+          await createVoiceTestSession(testUserId);
+          expect.fail('Should have thrown ApiError');
+        } catch (error) {
+          expect(error).toBeInstanceOf(ApiError);
+          expect(error.statusCode).toBe(500);
+        }
+      });
+    });
+
+    describe('getVoiceTestUploadUrl 错误状态码', () => {
+      it('应该处理 401 未授权错误', async () => {
+        server.use(
+          http.post(`${API_URL}/uploads`, () => {
+            return HttpResponse.json(
+              { error: 'Unauthorized', message: 'Token 已过期' },
+              { status: 401 }
+            );
+          })
+        );
+
+        try {
+          await getVoiceTestUploadUrl(testSessionId, 'ah', 'test.wav', 'audio/wav');
+          expect.fail('Should have thrown ApiError');
+        } catch (error) {
+          expect(error).toBeInstanceOf(ApiError);
+          expect(error.statusCode).toBe(401);
+        }
+      });
+
+      it('应该处理 404 会话不存在错误', async () => {
+        server.use(
+          http.post(`${API_URL}/uploads`, () => {
+            return HttpResponse.json(
+              { error: 'Not Found', message: '会话不存在' },
+              { status: 404 }
+            );
+          })
+        );
+
+        try {
+          await getVoiceTestUploadUrl(testSessionId, 'ah', 'test.wav', 'audio/wav');
+          expect.fail('Should have thrown ApiError');
+        } catch (error) {
+          expect(error).toBeInstanceOf(ApiError);
+          expect(error.statusCode).toBe(404);
+        }
+      });
+
+      it('应该处理 500 服务器错误', async () => {
+        server.use(
+          http.post(`${API_URL}/uploads`, () => {
+            return HttpResponse.json(
+              { error: 'Internal Server Error', message: 'S3 签名失败' },
+              { status: 500 }
+            );
+          })
+        );
+
+        try {
+          await getVoiceTestUploadUrl(testSessionId, 'ah', 'test.wav', 'audio/wav');
+          expect.fail('Should have thrown ApiError');
+        } catch (error) {
+          expect(error).toBeInstanceOf(ApiError);
+          expect(error.statusCode).toBe(500);
+        }
+      });
+    });
+
+    describe('requestVoiceTestAnalyze 错误状态码', () => {
+      it('应该处理 401 未授权错误', async () => {
+        server.use(
+          http.post(`${API_URL}/analyze`, () => {
+            return HttpResponse.json(
+              { error: 'Unauthorized', message: 'Token 已过期' },
+              { status: 401 }
+            );
+          })
+        );
+
+        try {
+          await requestVoiceTestAnalyze(testSessionId, {}, {});
+          expect.fail('Should have thrown ApiError');
+        } catch (error) {
+          expect(error).toBeInstanceOf(ApiError);
+          expect(error.statusCode).toBe(401);
+        }
+      });
+
+      it('应该处理 400 数据验证错误', async () => {
+        server.use(
+          http.post(`${API_URL}/analyze`, () => {
+            return HttpResponse.json(
+              { error: 'Bad Request', message: '分析参数格式错误' },
+              { status: 400 }
+            );
+          })
+        );
+
+        try {
+          await requestVoiceTestAnalyze(testSessionId, {}, {});
+          expect.fail('Should have thrown ApiError');
+        } catch (error) {
+          expect(error).toBeInstanceOf(ApiError);
+          expect(error.statusCode).toBe(400);
+        }
+      });
+
+      it('应该处理 500 服务器错误', async () => {
+        server.use(
+          http.post(`${API_URL}/analyze`, () => {
+            return HttpResponse.json(
+              { error: 'Internal Server Error', message: '分析服务失败' },
+              { status: 500 }
+            );
+          })
+        );
+
+        try {
+          await requestVoiceTestAnalyze(testSessionId, {}, {});
+          expect.fail('Should have thrown ApiError');
+        } catch (error) {
+          expect(error).toBeInstanceOf(ApiError);
+          expect(error.statusCode).toBe(500);
+        }
+      });
+    });
+
+    describe('getVoiceTestResults 错误状态码', () => {
+      it('应该处理 404 结果不存在错误', async () => {
+        server.use(
+          http.get(`${API_URL}/results/${testSessionId}`, () => {
+            return HttpResponse.json(
+              { error: 'Not Found', message: '测试结果不存在' },
+              { status: 404 }
+            );
+          })
+        );
+
+        try {
+          await getVoiceTestResults(testSessionId);
+          expect.fail('Should have thrown ApiError');
+        } catch (error) {
+          expect(error).toBeInstanceOf(ApiError);
+          expect(error.statusCode).toBe(404);
+        }
+      });
+
+      it('应该处理 500 服务器错误', async () => {
+        server.use(
+          http.get(`${API_URL}/results/${testSessionId}`, () => {
+            return HttpResponse.json(
+              { error: 'Internal Server Error', message: '结果查询失败' },
+              { status: 500 }
+            );
+          })
+        );
+
+        try {
+          await getVoiceTestResults(testSessionId);
+          expect.fail('Should have thrown ApiError');
+        } catch (error) {
+          expect(error).toBeInstanceOf(ApiError);
+          expect(error.statusCode).toBe(500);
+        }
+      });
     });
   });
 });

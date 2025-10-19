@@ -8,8 +8,13 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
+import { http, HttpResponse } from 'msw';
 import { setupUserProfile, isUserProfileComplete } from '../../../src/api.js';
 import { setAuthenticated } from '../../../src/test-utils/mocks/amplify-auth.js';
+import { server } from '../../../src/test-utils/mocks/msw-server.js';
+import { ApiError } from '../../../src/utils/apiError.js';
+
+const API_URL = 'https://2rzxc2x5l8.execute-api.us-east-1.amazonaws.com/dev';
 
 describe('User Profile Setup API 集成测试', () => {
   beforeEach(() => {
@@ -306,6 +311,95 @@ describe('User Profile Setup API 集成测试', () => {
 
       expect(isUserProfileComplete(profileWithSocials)).toBe(true);
       expect(isUserProfileComplete(profileWithoutSocials)).toBe(true);
+    });
+  });
+
+  describe('错误状态码处理 (P1.2.4 - Phase 3.3 Code Review)', () => {
+    const testProfileData = {
+      profile: {
+        name: '测试用户',
+        isNamePublic: false,
+        socials: [],
+        areSocialsPublic: false
+      }
+    };
+
+    describe('setupUserProfile 错误状态码', () => {
+      it('应该处理 401 未授权错误', async () => {
+        server.use(
+          http.post(`${API_URL}/user/profile-setup`, () => {
+            return HttpResponse.json(
+              { error: 'Unauthorized', message: 'Token 已过期' },
+              { status: 401 }
+            );
+          })
+        );
+
+        try {
+          await setupUserProfile(testProfileData);
+          expect.fail('Should have thrown ApiError');
+        } catch (error) {
+          expect(error).toBeInstanceOf(ApiError);
+          expect(error.statusCode).toBe(401);
+        }
+      });
+
+      it('应该处理 400 数据验证错误', async () => {
+        server.use(
+          http.post(`${API_URL}/user/profile-setup`, () => {
+            return HttpResponse.json(
+              { error: 'Bad Request', message: '资料数据格式错误' },
+              { status: 400 }
+            );
+          })
+        );
+
+        try {
+          await setupUserProfile(testProfileData);
+          expect.fail('Should have thrown ApiError');
+        } catch (error) {
+          expect(error).toBeInstanceOf(ApiError);
+          expect(error.statusCode).toBe(400);
+        }
+      });
+
+      it('应该处理 409 用户已存在错误', async () => {
+        server.use(
+          http.post(`${API_URL}/user/profile-setup`, () => {
+            return HttpResponse.json(
+              { error: 'Conflict', message: '用户资料已设置' },
+              { status: 409 }
+            );
+          })
+        );
+
+        try {
+          await setupUserProfile(testProfileData);
+          expect.fail('Should have thrown ApiError');
+        } catch (error) {
+          expect(error).toBeInstanceOf(ApiError);
+          expect(error.statusCode).toBe(409);
+        }
+      });
+
+      it('应该处理 500 服务器错误', async () => {
+        server.use(
+          http.post(`${API_URL}/user/profile-setup`, () => {
+            return HttpResponse.json(
+              { error: 'Internal Server Error', message: '资料设置失败' },
+              { status: 500 }
+            );
+          })
+        );
+
+        try {
+          await setupUserProfile(testProfileData);
+          expect.fail('Should have thrown ApiError');
+        } catch (error) {
+          expect(error).toBeInstanceOf(ApiError);
+          expect(error.statusCode).toBe(500);
+        }
+      });
     });
   });
 });
