@@ -52,6 +52,23 @@ function getApiEndpoint() {
 const skipIfNotConfigured = hasRequiredEnvVars() ? it : it.skip;
 const skipIfNotAuthenticated = (hasRequiredEnvVars() && hasTestCredentials()) ? it : it.skip;
 
+// 如果环境未配置，显示帮助信息
+if (!hasRequiredEnvVars()) {
+  console.warn(`
+⚠️  契约测试已跳过：缺少必需的环境变量
+
+如需运行契约测试，请参考：
+📖 docs/CONTRACT_TEST_ENVIRONMENT.md - 环境配置完整指南
+📖 tests/contract/README.md - 契约测试说明
+📖 ROADMAP.md Phase 5 (P5.2) - 契约测试改进计划
+
+常见问题快速解决：
+- 环境变量缺失？复制 .env.contract.example 到 .env.contract
+- Dynamo 数据过期？运行 scripts/refresh-dynamo-fixtures.js
+- 测试账户问题？查看 docs/CONTRACT_TEST_ENVIRONMENT.md
+  `);
+}
+
 // 配置 Amplify
 async function configureAmplify() {
   if (amplifyConfigured) return;

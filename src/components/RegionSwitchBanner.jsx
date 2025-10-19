@@ -38,8 +38,14 @@ const RegionSwitchBanner = () => {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
+    // 服务端渲染时直接返回
     if (typeof window === 'undefined') return;
-    const host = window.location.hostname.toLowerCase();
+    
+    // 测试环境下可能没有 window.location.hostname，需要处理
+    const hostname = window.location?.hostname;
+    if (!hostname) return;
+    
+    const host = hostname.toLowerCase();
     const isAppDomain = host.endsWith('.app');
     if (!isAppDomain) {
       setOpen(false);
