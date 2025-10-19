@@ -4,7 +4,7 @@
  * 测试离线记录同步按钮组件
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import PendingSyncButton from '../../../src/components/PendingSyncButton.jsx';
@@ -18,6 +18,29 @@ vi.mock('../../../src/api.js', () => ({
 const OFFLINE_QUEUE_KEY = 'pendingEvents:v1';
 
 describe('PendingSyncButton 组件测试', () => {
+  // 备份原始的全局对象
+  let originalLocalStorage;
+  let originalOnLine;
+  let originalAlert;
+  let originalDispatchEvent;
+
+  beforeAll(() => {
+    // 保存原始对象
+    originalLocalStorage = global.localStorage;
+    originalOnLine = Object.getOwnPropertyDescriptor(Navigator.prototype, 'onLine');
+    originalAlert = global.alert;
+    originalDispatchEvent = global.dispatchEvent;
+  });
+
+  afterAll(() => {
+    // 恢复原始对象
+    global.localStorage = originalLocalStorage;
+    if (originalOnLine) {
+      Object.defineProperty(Navigator.prototype, 'onLine', originalOnLine);
+    }
+    global.alert = originalAlert;
+    global.dispatchEvent = originalDispatchEvent;
+  });
   
   // Mock localStorage
   let localStorageMock;

@@ -4,11 +4,28 @@
  * 测试ICP备案徽章组件的显示逻辑
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import ICPBadge from '../../../src/components/ICPBadge.jsx';
 
 describe('ICPBadge 组件测试', () => {
+  // 备份原始的 window.location
+  let originalLocation;
+
+  beforeAll(() => {
+    originalLocation = window.location;
+  });
+
+  afterAll(() => {
+    // 恢复原始的 window.location
+    window.location = originalLocation;
+  });
+
+  beforeEach(() => {
+    // 每个测试前重置 location (默认 localhost)
+    delete window.location;
+    window.location = { hostname: 'localhost', href: 'http://localhost/' };
+  });
 
   // ============================================
   // 基础渲染测试

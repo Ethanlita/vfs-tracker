@@ -2,7 +2,7 @@
  * 单元测试: src/components/RegionSwitchBanner.jsx
  * 测试区域切换横幅组件的显示逻辑和交互
  */
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { BrowserRouter, MemoryRouter } from 'react-router-dom';
 import userEvent from '@testing-library/user-event';
@@ -15,6 +15,26 @@ describe('RegionSwitchBanner 组件测试', () => {
   let originalLocation;
   let originalNavigator;
   let originalIntl;
+  let originalLocalStorage;
+
+  beforeAll(() => {
+    // 保存原始的全局对象
+    originalLocalStorage = global.localStorage;
+    originalLocation = window.location;
+    originalNavigator = navigator;
+    originalIntl = global.Intl;
+  });
+
+  afterAll(() => {
+    // 恢复原始的全局对象
+    global.localStorage = originalLocalStorage;
+    window.location = originalLocation;
+    Object.defineProperty(global, 'navigator', {
+      value: originalNavigator,
+      writable: true
+    });
+    global.Intl = originalIntl;
+  });
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -28,15 +48,6 @@ describe('RegionSwitchBanner 组件测试', () => {
     };
     global.localStorage = localStorageMock;
 
-    // Save original window.location
-    originalLocation = window.location;
-    
-    // Save original navigator
-    originalNavigator = navigator;
-
-    // Save original Intl
-    originalIntl = global.Intl;
-
     // Mock Intl.DateTimeFormat to return non-China timezone by default
     global.Intl = {
       ...global.Intl,
@@ -47,14 +58,7 @@ describe('RegionSwitchBanner 组件测试', () => {
   });
 
   afterEach(() => {
-    // Restore original values
-    window.location = originalLocation;
-    Object.defineProperty(global, 'navigator', {
-      value: originalNavigator,
-      writable: true,
-      configurable: true,
-    });
-    global.Intl = originalIntl;
+    vi.restoreAllMocks();
   });
 
   describe('基础渲染', () => {
