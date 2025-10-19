@@ -327,4 +327,160 @@ describe('API Schemas 单元测试', () => {
       expect(result.valid).toBe(false);
     });
   });
+
+  // ==================== Voice Training Tests ====================
+  
+  describe('voiceTrainingDetailsSchema', () => {
+    it('应该验证完整的语音训练数据', () => {
+      const details = {
+        trainingContent: '进行了共鸣训练和音高练习',
+        instructor: '李老师',
+        voiceStatus: '状态良好，无疲劳感',
+        selfPracticeContent: '每天进行30分钟的发声练习',
+        feelings: '感觉声音变得更加稳定',
+        references: 'https://example.com/voice-training-guide',
+        voicing: '胸声'
+      };
+      
+      const result = validateData(schemas.voiceTrainingDetails, details);
+      expect(result.valid).toBe(true);
+    });
+
+    it('应该接受空对象（所有字段都是可选的）', () => {
+      const details = {};
+      
+      const result = validateData(schemas.voiceTrainingDetails, details);
+      expect(result.valid).toBe(true);
+    });
+
+    it('应该接受部分字段', () => {
+      const details = {
+        trainingContent: '基础发声练习',
+        instructor: '王老师'
+      };
+      
+      const result = validateData(schemas.voiceTrainingDetails, details);
+      expect(result.valid).toBe(true);
+    });
+
+    it('应该接受未知字段（unknown: true）', () => {
+      const details = {
+        trainingContent: '共鸣训练',
+        customField: '自定义数据',
+        anotherField: 123
+      };
+      
+      const result = validateData(schemas.voiceTrainingDetails, details);
+      expect(result.valid).toBe(true);
+    });
+  });
+
+  // ==================== Self Practice Tests ====================
+  
+  describe('selfPracticeDetailsSchema', () => {
+    it('应该验证完整的自我练习数据', () => {
+      const details = {
+        practiceContent: '在家进行了30分钟的发声练习',
+        hasInstructor: true,
+        instructor: '张老师（在线指导）',
+        voiceStatus: '状态较好，略有疲劳',
+        feelings: '通过练习发现了一些问题',
+        references: 'https://example.com/practice-guide',
+        voicing: '混声'
+      };
+      
+      const result = validateData(schemas.selfPracticeDetails, details);
+      expect(result.valid).toBe(true);
+    });
+
+    it('应该接受空对象（所有字段都是可选的）', () => {
+      const details = {};
+      
+      const result = validateData(schemas.selfPracticeDetails, details);
+      expect(result.valid).toBe(true);
+    });
+
+    it('应该接受无指导者的练习记录', () => {
+      const details = {
+        practiceContent: '独自练习发声',
+        hasInstructor: false,
+        voiceStatus: '正常',
+        feelings: '需要更多练习'
+      };
+      
+      const result = validateData(schemas.selfPracticeDetails, details);
+      expect(result.valid).toBe(true);
+    });
+
+    it('应该接受未知字段（unknown: true）', () => {
+      const details = {
+        practiceContent: '发声练习',
+        extraField: '额外数据'
+      };
+      
+      const result = validateData(schemas.selfPracticeDetails, details);
+      expect(result.valid).toBe(true);
+    });
+  });
+
+  // ==================== Schema-Fixture 同步检查 ====================
+  
+  describe('Schema-Fixture 同步检查', () => {
+    it('所有 user fixtures 必须符合 user schema', () => {
+      const userFixtures = [completeProfileUser, minimalProfileUser];
+      
+      userFixtures.forEach((user, index) => {
+        const result = validateData(schemas.user, user);
+        expect(result.valid).toBe(true, 
+          `User fixture ${index} should be valid, but got errors: ${JSON.stringify(result.errors)}`
+        );
+      });
+    });
+
+    it('所有 private event fixtures 必须符合 eventPrivate schema', () => {
+      const eventFixtures = [
+        completeSelfTest,
+        minimalSelfTest,
+        completeSurgery,
+        completeFeelingLog,
+      ];
+      
+      eventFixtures.forEach((event, index) => {
+        const result = validateData(schemas.eventPrivate, event);
+        expect(result.valid).toBe(true, 
+          `Private event fixture ${index} (type: ${event.type}) should be valid, but got errors: ${JSON.stringify(result.errors)}`
+        );
+      });
+    });
+
+    it('所有 public event fixtures 必须符合 eventPublic schema', () => {
+      mockPublicEvents.forEach((event, index) => {
+        const result = validateData(schemas.eventPublic, event);
+        expect(result.valid).toBe(true, 
+          `Public event fixture ${index} (type: ${event.type}) should be valid, but got errors: ${JSON.stringify(result.errors)}`
+        );
+      });
+    });
+
+    it('private event fixtures 不应包含 eventPrivate schema 中未定义的顶层字段', () => {
+      const eventFixtures = [
+        completeSelfTest,
+        minimalSelfTest,
+        completeSurgery,
+        completeFeelingLog,
+      ];
+      
+      // 获取 schema 允许的字段
+      const schemaKeys = Object.keys(schemas.eventPrivate.describe().keys);
+      
+      eventFixtures.forEach((event, index) => {
+        const fixtureKeys = Object.keys(event);
+        const unknownKeys = fixtureKeys.filter(key => !schemaKeys.includes(key));
+        
+        expect(unknownKeys).toEqual([], 
+          `Private event fixture ${index} (type: ${event.type}) contains unknown keys: ${unknownKeys.join(', ')}`
+        );
+      });
+    });
+  });
 });
