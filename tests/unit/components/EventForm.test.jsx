@@ -541,4 +541,43 @@ describe('EventForm 组件测试', () => {
   // it('应该处理文件上传', async () => { ... });
   // it('应该允许移除附件', async () => { ... });
   // it('应该在提交时包含附件', async () => { ... });
+
+  // --- 7. 错误处理测试 (P1.2.2 - Phase 3.3 Code Review) ---
+
+  describe('错误处理', () => {
+    it('应该处理 API 失败 - 不调用 onEventAdded', async () => {
+      const user = userEvent.setup();
+      
+      // Mock API 失败
+      vi.mocked(api.addEvent).mockRejectedValue(new Error('服务器错误'));
+      mockOnEventAdded.mockClear();
+
+      renderEventForm();
+
+      // 填写必填字段
+      const soundCheckbox = screen.getByLabelText('好');
+      await user.click(soundCheckbox);
+      const voicingCheckbox = screen.getByLabelText('没夹');
+      await user.click(voicingCheckbox);
+
+      // 提交表单
+      const submitButton = screen.getByRole('button', { name: /添加新事件/ });
+      await user.click(submitButton);
+
+      // 验证 API 被调用
+      await waitFor(() => {
+        expect(api.addEvent).toHaveBeenCalledTimes(1);
+      });
+
+      // 验证 onEventAdded 没有被调用
+      expect(mockOnEventAdded).not.toHaveBeenCalled();
+    });
+
+    // TODO: 添加更多错误场景测试
+    // - 显示错误消息UI (需要先 mock ApiErrorNotice 或使用真实组件)
+    // - 网络错误处理
+    // - 认证错误处理
+    // - 重试功能测试
+    // 这些测试需要确保 mock 的 Error 对象能被 formatApiError/ensureAppError 正确处理
+  });
 });
