@@ -25,13 +25,47 @@ Contract Tests（契约测试）是一种测试方法，用于验证真实的 AP
 
 契约测试需要真实的 AWS 环境配置。请确保以下环境变量已设置：
 
+### 快速开始
+
+复制示例文件并填写真实值：
+
 ```bash
-VITE_COGNITO_USER_POOL_ID=your-pool-id
-VITE_COGNITO_USER_POOL_WEB_CLIENT_ID=your-client-id
+cp .env.contract.example .env.contract
+```
+
+编辑 `.env.contract`，填写以下必需变量：
+
+```ini
+# AWS Cognito 配置
+VITE_COGNITO_USER_POOL_ID=us-east-1_YourPoolId
+VITE_COGNITO_USER_POOL_WEB_CLIENT_ID=YourClientId
 VITE_AWS_REGION=us-east-1
-VITE_API_ENDPOINT=https://api.vfs-tracker.app/dev
+
+# API Gateway 配置
+VITE_API_ENDPOINT=https://your-api-id.execute-api.us-east-1.amazonaws.com
+VITE_API_STAGE=dev
+
+# 测试用户凭证（用于认证测试）
+TEST_USER_EMAIL=test-user@example.com
+TEST_USER_PASSWORD=YourTestPassword
+
+# S3 配置（用于上传测试）
 VITE_S3_BUCKET=your-bucket-name
 ```
+
+### 环境变量详解
+
+**必需变量**:
+- `VITE_COGNITO_USER_POOL_ID` - Cognito 用户池 ID
+- `VITE_COGNITO_USER_POOL_WEB_CLIENT_ID` - Cognito Web 客户端 ID
+- `VITE_AWS_REGION` - AWS 区域（如 `us-east-1`）
+- `VITE_API_ENDPOINT` - API Gateway 端点
+
+**可选变量**:
+- `VITE_API_STAGE` - API 阶段（默认为空）
+- `TEST_USER_EMAIL` - 测试账户邮箱（未设置则跳过认证测试）
+- `TEST_USER_PASSWORD` - 测试账户密码
+- `VITE_S3_BUCKET` - S3 存储桶（未设置则跳过上传测试）
 
 如果环境变量未配置，契约测试会自动跳过（使用 `it.skip`）。
 
@@ -188,6 +222,54 @@ if (error) {
 npm run test:contract -- --reporter=verbose --bail
 ```
 
+## 故障排除
+
+### 问题 1: 契约测试全部跳过
+
+**症状**: `⚠️  契约测试已跳过：缺少必需的环境变量`
+
+**解决方案**:
+1. 检查 `.env.contract` 文件是否存在
+2. 验证环境变量是否正确加载（在测试中添加 `console.log`）
+3. 确认 `vitest.contract.config.js` 中的 `envFiles` 配置正确
+
+### 问题 2: 测试超时或连接失败
+
+**症状**: `Error: connect ETIMEDOUT` 或 `Request timeout`
+
+**解决方案**:
+1. 验证 API 端点可访问：`curl https://your-api-endpoint/dev/all-events`
+2. 检查 `VITE_AWS_REGION` 与 API Gateway 部署区域一致
+3. 增加超时时间：`it('test', async () => {...}, { timeout: 30000 })`
+
+### 问题 3: 认证失败
+
+**症状**: `Error: Unauthorized` 或 `Invalid credentials`
+
+**解决方案**:
+1. 确认 `TEST_USER_EMAIL` 和 `TEST_USER_PASSWORD` 正确
+2. 验证测试账户在 Cognito User Pool 中存在
+3. 使用 AWS CLI 测试认证：`aws cognito-idp describe-user-pool-client`
+
+### 问题 4: DynamoDB 数据过期或不一致
+
+**症状**: `Expected 10 events, received 0` 或 `User profile not found`
+
+**解决方案**:
+1. 刷新测试数据：`node scripts/refresh-dynamo-fixtures.js`（如果存在）
+2. 手动检查 DynamoDB：`aws dynamodb scan --table-name VoiceFemUsers`
+3. 跳过依赖特定数据的测试（添加数据验证）
+
+### 问题 5: Schema 验证失败
+
+**症状**: `ValidationError: "field" is required`
+
+**解决方案**:
+1. 查看实际 API 响应：在测试中添加 `console.log(JSON.stringify(response, null, 2))`
+2. 更新 Schema（如果 API 行为正确）：修改 `src/api/schemas.js`
+3. 修复 API（如果 Schema 正确）：检查 Lambda 函数返回格式
+4. 记录为已知问题（如果是临时不一致）
+
 ## 常见问题
 
 ### Q: 契约测试失败了，是前端还是后端的问题？
@@ -210,6 +292,27 @@ A:
 1. 检查清理逻辑是否正确
 2. 考虑使用定时任务清理测试数据
 3. 为测试数据添加特殊标记，便于批量清理
+
+## 最佳实践
+
+### 使用独立的测试账户
+**不要**使用生产环境账户运行契约测试。建议：
+- ✅ 创建专用的测试环境（dev/test）
+- ✅ 使用独立的 Cognito User Pool
+- ✅ 使用独立的 DynamoDB 表
+
+### 最小化 API 调用
+契约测试应该：
+- ✅ 验证关键 API 端点
+- ✅ 检查响应格式是否符合 Schema
+- ❌ 避免大量重复调用
+- ❌ 避免创建大量测试数据
+
+### 定期刷新测试数据
+建议每周运行一次数据刷新脚本，确保测试数据与 API 行为一致。
+
+### 监控 AWS 费用
+契约测试会产生 API Gateway、DynamoDB 和 Cognito 费用。建议设置 AWS Budgets 和 Billing Alarms。
 
 ## 关键发现与最佳实践
 
