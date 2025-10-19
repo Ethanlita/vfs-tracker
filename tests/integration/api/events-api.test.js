@@ -9,6 +9,8 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
+import { http, HttpResponse } from 'msw';
+import { server } from '../../../src/test-utils/mocks/msw-server.js';
 import { 
   getAllEvents, 
   getEventsByUserId,  // 当前实际的函数名
@@ -27,6 +29,7 @@ import {
 import { 
   setAuthenticated 
 } from '../../../src/test-utils/mocks/amplify-auth.js';
+import { ApiError } from '../../../src/utils/apiError.js';
 
 describe('Events API 集成测试', () => {
   beforeEach(() => {
@@ -229,6 +232,238 @@ describe('Events API 集成测试', () => {
       expect(response).toBeDefined();
       expect(response.message).toBe('Event added successfully');
       expect(response.eventId).toBeDefined();
+    });
+  });
+
+  // ============================================
+  // 错误状态码测试 (P1.2.4 - Phase 3.3 Code Review)
+  // ============================================
+
+  describe('错误处理', () => {
+    const API_URL = 'https://2rzxc2x5l8.execute-api.us-east-1.amazonaws.com/dev';
+
+    describe('getAllEvents 错误状态码', () => {
+      it('应该处理 401 未授权错误', async () => {
+        server.use(
+          http.get(`${API_URL}/all-events`, () => {
+            return HttpResponse.json(
+              { error: 'Unauthorized', message: 'Token 已过期' },
+              { status: 401 }
+            );
+          })
+        );
+
+        try {
+          await getAllEvents();
+          expect.fail('Should have thrown ApiError');
+        } catch (error) {
+          expect(error).toBeInstanceOf(ApiError);
+          expect(error.statusCode).toBe(401);
+        }
+      });
+
+      it('应该处理 403 禁止访问错误', async () => {
+        server.use(
+          http.get(`${API_URL}/all-events`, () => {
+            return HttpResponse.json(
+              { error: 'Forbidden', message: '没有访问权限' },
+              { status: 403 }
+            );
+          })
+        );
+
+        try {
+          await getAllEvents();
+          expect.fail('Should have thrown ApiError');
+        } catch (error) {
+          expect(error).toBeInstanceOf(ApiError);
+          expect(error.statusCode).toBe(403);
+        }
+      });
+
+      it('应该处理 429 请求限流错误', async () => {
+        server.use(
+          http.get(`${API_URL}/all-events`, () => {
+            return HttpResponse.json(
+              { error: 'Too Many Requests', message: '请求过于频繁' },
+              { status: 429 }
+            );
+          })
+        );
+
+        try {
+          await getAllEvents();
+          expect.fail('Should have thrown ApiError');
+        } catch (error) {
+          expect(error).toBeInstanceOf(ApiError);
+          expect(error.statusCode).toBe(429);
+        }
+      });
+
+      it('应该处理 500 服务器错误', async () => {
+        server.use(
+          http.get(`${API_URL}/all-events`, () => {
+            return HttpResponse.json(
+              { error: 'Internal Server Error', message: '服务器内部错误' },
+              { status: 500 }
+            );
+          })
+        );
+
+        try {
+          await getAllEvents();
+          expect.fail('Should have thrown ApiError');
+        } catch (error) {
+          expect(error).toBeInstanceOf(ApiError);
+          expect(error.statusCode).toBe(500);
+        }
+      });
+    });
+
+    describe('getEventsByUserId 错误状态码', () => {
+      const userId = 'us-east-1:test-user';
+
+      it('应该处理 401 未授权错误', async () => {
+        server.use(
+          http.get(`${API_URL}/events/${userId}`, () => {
+            return HttpResponse.json(
+              { error: 'Unauthorized', message: 'Token 已过期' },
+              { status: 401 }
+            );
+          })
+        );
+
+        try {
+          await getEventsByUserId(userId);
+          expect.fail('Should have thrown ApiError');
+        } catch (error) {
+          expect(error).toBeInstanceOf(ApiError);
+          expect(error.statusCode).toBe(401);
+        }
+      });
+
+      it('应该处理 403 禁止访问错误', async () => {
+        server.use(
+          http.get(`${API_URL}/events/${userId}`, () => {
+            return HttpResponse.json(
+              { error: 'Forbidden', message: '无权访问其他用户的事件' },
+              { status: 403 }
+            );
+          })
+        );
+
+        try {
+          await getEventsByUserId(userId);
+          expect.fail('Should have thrown ApiError');
+        } catch (error) {
+          expect(error).toBeInstanceOf(ApiError);
+          expect(error.statusCode).toBe(403);
+        }
+      });
+
+      it('应该处理 500 服务器错误', async () => {
+        server.use(
+          http.get(`${API_URL}/events/${userId}`, () => {
+            return HttpResponse.json(
+              { error: 'Internal Server Error', message: '数据库查询失败' },
+              { status: 500 }
+            );
+          })
+        );
+
+        try {
+          await getEventsByUserId(userId);
+          expect.fail('Should have thrown ApiError');
+        } catch (error) {
+          expect(error).toBeInstanceOf(ApiError);
+          expect(error.statusCode).toBe(500);
+        }
+      });
+    });
+
+    describe('addEvent 错误状态码', () => {
+      const eventData = {
+        type: 'self-test',
+        date: '2025-01-15T10:00:00.000Z',
+        title: '测试事件',
+        details: {}
+      };
+
+      it('应该处理 401 未授权错误', async () => {
+        server.use(
+          http.post(`${API_URL}/events`, () => {
+            return HttpResponse.json(
+              { error: 'Unauthorized', message: 'Token 已过期' },
+              { status: 401 }
+            );
+          })
+        );
+
+        try {
+          await addEvent(eventData);
+          expect.fail('Should have thrown ApiError');
+        } catch (error) {
+          expect(error).toBeInstanceOf(ApiError);
+          expect(error.statusCode).toBe(401);
+        }
+      });
+
+      it('应该处理 403 禁止访问错误', async () => {
+        server.use(
+          http.post(`${API_URL}/events`, () => {
+            return HttpResponse.json(
+              { error: 'Forbidden', message: '账号已被限制' },
+              { status: 403 }
+            );
+          })
+        );
+
+        try {
+          await addEvent(eventData);
+          expect.fail('Should have thrown ApiError');
+        } catch (error) {
+          expect(error).toBeInstanceOf(ApiError);
+          expect(error.statusCode).toBe(403);
+        }
+      });
+
+      it('应该处理 429 请求限流错误', async () => {
+        server.use(
+          http.post(`${API_URL}/events`, () => {
+            return HttpResponse.json(
+              { error: 'Too Many Requests', message: '创建事件过于频繁' },
+              { status: 429 }
+            );
+          })
+        );
+
+        try {
+          await addEvent(eventData);
+          expect.fail('Should have thrown ApiError');
+        } catch (error) {
+          expect(error).toBeInstanceOf(ApiError);
+          expect(error.statusCode).toBe(429);
+        }
+      });
+
+      it('应该处理 500 服务器错误', async () => {
+        server.use(
+          http.post(`${API_URL}/events`, () => {
+            return HttpResponse.json(
+              { error: 'Internal Server Error', message: '事件保存失败' },
+              { status: 500 }
+            );
+          })
+        );
+
+        try {
+          await addEvent(eventData);
+          expect.fail('Should have thrown ApiError');
+        } catch (error) {
+          expect(error).toBeInstanceOf(ApiError);
+          expect(error.statusCode).toBe(500);
+        }
+      });
     });
   });
 });
