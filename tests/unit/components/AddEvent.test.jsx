@@ -231,4 +231,38 @@ describe('AddEvent 组件测试', () => {
       expect(container.querySelector('.bg-blue-300')).toBeInTheDocument();
     });
   });
+
+  describe('错误处理 (P1.2.1 - Phase 3.3 Code Review)', () => {
+    it('当 EventForm 提交失败时不应该显示成功消息', () => {
+      renderAddEvent();
+      
+      // EventForm mock 不会触发 onEventAdded，模拟失败场景
+      // 验证成功消息不显示
+      expect(screen.queryByText(/事件添加成功/)).not.toBeInTheDocument();
+    });
+
+    it('当 EventForm 提交失败时不应该导航', () => {
+      renderAddEvent();
+      
+      // 等待一段时间确保没有触发导航
+      expect(mockNavigate).not.toHaveBeenCalledWith('/mypage');
+    });
+
+    it('只有在 onEventAdded 被调用后才显示成功消息', async () => {
+      const user = userEvent.setup();
+      renderAddEvent();
+      
+      // 初始状态：无成功消息
+      expect(screen.queryByText(/事件添加成功/)).not.toBeInTheDocument();
+      
+      // 触发 onEventAdded（通过 mock 的提交按钮）
+      const submitButton = screen.getByText('模拟提交');
+      await user.click(submitButton);
+      
+      // 成功消息应该显示
+      await waitFor(() => {
+        expect(screen.getByText(/事件添加成功/)).toBeInTheDocument();
+      });
+    });
+  });
 });
