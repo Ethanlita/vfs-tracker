@@ -12,12 +12,6 @@ import * as api from '../../../src/api';
 // Mock API 模块
 vi.mock('../../../src/api');
 
-// Mock window.confirm 和 window.alert
-const mockConfirm = vi.fn();
-const mockAlert = vi.fn();
-global.window.confirm = mockConfirm;
-global.window.alert = mockAlert;
-
 /**
  * 测试数据：模拟多种类型的事件
  */
@@ -81,12 +75,35 @@ const mockEvents = [
 ];
 
 describe('EventManager 组件集成测试', () => {
+  // 保存原始的全局函数
+  const originalConfirm = global.window.confirm;
+  const originalAlert = global.window.alert;
+  
+  // Mock 函数
+  const mockConfirm = vi.fn();
+  const mockAlert = vi.fn();
+  
   let user;
   const mockOnEventDeleted = vi.fn();
+  
+  beforeAll(() => {
+    // 设置 mock
+    global.window.confirm = mockConfirm;
+    global.window.alert = mockAlert;
+  });
+  
+  afterAll(() => {
+    // 恢复原始值
+    global.window.confirm = originalConfirm;
+    global.window.alert = originalAlert;
+  });
 
   beforeEach(() => {
     user = userEvent.setup();
     vi.clearAllMocks();
+    // 清理 mock 调用记录
+    mockConfirm.mockClear();
+    mockAlert.mockClear();
   });
 
   afterEach(() => {
