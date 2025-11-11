@@ -13,8 +13,6 @@ import {
 import { getEncouragingMessage, getEventsByUserId } from '../api';
 import { useAsync } from '../utils/useAsync.js';
 import { useAuth } from '../contexts/AuthContext.jsx';
-import { isProductionReady } from '../env.js';
-import DevModeTest from './DevModeTest.jsx';
 import { ApiErrorNotice } from './ApiErrorNotice.jsx';
 
 ChartJS.register(
@@ -30,7 +28,6 @@ ChartJS.register(
 const Timeline = () => {
   const DEFAULT_MESSAGE = "持续跟踪，持续进步 ✨";
   const { user } = useAuth();
-  const isProdReady = isProductionReady();
 
   // 状态管理
   const [chartData, setChartData] = useState(null);
@@ -38,33 +35,37 @@ const Timeline = () => {
   const [isLoadingChart, setIsLoadingChart] = useState(true);
   const [isLoadingTimeline, setIsLoadingTimeline] = useState(true);
 
-  // 获取用户ID - 开发模式强制使用mock用户ID
+  // 获取用户ID
   const getUserId = () => {
-    console.log('🔍 Timeline: 环境检查', {
-      isProdReady,
-      hasUser: !!user,
-      forceUseMockData: !isProdReady
+    console.log('🔍 Timeline: 用户检查', {
+      hasUser: !!user
     });
 
-    if (!isProdReady) {
-      // 开发模式：强制使用mock数据
-      console.log('🔧 Timeline: 开发模式 - 使用mock用户ID');
-      return 'mock-user-1';
-    }
-
     if (user) {
-      // 生产模式且有用户：使用真实用户ID
+      // 使用真实用户ID
       const realUserId = user.userId || user.username || user.sub;
-      console.log('✅ Timeline: 生产模式 - 使用真实用户ID', realUserId);
+      console.log('✅ Timeline: 使用真实用户ID', realUserId);
       return realUserId;
     }
 
-    // 生产模式但无用户：回退到mock
-    console.log('⚠️ Timeline: 生产模式但无用户 - 回退到mock用户ID');
-    return 'mock-user-1';
+    // 无用户：不加载数据（避免无用的 AWS 调用）
+    console.log('⚠️ Timeline: 无用户 - 不加载数据');
+    return null;
   };
 
   const currentUserId = getUserId();
+
+  // 如果没有用户ID，显示登录提示
+  if (!currentUserId) {
+    return (
+      <div className="text-center py-12">
+        <div className="inline-block p-8 bg-yellow-50 border-2 border-yellow-200 rounded-lg">
+          <p className="text-lg text-yellow-800 font-medium mb-2">📊 时间轴需要登录</p>
+          <p className="text-yellow-700">请登录以查看您的嗓音数据时间轴。</p>
+        </div>
+      </div>
+    );
+  }
 
   // 图表配置选项
   const chartOptions = {
@@ -340,7 +341,7 @@ const Timeline = () => {
   const actions = generateTimelineActions(timelineEvents);
 
   return (
-    <div className="dashboard-container relative px-3 sm:px-0">
+    <div className="dashboard-container relative px-3 sm:px-0" data-testid="timeline">
       {/* 装饰性背景元素 */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-pink-300 rounded-full mix-blend-multiply filter blur-xl opacity-30 animate-blob"></div>
@@ -472,9 +473,6 @@ const Timeline = () => {
           </div>
         </div>
       </div>
-
-      {/* 开发模式测试组件 - 仅在开发环境中显示 */}
-      {!isProdReady && <DevModeTest />}
     </div>
   );
 };

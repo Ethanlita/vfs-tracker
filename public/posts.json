@@ -1,0 +1,68 @@
+[
+  {
+    "name": "tutorial",
+    "type": "folder",
+    "children": [
+      {
+        "name": "嗓音分析使用指南.md",
+        "type": "file",
+        "path": "tutorial/嗓音分析使用指南.md"
+      },
+      {
+        "name": "数据查询使用指南.md",
+        "type": "file",
+        "path": "tutorial/数据查询使用指南.md"
+      },
+      {
+        "name": "数据记录使用指南.md",
+        "type": "file",
+        "path": "tutorial/数据记录使用指南.md"
+      },
+      {
+        "name": "音阶练习使用指南.md",
+        "type": "file",
+        "path": "tutorial/音阶练习使用指南.md"
+      }
+    ]
+  },
+  {
+    "name": "VFS Tracker是什么.md",
+    "type": "file",
+    "path": "VFS Tracker是什么.md"
+  },
+  {
+    "name": "使用协议.md",
+    "type": "file",
+    "path": "使用协议.md"
+  },
+  {
+    "name": "嗓音测试报告解读指南.md",
+    "type": "file",
+    "path": "嗓音测试报告解读指南.md"
+  },
+  {
+    "name": "基频和其他参数的意义.md",
+    "type": "file",
+    "path": "基频和其他参数的意义.md"
+  },
+  {
+    "name": "数据保护指南.md",
+    "type": "file",
+    "path": "数据保护指南.md"
+  },
+  {
+    "name": "更新记录.md",
+    "type": "file",
+    "path": "更新记录.md"
+  },
+  {
+    "name": "测试基频和其它参数的方法.md",
+    "type": "file",
+    "path": "测试基频和其它参数的方法.md"
+  },
+  {
+    "name": "联系和交流.md",
+    "type": "file",
+    "path": "联系和交流.md"
+  }
+]

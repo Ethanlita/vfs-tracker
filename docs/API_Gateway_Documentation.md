@@ -2,8 +2,8 @@
 
 **API Base URL**: `https://2rzxc2x5l8.execute-api.us-east-1.amazonaws.com/dev`
 
-**Version**: 1.2
-**Last Updated**: August 19, 2025
+**Version**: 1.3
+**Last Updated**: October 7, 2025
 
 ---
 
@@ -25,7 +25,7 @@ VFS Tracker API provides endpoints for managing voice feminization training even
 ## Authentication
 
 - **Public Endpoints**: No authentication required
-- **Private Endpoints**: Require AWS Cognito JWT token in Authorization header
+- **Private Endpoints**: Require AWS Cognito **ID Token** (`token_use = "id"`) in the `Authorization: Bearer {id_token}` header
 - **User Pool**: `us-east-1_Bz6JC9ko9`
 - **Client ID**: `fb5fjoh3k5djvmbl9qq3pdl4q`
 
@@ -57,7 +57,8 @@ All endpoints support CORS with the following headers:
     "type": "voice_training | self_test | hospital_test | self_practice | surgery | feeling_log",
     "date": "string (ISO 8601)",
     "details": { /* type-specific */ },
-    "createdAt": "string (ISO 8601)"
+    "createdAt": "string (ISO 8601)",
+    "userName": "string (公开昵称或\"（非公开）\"占位)"
     // NOTE: attachments 字段已被后台剥离，不会出现在公共响应中
   }
 ]
@@ -76,7 +77,8 @@ All endpoints support CORS with the following headers:
       "voiceStatus": "良好",
       "instructor": "张老师"
     },
-    "createdAt": "2025-08-15T10:30:00.000Z"
+    "createdAt": "2025-08-15T10:30:00.000Z",
+    "userName": "张老师"
   }
 ]
 ```
@@ -103,31 +105,41 @@ Content-Type: application/json
 
 **Response Format**:
 ```json
-[
-  {
-    "userId": "string",
-    "eventId": "string",
-    "type": "self_test",
-    "date": "2025-08-14T15:30:00.000Z",
-    "details": { /* type-specific */ },
-    "attachments": [
-       { "fileUrl": "attachments/<userId>/a1.jpg", "fileType": "image/jpeg", "fileName": "front.jpg" },
-       { "fileUrl": "attachments/<userId>/a2.jpg", "fileType": "image/jpeg", "fileName": "back.jpg" }
-    ],
-    "status": "pending",
-    "createdAt": "2025-08-14T15:45:00.000Z",
-    "updatedAt": "2025-08-14T15:45:00.000Z"
+{
+  "events": [
+    {
+      "userId": "string",
+      "eventId": "string",
+      "type": "self_test",
+      "date": "2025-08-14T15:30:00.000Z",
+      "details": { /* type-specific */ },
+      "attachments": [
+        { "fileUrl": "attachments/<userId>/a1.pdf", "fileType": "application/pdf", "fileName": "report.pdf" }
+      ],
+      "status": "pending",
+      "createdAt": "2025-08-14T15:45:00.000Z",
+      "updatedAt": "2025-08-14T15:45:00.000Z"
+    }
+  ],
+  "debug": {
+    "lambdaExecuted": true,
+    "timestamp": "2025-08-14T15:45:01.000Z",
+    "authenticatedUserId": "us-east-1:1234...",
+    "eventCount": 1,
+    "...": "省略若干调试字段"
   }
-]
+}
 ```
 
-**Note**: Returns ALL events for the user (pending, approved, rejected), sorted by date descending.
+**Notes**:
+- 返回所有状态的事件（`pending`、`approved`、`rejected`），默认按创建时间降序排序。
+- `debug` 字段目前主要用于排查问题，生产环境中也会返回；后续重构可移除或受控暴露。（这不是一个必须存在的字段）
 
 **HTTP Status Codes**:
 - `200 OK`: Success
-- `401 Unauthorized`: Missing or invalid JWT token
 - `403 Forbidden`: Attempting to access another user's data
 - `500 Internal Server Error`: Server error
+  - **已知问题**: 缺失或无效 token 会触发 500（而非 401），需在后续修复认证失败的返回码。
 
 ---
 
@@ -161,7 +173,7 @@ Content-Type: application/json
 - `createdAt`: Current timestamp
 - `updatedAt`: Current timestamp
 
-**Response** (201 Created):
+**Response** (200 OK):
 ```json
 {
   "message": "Event added successfully",
@@ -169,13 +181,12 @@ Content-Type: application/json
 }
 ```
 
-> The server persists the attachments array as-is (after basic validation). Clients must resolve actual download URLs separately.
+> 服务端会对 `attachments` 列表做基本清洗（确保 `fileUrl` 存在，去除多余字段）后原样存储。客户端需自行获取下载 URL。
 
 **HTTP Status Codes**:
-- `201 Created`: Event created successfully
+- `200 OK`: Event created successfully
 - `400 Bad Request`: Missing required fields (type, date, details)
-- `401 Unauthorized`: Missing or invalid JWT token
-- `500 Internal Server Error`: Server error
+- `500 Internal Server Error`: Server error（包含认证失败、JSON解析失败等情况）
 
 ---
 
@@ -186,6 +197,7 @@ Content-Type: application/json
 **Authentication**: Required (Cognito JWT)
 
 **Security**: Users can only delete their own events. The Lambda function will verify that the `userId` associated with the `eventId` matches the authenticated user's ID from the JWT token.
+这一API会同时级联删除当该事件在S3内的文件。
 
 **Headers**:
 ```
@@ -202,11 +214,12 @@ Authorization: Bearer {jwt-token}
 }
 ```
 
+> 删除操作会尝试清理事件附件：Lambda 支持附件保存为 `s3://bucket/key`、`https://...` 或纯粹的 `key`；解析成功后逐一调用 S3 `DeleteObject`，失败条目会记录日志但不会阻止主流程完成。
+
 **HTTP Status Codes**:
 - `200 OK`: Event deleted successfully.
-- `401 Unauthorized`: Missing or invalid JWT token.
-- `403 Forbidden`: Attempting to delete another user's event (handled by Lambda logic, may result in 404).
-- `404 Not Found`: Event with the given `eventId` does not exist for the authenticated user.
+- `401 Unauthorized`: Missing or invalid JWT token（当 API Gateway 未注入 claims 时返回）。
+- `404 Not Found`: Event with the given `eventId` does not exist **or** does not belong to the authenticated user.
 - `500 Internal Server Error`: Server error.
 
 ---
@@ -234,7 +247,9 @@ Content-Type: application/json
   "userId": "string",
   "email": "string",
   "profile": {
+    "nickname": "string (来自 Cognito，始终返回)",
     "name": "string (optional)",
+    "bio": "string (optional, defaults to empty)",
     "isNamePublic": "boolean (optional, defaults to false)",
     "socials": [
       {
@@ -249,11 +264,14 @@ Content-Type: application/json
 }
 ```
 
+**Notes**:
+- 如果数据库中不存在该用户资料，服务会根据 token 构造一个占位资料并返回 `200 OK`（`createdAt/updatedAt` 为当前时间）。
+- `nickname` 字段始终由 token 决定，客户端传入的同名字段会被忽略。
+
 **HTTP Status Codes**:
 - `200 OK`: Success
 - `401 Unauthorized`: Missing or invalid JWT token
 - `403 Forbidden`: Attempting to access another user's data
-- `404 Not Found`: User profile not found
 - `500 Internal Server Error`: Server error
 
 ---
@@ -280,6 +298,7 @@ Content-Type: application/json
 {
   "profile": {
     "name": "string (optional)",
+    "bio": "string (optional)",
     "isNamePublic": "boolean (optional)",
     "socials": [
       {
@@ -298,12 +317,14 @@ Content-Type: application/json
 **Response** (200 OK):
 ```json
 {
-  "message": "User profile updated successfully",
+  "message": "Profile updated successfully",
   "user": {
     "userId": "us-east-1:12345678-1234-1234-1234-123456789012",
     "email": "user@example.com",
     "profile": {
+      "nickname": "来自 Cognito 的昵称",
       "name": "张三",
+      "bio": "",
       "isNamePublic": true,
       "socials": [
         {
@@ -318,6 +339,8 @@ Content-Type: application/json
   }
 }
 ```
+
+> 请求体中的 `profile.nickname` 字段会被忽略；系统始终使用 Cognito token 中的昵称。
 
 **HTTP Status Codes**:
 - `200 OK`: Profile updated successfully
@@ -346,6 +369,7 @@ Content-Type: application/json
 {
   "profile": {
     "name": "string (optional)",
+    "bio": "string (optional, defaults to empty)",
     "isNamePublic": "boolean (optional, defaults to false)",
     "socials": [
       {
@@ -372,7 +396,9 @@ Content-Type: application/json
     "userId": "us-east-1:12345678-1234-1234-1234-123456789012",
     "email": "newuser@example.com",
     "profile": {
+      "nickname": "新用户昵称（来源于 Cognito）",
       "name": "新用户",
+      "bio": "", //这个字段目前暂时没有使用，是预留
       "isNamePublic": false,
       "socials": [],
       "areSocialsPublic": false
@@ -383,6 +409,8 @@ Content-Type: application/json
   "isNewUser": true
 }
 ```
+
+> 当 `profile` 缺失时会使用默认值；`nickname` 同样来自 ID token。
 
 **HTTP Status Codes**:
 - `201 Created`: New user profile created successfully
@@ -407,7 +435,9 @@ Content-Type: application/json
 {
   "userId": "string",
   "profile": {
+    "nickname": "（非公开）",
     "name": "string (only if isNamePublic is true, otherwise returns '（非公开）')",
+    "bio": "string (用户可公开的简介，默认为空字符串)",
     "socials": [
       {
         "platform": "string",
@@ -421,12 +451,40 @@ Content-Type: application/json
 **Note**: 
 - If `isNamePublic` is false, the `name` field will return "（非公开）"
 - If `areSocialsPublic` is false, the `socials` array will be empty
+- `nickname` 始终固定为 "（非公开）"，用于提示该字段当前不对外公开
 - Non-public users may return minimal information
 
 **HTTP Status Codes**:
 - `200 OK`: Success
 - `404 Not Found`: User not found
 - `500 Internal Server Error`: Server error
+
+---
+
+### GET /edge-probe
+
+**Description**: 诊断端点。返回请求在 API Gateway/CDN 边缘节点上的路由信息，用于排查域名或 CORS 配置问题。
+
+**Authentication**: None required（公开，但仅用于调试，不返回业务数据）
+
+**Response (200 OK)**:
+```json
+{
+  "receivedHost": "api.vfs-tracker.app",
+  "xForwardedHost": "cdn.vfs-tracker.app",
+  "requestContextDomain": "2rzxc2x5l8.execute-api.us-east-1.amazonaws.com",
+  "method": "GET",
+  "path": "/edge-probe"
+}
+```
+
+**Notes**:
+- 该端点不会执行权限校验，请避免在生产环境泄露敏感 header。
+- 建议仅在故障排查期间短期开放，长期策略可考虑移除或加上鉴权。
+
+**HTTP Status Codes**:
+- `200 OK`: Endpoint reachable
+- `500 Internal Server Error`: Unexpected Lambda error
 
 ---
 
@@ -586,7 +644,10 @@ This set of endpoints manages the multi-step voice analysis test feature.
 - `200 OK`: Success.
 - `400 Bad Request`: Missing required fields.
 - `401 Unauthorized`: Missing or invalid JWT token.
+- `403 Forbidden`: Session does not belong to the authenticated user.
 - `500 Internal Server Error`: Server error.
+
+> 生成的 `putUrl` 会自动重写为 `storage.vfs-tracker.app` 或 `storage.vfs-tracker.cn` 域名，以确保使用 CDN。
 
 ---
 
@@ -599,7 +660,9 @@ This set of endpoints manages the multi-step voice analysis test feature.
 **Request Body**:
 ```json
 {
-  "sessionId": "a1b2c3d4-e5f6-7890-1234-567890abcdef"
+  "sessionId": "a1b2c3d4-e5f6-7890-1234-567890abcdef",
+  "calibration": { /* 可选：校准步骤用户输入 */ },
+  "forms": { /* 可选：问卷或自述表单数据 */ }
 }
 ```
 
@@ -616,6 +679,8 @@ This set of endpoints manages the multi-step voice analysis test feature.
 - `400 Bad Request`: Invalid request format or data.
 - `401 Unauthorized`: Missing or invalid JWT token.
 - `500 Internal Server Error`: Server error.
+
+> 当前实现不会在后台再次验证 `sessionId` 是否属于调用者；请在重构阶段补充这一安全检查。
 
 ---
 
@@ -638,32 +703,29 @@ This set of endpoints manages the multi-step voice analysis test feature.
 **Response Format (when complete)**:
 ```json
 {
+  "sessionId": "a1b2c3d4-e5f6-7890-1234-567890abcdef",
+  "userId": "us-east-1:1234...",
   "status": "done",
+  "createdAt": 1757939726,
+  "updatedAt": 1757940115,
   "metrics": {
-    "sustained": {
-      "spl_dbA": 76.8,
-      "f0_mean": 290,
-      "f0_sd": 15.2,
-      "jitter_local_percent": 1.04,
-      "shimmer_local_percent": 4.52,
-      "hnr_db": 20.0,
-      "mpt_s": 11.8,
-      "formants": { "F1": 550, "F2": 1500, "F3": 2500 }
-    },
-    "vrp": {
-      "f0_min": 90,
-      "f0_max": 596,
-      "spl_min": 57,
-      "spl_max": 91
-    }
+    "sustained": { "...": "详见指标映射" },
+    "spontaneous": { "...": "详见指标映射" },
+    "vrp": { "f0_min": 90, "f0_max": 596, "spl_min": 57, "spl_max": 91 },
+    "formants_low": { "F1": 520, "F2": 1700, "F3": 2600 },
+    "questionnaires": { "...": "用户问卷得分" }
   },
   "charts": {
-    "timeSeries": "s3://your-bucket/voice-tests/.../artifacts/timeSeries.png",
-    "vrp": "s3://your-bucket/voice-tests/.../artifacts/vrp.png"
+    "timeSeries": "https://storage.vfs-tracker.app/voice-tests/.../artifacts/timeSeries.png",
+    "vrp": "https://storage.vfs-tracker.app/voice-tests/.../artifacts/vrp.png",
+    "formant": "https://storage.vfs-tracker.app/voice-tests/.../artifacts/formant.png"
   },
-  "reportPdf": "s3://your-bucket/voice-tests/.../report.pdf"
+  "reportPdf": "https://storage.vfs-tracker.app/voice-tests/.../report.pdf",
+  "errorMessage": null
 }
 ```
+
+> `createdAt`/`updatedAt` 使用 Unix 时间戳（秒）。当状态为 `done` 时，所有 S3 URI 会转换为带 CDN 主机的预签名 URL（有效期 1 小时）。
 
 **Response Format (if failed)**:
 ```json
@@ -685,7 +747,11 @@ This set of endpoints manages the multi-step voice analysis test feature.
 
 ### POST /upload-url
 
-**描述**: 获取文件上传的预签名URL，用于安全上传文件到S3
+**描述**: 获取文件上传的预签名URL，用于安全上传文件到S3。该端点支持用户目录下的通用上传需求；会在返回的 URL 上自动替换 CDN 主机，方便前端直接 PUT 上传。
+**用于上传附件时**: 推荐 `fileKey = attachments/{userId}/{timestamp}_{originalFileName}`，其中 `userId` 必须与 ID Token 的 `sub` 一致。上传完成后，把该 key 保存到事件对象的 `attachments` 字段；`DELETE /event/{eventId}` 会根据这些 key 级联删除 S3 文件。
+**用于上传嗓音测试音频时**: 请使用 Online Praat 专用的 `POST /uploads`（`handler.py` 会校验会话所有权并生成 `voice-tests/{sessionId}/raw/...` 路径）。若直接对本端点提交 `voice-tests/` 前缀，会因目录不在允许范围而返回 403。
+**用于上传头像时**: 将 `fileKey` 固定为 `avatars/{userId}/avatar`，再使用返回的 `uploadUrl` 进行 HTTP PUT 上传；`GET /avatar/{userId}` 始终读取该固定 key，因此不要追加扩展名或随机后缀。
+**其他上传场景**: 可以把临时草稿或个人文档放在 `uploads/{userId}/` 目录。依旧需要遵守用户 ID 校验，并利用返回的 CDN URL 直接上传；后续访问可通过 `POST /file-url` 获取下载签名。
 
 **认证**: 需要JWT token
 
@@ -706,10 +772,18 @@ This set of endpoints manages the multi-step voice analysis test feature.
 }
 ```
 
+> 返回的 `uploadUrl` 会自动替换为 `storage.vfs-tracker.app` 或 `storage.vfs-tracker.cn` 域名；客户端可直接使用该 URL 进行上传。
+
 **安全规则**:
 - 用户只能上传到自己的目录下
 - 支持的路径格式：`avatars/{userId}/`, `attachments/{userId}/`, `uploads/{userId}/`
 - 上传URL有效期15分钟
+
+**常见使用场景**:
+- **事件附件**：使用 `fileKey = attachments/{userId}/{timestamp}_{originalFileName}`。上传完成后，将该 key 写入事件的 `attachments` 字段；后续 `DELETE /event/{eventId}` 会依据该 key 清理 S3 文件。
+- **嗓音测试音频**：请改用 Online Praat 专用端点 `POST /uploads`（生成 `voice-tests/{sessionId}/raw/...` 路径），本端点不接受 `voice-tests/` 前缀，直接调用会返回 403。
+- **头像上传**：在调用本端点时将 `fileKey` 固定为 `avatars/{userId}/avatar`，然后使用返回的 `uploadUrl` 执行 HTTP PUT；取图请调用 `GET /avatar/{userId}`。
+- **其他临时或个性化上传**：可使用 `uploads/{userId}/...` 目录存放草稿、个人记录等，同样受用户 ID 校验与 CDN 主机重写影响。
 
 ---
 
@@ -734,10 +808,15 @@ This set of endpoints manages the multi-step voice analysis test feature.
 }
 ```
 
+> 预签名链接同样会重写为 `storage.vfs-tracker.app/.cn` 域名，以便前端直接访问 CDN。
+
 **安全规则**:
 - 只有文件所有者可以访问自己的文件
+- `attachments/{userId}/` 路径要求路径中的 `userId` 与 token `sub` 一致
+- `voice-tests/{sessionId}/` 路径会通过 VoiceFemTests 表核验 session 归属
 - 访问URL有效期1小时
 - 主要用于附件和私有文件访问
+- 支持在查询参数或请求体中提供 `fileKey`
 
 ---
 
@@ -753,10 +832,12 @@ This set of endpoints manages the multi-step voice analysis test feature.
 **响应**:
 ```json
 {
-  "url": "string",      // 预签名访问URL
+  "url": "string",      // 预签名访问URL，会根据访问域名返回CDN地址
   "expiresIn": 86400    // URL有效期（秒）
 }
 ```
+
+> 与其他文件端点一致，返回的预签名链接会被重写为 `storage.vfs-tracker.app` 或 `storage.vfs-tracker.cn` 主机，方便直接走 CDN。
 
 **安全规则**:
 - 任何用户都可以访问其他用户的头像
@@ -804,25 +885,24 @@ uploads/{userId}/           # 通用上传文件
 
 ## 部署状态
 
-### 已完成 ✅
-- Lambda函数实现（getUploadUrl, getFileUrl, getAvatarUrl）
-- 前端SecureFileUpload组件
-- API模块预签名URL函数
-- 安全架构设计
+### 已上线 ✅
+- API Gateway `VoiceFemApi` 已部署 `/upload-url`、`/file-url`、`/avatar/{userId}`、`/edge-probe` 等端点
+- Lambda 函数（getUploadUrl、getFileUrl、getAvatarUrl）与 S3/CDN 重写策略生效
+- 运行环境配置了 `BUCKET_NAME`、`AWS_REGION`、`VOICE_TESTS_TABLE_NAME` 等必需变量
 
-### 待完成 ⏳
-- API Gateway端点配置
-- Lambda函数部署到AWS
-- 环境变量配置
-- 端到端测试
+### 运维注意事项 🔍
+- 监控 CloudWatch 日志，关注 403/500 异常峰值
+- 定期复查 `ATTACHMENTS_BUCKET_NAME`、`BUCKET_NAME` 等配置是否与 IaC 同步
+- 端到端测试应覆盖上传→下载→附件删除链路，以验证签名 URL 与权限策略
 
 ---
 
-**注意**: 这些端点目前处于开发阶段，实际部署需要先完成API Gateway配置。详细配置说明请参考 `docs/api-gateway-s3-presigned-config.md`.
+**注意**: 详细的 API Gateway 配置仍可参考 `docs/api-gateway-s3-presigned-config.md`，以便在新环境中快速复现部署。
 
 ---
 
 ## Change Log
+- 1.3: Reconciled documentation with deployed API (public events `userName`, event/debug payloads, edge-probe endpoint, voice test request/response details).
 - 1.2: Added Online Praat / Voice Test endpoints (/sessions, /uploads, /analyze, /results).
 - 1.1: Added multi-attachment support; documented private `attachments` field visibility rules.
 - 1.0: Initial version.

@@ -30,3 +30,14 @@ package-lock.json
 .env.development.local
 .env.test.local
 .env.production.local
+.env.contract
+
+# Test coverage
+coverage/
+
+# Database exports (may contain real data)
+data_of_dynamodb/
+
+# Playwright report
+playwright-report/
+test-results/
