@@ -3,6 +3,7 @@
  * @description 测试用户登录、注册、登出流程
  */
 import { test, expect } from '@playwright/test';
+import { loginAsTestUser, logout, isLoggedIn } from './helpers/auth.js';
 
 test.describe('用户认证流程', () => {
   test.beforeEach(async ({ page }) => {
@@ -84,40 +85,49 @@ test.describe('用户认证流程', () => {
 });
 
 test.describe('登录后状态', () => {
-  // 这些测试需要实际的测试账号，或者 mock 认证状态
-  test.skip('成功登录后应该显示用户信息', async ({ page }) => {
-    // TODO: 实现测试账号登录或 mock 认证
-    await page.goto('/');
+  test('成功登录后应该显示用户信息', async ({ page }) => {
+    // 使用登录辅助函数
+    await loginAsTestUser(page);
     
-    // 填写登录表单
-    // await page.fill('input[type="email"]', 'test@example.com');
-    // await page.fill('input[type="password"]', 'testpassword');
-    // await page.click('button[type="submit"]');
+    // 验证登录成功 - 用户菜单应该可见
+    const userMenu = page.locator('[data-testid="user-menu"], .user-menu, button:has-text("退出"), button:has-text("登出")').first();
+    await expect(userMenu).toBeVisible({ timeout: 20000 });
     
-    // 验证登录成功
-    // const userMenu = page.locator('.user-menu, [data-testid="user-menu"]');
-    // await expect(userMenu).toBeVisible();
+    // 验证已登录状态
+    const loggedIn = await isLoggedIn(page);
+    expect(loggedIn).toBe(true);
   });
 
-  test.skip('登录后应该能够登出', async ({ page }) => {
-    // TODO: 先登录，然后测试登出
-    await page.goto('/');
+  test('登录后应该能够登出', async ({ page }) => {
+    // 先登录
+    await loginAsTestUser(page);
     
-    // 点击登出按钮
-    // const logoutButton = page.locator('text=/登出|Logout|Sign Out/i');
-    // await logoutButton.click();
+    // 验证已登录
+    expect(await isLoggedIn(page)).toBe(true);
     
-    // 验证登出成功（登录按钮重新出现）
-    // const loginButton = page.locator('text=/登录|Login/i');
-    // await expect(loginButton).toBeVisible();
+    // 执行登出
+    await logout(page);
+    
+    // 验证登出成功 - 登录按钮应该重新出现
+    const loginButton = page.locator('text=/登录|Login|Sign In/i').first();
+    await expect(loginButton).toBeVisible({ timeout: 5000 });
+    
+    // 验证未登录状态
+    const loggedIn = await isLoggedIn(page);
+    expect(loggedIn).toBe(false);
   });
 });
 
 test.describe('认证持久化', () => {
-  test.skip('刷新页面后应该保持登录状态', async ({ page, context }) => {
-    // TODO: 需要实际登录流程
-    // 登录后，刷新页面
-    // await page.reload();
+  test('刷新页面后应该保持登录状态', async ({ page, context }) => {
+    // 先登录
+    await loginAsTestUser(page);
+    
+    // 验证已登录
+    expect(await isLoggedIn(page)).toBe(true);
+    
+    // 刷新页面
+    await page.reload();
     
     // 验证仍然登录
     // const userMenu = page.locator('.user-menu');

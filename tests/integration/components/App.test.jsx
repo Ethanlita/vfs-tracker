@@ -234,21 +234,6 @@ describe('App Component', () => {
         expect(screen.getByRole('main')).toBeInTheDocument();
       });
     });
-
-    it('应该渲染开发模式测试页面 (/dev-test)', async () => {
-      setupDefaultAuth();
-      
-      render(
-        <MemoryRouter initialEntries={['/dev-test']}>
-          <App />
-        </MemoryRouter>
-      );
-
-      // 验证真实的 DevModeTest 组件（特定的标题）
-      await waitFor(() => {
-        expect(screen.getByRole('heading', { name: /开发模式测试结果/i })).toBeInTheDocument();
-      });
-    });
   });
 
   describe('保护路由', () => {

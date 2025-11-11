@@ -1,6 +1,8 @@
-# VFS Tracker
+﻿# VFS Tracker
 
-一个用于记录与分析 VFS（Voice Feminization Surgery）相关语音事件的开## 测试 (Testing)
+一个用于记录与分析 VFS（Voice Feminization Surgery）相关语音事件的开源应用。
+
+## 测试 (Testing)
 
 项目使用 **Vitest + jsdom + MSW + React Testing Library** 构建现代化测试框架。
 
@@ -36,6 +38,13 @@ npm run test:contract
   - `tests/contract/api-contract.test.js`
   - 需要完整的 AWS 环境变量配置
 
+### Playwright / 真实后端
+1. 复制 `.env.contract`（或 `.env.contract.example`）到 `.env.local`，填入文档要求的 5 个 AWS/Cognito/S3 必填变量，以及 Playwright 登录账号。
+2. `npm run test:e2e` 会自动调用 `npm run dev:playwright`，该脚本通过 `dotenv-cli` 注入 `.env.contract` / `.env.local`，确保 Vite dev server 直接连到真实后端。
+3. 如果只想手动联调，可单独运行 `npm run dev:playwright` 打开真实环境的本地开发服务器。
+4. `npm run build` / `npm run preview` 现在同样会使用 `.env.local`（若不存在则退回 `.env.contract`），预览站点不再落回 mock，而是完整命中云端 API。
+5. 需要纯人工测试时，可在另一个终端执行 `npm run playwright:open`，它会在注入真实环境变量的前提下启动一个 Playwright 浏览器，后续操作完全由人工完成。
+
 ### 重要文档
 - 📖 **[完整测试指南](docs/TESTING_GUIDE.md)** - 500+ 行详细文档
 - 📖 **[契约测试说明](tests/contract/README.md)** - 契约测试使用指南
@@ -50,19 +59,51 @@ npm run test:contract
 
 > 💡 **注意**: 集成测试的部分失败是预期的。这些测试采用**规范驱动开发 (Specification-Driven Development)** 方法，定义了理想的 API 和组件接口。Phase 3.2 将重构实际代码以匹配这些规范。详见 [Phase 3.1 状态报告](tests/PHASE3.1_STATUS.md)。
 
-## 环境变量与 isProductionReady
+### GitHub Secrets（Playwright / E2E）
 
-项目通过 isProductionReady 决定是否启用真实云服务：
-- 必需变量（全部存在且非空才视为"生产就绪" Production Ready）：
-  - VITE_COGNITO_USER_POOL_ID
-  - VITE_COGNITO_USER_POOL_WEB_CLIENT_ID
-  - VITE_AWS_REGION
-  - VITE_API_ENDPOINT（统一 API 入口，例如 https://api.vfs-tracker.app）
-  - VITE_S3_BUCKET（用户文件所使用的 S3 Bucket 名称）
-- 可选变量：
-  - VITE_GOOGLE_GEMINI_API（用于生成 AI 鼓励消息，仅生产环境使用）
+- Playwright E2E / 契约测试会直接登录真实的 Cognito 账号（参考 `docs/TESTING_GUIDE.md`）。本地运行时请在 `.env.local` 或 `.env.contract` 中提供 `VITE_CONTRACT_TEST_USER_EMAIL`、`VITE_CONTRACT_TEST_USER_PASSWORD`。
+- 在 GitHub Actions 中，请为这些变量配置 Secrets。例如：
+  - `TEST_USER_EMAIL`、`TEST_USER_PASSWORD` —— 保存真实测试账号。
+  - 在 workflow 中将其映射到 `VITE_CONTRACT_TEST_USER_EMAIL`、`VITE_CONTRACT_TEST_USER_PASSWORD`（示例见 `ROADMAP.md` Phase 5.2 片段）。
+- 未提供上述凭据时，Playwright 将无法完成自动登录，相关测试会全部失败。
+- 已安装 GitHub CLI（`C:\Program Files\GitHub CLI\gh.exe`），但尚未登录。请执行：
+  1. `\"C:\\Program Files\\GitHub CLI\\gh.exe\" auth login --hostname github.com --web`
+  2. `\"C:\\Program Files\\GitHub CLI\\gh.exe\" secret set TEST_USER_EMAIL --body \"test-contract@yourdomain.com\"`
+  3. `\"C:\\Program Files\\GitHub CLI\\gh.exe\" secret set TEST_USER_PASSWORD --body \"YourSecurePassword123!\"`
+  4. 根据需要再写入 `VITE_CONTRACT_TEST_USER_EMAIL`、`VITE_CONTRACT_TEST_USER_PASSWORD` 等 Secrets。
 
-> isProductionReady 会在上述任意一个配置缺失时返回 `false`，前端自动落入"开发模式"。只要全部配置齐全，就会被视为生产模式并走真实云端流程。t + Vite，样式采用 Tailwind CSS；在具备云配置时通过 AWS Serverless（Cognito、API Gateway、Lambda、DynamoDB）提供鉴权、API 与存储。缺省情况下使用本地模拟数据运行，无需云账号即可体验。
+## 环境变量配置
+
+项目需要配置 AWS 环境变量才能正常运行：
+
+### 必需变量
+
+这些环境变量必须全部配置才能使用应用：
+
+- `VITE_COGNITO_USER_POOL_ID` - AWS Cognito 用户池 ID
+- `VITE_COGNITO_USER_POOL_WEB_CLIENT_ID` - AWS Cognito 应用客户端 ID
+- `VITE_AWS_REGION` - AWS 区域（如 us-east-1）
+- `VITE_API_ENDPOINT` - 统一 API 入口（如 https://api.vfs-tracker.app）
+- `VITE_S3_BUCKET` - 用户文件所使用的 S3 Bucket 名称
+
+### 可选变量
+
+- `VITE_GOOGLE_GEMINI_API` - 用于生成 AI 鼓励消息
+
+### 配置步骤
+
+1. 复制 `.env.example` 为 `.env`
+2. 在 AWS Cognito 控制台获取用户池相关信息
+3. 在 API Gateway 控制台获取 API 端点
+4. 在 S3 控制台获取存储桶名称
+5. 填入 `.env` 文件中
+6. **重要**: 不要将包含真实值的 `.env` 文件提交到 git
+
+> ⚠️ **注意**: 应用现已移除开发模式，必须配置完整的 AWS 环境变量才能运行。详见 [AWS 环境变量配置指南](docs/lambda-environment-variables.md)。
+
+## 项目简介
+
+VFS Tracker 是一个**声音训练、监测与数据可视化平台**，主要面向跨性别女性（MtF）或其它有嗓音调整需求的用户。前端技术栈为 React + Vite，样式采用 Tailwind CSS；后端通过 AWS Serverless（Cognito、API Gateway、Lambda、DynamoDB）提供鉴权、API 与存储。
 
 - **在线演示与文档**: 请参考本仓库主页、[架构文档](ARCHITECTURE.md)和[API文档](API_Gateway_Documentation.md)。
 - **代码许可与贡献**: 参见 [CONTRIBUTION.md](CONTRIBUTION.md)。
@@ -99,7 +140,7 @@ npm run test:contract
   - EventForm.jsx：事件录入表单，支持文件上传与动态字段
   - Timeline.jsx：个人时间轴与图表展示
   - PostList.jsx / PostViewer.jsx / PostsDropdown.jsx：帖子列表与阅读
-- `src/api.js`: 封装所有与后端 API 的交互，并提供开发环境回退逻辑。
+- `src/api.js`: 封装所有与后端 API 的交互
 - `lambda-functions/`: 包含所有后端 Lambda 函数的源代码。
 - `docs/`: 包含项目的主要文档。
 - scripts/generate-posts-list.js：生成 public/posts.json
@@ -115,7 +156,11 @@ npm run test:contract
 - 使用 pnpm：
   - pnpm i
 
-2) 本地开发（含模拟数据，无需云配置）
+2) 配置环境变量
+- 复制 `.env.example` 为 `.env`
+- 填入你的 AWS 凭证（见上方"环境变量配置"部分）
+
+3) 本地开发
 - npm run dev（或 pnpm dev）
 - 浏览器访问 http://localhost:3000
 
@@ -125,34 +170,6 @@ npm run test:contract
 
 4) 本地预览构建产物
 - npm run preview
-
-## 环境变量与 isProductionReady
-
-项目通过 isProductionReady 决定是否启用真实云服务：
-- 必需变量（全部存在且非空才视为“生产就绪” Production Ready）：
-  - VITE_COGNITO_USER_POOL_ID
-  - VITE_COGNITO_USER_POOL_WEB_CLIENT_ID
-  - VITE_AWS_REGION
-  - VITE_API_ENDPOINT（统一 API 入口，例如 https://api.vfs-tracker.app）
-  - VITE_S3_BUCKET（用户文件所使用的 S3 Bucket 名称）
-- 可选变量：
-  - VITE_GOOGLE_GEMINI_API（用于生成 AI 鼓励消息，仅生产环境使用）
-
-> isProductionReady 会在上述任意一个配置缺失时返回 `false`，前端自动落入“开发模式”。只要全部配置齐全，就会被视为生产模式并走真实云端流程。
-
-行为差异：
-- 开发模式（未就绪）：
-  - API 返回 mock_data.json 中的模拟事件
-  - 上传文件返回模拟 Key（不调用 S3）
-  - AI 鼓励消息使用静态默认文案
-- 生产模式（就绪）：
-  - 通过 `src/api.js` 中封装的函数调用 API Gateway/Lambda。
-  - 通过后端生成的预签名 URL 安全地上传文件至 S3。
-  - 可调用 Gemini API 生成鼓励消息。
-
-代码位置：
-- src/api.js 中的 isProductionReady() 与各 API 方法（getAllEvents、getEventsByUserId、addEvent、uploadFile、getEncouragingMessage）
-- 组件内也会基于上述变量决定鉴权与 UI 行为（如 EventForm、PublicDashboard）
 
 ## 数据契约（Data Contract）
 
@@ -177,10 +194,10 @@ npm run test:contract
 ## FAQ
 
 - Q: 没有 AWS 账号能否运行？
-  - A: 可以。未配置必需环境变量时，应用使用本地模拟数据与回退逻辑。
-- Q: 图表没有数据或显示“暂无可绘制的基频数据”？
-  - A: 仪表板会在数据不足时生成额外演示数据；若仍为空，请检查 mock_data.json 或真实 API 返回。
+  - A: 不可以。应用现已移除开发模式，必须配置完整的 AWS 环境变量才能运行。
+- Q: 图表没有数据或显示"暂无可绘制的基频数据"？
+  - A: 请检查是否有足够的事件数据，以及事件中是否包含基频（fundamentalFrequency）字段。
 - Q: 上传失败如何排查？
-  - A: 在开发模式下不会真的上传；在生产模式下，请检查 S3 权限、API Gateway 配置以及浏览器控制台的网络请求和日志。
+  - A: 请检查 S3 权限、API Gateway 配置以及浏览器控制台的网络请求和日志。确保 VITE_S3_BUCKET 环境变量配置正确。
 - Q: 帖子列表为什么自动生成？
   - A: 开发与构建时 scripts/generate-posts-list.js 会扫描 posts 目录，生成 public/posts.json，vite 插件会将 posts 复制到 dist/posts。

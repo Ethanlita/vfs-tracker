@@ -48,10 +48,8 @@ const StatusIndicator = ({ isDemo, isLoading }) => {
   );
 };
 
-const NewTimeline = ({ events = [], isProductionReady, isLoading = false }) => {
+const NewTimeline = ({ events = [], isLoading = false }) => {
   const [selectedEvent, setSelectedEvent] = useState(null);
-
-  const isDemo = !(typeof isProductionReady === 'function' ? isProductionReady() : isProductionReady);
 
   const formatDate = (dateString) => {
     const d = new Date(dateString);
@@ -154,7 +152,7 @@ const NewTimeline = ({ events = [], isProductionReady, isLoading = false }) => {
 
       {/* 数据源状态指示 */}
       <div className="mt-6 flex justify-end px-8">
-        <StatusIndicator isDemo={isDemo} isLoading={isLoading} />
+        <StatusIndicator isDemo={false} isLoading={isLoading} />
       </div>
 
       {/* 详情弹窗 */}

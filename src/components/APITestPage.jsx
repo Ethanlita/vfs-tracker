@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useAuth } from '../contexts/AuthContext';
 import {
   getUserProfile,
   getUserPublicProfile,
@@ -7,9 +8,9 @@ import {
 } from '../api';
 
 const APITestPage = () => {
+  const { user } = useAuth();
   const [results, setResults] = useState({});
   const [loading, setLoading] = useState({});
-  const [testUserId] = useState('demo-user-123'); // 开发模式测试用户ID
 
   const [profileData, setProfileData] = useState({
     name: '测试用户',
@@ -45,6 +46,9 @@ const APITestPage = () => {
       setLoading(prev => ({ ...prev, [testName]: false }));
     }
   };
+
+  // 获取真实用户ID
+  const testUserId = user?.userId || user?.sub;
 
   const tests = [
     {
@@ -98,6 +102,18 @@ const APITestPage = () => {
     );
   };
 
+  // 如果用户未登录，显示登录提示
+  if (!user) {
+    return (
+      <div className="max-w-4xl mx-auto p-6">
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6">
+          <h2 className="text-xl font-bold text-yellow-800 mb-2">需要登录</h2>
+          <p className="text-yellow-700">请先登录以测试用户 API。</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-4xl mx-auto p-6">
       <div className="mb-8">
@@ -105,12 +121,13 @@ const APITestPage = () => {
           用户API测试页面
         </h1>
         <p className="text-gray-600">
-          测试4个新增的用户管理API。当前运行在开发模式，使用模拟数据。
+          测试4个新增的用户管理API。所有操作都将调用真实的 AWS 后端服务。
         </p>
         <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
           <p className="text-blue-800 text-sm">
             <strong>测试用户ID:</strong> {testUserId}<br/>
-            <strong>环境:</strong> 开发模式（使用模拟数据）
+            <strong>用户邮箱:</strong> {user.email || '未设置'}<br/>
+            <strong>环境:</strong> 生产模式（调用真实 AWS API）
           </p>
         </div>
       </div>
