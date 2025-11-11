@@ -37,3 +37,6 @@ coverage/
 
 # Database exports (may contain real data)
 data_of_dynamodb/
+
+# Playwright report
+playwright-report/
