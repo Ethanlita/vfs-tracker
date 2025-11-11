@@ -143,7 +143,7 @@ async function loadProfile(signal) {
 
 - Derive new classes from the closest existing parent (`ClientError`, `ServiceError`, etc.) to inherit context handling. 从最贴近的父类（如 `ClientError` 或 `ServiceError`）继承，以获得上下文合并能力。
 - Provide bilingual default messages and document any extra fields in this guide. 为默认消息提供中英双语表达，并在本指南中记录新增字段。
-- Add targeted unit tests in `tests/apiError.test.mjs` to capture new behaviors. 为新增行为在 `tests/apiError.test.mjs` 中编写单元测试。
+- Add targeted unit tests in `tests/unit/utils/apiError.test.js` to capture new behaviors. 为新增行为在 `tests/unit/utils/apiError.test.js` 中编写单元测试。
 
 ## Development vs Production / 开发模式与生产模式
 
@@ -151,5 +151,5 @@ In development mode the client may short-circuit requests (for example when cred
 
 ## Further Reading / 延伸阅读
 
-- Tests verifying the scenarios above live in `tests/apiError.test.mjs`. 对应的验证案例位于 `tests/apiError.test.mjs`。
+- Tests verifying the scenarios above live in `tests/unit/utils/apiError.test.js`. 对应的验证案例位于 `tests/unit/utils/apiError.test.js`。
 - Development readiness criteria are tracked in `README.md` and summarized in `AGENTS.md`. 开发模式与生产模式的判定标准记录在 `README.md`，并在 `AGENTS.md` 中有摘要。

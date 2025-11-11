@@ -52,12 +52,21 @@ const EventManager = ({ events, onEventDeleted }) => { // 移除未使用参数
     if (!events) return [];
 
     let filtered = events.filter(event => {
-      // 搜索过滤
       const searchLower = searchTerm.toLowerCase();
+
+      const matchesDetailFields = Object.values(event.details || {}).some((value) => {
+        if (typeof value === 'string') {
+          return value.toLowerCase().includes(searchLower);
+        }
+        if (Array.isArray(value)) {
+          return value.some((item) => typeof item === 'string' && item.toLowerCase().includes(searchLower));
+        }
+        return false;
+      });
+
       const matchesSearch = !searchTerm ||
         (event.type && event.type.toLowerCase().includes(searchLower)) ||
-        (event.details?.notes && event.details.notes.toLowerCase().includes(searchLower)) ||
-        (event.details?.content && event.details.content.toLowerCase().includes(searchLower)) ||
+        matchesDetailFields ||
         getTypeConfig(event.type).label.toLowerCase().includes(searchLower);
 
       // 类型过滤
@@ -157,7 +166,7 @@ const EventManager = ({ events, onEventDeleted }) => { // 移除未使用参数
         onEventDeleted(eventId);
       }
 
-      // 关���详情弹窗
+      // 关闭详情弹窗
       setShowDetails(false);
 
       // 提示用户成功
@@ -301,7 +310,7 @@ const EventManager = ({ events, onEventDeleted }) => { // 移除未使用参数
           <h3 className="text-lg font-semibold text-gray-800">事件列表</h3>
         </div>
 
-        <div className="divide-y divide-gray-200 max-h-96 overflow-y-auto">
+        <div className="divide-y divide-gray-200 max-h-96 overflow-y-auto" data-testid="events-list">
           {filteredAndSortedEvents.length === 0 ? (
             <div className="p-8 text-center text-gray-500">
               <div className="text-4xl mb-2">📭</div>
@@ -315,7 +324,8 @@ const EventManager = ({ events, onEventDeleted }) => { // 移除未使用参数
                   key={event.eventId}
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="p-4 hover:bg-gray-50 cursor-pointer transition-colors"
+                  className="p-4 hover:bg-gray-50 cursor-pointer transition-colors event-card"
+                  data-testid="event-item"
                   onClick={() => handleEventClick(event)}
                 >
                   <div className="flex items-center justify-between">
@@ -369,6 +379,7 @@ const EventManager = ({ events, onEventDeleted }) => { // 移除未使用参数
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
               className="bg-white rounded-xl max-w-2xl w-full max-h-screen overflow-y-auto p-6"
+              data-testid="event-detail"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center justify-between mb-4">
@@ -414,15 +425,16 @@ const EventManager = ({ events, onEventDeleted }) => { // 移除未使用参数
                 )}
 
                 {resolvedAtts && resolvedAtts.length > 0 && (
-                  <div>
+                  <div data-testid="attachments">
                     <h4 className="font-medium text-gray-800 mb-2 mt-4">附件</h4>
-                    <div className="flex flex-wrap gap-2">
+                    <div className="flex flex-wrap gap-2" data-testid="attachment-list">
                       {resolvedAtts.map((att, i) => (
                         <a
                           key={i}
                           href={att.downloadUrl || att.fileUrl}
                           target="_blank" rel="noreferrer"
                           className="inline-flex items-center px-3 py-1.5 rounded-md bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200"
+                          data-testid="attachment-item"
                         >
                           📎 {att.fileName || `附件${i+1}`}
                         </a>

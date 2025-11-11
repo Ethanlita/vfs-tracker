@@ -53,4 +53,55 @@ export default defineConfig({
     host: true,
     port: 3000,
   },
+  // Vitest 测试配置
+  test: {
+    globals: true,
+    environment: 'jsdom',
+    setupFiles: './src/test-utils/setup.js',
+    // 设置测试环境变量
+    // 注意：单元测试和集成测试使用 MSW mock，不会真正调用这些端点
+    // 但契约测试会调用真实的 API，所以需要使用真实的端点配置
+    env: {
+      VITE_COGNITO_USER_POOL_ID: 'us-east-1_Bz6JC9ko9',
+      VITE_COGNITO_USER_POOL_WEB_CLIENT_ID: '1nkup2vppbuk3n2d4575vbcoa0',
+      VITE_AWS_REGION: 'us-east-1',
+      VITE_API_ENDPOINT: 'https://2rzxc2x5l8.execute-api.us-east-1.amazonaws.com',
+      VITE_API_STAGE: 'dev',
+      VITE_S3_BUCKET: 'vfs-tracker-objstor',
+    },
+    include: [
+      'tests/**/*.test.{js,jsx}',
+      'src/**/*.test.{js,jsx}'
+    ],
+    exclude: [
+      'node_modules',
+      'dist',
+      'tests/legacy/**',
+      'tests/contract/**', // 排除契约测试，契约测试使用专门的配置
+      '.idea',
+      '.git',
+      'build'
+    ],
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'json', 'html', 'lcov'],
+      include: ['src/**/*.{js,jsx}'],
+      exclude: [
+        'src/main.jsx',
+        'src/**/*.test.{js,jsx}',
+        'src/test-utils/**',
+        'src/mock_data.json',
+        'src/assets/**',
+      ],
+      thresholds: {
+        lines: 50,
+        functions: 50,
+        branches: 40,
+        statements: 50,
+      }
+    },
+    // 覆盖率工具会显著降低执行速度（5-10倍），需要更长的超时时间
+    testTimeout: process.env.COVERAGE ? 30000 : 10000,  // coverage模式: 30s, 普通模式: 10s
+    hookTimeout: process.env.COVERAGE ? 20000 : 10000,  // coverage模式: 20s, 普通模式: 10s
+  },
 })

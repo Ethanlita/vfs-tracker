@@ -4,6 +4,7 @@ import { useLocation } from 'react-router-dom';
 const DISMISS_KEY = 'cnBannerDismissed';
 
 const isLikelyChinaLocale = () => {
+  // 检查时区
   try {
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
     if (tz === 'Asia/Shanghai' || tz === 'Asia/Urumqi') {
@@ -13,18 +14,22 @@ const isLikelyChinaLocale = () => {
     // ignore
   }
 
+  // 检查语言设置
   try {
     const langs = navigator.languages || [navigator.language];
-    if (langs && langs.length) {
-      return langs.some((lang) => {
+    if (langs && langs.length > 0) {
+      const hasChinaLocale = langs.some((lang) => {
         const lower = (lang || '').toLowerCase();
         return lower.startsWith('zh-cn') || lower.startsWith('zh-hans');
       });
+      // 明确返回检查结果
+      return hasChinaLocale;
     }
   } catch {
     // ignore
   }
 
+  // 如果所有检查都失败，返回 false
   return false;
 };
 
@@ -33,8 +38,14 @@ const RegionSwitchBanner = () => {
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
+    // 服务端渲染时直接返回
     if (typeof window === 'undefined') return;
-    const host = window.location.hostname.toLowerCase();
+    
+    // 测试环境下可能没有 window.location.hostname，需要处理
+    const hostname = window.location?.hostname;
+    if (!hostname) return;
+    
+    const host = hostname.toLowerCase();
     const isAppDomain = host.endsWith('.app');
     if (!isAppDomain) {
       setOpen(false);

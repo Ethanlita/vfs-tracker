@@ -171,7 +171,7 @@ const EnhancedDataCharts = ({ allEvents = [] }) => {
         display: true,
         text: chartType === 'training' ? '训练数据图表（以第一次训练为第0天对齐）' :
               chartType === 'non-training' ? '非训练数据图表（以第一次事件为第0天对齐）' :
-              '手术数据图表���VFS）',
+              '手术数据图表（VFS）',
       },
     },
     scales: {
@@ -232,7 +232,7 @@ const EnhancedDataCharts = ({ allEvents = [] }) => {
               >
                 <option value="all">显示所有</option>
                 <option value="doctor">按医生过滤</option>
-                <option value="method">��手术方法过滤</option>
+                <option value="method">按手术方法过滤</option>
               </select>
             </div>
 

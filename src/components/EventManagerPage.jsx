@@ -4,7 +4,6 @@ import { getEventsByUserId } from '../api';
 import EventManager from './EventManager';
 import { useAsync } from '../utils/useAsync.js';
 import { ApiErrorNotice } from './ApiErrorNotice.jsx';
-import { isProductionReady as globalIsProductionReady } from '../env.js';
 import { useAuth } from '../contexts/AuthContext'; // 使用AuthContext而不是直接使用useAuthenticator
 
 /**
@@ -13,13 +12,11 @@ import { useAuth } from '../contexts/AuthContext'; // 使用AuthContext而不是
  */
 const EventManagerPage = () => {
   const navigate = useNavigate();
-  const productionReady = globalIsProductionReady();
 
   // 使用AuthContext提供的用户信息，而不是直接使用useAuthenticator
   const { user, isAuthenticated } = useAuth();
 
   console.log('🔍 EventManagerPage - 用户状态分析 (使用AuthContext):', {
-    productionReady,
     user,
     isAuthenticated,
     hasUser: !!user,
@@ -162,7 +159,6 @@ const EventManagerPage = () => {
             events={events}
             onEventUpdated={handleEventUpdated}
             onEventDeleted={handleEventDeleted}
-            isProductionReady={globalIsProductionReady}
           />
         )}
       </div>

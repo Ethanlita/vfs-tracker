@@ -486,11 +486,12 @@ const PublicDashboard = () => {
 
         {/* 用户档案抽屉 */}
         {selectedUser && (
-          <div className="fixed inset-0 z-50">
+          <div className="fixed inset-0 z-50" role="dialog" aria-label="用户公开资料" aria-modal="true">
             {/* 背景遮罩 */}
             <div
               className="absolute inset-0 bg-black/30"
               onClick={() => setSelectedUserId(null)}
+              aria-hidden="true"
             />
             {/* 抽屉面板 */}
             <div className="absolute inset-y-0 right-0 w-full max-w-2xl bg-white shadow-2xl border-l border-gray-200 flex flex-col">
@@ -502,6 +503,7 @@ const PublicDashboard = () => {
                 <button
                   type="button"
                   onClick={() => setSelectedUserId(null)}
+                  aria-label="关闭用户资料"
                   className="inline-flex items-center rounded-md px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-gray-400"
                 >
                   关闭

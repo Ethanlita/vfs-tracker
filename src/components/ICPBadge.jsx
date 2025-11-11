@@ -1,8 +1,18 @@
 import React from 'react';
 
+/**
+ * ICP 备案徽章组件
+ * 仅在 .cn 域名下显示
+ */
 const ICPBadge = () => {
+  // 服务端渲染时直接返回 null
   if (typeof window === 'undefined') return null;
-  const host = window.location.hostname.toLowerCase();
+  
+  // 测试环境下可能没有 window.location.hostname，需要处理
+  const hostname = window.location?.hostname;
+  if (!hostname) return null;
+  
+  const host = hostname.toLowerCase();
   if (!host.endsWith('.cn')) {
     return null;
   }

@@ -4,7 +4,6 @@ import { getEventsByUserId } from '../api';
 import VoiceFrequencyChart from './VoiceFrequencyChart';
 import InteractiveTimeline from './InteractiveTimeline';
 import { useAsync } from '../utils/useAsync.js';
-import { isProductionReady as globalIsProductionReady } from '../env.js';
 import { getUserDisplayName } from '../utils/avatar.js';
 import { useAuth } from '../contexts/AuthContext.jsx';
 import PendingSyncButton from './PendingSyncButton.jsx';
@@ -20,9 +19,6 @@ import { ApiErrorNotice } from './ApiErrorNotice.jsx';
  */
 const MyPage = () => {
   // --- STATE MANAGEMENT ---
-  // @en Check if the environment is production-ready.
-  // @zh 检查是否为生产环境。
-  const productionReady = globalIsProductionReady();
   const navigate = useNavigate();
 
   // @en Use AuthContext exclusively - it already uses Amplify v6 standard APIs
@@ -41,7 +37,7 @@ const MyPage = () => {
 
   // @en Create user object with proper data from AuthContext (which uses Amplify v6 APIs)
   // @zh 从 AuthContext 创建用户对象（AuthContext 使用 Amplify v6 API）
-  const user = productionReady && authContextUser ? {
+  const user = authContextUser ? {
     attributes: {
       email: cognitoUserInfo?.email || authContextUser.attributes?.email,
       sub: authContextUser.userId,
@@ -51,20 +47,13 @@ const MyPage = () => {
       avatarKey: cognitoUserInfo?.avatarKey || authContextUser.attributes?.avatarKey
     },
     username: authContextUser.username
-  } : {
-    attributes: {
-      email: 'public-user@example.com',
-      sub: 'mock-user-1',
-      nickname: '开发用户',
-      name: '开发用户'
-    }
-  };
+  } : null;
 
-  console.log('🔍 MyPage: 最终用户对象 (仅来自AuthContext)', {
+  console.log('🔍 MyPage: 最终用户对象 (仅来自AuthContext)', user ? {
     user,
     displayName: getUserDisplayName(user),
     hasNickname: !!user.attributes?.nickname
-  });
+  } : null);
 
   // @en State for storing the list of user events.
   // @zh 用于存储用户事件列表的状态。
