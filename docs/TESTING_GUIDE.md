@@ -1,4 +1,4 @@
-# VFS Tracker 测试指南
+﻿# VFS Tracker 测试指南
 
 本文档详细说明了 VFS Tracker 项目的测试架构、测试策略和最佳实践。
 
@@ -70,6 +70,11 @@ src/test-utils/
     ├── events/
     └── index.js
 ```
+
+**鐜鍙橀噺锛?**
+- 請務必閰嶇疆 `VITE_CONTRACT_TEST_USER_EMAIL` 與 `VITE_CONTRACT_TEST_USER_PASSWORD` 锛屼互渚胯繘琛岄獙璇佺殑 Playwright 鐧婚檰娴嬭瘯銆?
+- `.env.contract` 鍜?`.env.local` 宸插祴鍊煎ソ鐨勬祴璇曡处鎴凤細 `test-contract@yourdomain.com` / `YourSecurePassword123!`锛屾敮鎸佸湪 Cognito 鐪熸鐧婚檰銆?
+- `tests/e2e/helpers/auth.js` 浼氶€氳繃姝や袱涓彉閲忚嚜鍔ㄩ厤缃祴璇曠敤鎴凤紝璇疯纰嶆敮鎸佽繃绋嬭幏鍙栨硶瀹岀殑鍙橀噺鍊笺€?
 
 ---
 
@@ -281,6 +286,13 @@ npm run test:e2e
 - E2E 测试不包含在代码覆盖率统计中
 - 使用 Playwright 作为 E2E 测试框架
 - 配置文件：`playwright.config.js`
+**Playwright 真实环境运行指引**
+1. 复制 .env.contract (或 .env.contract.example) 为 .env.local，并确保 AWS/Cognito/S3 变量完整。
+2. 运行 
+pm run test:e2e 时，Playwright 会自动调用 
+pm run dev:playwright，dotenv-cli 会用 .env.contract/.env.local 注入环境变量，让 Vite dev server 直接连接真实后端。
+3. 若想单独手动验证界面，可执行 
+pm run dev:playwright 并访问 http://localhost:3000。
 
 ---
 

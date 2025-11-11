@@ -9,7 +9,6 @@ import {
   resendSignUpCode
 } from 'aws-amplify/auth';
 import { getUserProfile, isUserProfileComplete, setupUserProfile, PROFILE_CACHE_KEY } from '../api.js';
-import { isProductionReady as globalIsProductionReady } from '../env.js';
 
 // Helper function to decode Base64URL-encoded strings, as used in JWTs.
 const b64UrlDecode = (str) => {
@@ -53,25 +52,20 @@ export const AuthProvider = ({ children }) => {
   const [cognitoLoading, setCognitoLoading] = useState(false); // 新增：Cognito操作加载状态
   const [needsProfileSetup, setNeedsProfileSetup] = useState(false);
   const [authInitialized, setAuthInitialized] = useState(false);
-  const ready = globalIsProductionReady();
 
   console.log('🔍 AuthContext: 初始状态', {
-    ready,
     user,
     authInitialized
   });
 
-  // 生产模式下监听Amplify认证状态
+  // 监听Amplify认证状态
   const authenticatorData = useAuthenticator(context => [
     context.authStatus,
     context.user
   ]);
-  const amplifyAuthHook = useMemo(() => (
-    ready ? authenticatorData : { authStatus: 'unauthenticated', user: null }
-  ), [ready, authenticatorData]);
+  const amplifyAuthHook = useMemo(() => authenticatorData, [authenticatorData]);
 
   console.log('🔍 AuthContext: amplifyAuthHook 状态', {
-    ready,
     authStatus: amplifyAuthHook.authStatus,
     hasUser: !!amplifyAuthHook.user,
     amplifyUser: amplifyAuthHook.user
@@ -250,13 +244,9 @@ export const AuthProvider = ({ children }) => {
     setUserProfile(null);
     setCognitoUserInfo(null);
     setNeedsProfileSetup(false);
-    if (!ready) {
-      localStorage.removeItem('dev-user');
-    }
-  }, [ready]);
+  }, []);
 
   const debugAuthCredentials = useCallback(async () => {
-    if (!ready) return;
     try {
       console.group('🔍 [DEBUG] 认证凭据详细信息');
       const { fetchAuthSession } = await import('aws-amplify/auth');
@@ -319,26 +309,9 @@ export const AuthProvider = ({ children }) => {
     } catch (error) {
       console.error('❌ 获取认证凭据失败:', error);
     }
-  }, [ready]);
+  }, []);
 
   const loadCognitoUserInfo = useCallback(async () => {
-    if (!ready) {
-      setCognitoUserInfo({
-        username: 'dev_user',
-        userId: 'dev_user_id',
-        email: 'dev@example.com',
-        nickname: 'Dev User',
-        email_verified: true,
-        avatarKey: null,
-        attributes: {
-          email: 'dev@example.com',
-          nickname: 'Dev User',
-          email_verified: 'true',
-          avatarKey: null
-        }
-      });
-      return;
-    }
     setCognitoLoading(true);
     try {
       const currentUser = await getCurrentUser();
@@ -361,29 +334,12 @@ export const AuthProvider = ({ children }) => {
     } finally {
       setCognitoLoading(false);
     }
-  }, [ready]);
+  }, []);
 
   // 检查现有的认证会话
   useEffect(() => {
     const checkExistingAuth = async () => {
-      if (!ready) {
-        // 开发模式：检查本地存储的模拟用户
-        const savedUser = localStorage.getItem('dev-user');
-        if (savedUser) {
-          try {
-            const userData = JSON.parse(savedUser);
-            setUser(userData);
-            console.log('🔄 开发模式：恢复保存的用户会话', userData);
-          } catch (error) {
-            console.error('解析保存的用户数据失败:', error);
-            localStorage.removeItem('dev-user');
-          }
-        }
-        setAuthInitialized(true);
-        return;
-      }
-
-      // 生产模式：检查Amplify认证状态
+      // 检查Amplify认证状态
       try {
         const currentUser = await getCurrentUser();
         if (currentUser) {
@@ -400,19 +356,18 @@ export const AuthProvider = ({ children }) => {
     };
 
     checkExistingAuth();
-  }, [ready, handleAuthSuccess]);
+  }, [handleAuthSuccess]);
 
-  // 监听生产模式下Amplify的认证状态变化
+  // 监听Amplify的认证状态变化
   useEffect(() => {
     console.log('🔍 AuthContext: useEffect 监听认证状态变化', {
-      ready,
       authInitialized,
       amplifyAuthStatus: amplifyAuthHook.authStatus,
       amplifyUser: amplifyAuthHook.user,
       currentUser: user
     });
 
-    if (!ready || !authInitialized) return;
+    if (!authInitialized) return;
 
     const { authStatus, user: amplifyUser } = amplifyAuthHook;
 
@@ -435,7 +390,7 @@ export const AuthProvider = ({ children }) => {
                 user ? 'user already exists' : 'unknown'
       });
     }
-  }, [amplifyAuthHook, authInitialized, ready, user, handleAuthSuccess, debugAuthCredentials, logout]);
+  }, [amplifyAuthHook, authInitialized, user, handleAuthSuccess, debugAuthCredentials, logout]);
 
   // 完善用户资料
   const completeProfileSetup = async (profileData) => {
@@ -452,28 +407,8 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // 开发模式登录
-  const login = (userData) => {
-    setUser(userData);
-    // 保存到本地存储
-    if (!ready) {
-      localStorage.setItem('dev-user', JSON.stringify(userData));
-    }
-
-    if (userData?.userId || userData?.attributes?.sub) {
-      const userId = userData.userId || userData.attributes.sub;
-      loadUserProfile(userId);
-    }
-  };
-
   // 更新Cognito用户属性 - 增强邮箱验证处理
-  const updateCognitoUserInfo = async (updates) => {
-    if (!ready) {
-      setCognitoUserInfo(prev => ({ ...prev, ...updates }));
-      return { success: true, message: '开发模式：模拟更新成功' };
-    }
-
-    setCognitoLoading(true);
+  const updateCognitoUserInfo = async (updates) => {    setCognitoLoading(true);
     try {
       const attributesToUpdate = {};
       let emailChanged = false;
@@ -536,10 +471,6 @@ export const AuthProvider = ({ children }) => {
 
   // 重新发送邮箱验证码
   const resendEmailVerification = async () => {
-    if (!ready) {
-      return { success: true, message: '开发模式：模拟发送验证码' };
-    }
-
     try {
       await resendSignUpCode({ username: cognitoUserInfo?.username });
       return { success: true, message: '验证邮件已重新发送，请检查邮箱' };
@@ -591,7 +522,6 @@ export const AuthProvider = ({ children }) => {
       profileLoading,
       needsProfileSetup,
       authInitialized,
-      login,
       logout,
       isAuthenticated,
       loadUserProfile,

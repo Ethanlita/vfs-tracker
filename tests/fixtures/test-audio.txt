@@ -1,0 +1,10 @@
+This is a test audio file placeholder for E2E testing.
+
+In a real scenario, this would be an actual audio file (e.g., .wav, .mp3).
+For E2E tests that require file uploads, this text file serves as a simple substitute.
+
+File metadata:
+- Name: test-audio.txt
+- Purpose: Attachment upload testing
+- Size: Small (for fast test execution)
+- Created: Phase 5 E2E Test Implementation

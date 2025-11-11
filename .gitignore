@@ -40,3 +40,4 @@ data_of_dynamodb/
 
 # Playwright report
 playwright-report/
+test-results/

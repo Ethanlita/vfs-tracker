@@ -14,14 +14,43 @@ import { fetchAuthSession } from 'aws-amplify/auth';
 // 使用 setup.js 中的全局 mock
 vi.mock('aws-amplify/auth');
 
+// Mock react-chartjs-2 to avoid canvas issues in jsdom
+vi.mock('react-chartjs-2', () => ({
+  Line: ({ data, options }) => (
+    <div data-testid="chart-line">
+      {data && <div data-testid="chart-data">{JSON.stringify(data)}</div>}
+      {options && <div data-testid="chart-options">{JSON.stringify(options)}</div>}
+    </div>
+  ),
+}));
+
+// Mock useAuth hook
+const mockUseAuth = vi.fn();
+vi.mock('../../../src/contexts/AuthContext', async () => {
+  const actual = await vi.importActual('../../../src/contexts/AuthContext');
+  return {
+    ...actual,
+    useAuth: () => mockUseAuth(),
+    AuthProvider: ({ children }) => children
+  };
+});
+
 describe('Timeline 组件集成测试', () => {
 
+  // 辅助函数：创建带认证的用户上下文
+  const createAuthenticatedUser = () => ({
+    userId: 'us-east-1:complete-user-001',
+    sub: 'us-east-1:complete-user-001',
+    email: 'test@example.com',
+    username: 'testuser'
+  });
+
   beforeEach(() => {
-    // 设置默认的 auth mock 行为
+    // 设置默认的 fetchAuthSession mock
     vi.mocked(fetchAuthSession).mockResolvedValue({
       tokens: {
         idToken: {
-          toString: () => 'mock-id-token',
+          toString: () => 'mock-id-token-12345',
           payload: {
             sub: 'us-east-1:complete-user-001',
             email: 'test@example.com',
@@ -31,12 +60,26 @@ describe('Timeline 组件集成测试', () => {
         },
       },
     });
+
+    // 设置 useAuth mock - 返回认证用户
+    mockUseAuth.mockReturnValue({
+      user: createAuthenticatedUser(),
+      isAuthenticated: true,
+      needsProfileSetup: false,
+      profileLoading: false,
+      authInitialized: true
+    });
   });
+
+  // 辅助函数：渲染 Timeline（已通过 mock useAuth 提供认证）
+  const renderTimelineAuthenticated = (props = {}) => {
+    return renderWithProviders(<Timeline {...props} />);
+  };
 
   describe('基本渲染', () => {
     it('应该成功渲染时间线', async () => {
       // Timeline组件自己获取数据，MSW会返回mock数据
-      renderWithProviders(<Timeline />);
+      renderTimelineAuthenticated();
 
       // 等待加载完成
       await waitFor(() => {
@@ -52,7 +95,7 @@ describe('Timeline 组件集成测试', () => {
     });
 
     it('应该按时间顺序显示事件', async () => {
-      renderWithProviders(<Timeline />);
+      renderTimelineAuthenticated();
 
       await waitFor(() => {
         expect(screen.queryByText(/正在加载/i)).not.toBeInTheDocument();
@@ -72,21 +115,22 @@ describe('Timeline 组件集成测试', () => {
 
     it('当没有事件时应该显示空状态', async () => {
       // 不传props，组件会自己fetch，MSW默认返回空数据或少量数据
-      renderWithProviders(<Timeline />);
+      renderTimelineAuthenticated();
 
       await waitFor(() => {
         expect(screen.queryByText(/正在加载/i)).not.toBeInTheDocument();
       }, { timeout: 3000 });
 
-      // 检查是否显示空状态（Timeline可能fetch到空数据）
+      // 检查是否显示空状态(Timeline可能fetch到空数据)
       const emptyState = screen.queryByText(/暂无最近活动/i);
-      // 空状态存在 或 有事件数据都是正常的
-      expect(emptyState || screen.queryByText(/今天|昨天/)).toBeTruthy();
+      // 空状态存在 或 有事件数据(任意日期格式: "今天", "昨天", "9月25日"等)都是正常的
+      const hasDateHeaders = screen.queryAllByText(/今天|昨天|\d+月\d+日/).length > 0;
+      expect(emptyState || hasDateHeaders).toBeTruthy();
     });
   });  describe('时间线项目显示', () => {
     it('每个事件应该显示日期', async () => {
       // Timeline不接受props,它自己通过API获取数据
-      renderWithProviders(<Timeline />);
+      renderTimelineAuthenticated();
       
       await waitFor(() => {
         expect(screen.queryByText(/正在加载/i)).not.toBeInTheDocument();
@@ -101,7 +145,7 @@ describe('Timeline 组件集成测试', () => {
     });
     
     it('应该显示事件类型图标', async () => {
-      renderWithProviders(<Timeline events={mockPrivateEvents} />);
+      renderTimelineAuthenticated({ events: mockPrivateEvents });
       
       await waitFor(() => {
         // 查找图标元素（svg 或特定的类名）
@@ -113,7 +157,7 @@ describe('Timeline 组件集成测试', () => {
     
     it('应该显示事件的主要信息', async () => {
       // Timeline不接受props,它自己通过API获取数据
-      renderWithProviders(<Timeline />);
+      renderTimelineAuthenticated();
       
       await waitFor(() => {
         expect(screen.queryByText(/正在加载/i)).not.toBeInTheDocument();
@@ -133,7 +177,7 @@ describe('Timeline 组件集成测试', () => {
       );
       
       if (selfTestEvent) {
-        renderWithProviders(<Timeline events={[selfTestEvent]} />);
+        renderTimelineAuthenticated({ events: [selfTestEvent] });
         
         await waitFor(() => {
           // 应该显示基频等关键指标
@@ -146,7 +190,7 @@ describe('Timeline 组件集成测试', () => {
     
     it('手术事件应该显示手术类型', async () => {
       // Timeline不接受props,它自己通过API获取数据
-      renderWithProviders(<Timeline />);
+      renderTimelineAuthenticated();
       
       await waitFor(() => {
         expect(screen.queryByText(/正在加载/i)).not.toBeInTheDocument();
@@ -163,7 +207,7 @@ describe('Timeline 组件集成测试', () => {
   describe('时间分组', () => {
     it('应该按月份分组显示事件', async () => {
       // Timeline不接受groupBy prop,它固定使用"今天/昨天/日期"分组
-      renderWithProviders(<Timeline />);
+      renderTimelineAuthenticated();
       
       await waitFor(() => {
         expect(screen.queryByText(/正在加载/i)).not.toBeInTheDocument();
@@ -179,7 +223,7 @@ describe('Timeline 组件集成测试', () => {
     
     it('应该按年份分组显示事件', async () => {
       // Timeline不支持按年份分组,它固定使用"今天/昨天/日期"分组
-      renderWithProviders(<Timeline />);
+      renderTimelineAuthenticated();
       
       await waitFor(() => {
         expect(screen.queryByText(/正在加载/i)).not.toBeInTheDocument();
@@ -194,7 +238,7 @@ describe('Timeline 组件集成测试', () => {
     
     it('每个分组应该显示该时期的事件数量', async () => {
       // Timeline不显示每组的事件数量
-      renderWithProviders(<Timeline />);
+      renderTimelineAuthenticated();
       
       await waitFor(() => {
         expect(screen.queryByText(/正在加载/i)).not.toBeInTheDocument();
@@ -212,7 +256,7 @@ describe('Timeline 组件集成测试', () => {
   describe('数据可视化', () => {
     it('应该在有基频数据时显示趋势图表', async () => {
       // Timeline组件自动获取数据并生成图表,不需要传入props
-      renderWithProviders(<Timeline />);
+      renderTimelineAuthenticated();
       
       // 等待加载完成
       await waitFor(() => {
@@ -222,19 +266,18 @@ describe('Timeline 组件集成测试', () => {
       // 验证图表卡片标题存在
       expect(screen.getByText('声音频率图表')).toBeInTheDocument();
       
-      // 验证Chart.js的canvas元素存在（如果有基频数据）
-      // 或验证空状态提示（如果无基频数据）
+      // 验证图表组件存在（通过testid mock验证）或空状态提示
       await waitFor(() => {
-        const canvas = document.querySelector('canvas');
+        const chartElement = screen.queryByTestId('chart-line');
         const emptyState = screen.queryByText(/暂无图表数据/i);
         
         // 两者至少存在一个
-        expect(canvas || emptyState).toBeTruthy();
+        expect(chartElement || emptyState).toBeTruthy();
       });
     });
     
     it('应该显示图表标题和描述', async () => {
-      renderWithProviders(<Timeline />);
+      renderTimelineAuthenticated();
       
       // 等待组件完全加载
       await waitFor(() => {
@@ -249,7 +292,7 @@ describe('Timeline 组件集成测试', () => {
   
   describe('时间轴活动显示', () => {
     it('应该显示最近活动卡片', async () => {
-      renderWithProviders(<Timeline />);
+      renderTimelineAuthenticated();
       
       await waitFor(() => {
         expect(screen.queryByText(/正在加载活动/i)).not.toBeInTheDocument();
@@ -261,7 +304,7 @@ describe('Timeline 组件集成测试', () => {
     });
     
     it('应该按日期分组显示活动', async () => {
-      renderWithProviders(<Timeline />);
+      renderTimelineAuthenticated();
       
       await waitFor(() => {
         expect(screen.queryByText(/正在加载活动/i)).not.toBeInTheDocument();
@@ -279,7 +322,7 @@ describe('Timeline 组件集成测试', () => {
     });
     
     it('应该显示活动描述文本', async () => {
-      renderWithProviders(<Timeline />);
+      renderTimelineAuthenticated();
       
       await waitFor(() => {
         expect(screen.queryByText(/正在加载活动/i)).not.toBeInTheDocument();
@@ -299,7 +342,7 @@ describe('Timeline 组件集成测试', () => {
   
   describe('AI鼓励消息', () => {
     it('应该显示AI头像', async () => {
-      renderWithProviders(<Timeline />);
+      renderTimelineAuthenticated();
       
       // 等待组件完全加载
       await waitFor(() => {
@@ -313,7 +356,7 @@ describe('Timeline 组件集成测试', () => {
     });
     
     it('应该显示AI消息内容', async () => {
-      renderWithProviders(<Timeline />);
+      renderTimelineAuthenticated();
       
       // AI消息可能在加载中或已显示
       // 等待加载完成后应该有文本内容（默认消息或API返回的消息）
@@ -346,7 +389,7 @@ describe('Timeline 组件集成测试', () => {
       global.innerWidth = 375;
       global.dispatchEvent(new Event('resize'));
       
-      renderWithProviders(<Timeline events={mockPrivateEvents} />);
+      renderTimelineAuthenticated({ events: mockPrivateEvents });
       
       // 等待 loading 状态消失
       await waitFor(() => {
@@ -361,7 +404,7 @@ describe('Timeline 组件集成测试', () => {
       global.innerWidth = 1920;
       global.dispatchEvent(new Event('resize'));
       
-      renderWithProviders(<Timeline events={mockPrivateEvents} />);
+      renderTimelineAuthenticated({ events: mockPrivateEvents });
       
       // 等待 loading 状态消失
       await waitFor(() => {

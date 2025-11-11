@@ -3,108 +3,37 @@ import { Authenticator, useAuthenticator } from '@aws-amplify/ui-react';
 import { Amplify } from 'aws-amplify';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { isProductionReady as globalIsProductionReady } from '../env.js';
 import { getUserAvatarUrl, getUserDisplayName } from '../utils/avatar.js';
 import { ApiErrorNotice } from './ApiErrorNotice.jsx';
 import { ensureAppError } from '../utils/apiError.js';
 
+/**
+ * Auth 组件
+ * 
+ * 提供用户认证相关的UI和交互逻辑，包括登录、注册、登出等功能。
+ * 使用 AWS Amplify 进行身份验证。
+ * 
+ * @returns {JSX.Element} 认证组件
+ */
 const Auth = () => {
     const navigate = useNavigate();
-    const { user, login, logout } = useAuth();
     const [showAuthenticator, setShowAuthenticator] = useState(false);
     const [amplifyReady, setAmplifyReady] = useState(false);
-    const ready = globalIsProductionReady();
-    const [avatarUrl, setAvatarUrl] = useState('');
 
     // 检查Amplify配置状态
     useEffect(() => {
-        if (ready) {
-            try {
-                const config = Amplify.getConfig();
-                const hasAuth = config?.Auth?.Cognito?.userPoolId;
-                console.log('[Auth] Amplify配置检查:', { hasAuth, config: config?.Auth });
-                setAmplifyReady(!!hasAuth);
-            } catch (error) {
-                console.error('[Auth] Amplify配置检查失败:', error);
-                setAmplifyReady(false);
-            }
-        } else {
-            setAmplifyReady(true); // 开发模式不需要真实配置
+        try {
+            const config = Amplify.getConfig();
+            const hasAuth = config?.Auth?.Cognito?.userPoolId;
+            console.log('[Auth] Amplify配置检查:', { hasAuth, config: config?.Auth });
+            setAmplifyReady(!!hasAuth);
+        } catch (error) {
+            console.error('[Auth] Amplify配置检查失败:', error);
+            setAmplifyReady(false);
         }
-    }, [ready]);
+    }, []);
 
-    const handleDevLogin = () => {
-        login({
-            username: 'dev-user',
-            userId: 'demo-user-123',
-            attributes: {
-                name: '开发用户',
-                nickname: '开发用户', // 确保开发模式也有nickname
-                email: 'dev@example.com',
-                sub: 'demo-user-123'
-            }
-        });
-    };
-
-    const handleDevLogout = () => {
-        logout();
-        navigate('/');
-    };
-
-    useEffect(() => {
-        const fetchAvatar = async () => {
-            if (user) {
-                const url = await getUserAvatarUrl(user, 40);
-                setAvatarUrl(url);
-            }
-        };
-        fetchAvatar();
-    }, [user]);
-
-    // 开发模式的认证组件
-    if (!ready) {
-        if (user) {
-            // 开发模式 - 已认证用户
-            return (
-                <div className="flex items-center gap-2 sm:gap-3">
-                    <img
-                        src={avatarUrl}
-                        alt={getUserDisplayName(user)}
-                        className="w-9 h-9 sm:w-10 sm:h-10 rounded-full border-2 border-pink-500"
-                    />
-                    <span className="font-semibold text-gray-700 hidden sm:block">
-                        {getUserDisplayName(user)}
-                    </span>
-                    <button
-                        onClick={() => navigate('/mypage')}
-                        className="btn-pink mx-1.5 text-sm px-3 py-2 sm:text-base sm:px-6 sm:py-3"
-                    >
-                        我的页面
-                    </button>
-                    <button
-                        onClick={handleDevLogout}
-                        className="btn-pink mx-1.5 text-sm px-3 py-2 sm:text-base sm:px-6 sm:py-3"
-                    >
-                        登出
-                    </button>
-                </div>
-            );
-        } else {
-            // 开发模式 - 未认证状态
-            return (
-                <div className="flex items-center gap-2">
-                    <button
-                        onClick={handleDevLogin}
-                        className="btn-pink text-sm px-3 py-2 sm:text-base sm:px-6 sm:py-3"
-                    >
-                        模拟登录
-                    </button>
-                </div>
-            );
-        }
-    }
-
-    // 生产模式：条件显示登录界面
+    // 条件显示登录界面
     if (showAuthenticator) {
         // 确保只在Amplify配置就绪时显示认证界面
         if (!amplifyReady) {
@@ -138,7 +67,7 @@ const Auth = () => {
         );
     }
 
-    // 生产模式的认证状态检查组件
+    // 认证状态检查组件
     return (
         <ProductionAuthStatus
             onShowLogin={() => setShowAuthenticator(true)}
@@ -196,7 +125,12 @@ const ProductionAuthStatus = ({ onShowLogin, navigate }) => {
 
     if (completeUser) {
         return (
-            <div className="flex items-center gap-2 sm:gap-3">
+            <div
+                className="flex items-center gap-2 sm:gap-3 user-menu"
+                data-testid="user-menu"
+                role="group"
+                aria-label="User menu"
+            >
                 <img
                     src={avatarUrl}
                     alt={getUserDisplayName(completeUser)}
@@ -217,6 +151,7 @@ const ProductionAuthStatus = ({ onShowLogin, navigate }) => {
                         navigate('/');
                     }}
                     className="btn-pink mx-1.5 text-sm px-3 py-2 sm:text-base sm:px-6 sm:py-3"
+                    data-testid="logout-button"
                 >
                     登出
                 </button>

@@ -11,9 +11,8 @@ import NewTimeline from './NewTimeline';
  */
 const TimelineTest = () => {
   // Define a small list of mock events mirroring the structure used
-  // throughout the application.  These are extracted from
-  // src/mock_data.json for convenience and allow the timeline to
-  // demonstrate various event types.
+  // throughout the application. These events are used to demonstrate
+  // various event types in the timeline component.
   const mockEvents = [
     {
       userId: 'mock-user-1',
@@ -74,7 +73,7 @@ const TimelineTest = () => {
   return (
     <div className="min-h-screen p-6 bg-gradient-to-br from-rose-50 via-purple-50 to-blue-50">
       <h1 className="text-3xl font-bold mb-6 text-pink-600">时间轴测试页面</h1>
-      <NewTimeline events={mockEvents} isProductionReady={false} />
+      <NewTimeline events={mockEvents} />
     </div>
   );
 };

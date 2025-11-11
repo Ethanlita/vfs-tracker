@@ -61,7 +61,8 @@ describe('AuthContext 单元测试', () => {
       
       expect(result.current).toBeDefined();
       expect(result.current.isAuthenticated).toBeDefined();
-      expect(result.current.login).toBeDefined();
+      // ⚠️ Phase 4: login method was removed (dev-mode only)
+      // expect(result.current.login).toBeDefined();
       expect(result.current.logout).toBeDefined();
       expect(result.current.user).toBeDefined(); // 可能是 null
       expect(result.current.userProfile).toBeDefined(); // 可能是 null
@@ -167,7 +168,8 @@ describe('AuthContext 单元测试', () => {
       });
 
       // 认证方法
-      expect(typeof result.current.login).toBe('function');
+      // ⚠️ Phase 4: login method was removed (dev-mode only)
+      // expect(typeof result.current.login).toBe('function');
       expect(typeof result.current.logout).toBe('function');
       expect(typeof result.current.handleAuthSuccess).toBe('function');
 

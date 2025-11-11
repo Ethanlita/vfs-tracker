@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { addEvent } from '../api';
-import { isProductionReady as globalIsProductionReady } from '../env.js';
 import { useAsync } from '../utils/useAsync.js';
 import SecureFileUpload from './SecureFileUpload';
 import { useAuth } from '../contexts/AuthContext.jsx';
@@ -16,20 +15,24 @@ import { ApiErrorNotice } from './ApiErrorNotice.jsx';
  * @returns {JSX.Element} The rendered form component.
  */
 const EventForm = ({ onEventAdded }) => {
-  // 检查是否为生产环境
-  const isProductionReady = globalIsProductionReady;
-
   // --- STATE MANAGEMENT ---
   // @en Use AuthContext exclusively - it already uses Amplify v6 standard APIs
   // @zh 专门使用 AuthContext - 它已经使用了 Amplify v6 标准 API
   const { user: authContextUser } = useAuth();
 
-  const user = authContextUser || {
-    attributes: {
-      email: 'demo@example.com',
-      sub: 'demo-user-123'
-    }
-  };
+  // 如果用户未登录，显示提示
+  if (!authContextUser) {
+    return (
+      <div className="max-w-4xl mx-auto p-6">
+        <div className="bg-yellow-50 border-2 border-yellow-200 rounded-lg p-6">
+          <h2 className="text-xl font-bold text-yellow-800 mb-2">需要登录</h2>
+          <p className="text-yellow-700">请先登录以添加新的嗓音事件。</p>
+        </div>
+      </div>
+    );
+  }
+
+  const user = authContextUser;
 
   const [eventType, setEventType] = useState('self_test');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
@@ -392,20 +395,9 @@ const EventForm = ({ onEventAdded }) => {
     };
     if (attachments.length) eventData.attachments = attachments;
 
-    if (!isProductionReady) {
-      // 模拟延迟
-      await new Promise(r => setTimeout(r, 400));
-      return {
-        eventId: `mock-${Date.now()}`,
-        userId: user.attributes.sub,
-        ...eventData,
-        createdAt: new Date().toISOString()
-      };
-    }
-
     const apiResp = await addEvent(eventData);
     return apiResp.item || apiResp;
-  }, [user, isProductionReady], { immediate: false }); // 禁用自动执行
+  }, [user], { immediate: false }); // 禁用自动执行
 
   const handleSubmit = (e) => {
     e.preventDefault();

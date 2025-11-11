@@ -37,9 +37,9 @@ const EventList = ({ events }) => {
 
   return (
       <div className="flow-root">
-        <ul role="list" className="-mb-8">
+        <ul role="list" className="-mb-8" data-testid="events-list">
           {events.map((event, eventIdx) => (
-              <li key={event.eventId}>
+              <li key={event.eventId} data-testid="event-item">
                 <div className="relative pb-8">
                   {/* @en Render a vertical line connecting timeline points, except for the last one. */}
                   {/* @zh 渲染连接时间线点的垂直线，除了最后一个。 */}
@@ -77,7 +77,7 @@ const EventList = ({ events }) => {
                         {/* @en If there are attachments, show download buttons for each. */}
                         {/* @zh 如果有附件，则为每个附件显示下载按钮。 */}
                         {Array.isArray(event.attachments) && event.attachments.length > 0 && (
-                            <div className="mt-2 space-y-1">
+                            <div className="mt-2 space-y-1" data-testid="attachment-list">
                               {event.attachments.map((att, idx) => {
                                 const key = att.fileUrl;
                                 return (
@@ -85,6 +85,7 @@ const EventList = ({ events }) => {
                                         key={idx}
                                         onClick={() => handleDownload(key)}
                                         className="block text-sm font-medium text-indigo-600 hover:text-indigo-500 disabled:opacity-50 text-left"
+                                        data-testid="attachment-item"
                                         disabled={downloadingKey === key}
                                     >
                                       {downloadingKey === key ? `附件${idx+1} 获取链接中...` : `下载附件${idx+1}${att.fileName ? ' - '+att.fileName : ''}`}

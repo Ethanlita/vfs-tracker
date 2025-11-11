@@ -74,7 +74,7 @@ export default defineConfig({
 
   // 在测试前启动开发服务器
   webServer: {
-    command: 'npm run dev',
+    command: 'npm run dev:playwright',
     url: 'http://localhost:3000',
     reuseExistingServer: !process.env.CI,
     timeout: 120000,

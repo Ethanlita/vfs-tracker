@@ -3,7 +3,6 @@ import '@aws-amplify/ui-react/styles.css';
 import { Routes, Route, Navigate, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
-import { isProductionReady as globalIsProductionReady } from './env.js';
 
 import Layout from './components/Layout';
 import Auth from './components/Auth';
@@ -19,7 +18,6 @@ import APITestPage from './components/APITestPage';
 import ProfileSetupWizard from './components/ProfileSetupWizard';
 import UserProfileManager from './components/UserProfileManager';
 import EnhancedDataCharts from './components/EnhancedDataCharts';
-import DevModeTest from './components/DevModeTest';
 import VoiceTestWizard from './components/VoiceTestWizard'; // 新增导入
 import QuickF0Test from './components/QuickF0Test'; // 新增导入
 import ScalePractice from './components/ScalePractice'; // 新增导入
@@ -27,10 +25,13 @@ import RegionSwitchBanner from './components/RegionSwitchBanner.jsx';
 import NoteFrequencyTool from './components/NoteFrequencyTool.jsx';
 
 /**
- * @en A component to protect routes that require authentication in production mode.
- * @zh 生产模式下保护需要身份验证的路由的组件。
+ * @en A component to protect routes that require authentication.
+ * It checks the user's authentication status and redirects to the home page if not logged in.
+ * @zh 一个用于保护需要身份验证的路由的组件。
+ * 它会检查用户的身份验证状态，如果未登录则重定向到主页。
+ * @returns {JSX.Element} The child component if authenticated, or a redirect.
  */
-const ProductionProtectedRoute = () => {
+const ProtectedRoute = () => {
   const { authStatus } = useAuthenticator(context => [context.authStatus]);
   const { needsProfileSetup, profileLoading, authInitialized } = useAuth();
   const [isOnline, setIsOnline] = useState(typeof navigator === 'undefined' ? true : navigator.onLine);
@@ -76,19 +77,6 @@ const ProductionProtectedRoute = () => {
   // @en If the user is not authenticated, redirect them to the home page.
   // @zh 如果用户未通过身份验证，则将他们重定向到主页。
   return authStatus === 'authenticated' ? <Outlet /> : <Navigate to="/" replace />;
-};
-
-/**
- * @en A component to protect routes that require authentication.
- * It checks the user's authentication status and redirects to the home page if not logged in.
- * @zh 一个用于保护需要身份验证的路由的组件。
- * 它会检查用户的身份验证状态，如果未登录则重定向到主页。
- * @returns {JSX.Element} The child component if authenticated, or a redirect.
- */
-const ProtectedRoute = () => {
-  const ready = globalIsProductionReady();
-  if (!ready) return <Outlet />; // 未就绪使用开放访问 + mock
-  return <ProductionProtectedRoute />; // 就绪使用真实认证
 };
 
 /**
@@ -201,8 +189,6 @@ const AppContent = () => {
           <Route path="/docs" element={<PostViewer />} />
           {/* Route for testing the new timeline component independently */}
           <Route path="/timeline-test" element={<TimelineTest />} />
-          {/* Development mode testing route */}
-          <Route path="/dev-test" element={<DevModeTest />} />
           <Route element={<ProtectedRoute />}>
             <Route path="/mypage" element={<MyPage />} />
             <Route path="/add-event" element={<AddEvent />} />
@@ -230,25 +216,14 @@ const AppContent = () => {
  * @returns {JSX.Element} The main application component.
  */
 function App() {
-  const ready = globalIsProductionReady();
-
-  if (ready) {
-    // 生产模式：需要 Authenticator.Provider 包装
-    return (
-      <Authenticator.Provider>
-        <AuthProvider>
-          <AppContent />
-        </AuthProvider>
-      </Authenticator.Provider>
-    );
-  } else {
-    // 开发模式：不需要 Authenticator.Provider
-    return (
+  // 生产模式：使用 Authenticator.Provider 包装
+  return (
+    <Authenticator.Provider>
       <AuthProvider>
         <AppContent />
       </AuthProvider>
-    );
-  }
+    </Authenticator.Provider>
+  );
 }
 
 export default App;
