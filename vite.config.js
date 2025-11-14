@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import wasm from 'vite-plugin-wasm'
 import { copyFileSync, mkdirSync, readdirSync, statSync } from 'fs'
 import { join, dirname } from 'path'
 
@@ -36,7 +37,11 @@ const copyPostsPlugin = () => {
 // https://vite.dev/config/
 export default defineConfig({
   base: '/', // Set base to root ('/') for custom domain deployment
-  plugins: [react(), copyPostsPlugin()],
+  plugins: [
+    wasm(),  // WASM 支持（RubberBand, World.JS）
+    react(), 
+    copyPostsPlugin()
+  ],
   build: {
     outDir: 'dist',
     assetsDir: 'assets',

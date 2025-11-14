@@ -9,4 +9,5 @@ export const SIDEBAR_ROUTES = [
   { to: '/profile-setup-wizard', label: '完善资料', requiresAuth: true, showInSidebar: false, offlineSafe: true },
   { to: '/dashboard', label: '🧭 公共仪表板', offlineSafe: false },
   { to: '/note-frequency-tool', label: '🎼 Hz-音符转换器', offlineSafe: true },
+  { to: '/vfs-effect-preview', label: '🎵 VFS效果预览', offlineSafe: true },
 ];
