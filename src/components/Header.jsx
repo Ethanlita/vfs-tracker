@@ -49,6 +49,7 @@ const Header = ({ AuthComponent }) => {
     () => [
       { label: '公共仪表板', to: '/dashboard' },
       { label: 'Hz-音符转换器', to: '/note-frequency-tool' },
+      { label: 'VFS效果预览', to: '/vfs-effect-preview' },
     ],
     [],
   );
