@@ -6,6 +6,7 @@
  */
 
 import { RubberBandInterface } from 'rubberband-wasm';
+import { getSharedAudioContext } from './audioContextManager';
 
 /**
  * RubberBand 处理器实例（单例模式）
@@ -308,8 +309,9 @@ export async function processWithRubberBand(audioBuffer, pitchShiftHz, onProgres
     api.free(channelArrayPtr);
     api.rubberband_delete(rbState);
 
-    // 创建新的 AudioBuffer
-    const outputAudioBuffer = new AudioContext().createBuffer(
+    // 使用共享的 AudioContext 创建 AudioBuffer（避免泄漏）
+    const audioContext = getSharedAudioContext();
+    const outputAudioBuffer = audioContext.createBuffer(
       numChannels,
       writePos, // 使用实际写入的长度
       sampleRate

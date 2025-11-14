@@ -1,7 +1,8 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Recorder from './Recorder';
-import { processWithRubberBand, isRubberBandReady } from '../utils/rubberbandProcessor';
+import { processWithRubberBand } from '../utils/rubberbandProcessor';
+import { createTemporaryAudioContext } from '../utils/audioContextManager';
 
 /**
  * @zh VFS效果预览组件
@@ -30,6 +31,7 @@ const VFSEffectPreview = () => {
   const [selectedAlgorithm, setSelectedAlgorithm] = useState('rubberband'); // 'td-psola' | 'rubberband' | 'world'
   const [isProcessing, setIsProcessing] = useState(false); // 处理中状态
   const [processingProgress, setProcessingProgress] = useState(0); // 处理进度 (0-1)
+  const [isWorldJSLoaded, setIsWorldJSLoaded] = useState(false); // World.JS 加载状态
   
   // 多版本处理结果
   const [processedBlobs, setProcessedBlobs] = useState({
@@ -47,6 +49,28 @@ const VFSEffectPreview = () => {
   // 引用
   const audioElementRef = useRef(null);
   const animationFrameRef = useRef(null);
+
+  /**
+   * @zh 检查 World.JS 是否已加载
+   */
+  useEffect(() => {
+    const checkWorldJS = () => {
+      if (typeof window.Module !== 'undefined' && window.Module.Dio_JS) {
+        setIsWorldJSLoaded(true);
+        console.log('[World.JS] 模块加载成功');
+      } else {
+        console.warn('[World.JS] 模块未加载，WORLD 算法将不可用');
+      }
+    };
+
+    // 立即检查
+    checkWorldJS();
+
+    // 如果未加载，等待一段时间后再检查（script 可能还在加载）
+    const timer = setTimeout(checkWorldJS, 2000);
+
+    return () => clearTimeout(timer);
+  }, []);
 
   /**
    * @zh 录音完成回调
@@ -67,9 +91,11 @@ const VFSEffectPreview = () => {
    * @param {Blob} blob - 音频Blob
    */
   const detectPitch = async (blob) => {
+    // 创建临时 AudioContext 用于解码
+    const { context: audioContext, close: closeContext } = createTemporaryAudioContext();
+    
     try {
       const arrayBuffer = await blob.arrayBuffer();
-      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
       const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
       
       // 获取音频数据
@@ -191,10 +217,11 @@ const VFSEffectPreview = () => {
       } else {
         console.log(`检测到的基频 ${estimatedF0.toFixed(1)} Hz 超出合理范围`);
       }
-      
-      audioContext.close();
     } catch (error) {
       console.error('检测基频失败:', error);
+    } finally {
+      // 确保 AudioContext 被关闭，避免资源泄漏
+      await closeContext();
     }
   };
 
@@ -211,10 +238,12 @@ const VFSEffectPreview = () => {
     setIsProcessing(true);
     setProcessingProgress(0);
     
+    // 创建临时 AudioContext 用于解码
+    const { context: audioContext, close: closeContext } = createTemporaryAudioContext();
+    
     try {
       // 读取原始音频
       const arrayBuffer = await recordedBlob.arrayBuffer();
-      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
       const sourceBuffer = await audioContext.decodeAudioData(arrayBuffer);
       
       // 计算音高参数
@@ -256,12 +285,12 @@ const VFSEffectPreview = () => {
       }));
       
       console.log(`[${selectedAlgorithm.toUpperCase()}] 处理完成: 原始 ${sourceBuffer.duration.toFixed(2)}s → 输出 ${processedBuffer.duration.toFixed(2)}s`);
-
-      audioContext.close();
     } catch (error) {
       console.error(`[${selectedAlgorithm.toUpperCase()}] 处理失败:`, error);
       alert(`音频处理失败: ${error.message}`);
     } finally {
+      // 确保 AudioContext 被关闭，避免资源泄漏
+      await closeContext();
       setIsProcessing(false);
       setProcessingProgress(0);
     }
@@ -307,25 +336,29 @@ const VFSEffectPreview = () => {
     );
     console.log(`[TD-PSOLA] 合成完成，输出长度=${synthesizedData.length}`);
     
-    // 创建新的 AudioBuffer
-    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    const outputBuffer = audioContext.createBuffer(
-      sourceBuffer.numberOfChannels,
-      synthesizedData.length,
-      sampleRate
-    );
+    // 使用临时 AudioContext 创建 AudioBuffer
+    const { context: audioContext, close: closeContext } = createTemporaryAudioContext();
     
-    // 复制处理后的数据到输出缓冲区
-    outputBuffer.getChannelData(0).set(synthesizedData);
-    
-    // 如果是立体声，复制到其他声道
-    for (let i = 1; i < sourceBuffer.numberOfChannels; i++) {
-      outputBuffer.getChannelData(i).set(synthesizedData);
+    try {
+      const outputBuffer = audioContext.createBuffer(
+        sourceBuffer.numberOfChannels,
+        synthesizedData.length,
+        sampleRate
+      );
+      
+      // 复制处理后的数据到输出缓冲区
+      outputBuffer.getChannelData(0).set(synthesizedData);
+      
+      // 如果是立体声，复制到其他声道
+      for (let i = 1; i < sourceBuffer.numberOfChannels; i++) {
+        outputBuffer.getChannelData(i).set(synthesizedData);
+      }
+      
+      return outputBuffer;
+    } finally {
+      // 确保关闭 AudioContext
+      await closeContext();
     }
-    
-    audioContext.close();
-    
-    return outputBuffer;
   };
 
   /**
@@ -902,9 +935,11 @@ const VFSEffectPreview = () => {
    */
   const processAudioWithWorld = async (sourceBuffer, pitchShiftHz, estimatedF0) => {
     // 确保 WorldJS Module 已加载
-    if (typeof Module === 'undefined' || !Module.Dio_JS) {
-      throw new Error('World.JS 模块未加载。请刷新页面重试。');
+    if (!isWorldJSLoaded || typeof window.Module === 'undefined' || !window.Module.Dio_JS) {
+      throw new Error('World.JS 模块未加载。请刷新页面或稍后重试。');
     }
+    
+    const Module = window.Module;
 
     const sampleRate = sourceBuffer.sampleRate;
     const channelData = sourceBuffer.getChannelData(0);
@@ -1058,25 +1093,30 @@ const VFSEffectPreview = () => {
       
       console.log(`[WORLD] 合成完成: 输出长度 = ${y.length}, 样本:`, y.slice(0, 5));
 
-      // 步骤7: 创建 AudioBuffer
-      const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-      const outputBuffer = audioContext.createBuffer(
-        1, // 单声道
-        y.length,
-        sampleRate
-      );
+      // 步骤7: 使用临时 AudioContext 创建 AudioBuffer
+      const { context: audioContext, close: closeContext } = createTemporaryAudioContext();
       
-      // 转换为 Float32Array
-      const outputData = outputBuffer.getChannelData(0);
-      for (let i = 0; i < y.length; i++) {
-        outputData[i] = y[i];
-      }
+      try {
+        const outputBuffer = audioContext.createBuffer(
+          1, // 单声道
+          y.length,
+          sampleRate
+        );
+        
+        // 转换为 Float32Array
+        const outputData = outputBuffer.getChannelData(0);
+        for (let i = 0; i < y.length; i++) {
+          outputData[i] = y[i];
+        }
 
-      setProcessingProgress(1.0);
-      console.log(`[WORLD] 处理完成: ${(y.length / sampleRate).toFixed(2)}s`);
-      
-      audioContext.close();
-      return outputBuffer;
+        setProcessingProgress(1.0);
+        console.log(`[WORLD] 处理完成: ${(y.length / sampleRate).toFixed(2)}s`);
+        
+        return outputBuffer;
+      } finally {
+        // 确保关闭 AudioContext
+        await closeContext();
+      }
 
     } catch (error) {
       console.error('[WORLD] 处理错误:', error);
@@ -1488,10 +1528,13 @@ const VFSEffectPreview = () => {
                     <button
                       type="button"
                       onClick={() => setSelectedAlgorithm('world')}
+                      disabled={!isWorldJSLoaded}
                       className={`p-4 rounded-lg border-2 text-left transition-all ${
                         selectedAlgorithm === 'world'
                           ? 'border-purple-600 bg-purple-50 shadow-md'
-                          : 'border-gray-200 hover:border-purple-300'
+                          : isWorldJSLoaded 
+                            ? 'border-gray-200 hover:border-purple-300'
+                            : 'border-gray-200 bg-gray-50 opacity-60 cursor-not-allowed'
                       }`}
                     >
                       <div className="flex items-center justify-between mb-1">
@@ -1502,7 +1545,12 @@ const VFSEffectPreview = () => {
                           </svg>
                         )}
                       </div>
-                      <p className="text-sm text-gray-600">高保真声码器算法</p>
+                      <p className="text-sm text-gray-600">
+                        高保真声码器算法
+                        {!isWorldJSLoaded && (
+                          <span className="text-orange-600 block mt-1">（加载中...）</span>
+                        )}
+                      </p>
                       {processedBlobs['world'] && (
                         <span className="inline-block mt-2 text-xs px-2 py-1 bg-green-100 text-green-700 rounded">
                           ✓ 已处理
@@ -1553,7 +1601,7 @@ const VFSEffectPreview = () => {
           )}
 
           {/* 步骤3: 播放处理后的音频 */}
-          {(processedBlobs['td-psola'] || processedBlobs['rubberband']) && (
+          {(processedBlobs['td-psola'] || processedBlobs['rubberband'] || processedBlobs['world']) && (
             <div className="mb-8">
               <h2 className="text-2xl font-semibold text-gray-900 mb-4 flex items-center">
                 <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-purple-100 text-purple-600 font-bold mr-3">
