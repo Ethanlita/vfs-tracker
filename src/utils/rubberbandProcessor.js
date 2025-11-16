@@ -6,7 +6,7 @@
  */
 
 import { RubberBandInterface } from 'rubberband-wasm';
-import { getSharedAudioContext } from './audioContextManager';
+import { createTemporaryAudioContext } from './audioContextManager';
 
 /**
  * RubberBand 处理器实例（单例模式）
@@ -309,27 +309,33 @@ export async function processWithRubberBand(audioBuffer, pitchShiftHz, onProgres
     api.free(channelArrayPtr);
     api.rubberband_delete(rbState);
 
-    // 使用共享的 AudioContext 创建 AudioBuffer（避免泄漏）
-    const audioContext = getSharedAudioContext();
-    const outputAudioBuffer = audioContext.createBuffer(
-      numChannels,
-      writePos, // 使用实际写入的长度
-      sampleRate
-    );
+    // 使用临时 AudioContext 创建 AudioBuffer，并在完成后关闭
+    const { context: tempAudioContext, close: closeTempAudioContext } = createTemporaryAudioContext();
 
-    // 复制数据到 AudioBuffer
-    for (let ch = 0; ch < numChannels; ch++) {
-      outputAudioBuffer.copyToChannel(outputBuffers[ch].subarray(0, writePos), ch);
+    try {
+      const outputAudioBuffer = tempAudioContext.createBuffer(
+        numChannels,
+        writePos, // 使用实际写入的长度
+        sampleRate
+      );
+
+      // 复制数据到 AudioBuffer
+      for (let ch = 0; ch < numChannels; ch++) {
+        outputAudioBuffer.copyToChannel(outputBuffers[ch].subarray(0, writePos), ch);
+      }
+
+      const processingTime = (performance.now() - startTime).toFixed(2);
+      console.log(`[RubberBand] ✅ 处理完成，耗时: ${processingTime}ms`);
+
+      if (onProgress) {
+        onProgress(1.0);
+      }
+
+      return outputAudioBuffer;
+    } finally {
+      // RubberBand 的输出缓冲只在此处创建，因此立即关闭临时 AudioContext
+      await closeTempAudioContext();
     }
-
-    const processingTime = (performance.now() - startTime).toFixed(2);
-    console.log(`[RubberBand] ✅ 处理完成，耗时: ${processingTime}ms`);
-
-    if (onProgress) {
-      onProgress(1.0);
-    }
-
-    return outputAudioBuffer;
 
   } catch (error) {
     console.error('[RubberBand] ❌ 处理失败:', error);

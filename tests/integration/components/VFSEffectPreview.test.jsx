@@ -282,6 +282,20 @@ describe('VFSEffectPreview Component', () => {
     });
   });
 
+  describe('结果预览', () => {
+    it('WORLD 算法的处理结果应该触发展示区块', async () => {
+      const mockWorldBlob = new Blob(['world-result'], { type: 'audio/wav' });
+
+      render(<VFSEffectPreview initialProcessedBlobs={{ world: mockWorldBlob }} />);
+
+      await waitFor(() => {
+        expect(screen.getByText(/预览效果/)).toBeInTheDocument();
+      }, { timeout: 3000 });
+
+      expect(screen.getByText(/处理完成/i)).toBeInTheDocument();
+    });
+  });
+
   describe('错误处理', () => {
     it('应该处理音频处理失败的情况', async () => {
       // Mock 失败的音频处理

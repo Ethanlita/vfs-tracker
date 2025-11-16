@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Recorder from './Recorder';
 import { processWithRubberBand } from '../utils/rubberbandProcessor';
@@ -22,7 +22,7 @@ import { createTemporaryAudioContext } from '../utils/audioContextManager';
  * 
  * @returns {JSX.Element} VFS效果预览组件
  */
-const VFSEffectPreview = () => {
+const VFSEffectPreview = ({ initialProcessedBlobs = null } = {}) => {
   const navigate = useNavigate();
   
   // 状态管理
@@ -34,11 +34,12 @@ const VFSEffectPreview = () => {
   const [isWorldJSLoaded, setIsWorldJSLoaded] = useState(false); // World.JS 加载状态
   
   // 多版本处理结果
-  const [processedBlobs, setProcessedBlobs] = useState({
+  const [processedBlobs, setProcessedBlobs] = useState(() => ({
     'td-psola': null,
     'rubberband': null,
-    'world': null
-  });
+    'world': null,
+    ...(initialProcessedBlobs || {})
+  }));
   
   const [isPlaying, setIsPlaying] = useState(false); // 播放状态
   const [playbackType, setPlaybackType] = useState(null); // 'original' | 'td-psola' | 'rubberband' | 'world'
@@ -93,7 +94,9 @@ const VFSEffectPreview = () => {
   const detectPitch = async (blob) => {
     // 创建临时 AudioContext 用于解码
     const { context: audioContext, close: closeContext } = createTemporaryAudioContext();
-    
+    let detectionResult = null;
+    let detectionFailureReason = null;
+
     try {
       const arrayBuffer = await blob.arrayBuffer();
       const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
@@ -119,103 +122,107 @@ const VFSEffectPreview = () => {
       // 能量阈值：如果信号太弱，认为是静音
       const energyThreshold = 0.001;
       if (energy < energyThreshold) {
-        console.log('信号能量太低，可能是静音');
-        return;
-      }
-
-      // 中心削波：减少共振峰的影响
-      const clippingLevel = Math.sqrt(energy) * 0.3;
-      const clippedBuffer = buffer.map(sample => {
-        if (Math.abs(sample) < clippingLevel) return 0;
-        return sample > 0 ? sample - clippingLevel : sample + clippingLevel;
-      });
-
-      // 归一化自相关
-      const minLag = Math.floor(sampleRate / 500); // 最高500Hz
-      const maxLag = Math.floor(sampleRate / 80);  // 最低80Hz
-      
-      const correlations = [];
-
-      // 计算lag=0的自相关（用于归一化）
-      let r0 = 0;
-      for (let i = 0; i < bufferSize; i++) {
-        r0 += clippedBuffer[i] * clippedBuffer[i];
-      }
-
-      // 计算各个lag的归一化自相关
-      for (let lag = minLag; lag <= maxLag; lag++) {
-        let sum = 0;
-        let rLag = 0;
-
-        for (let i = 0; i < bufferSize - lag; i++) {
-          sum += clippedBuffer[i] * clippedBuffer[i + lag];
-        }
-
-        // 计算lag位置的自相关能量
-        for (let i = 0; i < bufferSize - lag; i++) {
-          rLag += clippedBuffer[i + lag] * clippedBuffer[i + lag];
-        }
-
-        // 归一化：ACF(lag) / sqrt(ACF(0) * ACF_lag(0))
-        const normalizedCorrelation = sum / Math.sqrt(r0 * rLag);
-
-        correlations.push({
-          lag,
-          correlation: normalizedCorrelation
+        detectionFailureReason = 'low-energy';
+      } else {
+        // 中心削波：减少共振峰的影响
+        const clippingLevel = Math.sqrt(energy) * 0.3;
+        const clippedBuffer = buffer.map(sample => {
+          if (Math.abs(sample) < clippingLevel) return 0;
+          return sample > 0 ? sample - clippingLevel : sample + clippingLevel;
         });
-      }
 
-      // 寻找第一个显著峰值（而不是全局最大值）
-      // 峰值必须：1) 大于阈值  2) 大于相邻点
-      const threshold = 0.3; // 相关性阈值
-      let maxPeak = { lag: 0, correlation: -1 };
+        // 归一化自相关
+        const minLag = Math.floor(sampleRate / 500); // 最高500Hz
+        const maxLag = Math.floor(sampleRate / 80);  // 最低80Hz
 
-      for (let i = 1; i < correlations.length - 1; i++) {
-        const prev = correlations[i - 1].correlation;
-        const curr = correlations[i].correlation;
-        const next = correlations[i + 1].correlation;
+        const correlations = [];
 
-        // 检查是否为局部峰值
-        if (curr > prev && curr > next && curr > threshold) {
-          // 找到第一个显著峰值后即返回
-          if (curr > maxPeak.correlation) {
-            maxPeak = correlations[i];
-            // 找到第一个强峰值就可以了
-            if (curr > 0.7) {
-              break;
+        // 计算lag=0的自相关（用于归一化）
+        let r0 = 0;
+        for (let i = 0; i < bufferSize; i++) {
+          r0 += clippedBuffer[i] * clippedBuffer[i];
+        }
+
+        // 计算各个lag的归一化自相关
+        for (let lag = minLag; lag <= maxLag; lag++) {
+          let sum = 0;
+          let rLag = 0;
+
+          for (let i = 0; i < bufferSize - lag; i++) {
+            sum += clippedBuffer[i] * clippedBuffer[i + lag];
+          }
+
+          // 计算lag位置的自相关能量
+          for (let i = 0; i < bufferSize - lag; i++) {
+            rLag += clippedBuffer[i + lag] * clippedBuffer[i + lag];
+          }
+
+          // 归一化：ACF(lag) / sqrt(ACF(0) * ACF_lag(0))
+          const normalizedCorrelation = sum / Math.sqrt(r0 * rLag);
+
+          correlations.push({
+            lag,
+            correlation: normalizedCorrelation
+          });
+        }
+
+        // 寻找第一个显著峰值（而不是全局最大值）
+        // 峰值必须：1) 大于阈值  2) 大于相邻点
+        const threshold = 0.3; // 相关性阈值
+        let maxPeak = { lag: 0, correlation: -1 };
+
+        for (let i = 1; i < correlations.length - 1; i++) {
+          const prev = correlations[i - 1].correlation;
+          const curr = correlations[i].correlation;
+          const next = correlations[i + 1].correlation;
+
+          // 检查是否为局部峰值
+          if (curr > prev && curr > next && curr > threshold) {
+            // 找到第一个显著峰值后即返回
+            if (curr > maxPeak.correlation) {
+              maxPeak = correlations[i];
+              // 找到第一个强峰值就可以了
+              if (curr > 0.7) {
+                break;
+              }
             }
+          }
+        }
+
+        if (maxPeak.correlation < threshold) {
+          detectionFailureReason = 'no-peak';
+        } else {
+          // 抛物线插值以提高精度
+          const lagIndex = correlations.findIndex(c => c.lag === maxPeak.lag);
+          let refinedLag = maxPeak.lag;
+
+          if (lagIndex > 0 && lagIndex < correlations.length - 1) {
+            const y1 = correlations[lagIndex - 1].correlation;
+            const y2 = correlations[lagIndex].correlation;
+            const y3 = correlations[lagIndex + 1].correlation;
+
+            // 抛物线插值公式
+            const delta = 0.5 * (y1 - y3) / (y1 - 2 * y2 + y3);
+            refinedLag = maxPeak.lag + delta;
+          }
+
+          detectionResult = sampleRate / refinedLag;
+          console.log(`基频检测结果: ${detectionResult.toFixed(1)} Hz (相关性: ${maxPeak.correlation.toFixed(3)})`);
+
+          if (!(detectionResult >= 80 && detectionResult <= 500)) {
+            detectionFailureReason = 'out-of-range';
+          } else {
+            setDetectedF0(Math.round(detectionResult));
           }
         }
       }
 
-      if (maxPeak.correlation < threshold) {
+      if (detectionFailureReason === 'low-energy') {
+        console.log('信号能量太低，可能是静音');
+      } else if (detectionFailureReason === 'no-peak') {
         console.log('未找到显著的周期性峰值，可能不是纯音或语音');
-        return;
-      }
-
-      // 抛物线插值以提高精度
-      const lagIndex = correlations.findIndex(c => c.lag === maxPeak.lag);
-      let refinedLag = maxPeak.lag;
-
-      if (lagIndex > 0 && lagIndex < correlations.length - 1) {
-        const y1 = correlations[lagIndex - 1].correlation;
-        const y2 = correlations[lagIndex].correlation;
-        const y3 = correlations[lagIndex + 1].correlation;
-
-        // 抛物线插值公式
-        const delta = 0.5 * (y1 - y3) / (y1 - 2 * y2 + y3);
-        refinedLag = maxPeak.lag + delta;
-      }
-
-      const estimatedF0 = sampleRate / refinedLag;
-
-      console.log(`基频检测结果: ${estimatedF0.toFixed(1)} Hz (相关性: ${maxPeak.correlation.toFixed(3)})`);
-
-      // 只有在合理范围内才显示
-      if (estimatedF0 >= 80 && estimatedF0 <= 500) {
-        setDetectedF0(Math.round(estimatedF0));
-      } else {
-        console.log(`检测到的基频 ${estimatedF0.toFixed(1)} Hz 超出合理范围`);
+      } else if (detectionFailureReason === 'out-of-range' && detectionResult) {
+        console.log(`检测到的基频 ${detectionResult.toFixed(1)} Hz 超出合理范围`);
       }
     } catch (error) {
       console.error('检测基频失败:', error);
@@ -223,7 +230,13 @@ const VFSEffectPreview = () => {
       // 确保 AudioContext 被关闭，避免资源泄漏
       await closeContext();
     }
+
+    return detectionResult;
   };
+
+  const hasAnyProcessedAudio = useMemo(() => (
+    ['td-psola', 'rubberband', 'world'].some(key => Boolean(processedBlobs[key]))
+  ), [processedBlobs]);
 
   /**
    * @zh 处理音频变调
@@ -1601,7 +1614,7 @@ const VFSEffectPreview = () => {
           )}
 
           {/* 步骤3: 播放处理后的音频 */}
-          {(processedBlobs['td-psola'] || processedBlobs['rubberband'] || processedBlobs['world']) && (
+          {hasAnyProcessedAudio && (
             <div className="mb-8">
               <h2 className="text-2xl font-semibold text-gray-900 mb-4 flex items-center">
                 <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-purple-100 text-purple-600 font-bold mr-3">

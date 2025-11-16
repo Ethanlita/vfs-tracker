@@ -28,6 +28,7 @@
       - `getVoiceTestResults`: 轮询以获取分析结果。
   - `utils/`
     - `attachments.js`: 提供 `resolveAttachmentLinks` 函数，用于将私有S3存储键批量解析为临时的可下载URL。
+    - `audioContextManager.js`: 统一管理共享与临时 `AudioContext` 实例，确保 RubberBand、WORLD、基频检测等音频算法在浏览器 AudioContext 限制内安全运行，并在一次性操作结束后主动关闭上下文以避免泄漏。
   - `components/`
     - `EventForm.jsx`: 用于创建和编辑各种事件的动态表单，支持多附件上传。
     - `InteractiveTimeline`, `EventList`, `EventManager`: 用于展示和管理事件列表的核心组件。
