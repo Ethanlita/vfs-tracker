@@ -1559,7 +1559,7 @@ const VFSEffectPreview = ({ initialProcessedBlobs = null } = {}) => {
                         )}
                       </div>
                       <p className="text-sm text-gray-600">
-                        高保真声码器算法
+                        高保真声码器算法（处理耗时约1-2分钟）
                         {!isWorldJSLoaded && (
                           <span className="text-orange-600 block mt-1">（加载中...）</span>
                         )}
