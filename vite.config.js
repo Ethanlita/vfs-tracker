@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import { VitePWA } from 'vite-plugin-pwa'
 import wasm from 'vite-plugin-wasm'
 import { copyFileSync, mkdirSync, readdirSync, statSync } from 'fs'
 import { join, dirname } from 'path'
@@ -26,7 +27,7 @@ const copyPostsPlugin = () => {
           console.warn(`Warning: Could not copy ${src} to ${dest}:`, error.message)
         }
       }
-      
+
       // 复制posts目录到dist/posts
       copyRecursive('posts', 'dist/posts')
       console.log('✅ Posts directory copied to dist/posts')
@@ -39,8 +40,63 @@ export default defineConfig({
   base: '/', // Set base to root ('/') for custom domain deployment
   plugins: [
     wasm(),  // WASM 支持（RubberBand, World.JS）
-    react(), 
-    copyPostsPlugin()
+    react(),
+    copyPostsPlugin(),
+    VitePWA({
+      registerType: 'prompt',
+      includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
+      manifest: {
+        name: 'VFS Tracker',
+        short_name: 'VFS Tracker',
+        description: 'Voice Feminization Surgery Tracker',
+        theme_color: '#ffffff',
+        icons: [
+          {
+            src: 'icons/icon-192x192.png',
+            sizes: '192x192',
+            type: 'image/png'
+          },
+          {
+            src: 'icons/icon-512x512.png',
+            sizes: '512x512',
+            type: 'image/png'
+          }
+        ]
+      },
+      workbox: {
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,wasm}'],
+        runtimeCaching: [
+          {
+            urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'google-fonts-cache',
+              expiration: {
+                maxEntries: 10,
+                maxAgeSeconds: 60 * 60 * 24 * 365 // <== 365 days
+              },
+              cacheableResponse: {
+                statuses: [0, 200]
+              }
+            }
+          },
+          {
+            urlPattern: /^https:\/\/fonts\.gstatic\.com\/.*/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'gstatic-fonts-cache',
+              expiration: {
+                maxEntries: 10,
+                maxAgeSeconds: 60 * 60 * 24 * 365 // <== 365 days
+              },
+              cacheableResponse: {
+                statuses: [0, 200]
+              }
+            }
+          }
+        ]
+      }
+    })
   ],
   build: {
     outDir: 'dist',

@@ -131,6 +131,9 @@ VFS Tracker 是一个**声音训练、监测与数据可视化平台**，主要�
   - 适配手机等窄屏设备，提供可滑动的全键盘视图
 - 文章/帖子支持
   - 构建时自动生成 posts.json；构建产物复制 posts 目录到 dist/posts
+- **PWA 支持**
+  - 使用 `vite-plugin-pwa` 自动生成 Service Worker，支持离线访问与自动更新。
+  - 自动缓存静态资源与 Google Fonts。
 
 ## 目录结构（摘录）
 
