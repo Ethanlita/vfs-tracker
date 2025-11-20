@@ -94,6 +94,5 @@ export const getUserDisplayName = (user) => {
     user?.username ||
     (user?.attributes?.email ? user.attributes.email.split('@')[0] : '未知用户');
 
-  console.log('✅ getUserDisplayName: 最终显示名称', displayName);
   return displayName;
 };
