@@ -349,6 +349,7 @@ export const getEncouragingMessage = async (userData) => {
     console.log('🤖 api.js: getEncouragingMessage 接收到的事件数量:', userData.events.length);
 
     // 构建丰富的数据摘要
+    // 注意：传入的 userData.events 已经在调用方按时间排序并限制为最近30条
     const totalEvents = userData.events.length;
     const recentTrainingCount = userData.events.filter(e =>
       e.type === 'training' &&
@@ -356,7 +357,7 @@ export const getEncouragingMessage = async (userData) => {
     ).length;
     const consistencyScore = calculateConsistencyScore(userData.events);
 
-    const eventsSummary = userData.events.slice(0, 30).map(e => { // 限制最近30条
+    const eventsSummary = userData.events.map(e => {
       const date = new Date(e.date || e.createdAt).toLocaleDateString('zh-CN');
       const details = e.details ? JSON.stringify(e.details) : '无';
       return `- 日期: ${date}, 事件类型: ${e.type}, 详情: ${details}`;
@@ -383,7 +384,8 @@ ${userProgressSummary}
 2. 如果用户有进步（如近期训练频繁），请明确指出。
 3. 给出具体的建议或鼓励。
 4. 语气要温暖、专业且富有同理心。
-5. 回复长度适中，不要太短，也不要过于冗长（建议100-150字左右）。
+5. 回复长度适中，不要太短，也不要过于冗长（建议不超过600字）。
+6. 一致性分数对用户是不可见的，不要提到这个名词。
 `;
     return await callGeminiProxy(prompt);
   } catch (error) {
