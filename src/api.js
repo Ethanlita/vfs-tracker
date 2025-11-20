@@ -346,6 +346,8 @@ export const getEncouragingMessage = async (userData) => {
       return "开始记录你的声音数据，让我为你加油吧！";
     }
 
+    console.log('🤖 api.js: getEncouragingMessage 接收到的事件数量:', userData.events.length);
+
     // 构建丰富的数据摘要
     const totalEvents = userData.events.length;
     const recentTrainingCount = userData.events.filter(e =>
@@ -354,7 +356,7 @@ export const getEncouragingMessage = async (userData) => {
     ).length;
     const consistencyScore = calculateConsistencyScore(userData.events);
 
-    const eventsSummary = userData.events.slice(0, 10).map(e => { // 限制最近10条，避免token过长
+    const eventsSummary = userData.events.slice(0, 30).map(e => { // 限制最近30条
       const date = new Date(e.date || e.createdAt).toLocaleDateString('zh-CN');
       const details = e.details ? JSON.stringify(e.details) : '无';
       return `- 日期: ${date}, 事件类型: ${e.type}, 详情: ${details}`;
@@ -367,7 +369,7 @@ export const getEncouragingMessage = async (userData) => {
 - 训练一致性分数: ${consistencyScore}/100
 ${userData.voiceParameters ? `- 最新声音参数: 基频 ${userData.voiceParameters.fundamental}Hz, 抖动 ${userData.voiceParameters.jitter}%, 微颤 ${userData.voiceParameters.shimmer}%` : ''}
 
-最近详细记录 (Top 10):
+最近详细记录 (Top 30):
 ${eventsSummary}
 `;
 

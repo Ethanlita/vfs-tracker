@@ -25,7 +25,7 @@ const MyPage = () => {
   // @zh 专门使用 AuthContext - 它已经使用了 Amplify v6 标准 API
   const { user: authContextUser, cognitoUserInfo } = useAuth();
 
-  console.log('📍 [验证点20] MyPage组件用户信息来源验证:', {
+  console.debug('📍 [验证点20] MyPage组件用户信息来源验证:', {
     source: 'AuthContext (使用Amplify v6标准API)',
     authContextUser: !!authContextUser,
     cognitoUserInfo: !!cognitoUserInfo,

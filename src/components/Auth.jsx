@@ -83,7 +83,7 @@ const ProductionAuthStatus = ({ onShowLogin, navigate }) => {
     const { user, cognitoUserInfo, refreshCognitoUserInfo } = useAuth();
     const { signOut } = useAuthenticator((context) => [context.signOut]);
 
-    console.log('📍 [验证点20] Auth组件用户信息来源验证:', {
+    console.debug('📍 [验证点20] Auth组件用户信息来源验证:', {
         source: 'AuthContext (使用Amplify v6标准API)',
         authContextUser: !!user,
         cognitoUserInfo: !!cognitoUserInfo,
