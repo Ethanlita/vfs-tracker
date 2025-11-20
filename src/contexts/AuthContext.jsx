@@ -59,11 +59,9 @@ export const AuthProvider = ({ children }) => {
   });
 
   // 监听Amplify认证状态
-  const authenticatorData = useAuthenticator(context => [
-    context.authStatus,
-    context.user
-  ]);
-  const amplifyAuthHook = useMemo(() => authenticatorData, [authenticatorData]);
+  const { authStatus, user: amplifyUser } = useAuthenticator();
+
+  const amplifyAuthHook = useMemo(() => ({ authStatus, user: amplifyUser }), [authStatus, amplifyUser]);
 
   console.log('🔍 AuthContext: amplifyAuthHook 状态', {
     authStatus: amplifyAuthHook.authStatus,
@@ -386,8 +384,8 @@ export const AuthProvider = ({ children }) => {
         hasAmplifyUser: !!amplifyUser,
         hasCurrentUser: !!user,
         reason: authStatus !== 'authenticated' ? 'not authenticated' :
-                !amplifyUser ? 'no amplify user' :
-                user ? 'user already exists' : 'unknown'
+          !amplifyUser ? 'no amplify user' :
+            user ? 'user already exists' : 'unknown'
       });
     }
   }, [amplifyAuthHook, authInitialized, user, handleAuthSuccess, debugAuthCredentials, logout]);
@@ -408,7 +406,8 @@ export const AuthProvider = ({ children }) => {
   };
 
   // 更新Cognito用户属性 - 增强邮箱验证处理
-  const updateCognitoUserInfo = async (updates) => {    setCognitoLoading(true);
+  const updateCognitoUserInfo = async (updates) => {
+    setCognitoLoading(true);
     try {
       const attributesToUpdate = {};
       let emailChanged = false;
