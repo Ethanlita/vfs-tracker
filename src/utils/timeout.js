@@ -34,21 +34,21 @@ export const TIMEOUT_CONFIG = {
   // 用户相关 API (快速操作)
   '/user': 8000,                    // getUserProfile, updateUserProfile
   '/user/public': 8000,              // getUserPublicProfile
-  
+
   // 事件相关 API
   '/events': 8000,                   // addEvent (POST), getUserEvents (GET)
   '/event': 8000,                    // deleteEvent
   '/all-events': 34000,              // getAllEvents (复杂查询,需遍历大量数据)
-  
+
   // 文件相关 API (文件处理操作)
   '/upload-url': 305000,             // getUploadUrl (生成预签名URL + S3操作)
   '/file-url': 305000,               // getFileUrl (S3访问URL生成)
   '/avatar': 8000,                   // getAvatarUrl (简单的URL返回)
-  
+
   // 外部服务 API (复杂操作)
   '/song-recommendations': 34000,    // 调用外部推荐服务
   '/gemini-proxy': 34000,            // AI 服务代理
-  
+
   // 默认超时
   'default': 8000
 };
@@ -67,19 +67,19 @@ export const TIMEOUT_CONFIG = {
 export function getTimeout(path) {
   // 移除查询参数和尾部斜杠
   const cleanPath = path.split('?')[0].replace(/\/$/, '');
-  
+
   // 精确匹配
   if (TIMEOUT_CONFIG[cleanPath]) {
     return TIMEOUT_CONFIG[cleanPath];
   }
-  
+
   // 前缀匹配 (例如 /user/123 匹配 /user)
   for (const [pattern, timeout] of Object.entries(TIMEOUT_CONFIG)) {
     if (pattern !== 'default' && cleanPath.startsWith(pattern)) {
       return timeout;
     }
   }
-  
+
   // 返回默认超时
   return TIMEOUT_CONFIG.default;
 }
@@ -118,7 +118,7 @@ export function withTimeout(promise, timeoutMs, context = {}) {
           details: {
             message: '服务器响应时间过长，请检查网络连接或稍后重试',
             configuredTimeout: `${timeoutMs}ms`,
-            suggestion: timeoutMs >= 30000 
+            suggestion: timeoutMs >= 30000
               ? '大型操作可能需要更多时间，请耐心等待'
               : '请检查网络连接状态'
           }
@@ -195,7 +195,7 @@ export async function withAmplifyTimeout(operation, timeoutMs, context = {}) {
  */
 export async function withAutoTimeout(operation, context = {}) {
   const timeout = getTimeout(context.path || '');
-  console.log(`[Timeout] ${context.method} ${context.path}: ${timeout}ms`);
+  // console.debug(`[Timeout] ${context.method} ${context.path}: ${timeout}ms`);
   return withAmplifyTimeout(operation, timeout, context);
 }
 
@@ -216,11 +216,11 @@ export async function withAutoTimeout(operation, context = {}) {
  */
 export function isTimeoutError(error) {
   if (!error) return false;
-  return error.code === 'TIMEOUT' || 
-         error.errorCode === 'TIMEOUT' ||
-         error.name === 'TimeoutError' ||
-         (typeof error.message === 'string' && error.message.includes('超时')) ||
-         (typeof error.message === 'string' && error.message.toLowerCase().includes('timeout'));
+  return error.code === 'TIMEOUT' ||
+    error.errorCode === 'TIMEOUT' ||
+    error.name === 'TimeoutError' ||
+    (typeof error.message === 'string' && error.message.includes('超时')) ||
+    (typeof error.message === 'string' && error.message.toLowerCase().includes('timeout'));
 }
 
 /**
@@ -242,21 +242,21 @@ export function isTimeoutError(error) {
 export function createCancellableTimeout(timeoutMs) {
   let timeoutId;
   let cancelFn;
-  
+
   const promise = new Promise((_, reject) => {
     timeoutId = setTimeout(() => {
-      reject(new ApiError('Operation timeout', { 
+      reject(new ApiError('Operation timeout', {
         code: 'TIMEOUT',
-        timeout: timeoutMs 
+        timeout: timeoutMs
       }));
     }, timeoutMs);
   });
-  
+
   cancelFn = () => {
     if (timeoutId) {
       clearTimeout(timeoutId);
     }
   };
-  
+
   return { promise, cancel: cancelFn };
 }
