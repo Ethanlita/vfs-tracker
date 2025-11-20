@@ -19,7 +19,7 @@ export const PROFILE_CACHE_KEY = 'lastGoodUserProfile:v1';
  * @throws {ApiError} 如果请求失败或超时，则抛出 ApiError。
  */
 async function simpleGet(path) {
-  console.log('[simpleGet] making public request to:', path);
+  console.debug('[simpleGet] making public request to:', path);
   try {
     const op = get({ apiName: 'api', path });
     // 使用自动超时配置
@@ -47,7 +47,7 @@ async function simpleGet(path) {
  * @throws {ApiError} 如果请求失败或超时，则抛出 ApiError。
  */
 async function authenticatedGet(path) {
-  console.log('[authenticatedGet] making authenticated request to:', path);
+  console.debug('[authenticatedGet] making authenticated request to:', path);
   const session = await fetchAuthSession();
   const idToken = session.tokens?.idToken;
   if (!idToken) {
@@ -110,7 +110,7 @@ async function authenticatedPost(path, bodyData) {
       requestPath: path
     });
   }
-  console.debug('[authenticatedPost] ID Token preview (first 20 chars):', idToken.slice(0,20));
+  console.debug('[authenticatedPost] ID Token preview (first 20 chars):', idToken.slice(0, 20));
   try {
     const op = post({
       apiName: 'api',
@@ -301,8 +301,8 @@ export const callGeminiProxy = async (prompt) => {
  * @returns {Promise<string>} 一个解析为鼓励性消息字符串的 Promise。
  */
 export const getEncouragingMessage = async (userData) => {
-  // AI 功能由环境变量控制，可选择性启用
-  const isAiEnabled = !!import.meta.env.VITE_ENABLE_AI_IN_DEV;
+  // AI 功能默认启用，除非显式禁用
+  const isAiEnabled = import.meta.env.VITE_ENABLE_AI !== 'false';
   if (!isAiEnabled) return "持续跟踪，持续进步 ✨";
 
   try {
