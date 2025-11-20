@@ -44,6 +44,7 @@ export default defineConfig({
     copyPostsPlugin(),
     VitePWA({
       registerType: 'prompt',
+      cleanupOutdatedCaches: true, // Automatically delete old caches
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
       manifest: {
         name: 'VFS Tracker',
