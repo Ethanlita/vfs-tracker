@@ -85,10 +85,14 @@ const ProtectedRoute = () => {
  */
 const ServiceWorkerUpdateBanner = () => {
   const [visible, setVisible] = useState(false);
+  const [updateSW, setUpdateSW] = useState(null);
 
   useEffect(() => {
-    const handleUpdateAvailable = () => {
+    const handleUpdateAvailable = (event) => {
       setVisible(true);
+      if (event.detail && event.detail.updateSW) {
+        setUpdateSW(() => event.detail.updateSW);
+      }
     };
 
     window.addEventListener('sw:update-available', handleUpdateAvailable);
@@ -100,7 +104,11 @@ const ServiceWorkerUpdateBanner = () => {
   if (!visible) return null;
 
   const handleReload = () => {
-    window.location.reload();
+    if (updateSW) {
+      updateSW(true);
+    } else {
+      window.location.reload();
+    }
   };
 
   const handleDismiss = () => {

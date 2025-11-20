@@ -144,10 +144,15 @@ import App from './App.jsx'
 import { registerSW } from 'virtual:pwa-register'
 
 if (import.meta.env.PROD) {
-  const updateSW = registerSW({
+  let updateSW;
+  updateSW = registerSW({
     onNeedRefresh() {
       console.log('New content available, click on reload button to update.');
-      window.dispatchEvent(new CustomEvent('sw:update-available'));
+      window.dispatchEvent(new CustomEvent('sw:update-available', {
+        detail: {
+          updateSW: (reload) => updateSW(reload)
+        }
+      }));
     },
     onOfflineReady() {
       console.log('App is ready to work offline.');
