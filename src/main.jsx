@@ -37,7 +37,7 @@ ${missingVars.map(v => `  • ${v}`).join('\n')}
 参见 .env.example 了解所有必需变量的说明。`;
 
   console.error('[startup] 配置错误:', errorMsg);
-  
+
   createRoot(document.getElementById('root')).render(
     <div style={{
       padding: '2rem',
@@ -55,7 +55,7 @@ ${missingVars.map(v => `  • ${v}`).join('\n')}
       </p>
     </div>
   );
-  
+
   throw new Error('Missing required environment variables');
 }
 
@@ -140,30 +140,19 @@ if (!restConfig || !restConfig.api) {
 import App from './App.jsx'
 
 // 注册 Service Worker 并在检测到新版本后提示用户刷新
-if (import.meta.env.PROD && 'serviceWorker' in navigator) {
-  const notifyUpdateReady = () => {
-    window.dispatchEvent(new CustomEvent('sw:update-available'));
-  };
+// Register Service Worker and prompt user to refresh when a new version is detected
+import { registerSW } from 'virtual:pwa-register'
 
-  navigator.serviceWorker.register('/sw.js').then((registration) => {
-    console.log('Service Worker registered: ', registration);
-
-    if (registration.waiting && navigator.serviceWorker.controller) {
-      notifyUpdateReady();
-    }
-
-    registration.addEventListener('updatefound', () => {
-      const installing = registration.installing;
-      if (!installing) return;
-      installing.addEventListener('statechange', () => {
-        if (installing.state === 'installed' && navigator.serviceWorker.controller) {
-          notifyUpdateReady();
-        }
-      });
-    });
-  }).catch((registrationError) => {
-    console.log('Service Worker registration failed: ', registrationError);
-  });
+if (import.meta.env.PROD) {
+  const updateSW = registerSW({
+    onNeedRefresh() {
+      console.log('New content available, click on reload button to update.');
+      window.dispatchEvent(new CustomEvent('sw:update-available'));
+    },
+    onOfflineReady() {
+      console.log('App is ready to work offline.');
+    },
+  })
 }
 
 createRoot(document.getElementById('root')).render(

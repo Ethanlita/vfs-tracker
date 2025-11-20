@@ -13,7 +13,7 @@ import PublicDashboard from './components/PublicDashboard';
 import Home from './components/Home';
 import PostList from './components/PostList';
 import PostViewer from './components/PostViewer';
-import TimelineTest from './components/TimelineTest';
+
 import APITestPage from './components/APITestPage';
 import ProfileSetupWizard from './components/ProfileSetupWizard';
 import UserProfileManager from './components/UserProfileManager';
@@ -189,8 +189,7 @@ const AppContent = () => {
           <Route path="/vfs-effect-preview" element={<VFSEffectPreview />} />
           <Route path="/posts" element={<PostList />} />
           <Route path="/docs" element={<PostViewer />} />
-          {/* Route for testing the new timeline component independently */}
-          <Route path="/timeline-test" element={<TimelineTest />} />
+
           <Route element={<ProtectedRoute />}>
             <Route path="/mypage" element={<MyPage />} />
             <Route path="/add-event" element={<AddEvent />} />
