@@ -194,13 +194,20 @@ const Timeline = () => {
 
   // AI 消息获取
   const aiAsync = useAsync(async () => {
-    if (!timelineEvents.length) return DEFAULT_MESSAGE;
+    const allEvents = eventsAsync.value;
+    if (!allEvents || !allEvents.length) return DEFAULT_MESSAGE;
 
-    // 构造用户数据用于AI分析
+    // 构造用户数据用于AI分析 - 使用所有事件
     const userData = {
-      events: timelineEvents,
+      events: allEvents,
       voiceParameters: {} // 可以根据需要添加更多参数
     };
+
+    console.log('🤖 Timeline: 准备调用AI，事件数量对比:', {
+      allEventsCount: allEvents.length,
+      timelineEventsCount: timelineEvents.length,
+      isSame: allEvents === timelineEvents
+    });
 
     try {
       return await getEncouragingMessage(userData);
@@ -208,7 +215,7 @@ const Timeline = () => {
       console.error('获取AI消息失败:', error);
       return DEFAULT_MESSAGE;
     }
-  }, [timelineEvents]);
+  }, [eventsAsync.value]);
 
   // 处理事件数据变化
   useEffect(() => {
