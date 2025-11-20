@@ -197,16 +197,21 @@ const Timeline = () => {
     const allEvents = eventsAsync.value;
     if (!allEvents || !allEvents.length) return DEFAULT_MESSAGE;
 
-    // 构造用户数据用于AI分析 - 使用所有事件
+    // 按时间排序并取最近的30个事件用于AI分析
+    const recentEventsForAI = [...allEvents]
+      .sort((a, b) => new Date(b.date || b.createdAt) - new Date(a.date || a.createdAt))
+      .slice(0, 30);
+
+    // 构造用户数据用于AI分析 - 使用最近30个事件
     const userData = {
-      events: allEvents,
+      events: recentEventsForAI,
       voiceParameters: {} // 可以根据需要添加更多参数
     };
 
-    console.log('🤖 Timeline: 准备调用AI，事件数量对比:', {
+    console.log('🤖 Timeline: 准备调用AI，事件数量:', {
       allEventsCount: allEvents.length,
-      timelineEventsCount: timelineEvents.length,
-      isSame: allEvents === timelineEvents
+      recentEventsForAI: recentEventsForAI.length,
+      timelineEventsCount: timelineEvents.length
     });
 
     try {
