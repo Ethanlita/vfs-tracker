@@ -300,6 +300,42 @@ export const callGeminiProxy = async (prompt) => {
  * @param {object} userData - 包含用户事件数据的对象。
  * @returns {Promise<string>} 一个解析为鼓励性消息字符串的 Promise。
  */
+/**
+ * 计算用户训练一致性分数
+ * @param {Array} events - 用户事件列表
+ * @returns {number} 0-100的一致性分数
+ */
+const calculateConsistencyScore = (events) => {
+  if (!events || events.length === 0) return 0;
+
+  const trainingEvents = events.filter(e => e.type === 'training');
+  if (trainingEvents.length < 2) return 50;
+
+  // 计算训练频率的一致性
+  const dates = trainingEvents.map(e => new Date(e.createdAt || e.date)).sort((a, b) => a - b);
+  const intervals = [];
+
+  for (let i = 1; i < dates.length; i++) {
+    const interval = (dates[i] - dates[i - 1]) / (1000 * 60 * 60 * 24); // 天数
+    intervals.push(interval);
+  }
+
+  if (intervals.length === 0) return 50;
+
+  const avgInterval = intervals.reduce((a, b) => a + b, 0) / intervals.length;
+  const variance = intervals.reduce((sum, interval) => sum + Math.pow(interval - avgInterval, 2), 0) / intervals.length;
+
+  // 一致性分数：方差越小，分数越高
+  const consistencyScore = Math.max(0, Math.min(100, 100 - variance * 2));
+
+  return Math.round(consistencyScore);
+};
+
+/**
+ * [CN] 根据用户的事件数据生成一条鼓励性消息。如果 AI 未启用或调用失败，则返回默认消息。
+ * @param {object} userData - 包含用户事件数据的对象。
+ * @returns {Promise<string>} 一个解析为鼓励性消息字符串的 Promise。
+ */
 export const getEncouragingMessage = async (userData) => {
   // AI 功能默认启用，除非显式禁用
   const isAiEnabled = import.meta.env.VITE_ENABLE_AI !== 'false';
@@ -309,16 +345,43 @@ export const getEncouragingMessage = async (userData) => {
     if (!userData || !userData.events || userData.events.length === 0) {
       return "开始记录你的声音数据，让我为你加油吧！";
     }
-    const eventsSummary = userData.events.map(e => {
+
+    // 构建丰富的数据摘要
+    const totalEvents = userData.events.length;
+    const recentTrainingCount = userData.events.filter(e =>
+      e.type === 'training' &&
+      new Date(e.createdAt || e.date) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+    ).length;
+    const consistencyScore = calculateConsistencyScore(userData.events);
+
+    const eventsSummary = userData.events.slice(0, 10).map(e => { // 限制最近10条，避免token过长
       const date = new Date(e.date || e.createdAt).toLocaleDateString('zh-CN');
       const details = e.details ? JSON.stringify(e.details) : '无';
       return `- 日期: ${date}, 事件类型: ${e.type}, 详情: ${details}`;
     }).join('\n');
-    const prompt = `
-这是用户最近的嗓音事件记录：
+
+    const userProgressSummary = `
+用户声音训练进度摘要：
+- 总事件数: ${totalEvents}
+- 近7天训练次数: ${recentTrainingCount}
+- 训练一致性分数: ${consistencyScore}/100
+${userData.voiceParameters ? `- 最新声音参数: 基频 ${userData.voiceParameters.fundamental}Hz, 抖动 ${userData.voiceParameters.jitter}%, 微颤 ${userData.voiceParameters.shimmer}%` : ''}
+
+最近详细记录 (Top 10):
 ${eventsSummary}
+`;
+
+    const prompt = `
+这是用户的声音训练数据摘要和最近记录：
+${userProgressSummary}
 
 请基于这些数据，结合你的知识库，给用户一句鼓励和分析的话。
+请注意：
+1. 你的回复应该包含对用户当前状态的简要分析（例如：一致性分数高说明坚持得很好）。
+2. 如果用户有进步（如近期训练频繁），请明确指出。
+3. 给出具体的建议或鼓励。
+4. 语气要温暖、专业且富有同理心。
+5. 回复长度适中，不要太短，也不要过于冗长（建议100-150字左右）。
 `;
     return await callGeminiProxy(prompt);
   } catch (error) {
