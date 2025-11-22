@@ -58,7 +58,7 @@ export const getUserAvatarUrl = async (user, size = 40, avatarKey) => {
   if (userId && avatarKey) {
     try {
       const avatarUrl = await getAvatarUrl(userId, avatarKey);
-      if (avatarUrl) {
+      if (avatarUrl !== null && avatarUrl !== undefined) {
         return avatarUrl;
       }
     } catch (error) {
