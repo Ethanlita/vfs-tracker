@@ -10,6 +10,7 @@ export const minimalProfileUser = {
     name: '用户002',
     nickname: 'user002',
     bio: '',
+    avatarKey: null,
     isNamePublic: false,
     areSocialsPublic: false,
     socials: [],

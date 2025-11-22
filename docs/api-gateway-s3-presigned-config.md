@@ -19,9 +19,10 @@
 
 ### 3. 获取头像预签名URL
 - **路径**: `GET /avatar/{userId}`
+- **查询参数**: `key`（必填，形如 `avatars/{userId}/{timestamp}-{userId}.png`）
 - **认证**: 无需认证（公开访问）
 - **Lambda函数**: `getAvatarUrl`
-- **描述**: 生成头像访问的预签名URL，允许所有用户访问任何人的头像
+- **描述**: 生成头像访问的预签名URL，允许所有用户访问任何人的头像。请求方必须提供完整的头像对象键，Lambda 不再执行任何回退逻辑。
 
 ## 安全策略
 
@@ -78,6 +79,11 @@ uploads/{userId}/         # 通用上传文件
 ```
 
 ### 获取头像URL
+**请求**:
+```
+GET /avatar/us-east-1:complete-user-001?key=avatars/us-east-1:complete-user-001/1712578123456-us-east-1:complete-user-001.png
+```
+
 **响应**:
 ```json
 {

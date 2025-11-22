@@ -512,14 +512,19 @@ const getFileUrlHandler = http.post(`${API_URL}/file-url`, async ({ request }) =
  * 这是一个 GET 请求，不是 POST
  * 返回: {url} - 头像的公开或预签名 URL
  */
-const getAvatarUrlHandler = http.get(`${API_URL}/avatar/:userId`, ({ params }) => {
+const getAvatarUrlHandler = http.get(`${API_URL}/avatar/:userId`, ({ request, params }) => {
   const { userId } = params;
-  console.log(`[MSW] Handling GET /avatar/${userId}`);
-  
-  // 模拟头像 URL（可能是 CloudFront 公开 URL）
-  const mockAvatarUrl = `https://mock-cdn.cloudfront.net/avatars/${userId}/avatar.jpg?timestamp=${Date.now()}`;
-  
-  // 真实 API 返回 {url: string}
+  const url = new URL(request.url);
+  const avatarKey = url.searchParams.get('key');
+
+  console.log(`[MSW] Handling GET /avatar/${userId}`, { avatarKey });
+
+  if (!avatarKey) {
+    return HttpResponse.json({ error: 'avatarKey is required' }, { status: 400 });
+  }
+
+  const mockAvatarUrl = `https://mock-cdn.cloudfront.net/${avatarKey}?timestamp=${Date.now()}`;
+
   return HttpResponse.json({
     url: mockAvatarUrl,
   });

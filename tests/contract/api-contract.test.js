@@ -529,21 +529,29 @@ describe('API Contract 测试', () => {
   
   describe('GET /avatar/{userId} - 获取头像URL', () => {
     skipIfNotConfigured('应该返回用户头像URL', async () => {
-      const testUserId = 'f4186448-7091-70b8-da14-276edd79c93f';
-      
-      const response = await fetch(`${getApiEndpoint()}/avatar/${testUserId}`);
-      
+      const avatarUserId = import.meta.env.CONTRACT_AVATAR_USER_ID;
+      const avatarKey = import.meta.env.CONTRACT_AVATAR_KEY;
+
+      if (!avatarUserId || !avatarKey) {
+        console.warn('⚠️  跳过头像URL契约测试: 需要配置 CONTRACT_AVATAR_USER_ID 和 CONTRACT_AVATAR_KEY');
+        return;
+      }
+
+      const response = await fetch(
+        `${getApiEndpoint()}/avatar/${avatarUserId}?key=${encodeURIComponent(avatarKey)}`
+      );
+
       if (response.status === 404) {
         console.log('⚠️  用户没有头像,跳过验证');
         return;
       }
-      
+
       expect(response.status).toBe(200);
       const result = await response.json();
-      
+
       expect(result).toBeDefined();
       expect(result.url).toBeDefined();
-      
+
       console.log('✓ 头像URL获取成功');
     });
   });
