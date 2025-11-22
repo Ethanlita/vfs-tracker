@@ -10,6 +10,7 @@ export const publicProfileUser = {
     name: '李明',
     nickname: 'liming',
     bio: '分享我的嗓音训练经验',
+    avatarKey: 'avatars/us-east-1:public-user-003/latest.png',
     isNamePublic: true,
     areSocialsPublic: true,
     socials: [

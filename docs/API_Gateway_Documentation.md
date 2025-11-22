@@ -750,7 +750,7 @@ This set of endpoints manages the multi-step voice analysis test feature.
 **描述**: 获取文件上传的预签名URL，用于安全上传文件到S3。该端点支持用户目录下的通用上传需求；会在返回的 URL 上自动替换 CDN 主机，方便前端直接 PUT 上传。
 **用于上传附件时**: 推荐 `fileKey = attachments/{userId}/{timestamp}_{originalFileName}`，其中 `userId` 必须与 ID Token 的 `sub` 一致。上传完成后，把该 key 保存到事件对象的 `attachments` 字段；`DELETE /event/{eventId}` 会根据这些 key 级联删除 S3 文件。
 **用于上传嗓音测试音频时**: 请使用 Online Praat 专用的 `POST /uploads`（`handler.py` 会校验会话所有权并生成 `voice-tests/{sessionId}/raw/...` 路径）。若直接对本端点提交 `voice-tests/` 前缀，会因目录不在允许范围而返回 403。
-**用于上传头像时**: 将 `fileKey` 固定为 `avatars/{userId}/avatar`，再使用返回的 `uploadUrl` 进行 HTTP PUT 上传；`GET /avatar/{userId}` 始终读取该固定 key，因此不要追加扩展名或随机后缀。
+**用于上传头像时**: 按 `avatars/{userId}/{timestamp}-{userId}{extension}` 生成唯一 key，并在上传成功后将该 key 保存到用户资料（DynamoDB）。`GET /avatar/{userId}` 需要通过查询参数 `?key=...` 显式指定该对象键，Lambda 不再执行任何自动推断或回退逻辑。
 **其他上传场景**: 可以把临时草稿或个人文档放在 `uploads/{userId}/` 目录。依旧需要遵守用户 ID 校验，并利用返回的 CDN URL 直接上传；后续访问可通过 `POST /file-url` 获取下载签名。
 
 **认证**: 需要JWT token
@@ -782,7 +782,7 @@ This set of endpoints manages the multi-step voice analysis test feature.
 **常见使用场景**:
 - **事件附件**：使用 `fileKey = attachments/{userId}/{timestamp}_{originalFileName}`。上传完成后，将该 key 写入事件的 `attachments` 字段；后续 `DELETE /event/{eventId}` 会依据该 key 清理 S3 文件。
 - **嗓音测试音频**：请改用 Online Praat 专用端点 `POST /uploads`（生成 `voice-tests/{sessionId}/raw/...` 路径），本端点不接受 `voice-tests/` 前缀，直接调用会返回 403。
-- **头像上传**：在调用本端点时将 `fileKey` 固定为 `avatars/{userId}/avatar`，然后使用返回的 `uploadUrl` 执行 HTTP PUT；取图请调用 `GET /avatar/{userId}`。
+- **头像上传**：在调用本端点时将 `fileKey` 设为 `avatars/{userId}/{timestamp}-{userId}{extension}` 之类的唯一值并保存到用户资料；取图请调用 `GET /avatar/{userId}?key=...`。
 - **其他临时或个性化上传**：可使用 `uploads/{userId}/...` 目录存放草稿、个人记录等，同样受用户 ID 校验与 CDN 主机重写影响。
 
 ---
@@ -822,12 +822,15 @@ This set of endpoints manages the multi-step voice analysis test feature.
 
 ### GET /avatar/{userId}
 
-**描述**: 获取用户头像的预签名URL（公开访问）
+**描述**: 获取用户头像的预签名URL（公开访问）。请求方必须在查询参数中提供完整的 `avatarKey`，形如 `avatars/{userId}/{timestamp}-{userId}.png`。
 
 **认证**: 无需认证
 
 **路径参数**:
 - `userId`: 用户ID
+
+**查询参数**:
+- `key` (string, required): 头像文件的 S3 对象键，必须以 `avatars/{userId}/` 开头
 
 **响应**:
 ```json
@@ -840,9 +843,9 @@ This set of endpoints manages the multi-step voice analysis test feature.
 > 与其他文件端点一致，返回的预签名链接会被重写为 `storage.vfs-tracker.app` 或 `storage.vfs-tracker.cn` 主机，方便直接走 CDN。
 
 **安全规则**:
-- 任何用户都可以访问其他用户的头像
+- 任何用户都可以访问其他用户的头像，但 `key` 必须属于该用户目录
 - 头像URL有效期24小时
-- 如果头像不存在，返回默认头像
+- 如果缺少 `key` 或 key 不匹配用户目录，直接返回 400/403；不再尝试任何回退逻辑
 
 ---
 

@@ -3,7 +3,7 @@ import { Authenticator, useAuthenticator } from '@aws-amplify/ui-react';
 import { Amplify } from 'aws-amplify';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { getUserAvatarUrl, getUserDisplayName } from '../utils/avatar.js';
+import { getUserAvatarUrl, getUserDisplayName, generateAvatar } from '../utils/avatar.js';
 import { ApiErrorNotice } from './ApiErrorNotice.jsx';
 import { ensureAppError } from '../utils/apiError.js';
 
@@ -80,7 +80,7 @@ const Auth = () => {
 const ProductionAuthStatus = ({ onShowLogin, navigate }) => {
     // @en Use AuthContext exclusively - it already uses Amplify v6 standard APIs
     // @zh 专门使用 AuthContext - 它已经使用了 Amplify v6 标准 API
-    const { user, cognitoUserInfo, refreshCognitoUserInfo } = useAuth();
+    const { user, cognitoUserInfo, refreshCognitoUserInfo, userProfile } = useAuth();
     const { signOut } = useAuthenticator((context) => [context.signOut]);
 
     console.debug('📍 [验证点20] Auth组件用户信息来源验证:', {
@@ -106,7 +106,6 @@ const ProductionAuthStatus = ({ onShowLogin, navigate }) => {
                 ...user.attributes,
                 nickname: cognitoUserInfo?.nickname || user.attributes?.nickname,
                 email: cognitoUserInfo?.email || user.attributes?.email,
-                avatarKey: cognitoUserInfo?.avatarKey || user.attributes?.avatarKey
             }
         } : null;
     }, [user, cognitoUserInfo]);
@@ -115,13 +114,18 @@ const ProductionAuthStatus = ({ onShowLogin, navigate }) => {
 
     useEffect(() => {
         const fetchAvatar = async () => {
-            if (completeUser) {
-                const url = await getUserAvatarUrl(completeUser, 40);
+            const avatarKey = userProfile?.profile?.avatarKey;
+            if (completeUser && avatarKey) {
+                const url = await getUserAvatarUrl(completeUser, 40, avatarKey);
                 setAvatarUrl(url);
+            } else if (completeUser) {
+                setAvatarUrl(generateAvatar(getUserDisplayName(completeUser), 40));
+            } else {
+                setAvatarUrl(generateAvatar('Guest', 40));
             }
         };
         fetchAvatar();
-    }, [completeUser]);
+    }, [completeUser, userProfile?.profile?.avatarKey]);
 
     if (completeUser) {
         return (

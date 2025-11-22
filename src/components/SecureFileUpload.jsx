@@ -62,7 +62,19 @@ const SecureFileUpload = ({
       setUploading(true);
       const storagePath = getStoragePath(fileType);
       const timestamp = Date.now();
-      const fileKey = `${storagePath}/${user.userId}/${timestamp}_${file.name}`;
+      let fileKey;
+
+      if (fileType === 'avatar') {
+        const extension = (() => {
+          const dotIndex = file.name.lastIndexOf('.');
+          if (dotIndex === -1) return '';
+          return file.name.slice(dotIndex).toLowerCase();
+        })();
+        const baseName = `${timestamp}-${user.userId}`;
+        fileKey = `${storagePath}/${user.userId}/${baseName}${extension}`;
+      } else {
+        fileKey = `${storagePath}/${user.userId}/${timestamp}_${file.name}`;
+      }
 
       const uploadUrl = await getUploadUrl(fileKey, file.type);
 
@@ -82,7 +94,8 @@ const SecureFileUpload = ({
 
       let fileUrl;
       if (fileType === 'avatar') {
-        fileUrl = await getAvatarUrl(user.userId);
+        // 传递 fileKey 以获取新上传文件的 URL，而不是默认路径
+        fileUrl = await getAvatarUrl(user.userId, fileKey);
       } else {
         fileUrl = await getFileUrl(fileKey);
       }

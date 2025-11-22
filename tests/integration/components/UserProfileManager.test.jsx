@@ -52,7 +52,8 @@ const mockUserProfile = {
       { platform: 'Twitter', handle: '@testuser' },
       { platform: 'Discord', handle: 'testuser#1234' }
     ],
-    areSocialsPublic: true
+    areSocialsPublic: true,
+    avatarKey: 'avatars/test-user-123/latest.png'
   }
 };
 

@@ -15,7 +15,6 @@ const UserProfileManager = () => {
     cognitoUserInfo,
     cognitoLoading,
     updateCognitoUserInfo,
-    refreshCognitoUserInfo,
     resendEmailVerification
   } = useAuth();
 
@@ -78,13 +77,17 @@ const UserProfileManager = () => {
   useEffect(() => {
     const loadAvatar = async () => {
       const sourceUser = cognitoUserInfo || user;
-      if (sourceUser) {
-        const url = await getUserAvatarUrl(sourceUser, 64);
+      const avatarKey = userProfile?.profile?.avatarKey;
+
+      if (sourceUser && avatarKey) {
+        const url = await getUserAvatarUrl(sourceUser, 64, avatarKey);
         setAvatarUrl(url);
+      } else {
+        setAvatarUrl('');
       }
     };
     loadAvatar();
-  }, [cognitoUserInfo, user]);
+  }, [cognitoUserInfo, user, userProfile?.profile?.avatarKey]);
 
   const handleUpdateCognitoInfo = async () => {
     setSuccess('');
@@ -189,12 +192,15 @@ const UserProfileManager = () => {
         });
       }
 
+      const existingProfile = userProfile?.profile || {};
       await updateUserProfile(user.userId, {
         profile: {
+          ...existingProfile,
           name: formData.name.trim(),
           isNamePublic: formData.isNamePublic,
           socials: formData.socials,
-          areSocialsPublic: formData.areSocialsPublic
+          areSocialsPublic: formData.areSocialsPublic,
+          avatarKey: existingProfile.avatarKey || null
         }
       });
 
@@ -228,18 +234,33 @@ const UserProfileManager = () => {
     setApiError(null);
   };
 
-  const handleAvatarUpdate = async (avatarKey) => {
+  const handleAvatarUpdate = async ({ fileUrl, fileKey }) => {
+    setApiError(null);
     try {
-      const result = await updateCognitoUserInfo({ avatarKey });
-      if (result.success) {
-        setSuccess('头像更新成功！');
-        await refreshCognitoUserInfo();
+      if (!userProfile?.profile) {
+        throw new ValidationError('请先完成个人资料设置。');
       }
+      if (!fileKey) {
+        throw new ValidationError('上传结果缺少文件标识，请重试。');
+      }
+
+      const updatedProfile = {
+        ...userProfile.profile,
+        avatarKey: fileKey
+      };
+
+      await updateUserProfile(user.userId, { profile: updatedProfile });
+      await refreshUserProfile();
+
+      if (fileUrl) {
+        setAvatarUrl(fileUrl);
+      }
+      setSuccess('头像更新成功！');
     } catch (error) {
       setApiError(ensureAppError(error, {
         message: '头像更新失败：' + (error.message || ''),
-        requestMethod: 'POST',
-        requestPath: '/cognito/avatar'
+        requestMethod: 'PUT',
+        requestPath: '/user/profile'
       }));
     }
   };
