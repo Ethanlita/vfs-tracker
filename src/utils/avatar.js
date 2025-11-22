@@ -57,7 +57,10 @@ export const getUserAvatarUrl = async (user, size = 40, avatarKey) => {
 
   if (userId && avatarKey) {
     try {
-      return await getAvatarUrl(userId, avatarKey);
+      const avatarUrl = await getAvatarUrl(userId, avatarKey);
+      if (avatarUrl) {
+        return avatarUrl;
+      }
     } catch (error) {
       console.error('获取头像URL失败:', error);
     }
