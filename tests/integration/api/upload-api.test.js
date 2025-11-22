@@ -141,8 +141,8 @@ describe('Upload API 集成测试', () => {
 
       expect(avatarUrl).toBeDefined();
       expect(typeof avatarUrl).toBe('string');
-  expect(avatarUrl).toContain('https://');
-  expect(avatarUrl).toContain(avatarKey);
+      expect(avatarUrl).toContain('https://');
+      expect(avatarUrl).toContain(avatarKey);
     });
 
     it('应该为不同用户返回不同的头像 URL', async () => {
