@@ -421,11 +421,6 @@ export const AuthProvider = ({ children }) => {
         emailChanged = true;
       }
 
-      // 支持头像Key更新
-      if (updates.avatarKey !== undefined) {
-        attributesToUpdate['custom:avatarKey'] = updates.avatarKey;
-      }
-
       if (Object.keys(attributesToUpdate).length > 0) {
         const result = await updateUserAttributes({
           userAttributes: attributesToUpdate
@@ -450,9 +445,6 @@ export const AuthProvider = ({ children }) => {
       let message = updates.password ? '账户信息和密码更新成功！' : '账户信息更新成功！';
       if (emailChanged) {
         message += ' 请检查新邮箱收件箱，点击验证链接完成邮箱验证。';
-      }
-      if (updates.avatarKey) {
-        message += ' 头像已更新！';
       }
 
       return {

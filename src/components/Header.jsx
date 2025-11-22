@@ -6,7 +6,7 @@ import { useAuth } from '../contexts/AuthContext.jsx';
 import { generateAvatarFromName, getUserAvatarUrl, getUserDisplayName } from '../utils/avatar.js';
 
 const Header = ({ AuthComponent }) => {
-  const { user } = useAuth();
+  const { user, userProfile } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState('');
   const [toolsMenuOpen, setToolsMenuOpen] = useState(false);
@@ -19,22 +19,22 @@ const Header = ({ AuthComponent }) => {
   useEffect(() => {
     let active = true;
     const loadAvatar = async () => {
-      if (user) {
+      const avatarKey = userProfile?.profile?.avatarKey;
+      if (user && avatarKey) {
         try {
-          const url = await getUserAvatarUrl(user, 64);
+          const url = await getUserAvatarUrl(user, 64, avatarKey);
           if (active) {
             setAvatarUrl(url);
           }
+          return;
         } catch (error) {
           console.error('加载头像失败:', error);
-          if (active) {
-            setAvatarUrl(generateAvatarFromName(displayName, 64));
-          }
         }
-      } else {
-        if (active) {
-          setAvatarUrl(generateAvatarFromName('Guest', 64));
-        }
+      }
+
+      if (active) {
+        const name = user ? displayName : 'Guest';
+        setAvatarUrl(generateAvatarFromName(name, 64));
       }
     };
 
@@ -42,7 +42,7 @@ const Header = ({ AuthComponent }) => {
     return () => {
       active = false;
     };
-  }, [user, displayName]);
+  }, [user, displayName, userProfile?.profile?.avatarKey]);
 
   const docLink = useMemo(() => ({ label: '文档', to: '/posts' }), []);
   const toolLinks = useMemo(

@@ -559,12 +559,17 @@ export const getFileUrl = async (fileKey) => {
 };
 
 /**
- * [CN] 获取用户的头像 URL。
+ * [CN] 获取指定头像文件的预签名 URL。
  * @param {string} userId - 用户的唯一标识符。
+ * @param {string} avatarKey - 头像文件在 S3 中的对象键。
  * @returns {Promise<string>} 一个解析为头像 URL 字符串的 Promise。
  */
-export const getAvatarUrl = async (userId) => {
-  const data = await simpleGet(`/avatar/${userId}`);
+export const getAvatarUrl = async (userId, avatarKey) => {
+  if (!avatarKey) {
+    throw new Error('avatarKey is required when requesting getAvatarUrl');
+  }
+  const path = `/avatar/${userId}?key=${encodeURIComponent(avatarKey)}`;
+  const data = await simpleGet(path);
   return data.url;
 };
 

@@ -34,6 +34,8 @@ export const handler = async (event) => {
 
         // 从路径参数获取用户ID
         const userId = event.pathParameters?.userId;
+        // 从查询参数获取具体的 avatarKey（必填）
+        const specificKey = event.queryStringParameters?.key;
 
         if (!userId) {
             return {
@@ -43,13 +45,28 @@ export const handler = async (event) => {
             };
         }
 
-        // 生成头像文件的S3 key
-        const avatarKey = `avatars/${userId}/avatar`;
+        if (!specificKey) {
+            return {
+                statusCode: 400,
+                headers: headers,
+                body: JSON.stringify({ error: '缺少 avatarKey' })
+            };
+        }
+
+        const expectedPrefix = `avatars/${userId}/`;
+        if (!specificKey.startsWith(expectedPrefix)) {
+            console.warn(`尝试访问非法的 avatarKey: ${specificKey}, 期望前缀: ${expectedPrefix}`);
+            return {
+                statusCode: 403,
+                headers: headers,
+                body: JSON.stringify({ error: '非法的文件访问请求' })
+            };
+        }
 
         // 生成预签名URL（头像允许所有用户访问，有效期较长）
         const command = new GetObjectCommand({
             Bucket: BUCKET_NAME,
-            Key: avatarKey
+            Key: specificKey
         });
 
         // 头像URL有效期设置为24小时

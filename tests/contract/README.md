@@ -101,6 +101,8 @@ VITE_S3_BUCKET=your-bucket-name
 - `TEST_USER_EMAIL` - 测试账户邮箱（未设置则跳过认证测试）
 - `TEST_USER_PASSWORD` - 测试账户密码
 - `VITE_S3_BUCKET` - S3 存储桶（未设置则跳过上传测试）
+- `CONTRACT_AVATAR_USER_ID` - (可选) 具有已知头像的用户 ID，用于 GET /avatar 契约测试
+- `CONTRACT_AVATAR_KEY` - (可选) 上述用户头像在 S3 中的对象键，形如 `avatars/{userId}/{timestamp}-{userId}.png`
 
 如果环境变量未配置，契约测试会自动跳过（使用 `it.skip`）。
 
@@ -140,7 +142,7 @@ npm run test:contract tests/contract/api-contract.test.js
 ### 5. 文件管理 (3 测试)
 - ✅ POST /upload-url - 获取 S3 预签名上传 URL
 - ✅ POST /file-url - 获取文件访问 URL
-- ✅ GET /avatar/{userId} - 获取用户头像 URL
+- ✅ GET /avatar/{userId}?key=... - 获取用户头像 URL（需要配置 CONTRACT_AVATAR_USER_ID/KEY）
 
 ### 6. 错误处理 (3 测试)
 - ✅ 未授权请求返回 401/403

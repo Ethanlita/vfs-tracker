@@ -74,6 +74,10 @@ export const profileSchema = Joi.object({
     .allow('', null)
     .optional()
     .description('用户头像 URL'),
+  avatarKey: Joi.string()
+    .allow('', null)
+    .optional()
+    .description('用户头像在 S3 中的对象键，用于生成临时访问 URL'),
   isNamePublic: Joi.boolean()
     .required()
     .description('是否公开用户名称'),

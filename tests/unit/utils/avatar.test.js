@@ -149,39 +149,38 @@ describe('avatar.js 单元测试', () => {
       vi.spyOn(api, 'getAvatarUrl');
     });
 
-    it('有 avatarKey 且 API 成功时应该返回上传的头像', async () => {
+    it('有 userId 且提供 avatarKey 时应该调用 API 并返回头像', async () => {
       api.getAvatarUrl.mockResolvedValue('https://s3.signed-url.com/avatar.jpg');
 
       const user = {
         userId: 'user-123',
         attributes: {
-          sub: 'user-123',
-          avatarKey: 's3-avatar-key',
           nickname: 'Alice'
         }
       };
+      const avatarKey = 'avatars/user-123/latest.png';
 
-      const url = await getUserAvatarUrl(user, 40);
+      const url = await getUserAvatarUrl(user, 40, avatarKey);
 
       expect(url).toBe('https://s3.signed-url.com/avatar.jpg');
-      expect(api.getAvatarUrl).toHaveBeenCalledWith('user-123');
+      expect(api.getAvatarUrl).toHaveBeenCalledWith('user-123', avatarKey);
     });
 
-    it('有 avatarKey 但没有 userId 时应该使用 sub', async () => {
+    it('没有 userId 时应该使用 sub 调用 API', async () => {
       api.getAvatarUrl.mockResolvedValue('https://s3.signed-url.com/avatar.jpg');
 
       const user = {
         attributes: {
           sub: 'sub-456',
-          avatarKey: 's3-avatar-key',
           nickname: 'Bob'
         }
       };
+      const avatarKey = 'avatars/sub-456/latest.png';
 
-      const url = await getUserAvatarUrl(user, 40);
+      const url = await getUserAvatarUrl(user, 40, avatarKey);
 
       expect(url).toBe('https://s3.signed-url.com/avatar.jpg');
-      expect(api.getAvatarUrl).toHaveBeenCalledWith('sub-456');
+      expect(api.getAvatarUrl).toHaveBeenCalledWith('sub-456', avatarKey);
     });
 
     it('API 失败时应该回退到生成的头像', async () => {
@@ -190,12 +189,11 @@ describe('avatar.js 单元测试', () => {
       const user = {
         userId: 'user-123',
         attributes: {
-          avatarKey: 's3-avatar-key',
           nickname: 'Charlie'
         }
       };
 
-      const url = await getUserAvatarUrl(user, 40);
+      const url = await getUserAvatarUrl(user, 40, 'avatars/user-123/latest.png');
 
       expect(url).toContain('ui-avatars.com');
       expect(url).toContain('name=C'); // Charlie 的首字母
@@ -208,29 +206,25 @@ describe('avatar.js 单元测试', () => {
       const user = {
         userId: 'user-123',
         attributes: {
-          avatarKey: 's3-avatar-key',
           nickname: 'Diana'
         }
       };
 
-      const url = await getUserAvatarUrl(user, 40);
+      const url = await getUserAvatarUrl(user, 40, 'avatars/user-123/latest.png');
 
       expect(url).toContain('ui-avatars.com');
       expect(url).toContain('name=D');
     });
 
-    it('没有 avatarKey 时应该直接生成头像', async () => {
+    it('缺少 avatarKey 时应该直接返回生成的头像且不调用 API', async () => {
       const user = {
-        userId: 'user-123',
-        attributes: {
-          nickname: 'Eve'
-        }
+        userId: 'user-789',
+        attributes: { nickname: 'NoKey' }
       };
 
       const url = await getUserAvatarUrl(user, 40);
 
       expect(url).toContain('ui-avatars.com');
-      expect(url).toContain('name=E');
       expect(api.getAvatarUrl).not.toHaveBeenCalled();
     });
 
@@ -395,11 +389,9 @@ describe('avatar.js 单元测试', () => {
       // 验证 console.log 被调用
       expect(console.log).toHaveBeenCalledWith(
         expect.stringContaining('getUserDisplayName'),
-        expect.any(Object)
-      );
-      expect(console.log).toHaveBeenCalledWith(
-        expect.stringContaining('最终显示名称'),
-        'TestUser'
+        expect.objectContaining({
+          nickname: 'TestUser'
+        })
       );
     });
   });
