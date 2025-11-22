@@ -135,21 +135,24 @@ describe('Upload API 集成测试', () => {
   describe('getAvatarUrl', () => {
     it('应该成功获取用户头像的 URL', async () => {
       const userId = 'us-east-1:complete-user-001';
+      const avatarKey = `avatars/${userId}/latest.png`;
 
-      const avatarUrl = await getAvatarUrl(userId);
+      const avatarUrl = await getAvatarUrl(userId, avatarKey);
 
       expect(avatarUrl).toBeDefined();
       expect(typeof avatarUrl).toBe('string');
-      expect(avatarUrl).toContain('https://');
-      expect(avatarUrl).toContain('avatar');
+  expect(avatarUrl).toContain('https://');
+  expect(avatarUrl).toContain(avatarKey);
     });
 
     it('应该为不同用户返回不同的头像 URL', async () => {
       const userId1 = 'us-east-1:user-001';
       const userId2 = 'us-east-1:user-002';
+      const avatarKey1 = `avatars/${userId1}/latest.png`;
+      const avatarKey2 = `avatars/${userId2}/latest.png`;
 
-      const avatarUrl1 = await getAvatarUrl(userId1);
-      const avatarUrl2 = await getAvatarUrl(userId2);
+      const avatarUrl1 = await getAvatarUrl(userId1, avatarKey1);
+      const avatarUrl2 = await getAvatarUrl(userId2, avatarKey2);
 
       expect(avatarUrl1).toBeDefined();
       expect(avatarUrl2).toBeDefined();
@@ -160,20 +163,17 @@ describe('Upload API 集成测试', () => {
 
     it('头像 URL 应该可以公开访问或包含预签名', async () => {
       const userId = 'us-east-1:complete-user-001';
+      const avatarKey = `avatars/${userId}/latest.png`;
 
-      const avatarUrl = await getAvatarUrl(userId);
+      const avatarUrl = await getAvatarUrl(userId, avatarKey);
 
       expect(avatarUrl).toContain('https://');
     });
 
-    it('应该处理没有头像的用户情况', async () => {
+    it('缺少 avatarKey 时应该抛出错误', async () => {
       const userId = 'us-east-1:user-without-avatar';
 
-      const avatarUrl = await getAvatarUrl(userId);
-
-      // 应该返回默认头像或空 URL
-      expect(avatarUrl).toBeDefined();
-      expect(typeof avatarUrl).toBe('string');
+      await expect(getAvatarUrl(userId)).rejects.toThrow('avatarKey is required');
     });
   });
 
@@ -233,10 +233,12 @@ describe('Upload API 集成测试', () => {
     it('所有返回的 URL 应该是有效的 URL 格式', async () => {
       const fileKey = 'test/file.mp3';
       const contentType = 'audio/mpeg';
+      const userId = 'us-east-1:test-user';
+      const avatarKey = `avatars/${userId}/latest.png`;
 
       const uploadUrl = await getUploadUrl(fileKey, contentType);
       const fileUrl = await getFileUrl(fileKey);
-      const avatarUrl = await getAvatarUrl('us-east-1:test-user');
+      const avatarUrl = await getAvatarUrl(userId, avatarKey);
 
       // 验证 URL 格式
       [uploadUrl, fileUrl, avatarUrl].forEach(url => {

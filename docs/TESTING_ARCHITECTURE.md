@@ -181,7 +181,7 @@ describe('契约测试: GET /all-events', () => {
 - PUT `/user/:userId` - 更新用户资料
 - POST `/upload-url` - 获取上传 URL
 - POST `/file-url` - 获取文件 URL
-- GET `/avatar/:userId` - 获取头像 URL
+- GET `/avatar/:userId` - 获取头像 URL（调用时需附加 `?key=avatars/{userId}/...`）
 
 ---
 

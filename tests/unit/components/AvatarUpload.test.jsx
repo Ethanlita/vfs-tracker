@@ -141,10 +141,13 @@ describe('AvatarUpload 组件测试', () => {
       await user.click(triggerButton);
 
       expect(mockOnAvatarUpdate).toHaveBeenCalledTimes(1);
-      expect(mockOnAvatarUpdate).toHaveBeenCalledWith('avatar-key-123');
+      expect(mockOnAvatarUpdate).toHaveBeenCalledWith({
+        fileUrl: 'https://s3.example.com/avatar.jpg',
+        fileKey: 'avatar-key-123',
+      });
     });
 
-    it('应该传递文件key而不是URL', async () => {
+    it('应该传递文件key和URL对象', async () => {
       const user = userEvent.setup();
       
       render(
@@ -157,10 +160,13 @@ describe('AvatarUpload 组件测试', () => {
       const triggerButton = screen.getByTestId('trigger-file-update');
       await user.click(triggerButton);
 
-      // 确保传递的是fileKey,不是fileUrl
+      // 确保传递的是包含 fileKey 与 fileUrl 的对象，方便父组件即时更新
       const callArg = mockOnAvatarUpdate.mock.calls[0][0];
-      expect(callArg).toBe('avatar-key-123');
-      expect(callArg).not.toContain('https://');
+      expect(callArg).toMatchObject({
+        fileKey: 'avatar-key-123',
+        fileUrl: 'https://s3.example.com/avatar.jpg',
+      });
+      expect(callArg.fileKey).not.toContain('https://');
     });
 
     it('多次更新应该每次都调用onAvatarUpdate', async () => {

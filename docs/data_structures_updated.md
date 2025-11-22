@@ -25,6 +25,7 @@
 | :--- | :--- | :--- | :--- |
 | `areSocialsPublic` | `Boolean` | Yes | 是否公开社交账户链接 |
 | `bio` | `String` | No | 用户自我介绍。**预留字段，暂未实现**。 |
+| `avatarKey` | `String` | No | 用户头像在 S3 中的对象键，形如 `avatars/{userId}/{timestamp}-{userId}.png`。前端通过该键生成临时访问 URL。 |
 | `isNamePublic` | `Boolean` | Yes | 是否公开用户名称 |
 | `name` | `String` | Yes | 用户在公共仪表板上显示的名字。用户选择不公开时展示"（非公开）"。 |
 | `nickname` | `String` | Yes | 用户昵称。在 /mypage 与 Auth 组件中展示。**必须与 Cognito `nickname` 保持严格同步**。当 Cognito 的 nickname 发生变化时（通过 Cognito API 修改），必须同步更新此字段。 |

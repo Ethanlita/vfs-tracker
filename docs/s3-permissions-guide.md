@@ -98,6 +98,6 @@ vfs-tracker-objstor/
 - ✅ 可以为不同用户生成不同权限的URL
 
 ## 需要实现的API端点：
-1. `/api/avatar/{userId}` - 获取头像预签名URL
+1. `/api/avatar/{userId}?key=avatars/{userId}/...` - 获取头像预签名URL
 2. `/api/file/{fileKey}` - 获取文件预签名URL
 3. `/api/upload-url` - 获取上传预签名URL

@@ -52,11 +52,12 @@ export const generateAvatar = (name, size = 40) => {
  * @param {number} size - 头像尺寸，默认40
  * @returns {string} 头像URL
  */
-export const getUserAvatarUrl = async (user, size = 40) => {
-  if (user?.attributes?.avatarKey) {
+export const getUserAvatarUrl = async (user, size = 40, avatarKey) => {
+  const userId = user?.userId || user?.attributes?.sub;
+
+  if (userId && avatarKey) {
     try {
-      const url = await getAvatarUrl(user?.userId || user?.attributes?.sub);
-      if (url) return url;
+      return await getAvatarUrl(userId, avatarKey);
     } catch (error) {
       console.error('获取头像URL失败:', error);
     }

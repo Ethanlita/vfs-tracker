@@ -11,6 +11,7 @@ export const completeProfileUser = {
     nickname: 'zhangsan',
     bio: '我是一名嗓音训练爱好者，正在探索声音女性化的旅程。',
     avatarUrl: 'https://mock-cdn.cloudfront.net/avatars/us-east-1:complete-user-001/avatar.jpg',
+    avatarKey: 'avatars/us-east-1:complete-user-001/latest.png',
     isNamePublic: true,
     areSocialsPublic: true,
     socials: [

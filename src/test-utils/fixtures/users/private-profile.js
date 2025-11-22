@@ -10,6 +10,7 @@ export const privateProfileUser = {
     name: '王小红',
     nickname: 'wangxiaohong',
     bio: null,
+    avatarKey: null,
     isNamePublic: false,
     areSocialsPublic: false,
     socials: [

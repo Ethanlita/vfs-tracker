@@ -35,6 +35,7 @@ Stores the profile and preferences for each user. The `email` is used as the pri
 | :--- | :--- | :--- | :--- |
 | `name` | `String` | No | The user's name. |
 | `isNamePublic` | `Boolean` | No | If `true`, the name is shown on the public dashboard. Defaults to `false`. |
+| `avatarKey` | `String` | No | S3 object key of the uploaded avatar (e.g., `avatars/{userId}/{timestamp}-{userId}.png`). Used to request presigned download URLs. |
 | `socials` | `Array<SocialAccount>` | No | A list of the user's social media accounts. |
 | `areSocialsPublic`| `Boolean` | No | If `true`, social accounts are shown on the public dashboard. Defaults to `false`.|
 
