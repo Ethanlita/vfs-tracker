@@ -34,7 +34,7 @@ export const handler = async (event) => {
 
         // 从路径参数获取用户ID
         const userId = event.pathParameters?.userId;
-av        // 从查询参数获取具体的 avatarKey（必填）
+        // 从查询参数获取具体的 avatarKey（必填）
         const specificKey = event.queryStringParameters?.key;
 
         if (!userId) {
