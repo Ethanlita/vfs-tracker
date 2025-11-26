@@ -54,6 +54,7 @@ const Home = () => {
             onClick={() => navigate('/login?returnUrl=/')}
             role="button"
             tabIndex={0}
+            aria-label="点击登录以查看个人事件时间线"
             onKeyDown={(e) => {
               if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault();
