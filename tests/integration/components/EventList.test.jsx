@@ -113,7 +113,8 @@ describe('EventList 组件集成测试', () => {
       await waitFor(() => {
         // EventList使用toLocaleDateString(),可能输出为 "6/21/2025" (月/日/年) 或 "2024/1/15" (年/月/日)
         // 支持月份和日期的单双位数，以及不同的日期格式
-        const datePattern = /\d{1,4}[/-]\d{1,2}[/-]\d{1,4}/;
+        // 确保年份始终为 4 位数
+        const datePattern = /\d{1,2}[/-]\d{1,2}[/-]\d{4}|\d{4}[/-]\d{1,2}[/-]\d{1,2}/;
         const elements = screen.getAllByText(datePattern);
         expect(elements.length).toBeGreaterThan(0);
       });

@@ -2,6 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { X, Plus } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
+// 常量定义在组件外部，避免不必要的重新渲染
+const STORAGE_KEY_PREFIX = 'vfs-reminder-dismissed-';
+const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000; // 7天的毫秒数
+
 /**
  * VFSReminderBanner 组件
  * 
@@ -17,8 +21,7 @@ import { useNavigate } from 'react-router-dom';
 const VFSReminderBanner = ({ events, userId }) => {
   const navigate = useNavigate();
   const [isVisible, setIsVisible] = useState(false);
-  const STORAGE_KEY = `vfs-reminder-dismissed-${userId}`;
-  const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000; // 7天的毫秒数
+  const STORAGE_KEY = `${STORAGE_KEY_PREFIX}${userId}`;
 
   useEffect(() => {
     // 检查用户是否有 VFS 相关事件
@@ -50,7 +53,7 @@ const VFSReminderBanner = ({ events, userId }) => {
 
     // 显示横幅
     setIsVisible(true);
-  }, [events, userId, STORAGE_KEY, ONE_WEEK_MS]);
+  }, [events, userId]); // 只依赖真正会变化的值
 
   const handleClose = () => {
     // 记录关闭时间

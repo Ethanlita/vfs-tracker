@@ -85,15 +85,13 @@ const Button = ({ type = 'submit', onClick, children, variant = 'primary', disab
  * API 兼容 Amplify Authenticator:
  * - 支持 children 函数模式: <CustomAuthenticator>{({ user }) => ...}</CustomAuthenticator>
  * - 支持 hideSignUp prop 隐藏注册功能
- * - 支持 loginMechanisms prop 设置登录方式
  * 
  * @param {Object} props
  * @param {Function} [props.children] - 认证成功后的渲染函数，接收 { user } 参数（兼容 Amplify）
  * @param {boolean} [props.hideSignUp=false] - 是否隐藏注册链接
- * @param {Array<string>} [props.loginMechanisms=['username', 'email']] - 登录方式
  * @returns {JSX.Element}
  */
-const CustomAuthenticator = ({ children, hideSignUp = false, loginMechanisms = ['username', 'email'] }) => {
+const CustomAuthenticator = ({ children, hideSignUp = false }) => {
   const [mode, setMode] = useState('signIn'); // 'signIn' | 'signUp' | 'confirmSignUp' | 'forgotPassword' | 'confirmReset' | 'forceChangePassword'
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -184,16 +182,20 @@ const CustomAuthenticator = ({ children, hideSignUp = false, loginMechanisms = [
     } catch (err) {
       console.error('登录错误:', err);
       if (err.name === 'UserNotConfirmedException') {
+        setLoading(false); // 先关闭登录loading
+        setMode('confirmSignUp');
         // 自动重新发送验证码
         try {
+          setLoading(true); // 为重发验证码开启loading
           await resendSignUpCode({ username: formData.username });
           setSuccessMessage('验证码已重新发送到您的邮箱，请查收并输入验证码。');
           setResendCooldown(120); // 启动 120 秒冷却
         } catch (resendErr) {
           console.error('[CustomAuthenticator] 自动重发验证码失败:', resendErr);
           setError('您的账号尚未验证邮箱。请在验证页面点击"重新发送"按钮获取验证码。');
+        } finally {
+          setLoading(false); // 重发操作完成
         }
-        setMode('confirmSignUp');
       } else if (err.name === 'NotAuthorizedException') {
         setError('用户名或密码错误');
       } else {
@@ -274,7 +276,6 @@ const CustomAuthenticator = ({ children, hideSignUp = false, loginMechanisms = [
         confirmationCode: formData.code
       });
       
-      setLoading(false); // 验证成功，关闭加载状态
       setSuccessMessage('🎉 邮箱验证成功！即将跳转到登录页面...');
       
       // 2秒后跳转到登录页面
@@ -283,7 +284,7 @@ const CustomAuthenticator = ({ children, hideSignUp = false, loginMechanisms = [
         resetForm();
       }, 2000);
       
-      return; // 提前返回，不执行 finally 块
+      return;
     } catch (err) {
       console.error('验证错误:', err);
       if (err.name === 'CodeMismatchException') {

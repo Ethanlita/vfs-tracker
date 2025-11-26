@@ -127,7 +127,7 @@ describe('LoginPage Component', () => {
     const originalGetConfig = Amplify.getConfig;
     Amplify.getConfig = vi.fn(() => ({}));
 
-    render(
+    const { unmount } = render(
       <MemoryRouter initialEntries={['/login']}>
         <LoginPage />
       </MemoryRouter>
@@ -135,7 +135,8 @@ describe('LoginPage Component', () => {
 
     expect(screen.getByText('正在加载认证服务...')).toBeInTheDocument();
     
-    // 恢复原始函数
+    // 清理：先卸载组件，然后恢复原始函数
+    unmount();
     Amplify.getConfig = originalGetConfig;
   });
 
