@@ -394,7 +394,7 @@ describe('Upload API 集成测试', () => {
         );
 
         try {
-          await getAvatarUrl(testUserId);
+          await getAvatarUrl(testUserId, 'avatars/test-user/avatar.png');
           expect.fail('Should have thrown ApiError');
         } catch (error) {
           expect(error).toBeInstanceOf(ApiError);
@@ -413,7 +413,7 @@ describe('Upload API 集成测试', () => {
         );
 
         try {
-          await getAvatarUrl(testUserId);
+          await getAvatarUrl(testUserId, 'avatars/test-user/avatar.png');
           expect.fail('Should have thrown ApiError');
         } catch (error) {
           expect(error).toBeInstanceOf(ApiError);

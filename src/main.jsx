@@ -3,11 +3,17 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 // 暂时不导入 App，等 Amplify 配置完成后再导入
 import { Amplify } from 'aws-amplify';
+import { I18n } from 'aws-amplify/utils';
+import { translations } from '@aws-amplify/ui-react';
 import '@aws-amplify/ui-react/styles.css';
 import { BrowserRouter } from 'react-router-dom';
 import { logEnvReadiness, getFullApiEndpoint } from './env.js';
 
 logEnvReadiness('main');
+
+// 配置 Amplify UI 中文翻译
+I18n.putVocabularies(translations);
+I18n.setLanguage('zh');
 
 // ============================================
 // 环境变量验证 (Environment Variable Validation)

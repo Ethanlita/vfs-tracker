@@ -57,7 +57,11 @@ export const getUserAvatarUrl = async (user, size = 40, avatarKey) => {
 
   if (userId && avatarKey) {
     try {
-      return await getAvatarUrl(userId, avatarKey);
+      const url = await getAvatarUrl(userId, avatarKey);
+      // 如果 API 返回有效的 URL，使用它；否则回退到生成的头像
+      if (url) {
+        return url;
+      }
     } catch (error) {
       console.error('获取头像URL失败:', error);
     }

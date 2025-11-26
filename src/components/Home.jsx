@@ -49,10 +49,22 @@ const Home = () => {
         </div>
 
         <div id="content-display" className="px-4 mt-8">
-          <div className="bg-white rounded-xl shadow-md max-w-4xl mx-auto px-12 py-4">
+          <div 
+            className="bg-white rounded-xl shadow-md max-w-4xl mx-auto px-12 py-4 cursor-pointer hover:shadow-lg transition-shadow"
+            onClick={() => navigate('/login?returnUrl=/')}
+            role="button"
+            tabIndex={0}
+            aria-label="点击登录以查看个人事件时间线"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                navigate('/login?returnUrl=/');
+              }
+            }}
+          >
             <h2 className="text-2xl font-bold mb-8">功能区</h2>
             <p className="text-gray-600 leading-relaxed text-lg mb-6">
-              登录后，这里将显示您的个人事件时间线。现在，您可以先浏览公开的数据汇总。
+              点击此处登录后，这里将显示您的个人事件时间线。现在，您可以先浏览公开的数据汇总。
             </p>
           </div>
         </div>

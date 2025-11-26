@@ -14,6 +14,7 @@ import { getEncouragingMessage, getEventsByUserId } from '../api';
 import { useAsync } from '../utils/useAsync.js';
 import { useAuth } from '../contexts/AuthContext.jsx';
 import { ApiErrorNotice } from './ApiErrorNotice.jsx';
+import VFSReminderBanner from './VFSReminderBanner.jsx';
 
 ChartJS.register(
   CategoryScale,
@@ -375,6 +376,17 @@ const Timeline = () => {
       {anyError && (
         <div className="mb-8">
           <ApiErrorNotice error={anyError} onRetry={handleRetry} />
+        </div>
+      )}
+
+      {/* VFS 记录提醒横幅 */}
+      {eventsAsync.value && currentUserId && (
+        <div className="mb-8 relative z-10">
+          <div className="flex justify-center">
+            <div className="max-w-md sm:max-w-lg md:max-w-xl lg:max-w-2xl w-full">
+              <VFSReminderBanner events={eventsAsync.value} userId={currentUserId} />
+            </div>
+          </div>
         </div>
       )}
 
