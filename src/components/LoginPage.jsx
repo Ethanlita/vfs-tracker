@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useAuthenticator } from '@aws-amplify/ui-react';
+import { Authenticator, useAuthenticator } from '@aws-amplify/ui-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Amplify } from 'aws-amplify';
@@ -32,6 +32,7 @@ const LoginPage = () => {
   const message = searchParams.get('message');
 
   const [configReady, setConfigReady] = useState(false);
+  const [useLegacyAuth, setUseLegacyAuth] = useState(false);
 
   // 检查 Amplify 配置
   useEffect(() => {
@@ -87,8 +88,8 @@ const LoginPage = () => {
           <h1 className="text-4xl font-bold tracking-tight bg-gradient-to-r from-pink-700 to-pink-500 bg-clip-text text-transparent mb-2">
             VFS Tracker
           </h1>
-          <h2 className="text-xl font-semibold text-grey-600 mb-4">
-            嗓音女性化跟踪工具
+          <h2 className="text-xl font-semibold text-gray-600 mb-4">
+            嗓音数据测试和跟踪工具
           </h2>
           
           {message ? (
@@ -104,22 +105,60 @@ const LoginPage = () => {
         
         {/* 登录表单区域 */}
         <div className="bg-white py-8 px-6 shadow-xl rounded-2xl border border-gray-100">
-          <CustomAuthenticator 
-            hideSignUp={false}
-            loginMechanisms={['username', 'email']}
-          >
-            {({ user }) => {
-              // 登录成功后立即跳转（兼容 Amplify Authenticator API）
-              if (user) {
-                console.log('[LoginPage] 登录成功，即将跳转至:', returnUrl);
-                // 确保 AuthContext 更新状态
-                handleAuthSuccess(user);
-                // 立即跳转
-                navigate(returnUrl, { replace: true });
-              }
-              return null;
-            }}
-          </CustomAuthenticator>
+          {!useLegacyAuth ? (
+            <>
+              <CustomAuthenticator 
+                hideSignUp={false}
+                loginMechanisms={['username', 'email']}
+              >
+                {({ user }) => {
+                  // 登录成功后立即跳转（兼容 Amplify Authenticator API）
+                  if (user) {
+                    console.log('[LoginPage] 登录成功，即将跳转至:', returnUrl);
+                    // 确保 AuthContext 更新状态
+                    handleAuthSuccess(user);
+                    // 立即跳转
+                    navigate(returnUrl, { replace: true });
+                  }
+                  return null;
+                }}
+              </CustomAuthenticator>
+
+              <div className="mt-4 text-center text-sm">
+                <span className="text-gray-600">遇到了问题？</span>
+                <span className="mx-2 text-gray-300">|</span>
+                <button
+                  type="button"
+                  onClick={() => setUseLegacyAuth(true)}
+                  className="text-pink-600 hover:text-pink-500 font-medium"
+                >
+                  切换到旧版登录页
+                </button>
+              </div>
+            </>
+          ) : (
+            <>
+              <Authenticator hideSignUp={false} loginMechanisms={['username', 'email']}>
+                {({ user }) => {
+                  if (user) {
+                    handleAuthSuccess(user);
+                    navigate(returnUrl, { replace: true });
+                  }
+                  return null;
+                }}
+              </Authenticator>
+
+              <div className="mt-4 text-center">
+                <button
+                  type="button"
+                  onClick={() => setUseLegacyAuth(false)}
+                  className="text-pink-600 hover:text-pink-500 font-medium"
+                >
+                  切换至新版登录页面
+                </button>
+              </div>
+            </>
+          )}
         </div>
 
         {/* 底部链接 */}

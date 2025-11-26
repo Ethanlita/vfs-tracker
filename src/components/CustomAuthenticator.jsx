@@ -504,7 +504,10 @@ const CustomAuthenticator = ({ children, hideSignUp = false, loginMechanisms = [
             >
               立即登录
             </button>
-            {' '}|{' '}
+          </p>
+
+          <p className="mt-1 text-sm text-gray-600">
+            已注册但还没验证？{' '}
             <button
               type="button"
               onClick={() => { setMode('confirmSignUp'); setError(''); }}
