@@ -1,9 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
-import { BrowserRouter, MemoryRouter } from 'react-router-dom';
+import { MemoryRouter } from 'react-router-dom';
 import LoginPage from '../../../src/components/LoginPage';
-import { AuthProvider } from '../../../src/contexts/AuthContext';
-import { Authenticator } from '@aws-amplify/ui-react';
 
 // Mock Amplify
 vi.mock('aws-amplify', () => ({
@@ -73,7 +71,7 @@ describe('LoginPage Component', () => {
     });
 
     // 验证标题和副标题
-    expect(screen.getByText('嗓音女性化跟踪工具')).toBeInTheDocument();
+    expect(screen.getByText('嗓音数据测试和跟踪工具')).toBeInTheDocument();
     
     // 验证默认提示信息
     expect(screen.getByText(/请登录以继续访问您的嗓音数据和分析/i)).toBeInTheDocument();
@@ -96,16 +94,31 @@ describe('LoginPage Component', () => {
     });
   });
 
-  it('应该显示 Authenticator 组件', async () => {
+  it('应该默认显示 CustomAuthenticator 登录表单', async () => {
     render(
       <MemoryRouter initialEntries={['/login']}>
         <LoginPage />
       </MemoryRouter>
     );
 
+    // 等待配置加载完成（先看到 VFS Tracker 标题）
     await waitFor(() => {
-      expect(screen.getByTestId('authenticator-mock')).toBeInTheDocument();
+      expect(screen.getByText('VFS Tracker')).toBeInTheDocument();
     });
+
+    // 验证 CustomAuthenticator 的登录表单元素
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText('用户名或邮箱')).toBeInTheDocument();
+    }, { timeout: 3000 });
+    
+    expect(screen.getByPlaceholderText('密码')).toBeInTheDocument();
+    
+    // 使用 getAllByRole 获取所有登录按钮，验证至少有一个
+    const loginButtons = screen.getAllByRole('button', { name: /登录/i });
+    expect(loginButtons.length).toBeGreaterThan(0);
+    
+    // 验证切换按钮存在
+    expect(screen.getByText(/切换到旧版登录页/i)).toBeInTheDocument();
   });
 
   it('应该在配置加载时显示加载指示器', async () => {

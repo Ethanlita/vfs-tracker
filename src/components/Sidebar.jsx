@@ -56,20 +56,16 @@ const Sidebar = ({ open, onClose, user, avatarUrl, docLink, AuthComponent }) => 
         return false;
       }
 
+      // 离线模式：只显示离线可用的功能
       if (!isOnline) {
-        if (item.requiresAuth) {
-          return false;
-        }
         return item.offlineSafe !== false;
       }
 
-      if (item.requiresAuth && !isAuthenticated) {
-        return false;
-      }
-
+      // 在线模式：显示所有功能（包括需要登录的）
+      // 未登录用户点击时会自动跳转到登录页
       return true;
     });
-  }, [isAuthenticated, isOnline]);
+  }, [isOnline]);
 
   useEffect(() => {
     if (typeof window === 'undefined') {

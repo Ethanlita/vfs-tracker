@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { signIn, signUp, confirmSignUp, resetPassword, confirmResetPassword, resendSignUpCode, confirmSignIn } from 'aws-amplify/auth';
 import { Mail, Lock, User, AlertCircle, Loader2, Eye, EyeOff } from 'lucide-react';
 
@@ -99,7 +99,9 @@ const CustomAuthenticator = ({ children, hideSignUp = false, loginMechanisms = [
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [tempSignInResult, setTempSignInResult] = useState(null); // 保存需要完成的登录结果
+  
+  // 重新发送验证码的冷却计时器
+  const [resendCooldown, setResendCooldown] = useState(0);
   
   // 表单数据
   const [formData, setFormData] = useState({
@@ -132,6 +134,16 @@ const CustomAuthenticator = ({ children, hideSignUp = false, loginMechanisms = [
     setError('');
   };
 
+  // 冷却计时器倒计时
+  useEffect(() => {
+    if (resendCooldown > 0) {
+      const timer = setTimeout(() => {
+        setResendCooldown(prev => prev - 1);
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [resendCooldown]);
+
   // 登录
   const handleSignIn = async (e) => {
     e.preventDefault();
@@ -149,26 +161,38 @@ const CustomAuthenticator = ({ children, hideSignUp = false, loginMechanisms = [
       // 检查是否需要修改临时密码
       if (nextStep?.signInStep === 'CONFIRM_SIGN_IN_WITH_NEW_PASSWORD_REQUIRED') {
         console.log('[CustomAuthenticator] 需要修改临时密码');
-        setTempSignInResult(result);
         setSuccessMessage('检测到您正在使用临时密码，请设置新密码');
         setMode('forceChangePassword');
         // 清空密码字段，准备输入新密码
         setFormData(prev => ({ ...prev, password: '', confirmPassword: '' }));
       } else if (isSignedIn) {
         // 登录成功，获取当前用户信息并调用 children 函数（兼容 Amplify API）
-        const { getCurrentUser } = await import('aws-amplify/auth');
-        const user = await getCurrentUser();
-        console.log('[CustomAuthenticator] 登录成功，用户:', user);
-        
-        // 如果提供了 children 函数，调用它（Amplify 标准模式）
-        if (typeof children === 'function') {
-          children({ user });
+        try {
+          const { getCurrentUser } = await import('aws-amplify/auth');
+          const user = await getCurrentUser();
+          console.log('[CustomAuthenticator] 登录成功，用户:', user);
+          
+          // 如果提供了 children 函数，调用它（Amplify 标准模式）
+          if (typeof children === 'function') {
+            children({ user });
+          }
+        } catch (userErr) {
+          console.error('[CustomAuthenticator] 获取用户信息失败:', userErr);
+          setError('登录成功，但无法获取用户信息。请刷新页面或重新登录。');
         }
       }
     } catch (err) {
       console.error('登录错误:', err);
       if (err.name === 'UserNotConfirmedException') {
-        setError('请先验证您的邮箱。我们已重新发送验证码。');
+        // 自动重新发送验证码
+        try {
+          await resendSignUpCode({ username: formData.username });
+          setSuccessMessage('验证码已重新发送到您的邮箱，请查收并输入验证码。');
+          setResendCooldown(120); // 启动 120 秒冷却
+        } catch (resendErr) {
+          console.error('[CustomAuthenticator] 自动重发验证码失败:', resendErr);
+          setError('您的账号尚未验证邮箱。请在验证页面点击"重新发送"按钮获取验证码。');
+        }
         setMode('confirmSignUp');
       } else if (err.name === 'NotAuthorizedException') {
         setError('用户名或密码错误');
@@ -290,12 +314,20 @@ const CustomAuthenticator = ({ children, hideSignUp = false, loginMechanisms = [
       return;
     }
 
+    // 检查冷却时间
+    if (resendCooldown > 0) {
+      setError(`请等待 ${resendCooldown} 秒后再重新发送`);
+      return;
+    }
+
     setLoading(true);
     setError('');
     
     try {
       await resendSignUpCode({ username: formData.username });
       setSuccessMessage('验证码已重新发送到您的邮箱，请查收');
+      // 启动 120 秒冷却计时器
+      setResendCooldown(120);
     } catch (err) {
       console.error('重新发送验证码错误:', err);
       if (err.name === 'UserNotFoundException') {
@@ -395,15 +427,20 @@ const CustomAuthenticator = ({ children, hideSignUp = false, loginMechanisms = [
       });
       
       // 修改成功，获取用户信息并完成登录
-      const { getCurrentUser } = await import('aws-amplify/auth');
-      const user = await getCurrentUser();
-      console.log('[CustomAuthenticator] 临时密码修改成功，登录完成:', user);
-      
-      setSuccessMessage('密码修改成功！正在登录...');
-      
-      // 调用 children 函数完成登录流程
-      if (typeof children === 'function') {
-        children({ user });
+      try {
+        const { getCurrentUser } = await import('aws-amplify/auth');
+        const user = await getCurrentUser();
+        console.log('[CustomAuthenticator] 临时密码修改成功，登录完成:', user);
+        
+        setSuccessMessage('密码修改成功！正在登录...');
+        
+        // 调用 children 函数完成登录流程
+        if (typeof children === 'function') {
+          children({ user });
+        }
+      } catch (userErr) {
+        console.error('[CustomAuthenticator] 密码修改成功，但获取用户信息失败:', userErr);
+        setError('密码已修改成功，但登录信息获取失败。请刷新页面或重新登录。');
       }
     } catch (err) {
       console.error('修改临时密码错误:', err);
@@ -632,10 +669,10 @@ const CustomAuthenticator = ({ children, hideSignUp = false, loginMechanisms = [
             <button
               type="button"
               onClick={handleResendSignUpCode}
-              disabled={loading}
+              disabled={loading || resendCooldown > 0}
               className="text-pink-600 hover:text-pink-500 disabled:text-gray-400"
             >
-              重新发送验证码
+              {resendCooldown > 0 ? `重新发送 (${resendCooldown}s)` : '重新发送验证码'}
             </button>
             <button
               type="button"

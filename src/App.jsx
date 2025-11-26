@@ -76,9 +76,16 @@ const ProtectedRoute = () => {
     );
   }
 
-  // @en If the user is not authenticated, redirect them to the home page.
-  // @zh 如果用户未通过身份验证，则将他们重定向到主页。
-  return authStatus === 'authenticated' ? <Outlet /> : <Navigate to="/" replace />;
+  // @en If the user is not authenticated, redirect them to the login page with returnUrl.
+  // @zh 如果用户未通过身份验证，则将他们重定向到登录页面，并传递返回地址。
+  if (authStatus === 'authenticated') {
+    return <Outlet />;
+  }
+  
+  // 构建登录页面 URL，带上当前路径作为 returnUrl
+  const currentPath = location.pathname + location.search;
+  const loginUrl = `/login?returnUrl=${encodeURIComponent(currentPath)}`;
+  return <Navigate to={loginUrl} replace />;
 };
 
 /**

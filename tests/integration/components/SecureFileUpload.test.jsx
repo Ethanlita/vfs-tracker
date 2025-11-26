@@ -296,7 +296,10 @@ describe('SecureFileUpload Component', () => {
       });
 
       await waitFor(() => {
-        expect(api.getAvatarUrl).toHaveBeenCalledWith('test-user-123');
+        expect(api.getAvatarUrl).toHaveBeenCalledWith(
+          'test-user-123',
+          expect.stringContaining('avatars/test-user-123/')
+        );
       });
 
       await waitFor(() => {
@@ -398,7 +401,7 @@ describe('SecureFileUpload Component', () => {
 
       await waitFor(() => {
         expect(api.getUploadUrl).toHaveBeenCalledWith(
-          `avatars/test-user-123/${now}_avatar.png`,
+          `avatars/test-user-123/${now}-test-user-123.png`,
           'image/png'
         );
       });

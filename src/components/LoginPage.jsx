@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Authenticator, useAuthenticator } from '@aws-amplify/ui-react';
+import { Authenticator } from '@aws-amplify/ui-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Amplify } from 'aws-amplify';
@@ -23,8 +23,7 @@ import CustomAuthenticator from './CustomAuthenticator';
 const LoginPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { handleAuthSuccess, authInitialized } = useAuth();
-  const { authStatus, user } = useAuthenticator((context) => [context.authStatus, context.user]);
+  const { user, isAuthenticated, handleAuthSuccess, authInitialized } = useAuth();
   
   // 获取 returnUrl，默认为 /mypage
   const searchParams = new URLSearchParams(location.search);
@@ -34,32 +33,43 @@ const LoginPage = () => {
   const [configReady, setConfigReady] = useState(false);
   const [useLegacyAuth, setUseLegacyAuth] = useState(false);
 
-  // 检查 Amplify 配置
+  // 检查 Amplify 配置（使用轮询机制而非固定延时）
   useEffect(() => {
     const checkConfig = async () => {
-      try {
-        // 简单的延时以确保配置加载（如果需要）
-        await new Promise(resolve => setTimeout(resolve, 100));
-        const config = Amplify.getConfig();
-        if (config?.Auth?.Cognito?.userPoolId) {
-          setConfigReady(true);
+      const pollInterval = 50; // 每 50ms 检查一次
+      const maxWait = 2000; // 最多等待 2 秒
+      let waited = 0;
+      
+      while (waited < maxWait) {
+        try {
+          const config = Amplify.getConfig();
+          if (config?.Auth?.Cognito?.userPoolId) {
+            setConfigReady(true);
+            return;
+          }
+        } catch (err) {
+          console.error('[LoginPage] 配置检查失败:', err);
         }
-      } catch (err) {
-        console.error('[LoginPage] 配置检查失败:', err);
+        
+        await new Promise(resolve => setTimeout(resolve, pollInterval));
+        waited += pollInterval;
       }
+      
+      // 超时后仍然标记为 ready，让组件继续渲染（可能是离线模式）
+      console.warn('[LoginPage] Amplify 配置未在预期时间内加载完成');
+      setConfigReady(true);
     };
     checkConfig();
   }, []);
 
   // 处理登录成功后的跳转
   useEffect(() => {
-    if (authStatus === 'authenticated' && user && authInitialized) {
+    if (isAuthenticated && user && authInitialized) {
       console.log(`[LoginPage] 用户已登录，跳转至: ${returnUrl}`);
-      // 确保 AuthContext 更新状态
-      handleAuthSuccess(user);
+      // 用户已认证，跳转到目标页面
       navigate(returnUrl, { replace: true });
     }
-  }, [authStatus, user, authInitialized, navigate, returnUrl, handleAuthSuccess]);
+  }, [isAuthenticated, user, authInitialized, navigate, returnUrl]);
 
   if (!configReady) {
     return (
