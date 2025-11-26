@@ -237,7 +237,7 @@ describe('App Component', () => {
   });
 
   describe('保护路由', () => {
-    it('未认证用户应该被重定向到首页', async () => {
+    it('未认证用户应该被重定向到登录页', async () => {
       setupAuthenticatedUser('unauthenticated');
       
       render(
@@ -246,12 +246,21 @@ describe('App Component', () => {
         </MemoryRouter>
       );
 
-      // 应该重定向到首页并显示真实的 Home 组件内容 - 使用更精确的查询
+      // 应该重定向到登录页（Issue #62 修改）
+      // 查找登录页的特征元素：VFS Tracker 标题或登录表单
       await waitFor(() => {
-        expect(screen.getByRole('heading', { level: 1, name: /欢迎来到VFS Tracker/i })).toBeInTheDocument();
+        // 登录页应该显示 VFS Tracker 标题和登录相关内容
+        const vfsTrackerHeading = screen.queryByText('VFS Tracker');
+        const customAuthForm = screen.queryByPlaceholderText('用户名或邮箱');
+        const loginText = screen.queryByText(/请登录|正在加载认证服务/i);
+        
+        // 至少应该有其中一个元素（取决于配置加载状态）
+        expect(
+          vfsTrackerHeading || customAuthForm || loginText
+        ).toBeTruthy();
       });
       
-      // 不应该看到 MyPage 的内容（查找特定的 MyPage 元素）
+      // 不应该看到 MyPage 的内容
       expect(screen.queryByRole('heading', { name: /我的页面|个人中心/i })).not.toBeInTheDocument();
     });
 
