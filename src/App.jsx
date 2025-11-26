@@ -13,6 +13,7 @@ import PublicDashboard from './components/PublicDashboard';
 import Home from './components/Home';
 import PostList from './components/PostList';
 import PostViewer from './components/PostViewer';
+import LoginPage from './components/LoginPage';
 
 import APITestPage from './components/APITestPage';
 import ProfileSetupWizard from './components/ProfileSetupWizard';
@@ -197,6 +198,7 @@ const AppContent = () => {
           <Route path="/vfs-effect-preview" element={<VFSEffectPreview />} />
           <Route path="/posts" element={<PostList />} />
           <Route path="/docs" element={<PostViewer />} />
+          <Route path="/login" element={<LoginPage />} />
 
           <Route element={<ProtectedRoute />}>
             <Route path="/mypage" element={<MyPage />} />
