@@ -13,10 +13,6 @@ permissions:
   id-token: write
   contents: read
 
-env:
-  AWS_REGION: us-east-1
-  ECR_REPOSITORY: vfs-tracker-images
-
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
@@ -28,8 +24,8 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::296821242554:role/vfs-tracker-github-actions-role
-          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ secrets.AWS_REGION }}
 
       - name: Login to Amazon ECR
         id: login-ecr
@@ -45,8 +41,8 @@ jobs:
           platforms: linux/arm64
           push: true
           tags: |
-            ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest
-            ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+            ${{ steps.login-ecr.outputs.registry }}/${{ secrets.ECR_REPOSITORY }}:latest
+            ${{ steps.login-ecr.outputs.registry }}/${{ secrets.ECR_REPOSITORY }}:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -54,13 +50,13 @@ jobs:
         run: |
           aws lambda update-function-code \
             --function-name online-praat-analysis \
-            --image-uri ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }} \
-            --region ${{ env.AWS_REGION }} || echo "Lambda function update skipped (function may not exist yet)"
+            --image-uri ${{ steps.login-ecr.outputs.registry }}/${{ secrets.ECR_REPOSITORY }}:${{ github.sha }} \
+            --region ${{ secrets.AWS_REGION }} || echo "Lambda function update skipped (function may not exist yet)"
 
       - name: Output image info
         run: |
           echo "## Docker Image Built" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- **Repository:** ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Repository:** ${{ steps.login-ecr.outputs.registry }}/${{ secrets.ECR_REPOSITORY }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Tags:** latest, ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Platform:** linux/arm64" >> $GITHUB_STEP_SUMMARY

@@ -20,10 +20,6 @@ permissions:
   id-token: write
   contents: read
 
-env:
-  AWS_REGION: us-east-1
-  STACK_NAME: vfs-tracker
-
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -50,8 +46,8 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::296821242554:role/vfs-tracker-github-actions-role
-          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ secrets.AWS_REGION }}
 
       - name: Validate SAM template
         working-directory: ./infra
@@ -65,35 +61,35 @@ jobs:
         working-directory: ./infra
         run: |
           sam deploy \
-            --stack-name ${{ env.STACK_NAME }} \
+            --stack-name ${{ secrets.STACK_NAME }} \
             --parameter-overrides Environment=dev \
             --no-confirm-changeset \
             --no-fail-on-empty-changeset \
             --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND \
-            --s3-bucket vfs-tracker-sam-deployments \
+            --s3-bucket ${{ secrets.SAM_DEPLOYMENT_BUCKET }} \
             --s3-prefix deployments \
-            --resolve-image-repos \
-            --region ${{ env.AWS_REGION }}
+            --image-repositories OnlinePraatAnalysisFunction=${{ secrets.ECR_REPOSITORY_URI }} \
+            --region ${{ secrets.AWS_REGION }}
 
       - name: Output deployment info
         working-directory: ./infra
         run: |
           echo "## 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- **Stack:** ${{ env.STACK_NAME }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Region:** ${{ env.AWS_REGION }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Stack:** ${{ secrets.STACK_NAME }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Region:** ${{ secrets.AWS_REGION }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           
           # Get outputs from stack
           echo "### Stack Outputs" >> $GITHUB_STEP_SUMMARY
           aws cloudformation describe-stacks \
-            --stack-name ${{ env.STACK_NAME }} \
+            --stack-name ${{ secrets.STACK_NAME }} \
             --query "Stacks[0].Outputs[*].[OutputKey,OutputValue]" \
             --output table >> $GITHUB_STEP_SUMMARY 2>/dev/null || echo "Could not retrieve outputs" >> $GITHUB_STEP_SUMMARY
           
           # Check if new API Gateway was created
           NEW_API_ID=$(aws cloudformation describe-stacks \
-            --stack-name ${{ env.STACK_NAME }} \
+            --stack-name ${{ secrets.STACK_NAME }} \
             --query "Stacks[0].Outputs[?OutputKey=='ApiId'].OutputValue" \
             --output text 2>/dev/null || echo "")
           
@@ -105,9 +101,9 @@ jobs:
             echo "To switch traffic from the old API Gateway, run:" >> $GITHUB_STEP_SUMMARY
             echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
             echo "# Delete old mapping" >> $GITHUB_STEP_SUMMARY
-            echo "aws apigateway delete-base-path-mapping --domain-name api.vfs-tracker.app --base-path dev --region us-east-1" >> $GITHUB_STEP_SUMMARY
+            echo "aws apigateway delete-base-path-mapping --domain-name api.vfs-tracker.app --base-path dev --region ${{ secrets.AWS_REGION }}" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "# Create new mapping" >> $GITHUB_STEP_SUMMARY
-            echo "aws apigateway create-base-path-mapping --domain-name api.vfs-tracker.app --rest-api-id ${NEW_API_ID} --stage dev --base-path dev --region us-east-1" >> $GITHUB_STEP_SUMMARY
+            echo "aws apigateway create-base-path-mapping --domain-name api.vfs-tracker.app --rest-api-id ${NEW_API_ID} --stage dev --base-path dev --region ${{ secrets.AWS_REGION }}" >> $GITHUB_STEP_SUMMARY
             echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
           fi
