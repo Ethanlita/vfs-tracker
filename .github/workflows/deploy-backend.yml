@@ -10,14 +10,11 @@ on:
       - '.github/workflows/deploy-backend.yml'
   workflow_dispatch:
     inputs:
-      environment:
-        description: 'Deployment environment'
-        required: true
-        default: 'dev'
-        type: choice
-        options:
-          - dev
-          - prod
+      deploy_api_gateway:
+        description: 'Deploy new API Gateway (will create new endpoint)'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   id-token: write
@@ -25,11 +22,11 @@ permissions:
 
 env:
   AWS_REGION: us-east-1
+  STACK_NAME: vfs-tracker
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    environment: ${{ github.event.inputs.environment || 'dev' }}
     
     steps:
       - name: Checkout code
@@ -38,7 +35,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -58,43 +55,59 @@ jobs:
 
       - name: Validate SAM template
         working-directory: ./infra
-        run: sam validate --template template.yaml
+        run: sam validate --template template-production.yaml
 
       - name: Build SAM application
         working-directory: ./infra
-        run: sam build --template template.yaml
+        run: sam build --template template-production.yaml
 
       - name: Deploy to AWS
         working-directory: ./infra
         run: |
-          ENVIRONMENT=${{ github.event.inputs.environment || 'dev' }}
           sam deploy \
-            --stack-name vfs-tracker-${ENVIRONMENT} \
-            --parameter-overrides Environment=${ENVIRONMENT} \
+            --stack-name ${{ env.STACK_NAME }} \
+            --parameter-overrides Environment=dev \
             --no-confirm-changeset \
             --no-fail-on-empty-changeset \
             --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND \
             --resolve-s3 \
             --s3-prefix vfs-tracker \
+            --resolve-image-repos \
             --region ${{ env.AWS_REGION }}
 
       - name: Output deployment info
         working-directory: ./infra
         run: |
-          ENVIRONMENT=${{ github.event.inputs.environment || 'dev' }}
-          echo "## Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "## 🚀 Deployment Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- **Environment:** ${ENVIRONMENT}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Stack:** vfs-tracker-${ENVIRONMENT}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Stack:** ${{ env.STACK_NAME }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Region:** ${{ env.AWS_REGION }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           
-          # Get API endpoint from stack outputs
-          API_ENDPOINT=$(aws cloudformation describe-stacks \
-            --stack-name vfs-tracker-${ENVIRONMENT} \
-            --query "Stacks[0].Outputs[?OutputKey=='ApiEndpoint'].OutputValue" \
-            --output text 2>/dev/null || echo "Not available")
+          # Get outputs from stack
+          echo "### Stack Outputs" >> $GITHUB_STEP_SUMMARY
+          aws cloudformation describe-stacks \
+            --stack-name ${{ env.STACK_NAME }} \
+            --query "Stacks[0].Outputs[*].[OutputKey,OutputValue]" \
+            --output table >> $GITHUB_STEP_SUMMARY 2>/dev/null || echo "Could not retrieve outputs" >> $GITHUB_STEP_SUMMARY
           
-          if [ "$API_ENDPOINT" != "Not available" ]; then
-            echo "- **API Endpoint:** ${API_ENDPOINT}" >> $GITHUB_STEP_SUMMARY
+          # Check if new API Gateway was created
+          NEW_API_ID=$(aws cloudformation describe-stacks \
+            --stack-name ${{ env.STACK_NAME }} \
+            --query "Stacks[0].Outputs[?OutputKey=='ApiId'].OutputValue" \
+            --output text 2>/dev/null || echo "")
+          
+          if [ -n "$NEW_API_ID" ] && [ "$NEW_API_ID" != "None" ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "### ⚠️ New API Gateway Created" >> $GITHUB_STEP_SUMMARY
+            echo "A new API Gateway was created with ID: \`${NEW_API_ID}\`" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "To switch traffic from the old API Gateway, run:" >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+            echo "# Delete old mapping" >> $GITHUB_STEP_SUMMARY
+            echo "aws apigateway delete-base-path-mapping --domain-name api.vfs-tracker.app --base-path dev --region us-east-1" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "# Create new mapping" >> $GITHUB_STEP_SUMMARY
+            echo "aws apigateway create-base-path-mapping --domain-name api.vfs-tracker.app --rest-api-id ${NEW_API_ID} --stage dev --base-path dev --region us-east-1" >> $GITHUB_STEP_SUMMARY
+            echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
           fi

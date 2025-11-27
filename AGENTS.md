@@ -21,6 +21,37 @@
     - **异步任务与触发器**: 由 S3 事件或 DynamoDB 流触发的后台进程 (例如, `autoApproveEvent`)。
     - **外部服务集成**: 与第三方 API（如 Google Gemini）交互 (例如, `gemini-proxy`, `get-song-recommendations`)。
   
+## 后端部署 / Backend Deployment
+
+### IaC 架构 / IaC Architecture
+- **SAM 模板**: 后端资源定义在 `infra/template-production.yaml`
+- **CloudFormation Stack**: `vfs-tracker` (us-east-1)
+- **部署方式**:
+  - 本地: `npm run deploy:backend`
+  - CI/CD: 推送到 master 分支自动触发 GitHub Actions
+
+### 由 CloudFormation 管理的资源 / CloudFormation-Managed Resources
+- **Lambda Functions**: 16 个 (包括 Node.js 和 Python 容器)
+- **DynamoDB Tables**: 3 个 (VoiceFemEvents, VoiceFemUsers, VoiceFemTests)
+- **API Gateway**: 1 个 REST API (`wg3q2nomc3`)
+- **Lambda Permissions**: 19 个 API Gateway 调用权限
+
+### 控制台管理的资源 / Console-Managed Resources
+以下资源通过 ARN 引用，不纳入 CloudFormation：
+- **IAM Roles**: 4 个 Lambda 执行角色
+- **Cognito User Pool**: `us-east-1_Bz6JC9ko9`
+- **S3 Bucket**: `vfs-tracker-objstor`
+- **ECR Repository**: `vfs-tracker-images`
+- **自定义域名**: `api.vfs-tracker.app`
+
+### 添加新 Lambda 函数 / Adding New Lambda Functions
+1. 在 `lambda-functions/` 创建新目录和代码
+2. 在 `infra/template-production.yaml` 添加函数定义
+3. 运行 `npm run deploy:backend` 或推送到 master
+
+### 重要文档 / Important Docs
+- 📖 [infra/README.md](infra/README.md) - 完整的资源清单、API 路由和开发工作流
+
 ## 前端组件
 - **样式**: 注意UI的美观，创建和修改页面组件时要确保其外观风格和这个项目中其他地方一致。样式要符合Tailwind CSS的最佳实践。
 

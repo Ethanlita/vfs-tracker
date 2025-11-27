@@ -1,0 +1,577 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  VFS-Tracker Backend Infrastructure (Production)
+  
+  用于更新现有 vfs-tracker CloudFormation Stack 中的资源。
+  此模板会更新已导入的 Lambda 函数代码，并创建新的 API Gateway。
+
+# ============================================
+# 参数定义
+# ============================================
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - prod
+    Description: Deployment environment
+
+  CognitoUserPoolId:
+    Type: String
+    Default: us-east-1_Bz6JC9ko9
+    Description: Cognito User Pool ID for authentication
+
+  CognitoUserPoolArn:
+    Type: String
+    Default: arn:aws:cognito-idp:us-east-1:296821242554:userpool/us-east-1_Bz6JC9ko9
+    Description: Cognito User Pool ARN
+
+  ExistingS3BucketName:
+    Type: String
+    Default: vfs-tracker-objstor
+    Description: Existing S3 bucket name
+
+  EcrRepositoryUri:
+    Type: String
+    Default: 296821242554.dkr.ecr.us-east-1.amazonaws.com/vfs-tracker-images
+    Description: ECR repository URI for Python Lambda container
+
+# ============================================
+# Global Configuration
+# ============================================
+Globals:
+  Function:
+    MemorySize: 128
+    Timeout: 3
+    Environment:
+      Variables:
+        ENVIRONMENT: !Ref Environment
+        AWS_NODEJS_CONNECTION_REUSE_ENABLED: "1"
+    LoggingConfig:
+      LogFormat: JSON
+      ApplicationLogLevel: INFO
+      SystemLogLevel: WARN
+
+  Api:
+    Cors:
+      AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
+      AllowHeaders: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+      AllowOrigin: "'*'"
+      MaxAge: "'600'"
+
+# ============================================
+# 资源定义
+# ============================================
+Resources:
+
+  # ==========================================
+  # DynamoDB Tables (已导入，保持配置一致)
+  # ==========================================
+  
+  VoiceFemEventsTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      TableName: VoiceFemEvents
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: userId
+          AttributeType: S
+        - AttributeName: eventId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: userId
+          KeyType: HASH
+        - AttributeName: eventId
+          KeyType: RANGE
+      StreamSpecification:
+        StreamViewType: NEW_IMAGE
+
+  VoiceFemUsersTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      TableName: VoiceFemUsers
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: userId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: userId
+          KeyType: HASH
+
+  VoiceFemTestsTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      TableName: VoiceFemTests
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: sessionId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: sessionId
+          KeyType: HASH
+
+  # ==========================================
+  # API Gateway (新创建)
+  # ==========================================
+  
+  VoiceFemApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: VoiceFemApi-SAM
+      StageName: !Ref Environment
+      Description: VFS-Tracker REST API (Managed by SAM)
+      EndpointConfiguration:
+        Type: REGIONAL
+      Auth:
+        DefaultAuthorizer: CognitoAuthorizer
+        AddDefaultAuthorizerToCorsPreflight: false
+        Authorizers:
+          CognitoAuthorizer:
+            UserPoolArn: !Ref CognitoUserPoolArn
+            Identity:
+              Header: Authorization
+      Tags:
+        Project: vfs-tracker
+
+  # ==========================================
+  # Lambda Functions - Events (已导入，更新代码)
+  # 注意: FunctionName 保持与现有函数名一致，不带环境后缀
+  # ==========================================
+
+  AddVoiceEventFunction:
+    Type: AWS::Serverless::Function
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      FunctionName: addVoiceEvent
+      Description: Add a new voice event
+      CodeUri: ../lambda-functions/addVoiceEvent/
+      Handler: index.handler
+      Runtime: nodejs20.x
+      Role: arn:aws:iam::296821242554:role/service-role/addVoiceEvent-role-l30o387r
+      Environment:
+        Variables:
+          EVENTS_TABLE: !Ref VoiceFemEventsTable
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref VoiceFemApi
+            Path: /events
+            Method: POST
+
+  GetVoiceEventsFunction:
+    Type: AWS::Serverless::Function
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      FunctionName: getVoiceEvents
+      Description: Get voice events for a user
+      CodeUri: ../lambda-functions/getVoiceEvents/
+      Handler: index.handler
+      Runtime: nodejs20.x
+      Role: arn:aws:iam::296821242554:role/service-role/addVoiceEvent-role-l30o387r
+      Environment:
+        Variables:
+          EVENTS_TABLE: !Ref VoiceFemEventsTable
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref VoiceFemApi
+            Path: /events/{userId}
+            Method: GET
+
+  GetAllPublicEventsFunction:
+    Type: AWS::Serverless::Function
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      FunctionName: getAllPublicEvents
+      Description: Get all public events (no auth required)
+      CodeUri: ../lambda-functions/getAllPublicEvents/
+      Handler: index.handler
+      Runtime: nodejs20.x
+      MemorySize: 3008
+      Timeout: 29
+      Role: arn:aws:iam::296821242554:role/service-role/addVoiceEvent-role-l30o387r
+      Environment:
+        Variables:
+          EVENTS_TABLE: !Ref VoiceFemEventsTable
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref VoiceFemApi
+            Path: /all-events
+            Method: GET
+            Auth:
+              Authorizer: NONE
+
+  DeleteEventFunction:
+    Type: AWS::Serverless::Function
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      FunctionName: deleteEvent
+      Description: Delete an event
+      CodeUri: ../lambda-functions/deleteEvent/
+      Handler: index.handler
+      Runtime: nodejs22.x
+      Role: arn:aws:iam::296821242554:role/service-role/addVoiceEvent-role-l30o387r
+      Environment:
+        Variables:
+          EVENTS_TABLE: !Ref VoiceFemEventsTable
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref VoiceFemApi
+            Path: /event/{eventId}
+            Method: DELETE
+
+  AutoApproveEventFunction:
+    Type: AWS::Serverless::Function
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      FunctionName: autoApproveEvent
+      Description: Auto-approve events from DynamoDB Stream
+      CodeUri: ../lambda-functions/autoApproveEvent/
+      Handler: index.handler
+      Runtime: nodejs22.x
+      MemorySize: 1024
+      Timeout: 300
+      Role: arn:aws:iam::296821242554:role/service-role/addVoiceEvent-role-l30o387r
+      Environment:
+        Variables:
+          EVENTS_TABLE: !Ref VoiceFemEventsTable
+      # 注意: DynamoDB Stream 事件源映射已在 AWS 控制台配置
+      # UUID: 7bfcd575-9ba9-4a37-a229-57394642a9f0
+      # 不在此处重复定义，避免冲突
+
+  # ==========================================
+  # Lambda Functions - Users
+  # ==========================================
+
+  GetUserProfileFunction:
+    Type: AWS::Serverless::Function
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      FunctionName: getUserProfile
+      Description: Get user profile
+      CodeUri: ../lambda-functions/getUserProfile/
+      Handler: index.handler
+      Runtime: nodejs22.x
+      Role: arn:aws:iam::296821242554:role/service-role/getAllPublicEvents-role-33fp67ha
+      Environment:
+        Variables:
+          USERS_TABLE: !Ref VoiceFemUsersTable
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref VoiceFemApi
+            Path: /user/{userId}
+            Method: GET
+
+  GetUserPublicProfileFunction:
+    Type: AWS::Serverless::Function
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      FunctionName: getUserPublicProfile
+      Description: Get user public profile (no auth required)
+      CodeUri: ../lambda-functions/getUserPublicProfile/
+      Handler: index.handler
+      Runtime: nodejs22.x
+      Role: arn:aws:iam::296821242554:role/service-role/addVoiceEvent-role-l30o387r
+      Environment:
+        Variables:
+          USERS_TABLE: !Ref VoiceFemUsersTable
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref VoiceFemApi
+            Path: /user/{userId}/public
+            Method: GET
+            Auth:
+              Authorizer: NONE
+
+  UpdateUserProfileFunction:
+    Type: AWS::Serverless::Function
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      FunctionName: updateUserProfile
+      Description: Update user profile
+      CodeUri: ../lambda-functions/updateUserProfile/
+      Handler: index.handler
+      Runtime: nodejs22.x
+      Role: arn:aws:iam::296821242554:role/service-role/addVoiceEvent-role-l30o387r
+      Environment:
+        Variables:
+          USERS_TABLE: !Ref VoiceFemUsersTable
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref VoiceFemApi
+            Path: /user/{userId}
+            Method: PUT
+
+  UserProfileSetupFunction:
+    Type: AWS::Serverless::Function
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      FunctionName: vfsTrackerUserProfileSetup
+      Description: Initial user profile setup
+      CodeUri: ../lambda-functions/vfsTrackerUserProfileSetup/
+      Handler: index.handler
+      Runtime: nodejs22.x
+      Role: arn:aws:iam::296821242554:role/service-role/getAllPublicEvents-role-33fp67ha
+      Environment:
+        Variables:
+          USERS_TABLE: !Ref VoiceFemUsersTable
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref VoiceFemApi
+            Path: /user/profile-setup
+            Method: POST
+
+  # ==========================================
+  # Lambda Functions - Files
+  # ==========================================
+
+  GetUploadUrlFunction:
+    Type: AWS::Serverless::Function
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      FunctionName: getUploadUrl
+      Description: Get presigned URL for file upload
+      CodeUri: ../lambda-functions/getUploadUrl/
+      Handler: index.handler
+      Runtime: nodejs22.x
+      Role: arn:aws:iam::296821242554:role/service-role/addVoiceEvent-role-l30o387r
+      Environment:
+        Variables:
+          BUCKET_NAME: !Ref ExistingS3BucketName
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref VoiceFemApi
+            Path: /upload-url
+            Method: POST
+
+  GetFileUrlFunction:
+    Type: AWS::Serverless::Function
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      FunctionName: getFileUrl
+      Description: Get presigned URL for file download
+      CodeUri: ../lambda-functions/getFileUrl/
+      Handler: index.handler
+      Runtime: nodejs22.x
+      Role: arn:aws:iam::296821242554:role/service-role/addVoiceEvent-role-l30o387r
+      Environment:
+        Variables:
+          BUCKET_NAME: !Ref ExistingS3BucketName
+          VOICE_TESTS_TABLE_NAME: !Ref VoiceFemTestsTable
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref VoiceFemApi
+            Path: /file-url
+            Method: POST
+
+  GetAvatarUrlFunction:
+    Type: AWS::Serverless::Function
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      FunctionName: getAvatarUrl
+      Description: Get avatar URL for a user
+      CodeUri: ../lambda-functions/getAvatarUrl/
+      Handler: index.handler
+      Runtime: nodejs22.x
+      Role: arn:aws:iam::296821242554:role/service-role/addVoiceEvent-role-l30o387r
+      Environment:
+        Variables:
+          BUCKET_NAME: !Ref ExistingS3BucketName
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref VoiceFemApi
+            Path: /avatar/{userId}
+            Method: GET
+
+  # ==========================================
+  # Lambda Functions - Voice Analysis (Container)
+  # ==========================================
+
+  OnlinePraatAnalysisFunction:
+    Type: AWS::Serverless::Function
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      FunctionName: online-praat-analysis
+      Description: Python-based voice analysis using Praat
+      PackageType: Image
+      ImageUri: !Sub ${EcrRepositoryUri}:latest
+      MemorySize: 3008
+      Timeout: 300
+      Architectures:
+        - arm64
+      Role: arn:aws:iam::296821242554:role/service-role/addVoiceEvent-role-l30o387r
+      Environment:
+        Variables:
+          BUCKET: !Ref ExistingS3BucketName
+          DDB_TABLE: !Ref VoiceFemTestsTable
+          LOG_LEVEL: INFO
+          AWS_S3_US_EAST_1_REGIONAL_ENDPOINT: regional
+      Events:
+        CreateSession:
+          Type: Api
+          Properties:
+            RestApiId: !Ref VoiceFemApi
+            Path: /sessions
+            Method: POST
+        UploadFile:
+          Type: Api
+          Properties:
+            RestApiId: !Ref VoiceFemApi
+            Path: /uploads
+            Method: POST
+        Analyze:
+          Type: Api
+          Properties:
+            RestApiId: !Ref VoiceFemApi
+            Path: /analyze
+            Method: POST
+        GetResults:
+          Type: Api
+          Properties:
+            RestApiId: !Ref VoiceFemApi
+            Path: /results/{sessionId}
+            Method: GET
+
+  # ==========================================
+  # Lambda Functions - Utilities
+  # ==========================================
+
+  GeminiProxyFunction:
+    Type: AWS::Serverless::Function
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      FunctionName: gemini-proxy
+      Description: Proxy for Google Gemini API
+      CodeUri: ../lambda-functions/gemini-proxy/
+      Handler: index.handler
+      Runtime: nodejs22.x
+      Timeout: 30
+      Role: arn:aws:iam::296821242554:role/service-role/gemini-proxy-role-cegcoi6x
+      Environment:
+        Variables:
+          GEMINI_API_KEY: '{{resolve:ssm:/vfs-tracker/gemini-api-key}}'
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref VoiceFemApi
+            Path: /gemini-proxy
+            Method: POST
+
+  GetSongRecommendationsFunction:
+    Type: AWS::Serverless::Function
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      FunctionName: get-song-recommendations
+      Description: Get song recommendations using Gemini
+      CodeUri: ../lambda-functions/get-song-recommendations/
+      Handler: index.handler
+      Runtime: nodejs22.x
+      Timeout: 29
+      Role: arn:aws:iam::296821242554:role/service-role/addVoiceEvent-role-l30o387r
+      Environment:
+        Variables:
+          GEMINI_API_KEY: '{{resolve:ssm:/vfs-tracker/gemini-api-key}}'
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref VoiceFemApi
+            Path: /recommend-songs
+            Method: POST
+
+  EdgeProbeFunction:
+    Type: AWS::Serverless::Function
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      FunctionName: edge-probe
+      Description: Edge location probe for latency testing
+      CodeUri: ../lambda-functions/edge-probe/
+      Handler: index.handler
+      Runtime: nodejs22.x
+      Role: arn:aws:iam::296821242554:role/service-role/edge-probe-role-ttc3yql4
+      Events:
+        GetEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref VoiceFemApi
+            Path: /edge-probe
+            Method: GET
+            Auth:
+              Authorizer: NONE
+        PostEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref VoiceFemApi
+            Path: /edge-probe
+            Method: POST
+            Auth:
+              Authorizer: NONE
+
+# ============================================
+# 输出
+# ============================================
+Outputs:
+  ApiEndpoint:
+    Description: API Gateway endpoint URL (新创建的 SAM 管理 API)
+    Value: !Sub https://${VoiceFemApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/
+
+  ApiId:
+    Description: API Gateway ID (用于更新 Base Path Mapping)
+    Value: !Ref VoiceFemApi
+
+  EventsTableName:
+    Description: DynamoDB Events table name
+    Value: !Ref VoiceFemEventsTable
+
+  UsersTableName:
+    Description: DynamoDB Users table name
+    Value: !Ref VoiceFemUsersTable
+
+  TestsTableName:
+    Description: DynamoDB Tests table name
+    Value: !Ref VoiceFemTestsTable

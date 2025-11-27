@@ -1,0 +1,135 @@
+[
+  {
+    "ResourceType": "AWS::DynamoDB::Table",
+    "LogicalResourceId": "VoiceFemEventsTable",
+    "ResourceIdentifier": {
+      "TableName": "VoiceFemEvents"
+    }
+  },
+  {
+    "ResourceType": "AWS::DynamoDB::Table",
+    "LogicalResourceId": "VoiceFemUsersTable",
+    "ResourceIdentifier": {
+      "TableName": "VoiceFemUsers"
+    }
+  },
+  {
+    "ResourceType": "AWS::DynamoDB::Table",
+    "LogicalResourceId": "VoiceFemTestsTable",
+    "ResourceIdentifier": {
+      "TableName": "VoiceFemTests"
+    }
+  },
+  {
+    "ResourceType": "AWS::Lambda::Function",
+    "LogicalResourceId": "AddVoiceEventFunction",
+    "ResourceIdentifier": {
+      "FunctionName": "addVoiceEvent"
+    }
+  },
+  {
+    "ResourceType": "AWS::Lambda::Function",
+    "LogicalResourceId": "GetVoiceEventsFunction",
+    "ResourceIdentifier": {
+      "FunctionName": "getVoiceEvents"
+    }
+  },
+  {
+    "ResourceType": "AWS::Lambda::Function",
+    "LogicalResourceId": "GetAllPublicEventsFunction",
+    "ResourceIdentifier": {
+      "FunctionName": "getAllPublicEvents"
+    }
+  },
+  {
+    "ResourceType": "AWS::Lambda::Function",
+    "LogicalResourceId": "DeleteEventFunction",
+    "ResourceIdentifier": {
+      "FunctionName": "deleteEvent"
+    }
+  },
+  {
+    "ResourceType": "AWS::Lambda::Function",
+    "LogicalResourceId": "AutoApproveEventFunction",
+    "ResourceIdentifier": {
+      "FunctionName": "autoApproveEvent"
+    }
+  },
+  {
+    "ResourceType": "AWS::Lambda::Function",
+    "LogicalResourceId": "GetUserProfileFunction",
+    "ResourceIdentifier": {
+      "FunctionName": "getUserProfile"
+    }
+  },
+  {
+    "ResourceType": "AWS::Lambda::Function",
+    "LogicalResourceId": "GetUserPublicProfileFunction",
+    "ResourceIdentifier": {
+      "FunctionName": "getUserPublicProfile"
+    }
+  },
+  {
+    "ResourceType": "AWS::Lambda::Function",
+    "LogicalResourceId": "UpdateUserProfileFunction",
+    "ResourceIdentifier": {
+      "FunctionName": "updateUserProfile"
+    }
+  },
+  {
+    "ResourceType": "AWS::Lambda::Function",
+    "LogicalResourceId": "UserProfileSetupFunction",
+    "ResourceIdentifier": {
+      "FunctionName": "vfsTrackerUserProfileSetup"
+    }
+  },
+  {
+    "ResourceType": "AWS::Lambda::Function",
+    "LogicalResourceId": "GetUploadUrlFunction",
+    "ResourceIdentifier": {
+      "FunctionName": "getUploadUrl"
+    }
+  },
+  {
+    "ResourceType": "AWS::Lambda::Function",
+    "LogicalResourceId": "GetFileUrlFunction",
+    "ResourceIdentifier": {
+      "FunctionName": "getFileUrl"
+    }
+  },
+  {
+    "ResourceType": "AWS::Lambda::Function",
+    "LogicalResourceId": "GetAvatarUrlFunction",
+    "ResourceIdentifier": {
+      "FunctionName": "getAvatarUrl"
+    }
+  },
+  {
+    "ResourceType": "AWS::Lambda::Function",
+    "LogicalResourceId": "OnlinePraatAnalysisFunction",
+    "ResourceIdentifier": {
+      "FunctionName": "online-praat-analysis"
+    }
+  },
+  {
+    "ResourceType": "AWS::Lambda::Function",
+    "LogicalResourceId": "GeminiProxyFunction",
+    "ResourceIdentifier": {
+      "FunctionName": "gemini-proxy"
+    }
+  },
+  {
+    "ResourceType": "AWS::Lambda::Function",
+    "LogicalResourceId": "GetSongRecommendationsFunction",
+    "ResourceIdentifier": {
+      "FunctionName": "get-song-recommendations"
+    }
+  },
+  {
+    "ResourceType": "AWS::Lambda::Function",
+    "LogicalResourceId": "EdgeProbeFunction",
+    "ResourceIdentifier": {
+      "FunctionName": "edge-probe"
+    }
+  }
+]

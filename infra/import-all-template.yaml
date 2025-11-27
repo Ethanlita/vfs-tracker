@@ -1,0 +1,377 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  VFS-Tracker Backend Infrastructure - Import Template
+  用于将现有 AWS 资源导入 CloudFormation 管理
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - prod
+    Description: Deployment environment
+
+  CognitoUserPoolId:
+    Type: String
+    Default: us-east-1_Bz6JC9ko9
+    Description: Cognito User Pool ID for authentication
+
+  CognitoUserPoolArn:
+    Type: String
+    Default: arn:aws:cognito-idp:us-east-1:296821242554:userpool/us-east-1_Bz6JC9ko9
+    Description: Cognito User Pool ARN
+
+  ExistingS3BucketName:
+    Type: String
+    Default: vfs-tracker-objstor
+    Description: Existing S3 bucket name
+
+  EcrRepositoryUri:
+    Type: String
+    Default: 296821242554.dkr.ecr.us-east-1.amazonaws.com/vfs-tracker-images
+    Description: ECR repository URI for Python Lambda container
+
+Resources:
+  # ==========================================
+  # DynamoDB Tables
+  # ==========================================
+  
+  VoiceFemEventsTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      TableName: VoiceFemEvents
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: userId
+          AttributeType: S
+        - AttributeName: eventId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: userId
+          KeyType: HASH
+        - AttributeName: eventId
+          KeyType: RANGE
+      StreamSpecification:
+        StreamViewType: NEW_IMAGE
+
+  VoiceFemUsersTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      TableName: VoiceFemUsers
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: userId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: userId
+          KeyType: HASH
+
+  VoiceFemTestsTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      TableName: VoiceFemTests
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: sessionId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: sessionId
+          KeyType: HASH
+
+  # ==========================================
+  # Lambda Functions - Events
+  # Role: addVoiceEvent-role-l30o387r (共享)
+  # ==========================================
+
+  AddVoiceEventFunction:
+    Type: AWS::Lambda::Function
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      FunctionName: addVoiceEvent
+      Runtime: nodejs20.x
+      Handler: index.handler
+      Code:
+        ZipFile: |
+          exports.handler = async (event) => {
+            return { statusCode: 200, body: 'placeholder' };
+          };
+      Role: arn:aws:iam::296821242554:role/service-role/addVoiceEvent-role-l30o387r
+      MemorySize: 128
+      Timeout: 3
+
+  GetVoiceEventsFunction:
+    Type: AWS::Lambda::Function
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      FunctionName: getVoiceEvents
+      Runtime: nodejs20.x
+      Handler: index.handler
+      Code:
+        ZipFile: |
+          exports.handler = async (event) => {
+            return { statusCode: 200, body: 'placeholder' };
+          };
+      Role: arn:aws:iam::296821242554:role/service-role/addVoiceEvent-role-l30o387r
+      MemorySize: 128
+      Timeout: 3
+
+  GetAllPublicEventsFunction:
+    Type: AWS::Lambda::Function
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      FunctionName: getAllPublicEvents
+      Runtime: nodejs20.x
+      Handler: index.handler
+      Code:
+        ZipFile: |
+          exports.handler = async (event) => {
+            return { statusCode: 200, body: 'placeholder' };
+          };
+      Role: arn:aws:iam::296821242554:role/service-role/addVoiceEvent-role-l30o387r
+      MemorySize: 3008
+      Timeout: 29
+
+  DeleteEventFunction:
+    Type: AWS::Lambda::Function
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      FunctionName: deleteEvent
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Code:
+        ZipFile: |
+          exports.handler = async (event) => {
+            return { statusCode: 200, body: 'placeholder' };
+          };
+      Role: arn:aws:iam::296821242554:role/service-role/addVoiceEvent-role-l30o387r
+      MemorySize: 128
+      Timeout: 3
+
+  AutoApproveEventFunction:
+    Type: AWS::Lambda::Function
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      FunctionName: autoApproveEvent
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Code:
+        ZipFile: |
+          exports.handler = async (event) => {
+            return { statusCode: 200, body: 'placeholder' };
+          };
+      Role: arn:aws:iam::296821242554:role/service-role/addVoiceEvent-role-l30o387r
+      MemorySize: 1024
+      Timeout: 300
+
+  # ==========================================
+  # Lambda Functions - Users
+  # ==========================================
+
+  GetUserProfileFunction:
+    Type: AWS::Lambda::Function
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      FunctionName: getUserProfile
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Code:
+        ZipFile: |
+          exports.handler = async (event) => {
+            return { statusCode: 200, body: 'placeholder' };
+          };
+      Role: arn:aws:iam::296821242554:role/service-role/getAllPublicEvents-role-33fp67ha
+      MemorySize: 128
+      Timeout: 3
+
+  GetUserPublicProfileFunction:
+    Type: AWS::Lambda::Function
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      FunctionName: getUserPublicProfile
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Code:
+        ZipFile: |
+          exports.handler = async (event) => {
+            return { statusCode: 200, body: 'placeholder' };
+          };
+      Role: arn:aws:iam::296821242554:role/service-role/addVoiceEvent-role-l30o387r
+      MemorySize: 128
+      Timeout: 3
+
+  UpdateUserProfileFunction:
+    Type: AWS::Lambda::Function
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      FunctionName: updateUserProfile
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Code:
+        ZipFile: |
+          exports.handler = async (event) => {
+            return { statusCode: 200, body: 'placeholder' };
+          };
+      Role: arn:aws:iam::296821242554:role/service-role/addVoiceEvent-role-l30o387r
+      MemorySize: 128
+      Timeout: 3
+
+  UserProfileSetupFunction:
+    Type: AWS::Lambda::Function
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      FunctionName: vfsTrackerUserProfileSetup
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Code:
+        ZipFile: |
+          exports.handler = async (event) => {
+            return { statusCode: 200, body: 'placeholder' };
+          };
+      Role: arn:aws:iam::296821242554:role/service-role/getAllPublicEvents-role-33fp67ha
+      MemorySize: 128
+      Timeout: 3
+
+  # ==========================================
+  # Lambda Functions - Files
+  # ==========================================
+
+  GetUploadUrlFunction:
+    Type: AWS::Lambda::Function
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      FunctionName: getUploadUrl
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Code:
+        ZipFile: |
+          exports.handler = async (event) => {
+            return { statusCode: 200, body: 'placeholder' };
+          };
+      Role: arn:aws:iam::296821242554:role/service-role/addVoiceEvent-role-l30o387r
+      MemorySize: 128
+      Timeout: 3
+
+  GetFileUrlFunction:
+    Type: AWS::Lambda::Function
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      FunctionName: getFileUrl
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Code:
+        ZipFile: |
+          exports.handler = async (event) => {
+            return { statusCode: 200, body: 'placeholder' };
+          };
+      Role: arn:aws:iam::296821242554:role/service-role/addVoiceEvent-role-l30o387r
+      MemorySize: 128
+      Timeout: 3
+
+  GetAvatarUrlFunction:
+    Type: AWS::Lambda::Function
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      FunctionName: getAvatarUrl
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Code:
+        ZipFile: |
+          exports.handler = async (event) => {
+            return { statusCode: 200, body: 'placeholder' };
+          };
+      Role: arn:aws:iam::296821242554:role/service-role/addVoiceEvent-role-l30o387r
+      MemorySize: 128
+      Timeout: 3
+
+  # ==========================================
+  # Lambda Functions - Voice Analysis (Container)
+  # ==========================================
+
+  OnlinePraatAnalysisFunction:
+    Type: AWS::Lambda::Function
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      FunctionName: online-praat-analysis
+      PackageType: Image
+      Code:
+        ImageUri: 296821242554.dkr.ecr.us-east-1.amazonaws.com/vfs-tracker-images:latest
+      Role: arn:aws:iam::296821242554:role/service-role/addVoiceEvent-role-l30o387r
+      MemorySize: 3008
+      Timeout: 300
+      Architectures:
+        - arm64
+
+  # ==========================================
+  # Lambda Functions - Utilities
+  # ==========================================
+
+  GeminiProxyFunction:
+    Type: AWS::Lambda::Function
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      FunctionName: gemini-proxy
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Code:
+        ZipFile: |
+          exports.handler = async (event) => {
+            return { statusCode: 200, body: 'placeholder' };
+          };
+      Role: arn:aws:iam::296821242554:role/service-role/gemini-proxy-role-cegcoi6x
+      MemorySize: 128
+      Timeout: 30
+
+  GetSongRecommendationsFunction:
+    Type: AWS::Lambda::Function
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      FunctionName: get-song-recommendations
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Code:
+        ZipFile: |
+          exports.handler = async (event) => {
+            return { statusCode: 200, body: 'placeholder' };
+          };
+      Role: arn:aws:iam::296821242554:role/service-role/addVoiceEvent-role-l30o387r
+      MemorySize: 128
+      Timeout: 29
+
+  EdgeProbeFunction:
+    Type: AWS::Lambda::Function
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      FunctionName: edge-probe
+      Runtime: nodejs22.x
+      Handler: index.handler
+      Code:
+        ZipFile: |
+          exports.handler = async (event) => {
+            return { statusCode: 200, body: 'placeholder' };
+          };
+      Role: arn:aws:iam::296821242554:role/service-role/edge-probe-role-ttc3yql4
+      MemorySize: 128
+      Timeout: 3
