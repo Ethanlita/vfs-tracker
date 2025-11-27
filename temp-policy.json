@@ -1,0 +1,177 @@
+﻿{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "CloudFormationAccess",
+            "Effect": "Allow",
+            "Action": [
+                "cloudformation:CreateStack",
+                "cloudformation:UpdateStack",
+                "cloudformation:DeleteStack",
+                "cloudformation:DescribeStacks",
+                "cloudformation:DescribeStackEvents",
+                "cloudformation:DescribeStackResources",
+                "cloudformation:GetTemplate",
+                "cloudformation:GetTemplateSummary",
+                "cloudformation:ValidateTemplate",
+                "cloudformation:CreateChangeSet",
+                "cloudformation:DescribeChangeSet",
+                "cloudformation:ExecuteChangeSet",
+                "cloudformation:DeleteChangeSet",
+                "cloudformation:ListStackResources"
+            ],
+            "Resource": [
+                "arn:aws:cloudformation:us-east-1:296821242554:stack/vfs-tracker*/*",
+                "arn:aws:cloudformation:us-east-1:296821242554:stack/aws-sam-cli-managed-default/*",
+                "arn:aws:cloudformation:us-east-1:aws:transform/Serverless-2016-10-31"
+            ]
+        },
+        {
+            "Sid": "S3Access",
+            "Effect": "Allow",
+            "Action": [
+                "s3:GetObject",
+                "s3:PutObject",
+                "s3:DeleteObject",
+                "s3:ListBucket",
+                "s3:GetBucketLocation",
+                "s3:CreateBucket",
+                "s3:PutBucketPolicy",
+                "s3:PutBucketVersioning",
+                "s3:PutBucketTagging",
+                "s3:GetBucketPolicy",
+                "s3:GetBucketVersioning"
+            ],
+            "Resource": [
+                "arn:aws:s3:::aws-sam-cli-managed-default-samclisourcebucket-*",
+                "arn:aws:s3:::aws-sam-cli-managed-default-samclisourcebucket-*/*",
+                "arn:aws:s3:::vfs-tracker-objstor",
+                "arn:aws:s3:::vfs-tracker-objstor/*",
+                "arn:aws:s3:::vfs-tracker-sam-deployments",
+                "arn:aws:s3:::vfs-tracker-sam-deployments/*"
+            ]
+        },
+        {
+            "Sid": "LambdaAccess",
+            "Effect": "Allow",
+            "Action": [
+                "lambda:CreateFunction",
+                "lambda:UpdateFunctionCode",
+                "lambda:UpdateFunctionConfiguration",
+                "lambda:DeleteFunction",
+                "lambda:GetFunction",
+                "lambda:GetFunctionConfiguration",
+                "lambda:ListFunctions",
+                "lambda:AddPermission",
+                "lambda:RemovePermission",
+                "lambda:InvokeFunction",
+                "lambda:PublishVersion",
+                "lambda:CreateAlias",
+                "lambda:UpdateAlias",
+                "lambda:DeleteAlias",
+                "lambda:TagResource",
+                "lambda:ListTags",
+                "lambda:CreateEventSourceMapping",
+                "lambda:UpdateEventSourceMapping",
+                "lambda:DeleteEventSourceMapping",
+                "lambda:GetEventSourceMapping",
+                "lambda:ListEventSourceMappings"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Sid": "APIGatewayAccess",
+            "Effect": "Allow",
+            "Action": [
+                "apigateway:GET",
+                "apigateway:POST",
+                "apigateway:PUT",
+                "apigateway:PATCH",
+                "apigateway:DELETE"
+            ],
+            "Resource": [
+                "arn:aws:apigateway:us-east-1::/*"
+            ]
+        },
+        {
+            "Sid": "DynamoDBAccess",
+            "Effect": "Allow",
+            "Action": [
+                "dynamodb:DescribeTable",
+                "dynamodb:CreateTable",
+                "dynamodb:UpdateTable",
+                "dynamodb:DeleteTable",
+                "dynamodb:TagResource",
+                "dynamodb:ListTagsOfResource"
+            ],
+            "Resource": [
+                "arn:aws:dynamodb:us-east-1:296821242554:table/VoiceFem*"
+            ]
+        },
+        {
+            "Sid": "IAMRoleAccess",
+            "Effect": "Allow",
+            "Action": [
+                "iam:CreateRole",
+                "iam:DeleteRole",
+                "iam:GetRole",
+                "iam:UpdateRole",
+                "iam:PassRole",
+                "iam:AttachRolePolicy",
+                "iam:DetachRolePolicy",
+                "iam:PutRolePolicy",
+                "iam:DeleteRolePolicy",
+                "iam:GetRolePolicy",
+                "iam:TagRole",
+                "iam:ListRolePolicies",
+                "iam:ListAttachedRolePolicies"
+            ],
+            "Resource": [
+                "arn:aws:iam::296821242554:role/vfs-tracker-*"
+            ]
+        },
+        {
+            "Sid": "CloudWatchLogsAccess",
+            "Effect": "Allow",
+            "Action": [
+                "logs:CreateLogGroup",
+                "logs:DeleteLogGroup",
+                "logs:DescribeLogGroups",
+                "logs:PutRetentionPolicy",
+                "logs:TagLogGroup"
+            ],
+            "Resource": [
+                "arn:aws:logs:us-east-1:296821242554:log-group:/aws/lambda/*"
+            ]
+        },
+        {
+            "Sid": "ECRAccess",
+            "Effect": "Allow",
+            "Action": [
+                "ecr:GetAuthorizationToken",
+                "ecr:BatchCheckLayerAvailability",
+                "ecr:GetDownloadUrlForLayer",
+                "ecr:BatchGetImage",
+                "ecr:PutImage",
+                "ecr:InitiateLayerUpload",
+                "ecr:UploadLayerPart",
+                "ecr:CompleteLayerUpload",
+                "ecr:DescribeRepositories",
+                "ecr:CreateRepository",
+                "ecr:SetRepositoryPolicy"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Sid": "SSMAccess",
+            "Effect": "Allow",
+            "Action": [
+                "ssm:GetParameter",
+                "ssm:GetParameters"
+            ],
+            "Resource": [
+                "arn:aws:ssm:us-east-1:296821242554:parameter/vfs-tracker/*"
+            ]
+        }
+    ]
+}
