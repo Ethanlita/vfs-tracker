@@ -15,13 +15,54 @@ on:
         required: false
         default: false
         type: boolean
+      skip_image_build:
+        description: 'Skip Python Lambda image build (use existing image)'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   id-token: write
   contents: read
 
 jobs:
+  # 检查是否需要构建 Python Lambda 镜像
+  check-image-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      image_changed: ${{ steps.check.outputs.image_changed }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Check for online-praat-analysis changes
+        id: check
+        run: |
+          if [ "${{ github.event.inputs.skip_image_build }}" = "true" ]; then
+            echo "image_changed=false" >> $GITHUB_OUTPUT
+            echo "Skipping image build (manual override)"
+          elif git diff --name-only HEAD~1 HEAD | grep -q "^lambda-functions/online-praat-analysis/"; then
+            echo "image_changed=true" >> $GITHUB_OUTPUT
+            echo "Python Lambda files changed, will build image"
+          else
+            echo "image_changed=false" >> $GITHUB_OUTPUT
+            echo "No Python Lambda changes detected"
+          fi
+
+  # 构建 Python Lambda 镜像（仅在代码变化时）
+  build-python-image:
+    needs: check-image-changes
+    if: needs.check-image-changes.outputs.image_changed == 'true'
+    uses: ./.github/workflows/build-python-lambda.yml
+    secrets: inherit
+
+  # 部署后端（等待镜像构建完成，如果需要的话）
   deploy:
+    needs: [check-image-changes, build-python-image]
+    # 无论 build-python-image 是否运行，都执行部署
+    if: always() && !failure() && !cancelled()
     runs-on: ubuntu-latest
     
     steps:
@@ -66,9 +107,7 @@ jobs:
             --no-confirm-changeset \
             --no-fail-on-empty-changeset \
             --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND \
-            --s3-bucket ${{ secrets.SAM_DEPLOYMENT_BUCKET }} \
-            --s3-prefix deployments \
-            --image-repositories OnlinePraatAnalysisFunction=${{ secrets.ECR_REPOSITORY_URI }} \
+            --resolve-s3 \
             --region ${{ secrets.AWS_REGION }}
 
       - name: Output deployment info

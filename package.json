@@ -8,7 +8,7 @@
     "dev:playwright": "node scripts/generate-posts-list.js && dotenv -e .env.contract -e .env.local -- vite --host 127.0.0.1",
     "prebuild": "node scripts/generate-posts-list.js",
     "build": "dotenv -e .env.local -e .env.contract -- vite build",
-    "deploy:backend": "cd infra && sam build --template template-production.yaml && sam deploy --no-confirm-changeset --no-fail-on-empty-changeset --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND --resolve-s3 --s3-prefix vfs-tracker --resolve-image-repos",
+    "deploy:backend": "cd infra && sam build --template template-production.yaml && sam deploy --no-confirm-changeset --no-fail-on-empty-changeset --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND --resolve-s3 --resolve-image-repos",
     "test": "vitest run",
     "test:ui": "vitest --ui",
     "test:run": "vitest run",
