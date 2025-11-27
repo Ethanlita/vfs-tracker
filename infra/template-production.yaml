@@ -119,6 +119,32 @@ Resources:
           KeyType: HASH
 
   # ==========================================
+  # SAM Deployment Bucket (用于存储部署产物)
+  # ==========================================
+  
+  SAMDeploymentBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: vfs-tracker-sam-deployments
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldDeployments
+            Status: Enabled
+            ExpirationInDays: 30
+      Tags:
+        - Key: Project
+          Value: vfs-tracker
+        - Key: Purpose
+          Value: SAM deployments
+
+  # ==========================================
   # API Gateway (新创建)
   # ==========================================
   

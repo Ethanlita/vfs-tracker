@@ -12,13 +12,14 @@
 | Lambda Functions (16) | ✅ CloudFormation 管理 | `vfs-tracker` |
 | API Gateway | ✅ CloudFormation 管理 | `vfs-tracker` |
 | Lambda Permissions (19) | ✅ CloudFormation 管理 | `vfs-tracker` |
+| S3 Deployment Bucket | ✅ CloudFormation 管理 | `vfs-tracker` |
 
 **Stack 信息**:
 - Name: `vfs-tracker`
 - Region: `us-east-1`
 - Status: `UPDATE_COMPLETE`
 - Termination Protection: ✅ 已启用
-- 总资源数: **41 个**
+- 总资源数: **42 个**
 
 **API Gateway 信息**:
 - API ID: `wg3q2nomc3`
@@ -102,6 +103,7 @@ GET/POST /edge-probe        → edge-probe (公开)
 |------|------|------|
 | Lambda Functions | 16 | 包括 Node.js 和 Python 容器 |
 | DynamoDB Tables | 3 | VoiceFemEvents, VoiceFemUsers, VoiceFemTests |
+| S3 Bucket | 1 | vfs-tracker-sam-deployments (部署产物存储) |
 | API Gateway REST API | 1 | VoiceFemApi |
 | API Gateway Deployment | 1 | dev 阶段 |
 | API Gateway Stage | 1 | dev |
@@ -115,7 +117,7 @@ GET/POST /edge-probe        → edge-probe (公开)
 |------|---------|------|
 | IAM Roles | 4 个执行角色 | 导入风险高，现有策略复杂 |
 | Cognito User Pool | `us-east-1_Bz6JC9ko9` | 包含用户数据 |
-| S3 Bucket | `vfs-tracker-objstor` | 设置 Retain 策略 |
+| S3 Bucket (业务数据) | `vfs-tracker-objstor` | 用于用户上传的文件 |
 | ECR Repository | `vfs-tracker-images` | 通过 --resolve-image-repos 管理 |
 | 自定义域名 | `api.vfs-tracker.app` | Base Path Mapping 需手动切换 |
 | DynamoDB Stream Mapping | autoApproveEvent 触发器 | 已存在于堆栈外部 |

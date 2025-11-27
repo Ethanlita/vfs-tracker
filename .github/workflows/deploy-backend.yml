@@ -70,8 +70,8 @@ jobs:
             --no-confirm-changeset \
             --no-fail-on-empty-changeset \
             --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND \
-            --resolve-s3 \
-            --s3-prefix vfs-tracker \
+            --s3-bucket vfs-tracker-sam-deployments \
+            --s3-prefix deployments \
             --resolve-image-repos \
             --region ${{ env.AWS_REGION }}
 
