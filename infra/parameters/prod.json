@@ -1,0 +1,9 @@
+{
+  "Environment": "prod",
+  "CognitoUserPoolId": "us-east-1_Bz6JC9ko9",
+  "CognitoUserPoolArn": "arn:aws:cognito-idp:us-east-1:296821242554:userpool/us-east-1_Bz6JC9ko9",
+  "S3BucketName": "vfs-tracker-objstor",
+  "EcrRepositoryUri": "296821242554.dkr.ecr.us-east-1.amazonaws.com/vfs-tracker-images",
+  "ApiDomainName": "api.vfs-tracker.app",
+  "CertificateArn": "arn:aws:acm:us-east-1:296821242554:certificate/642286ab-3434-453d-946b-318939cd7987"
+}

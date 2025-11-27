@@ -1,5 +1,5 @@
 {
-  "name": "get-user-profile",
+  "name": "get-all-public-events",
   "version": "1.0.0",
   "type": "module",
   "dependencies": {

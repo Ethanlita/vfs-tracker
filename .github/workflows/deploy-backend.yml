@@ -1,0 +1,100 @@
+name: Deploy Backend
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'lambda-functions/**'
+      - 'infra/**'
+      - '.github/workflows/deploy-backend.yml'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - prod
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment || 'dev' }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Setup SAM CLI
+        uses: aws-actions/setup-sam@v2
+        with:
+          use-installer: true
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::296821242554:role/vfs-tracker-github-actions-role
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Validate SAM template
+        working-directory: ./infra
+        run: sam validate --template template.yaml
+
+      - name: Build SAM application
+        working-directory: ./infra
+        run: sam build --template template.yaml
+
+      - name: Deploy to AWS
+        working-directory: ./infra
+        run: |
+          ENVIRONMENT=${{ github.event.inputs.environment || 'dev' }}
+          sam deploy \
+            --stack-name vfs-tracker-${ENVIRONMENT} \
+            --parameter-overrides Environment=${ENVIRONMENT} \
+            --no-confirm-changeset \
+            --no-fail-on-empty-changeset \
+            --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND \
+            --resolve-s3 \
+            --s3-prefix vfs-tracker \
+            --region ${{ env.AWS_REGION }}
+
+      - name: Output deployment info
+        working-directory: ./infra
+        run: |
+          ENVIRONMENT=${{ github.event.inputs.environment || 'dev' }}
+          echo "## Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Environment:** ${ENVIRONMENT}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Stack:** vfs-tracker-${ENVIRONMENT}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Region:** ${{ env.AWS_REGION }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Get API endpoint from stack outputs
+          API_ENDPOINT=$(aws cloudformation describe-stacks \
+            --stack-name vfs-tracker-${ENVIRONMENT} \
+            --query "Stacks[0].Outputs[?OutputKey=='ApiEndpoint'].OutputValue" \
+            --output text 2>/dev/null || echo "Not available")
+          
+          if [ "$API_ENDPOINT" != "Not available" ]; then
+            echo "- **API Endpoint:** ${API_ENDPOINT}" >> $GITHUB_STEP_SUMMARY
+          fi

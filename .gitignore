@@ -39,6 +39,12 @@ coverage/
 # Database exports (may contain real data)
 data_of_dynamodb/
 
+# Infrastructure backups (may contain sensitive config)
+infra/backup/
+
+# SAM CLI build artifacts
+.aws-sam/
+
 # Playwright report
 playwright-report/
 test-results/

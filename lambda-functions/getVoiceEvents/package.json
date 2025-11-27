@@ -1,5 +1,5 @@
 {
-  "name": "get-user-profile",
+  "name": "get-voice-events",
   "version": "1.0.0",
   "type": "module",
   "dependencies": {
