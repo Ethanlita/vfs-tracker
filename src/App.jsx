@@ -1,7 +1,7 @@
 import { useAuthenticator, Authenticator } from '@aws-amplify/ui-react';
 import '@aws-amplify/ui-react/styles.css';
 import { Routes, Route, Navigate, Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 
 import Layout from './components/Layout';
@@ -25,6 +25,21 @@ import ScalePractice from './components/ScalePractice'; // 新增导入
 import VFSEffectPreview from './components/VFSEffectPreview'; // VFS效果预览
 import RegionSwitchBanner from './components/RegionSwitchBanner.jsx';
 import NoteFrequencyTool from './components/NoteFrequencyTool.jsx';
+
+// 管理后台 - 使用懒加载以避免影响主应用的打包体积
+const AdminApp = lazy(() => import('./admin/AdminApp'));
+
+/**
+ * 管理后台加载状态组件
+ */
+const AdminLoadingFallback = () => (
+  <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+    <div className="text-center">
+      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-400 mx-auto mb-4"></div>
+      <p className="text-gray-400">加载管理后台...</p>
+    </div>
+  </div>
+);
 
 /**
  * @en A component to protect routes that require authentication.
@@ -236,11 +251,29 @@ const AppContent = () => {
 function App() {
   // 生产模式：使用 Authenticator.Provider 包装
   return (
-    <Authenticator.Provider>
-      <AuthProvider>
-        <AppContent />
-      </AuthProvider>
-    </Authenticator.Provider>
+    <Routes>
+      {/* 管理后台路由 - 完全独立，不使用 Amplify Authenticator */}
+      <Route 
+        path="/admin/*" 
+        element={
+          <Suspense fallback={<AdminLoadingFallback />}>
+            <AdminApp />
+          </Suspense>
+        } 
+      />
+      
+      {/* 主应用路由 */}
+      <Route 
+        path="/*" 
+        element={
+          <Authenticator.Provider>
+            <AuthProvider>
+              <AppContent />
+            </AuthProvider>
+          </Authenticator.Provider>
+        } 
+      />
+    </Routes>
   );
 }
 
