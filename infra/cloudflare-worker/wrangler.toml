@@ -1,0 +1,33 @@
+# Cloudflare Worker 配置文件
+# 用于 Wrangler CLI 部署 SPA 路由处理器
+# 
+# 使用方法：
+#   本地开发: npx wrangler dev
+#   部署: npx wrangler deploy
+#
+# 注意：需要在 GitHub Secrets 中配置 CLOUDFLARE_API_TOKEN
+# Token 权限要求：Account > Cloudflare Workers Scripts > Edit
+
+name = "vfs-tracker-spa-router"
+main = "spa-router.js"
+compatibility_date = "2024-01-01"
+
+# 账户 ID（从 Cloudflare Dashboard 获取）
+# 在 CI 中通过环境变量 CLOUDFLARE_ACCOUNT_ID 传入
+# account_id = "" 
+
+# 路由配置
+# 注意：routes 需要在 Cloudflare Dashboard 中配置，或使用下面的配置
+# 由于涉及到 zone_id，建议在 Dashboard 中手动配置路由
+
+# 如果要在 wrangler.toml 中配置路由，需要取消下面的注释并填入 zone_id
+# [[routes]]
+# pattern = "vfs-tracker.app/*"
+# zone_id = "your-zone-id"
+
+# [[routes]]
+# pattern = "www.vfs-tracker.app/*"
+# zone_id = "your-zone-id"
+
+[observability]
+enabled = true

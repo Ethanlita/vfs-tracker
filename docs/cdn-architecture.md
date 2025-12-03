@@ -96,8 +96,42 @@ return { url: signedUrl };
 ### Worker 代码位置
 
 ```
-infra/cloudflare-worker/spa-router.js
+infra/cloudflare-worker/
+├── spa-router.js    # Worker 代码
+└── wrangler.toml    # Wrangler 配置
 ```
+
+### CI/CD 自动部署
+
+Worker 代码变更后会通过 GitHub Actions 自动部署到 Cloudflare。
+
+**首次配置步骤：**
+
+1. **创建 Cloudflare API Token**
+   - 登录 [Cloudflare Dashboard](https://dash.cloudflare.com/profile/api-tokens)
+   - 点击 "Create Token"
+   - 使用 "Edit Cloudflare Workers" 模板
+   - 选择 Account Resources: 你的账户
+   - 选择 Zone Resources: All zones（或指定 vfs-tracker.app）
+   - 创建并复制 Token
+
+2. **获取 Account ID**
+   - 在 Cloudflare Dashboard 右侧边栏可以找到 Account ID
+
+3. **添加 GitHub Secrets**
+   - 在 GitHub 仓库 Settings → Secrets and variables → Actions
+   - 添加 `CLOUDFLARE_API_TOKEN`
+   - 添加 `CLOUDFLARE_ACCOUNT_ID`
+
+4. **首次部署后手动配置 Routes**
+   - Worker 部署后，需要在 Cloudflare Dashboard 手动添加路由
+   - `vfs-tracker.app/*` → `vfs-tracker-spa-router`
+   - `www.vfs-tracker.app/*` → `vfs-tracker-spa-router`
+
+**后续更新：**
+- 修改 `infra/cloudflare-worker/spa-router.js` 并推送到 master
+- GitHub Actions 会自动部署更新
+- 也可以在 Actions 页面手动触发 "Deploy Cloudflare Worker" 工作流
 
 ### 工作原理
 
