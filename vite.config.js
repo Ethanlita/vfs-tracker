@@ -67,6 +67,20 @@ export default defineConfig({
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,wasm}'],
         runtimeCaching: [
+          // 导航请求 (HTML) 使用 NetworkFirst 策略
+          // 联网时优先从网络获取最新版本，确保用户每次访问都能看到最新内容
+          // 网络超时或离线时回退到缓存
+          {
+            urlPattern: ({ request }) => request.mode === 'navigate',
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'html-cache',
+              networkTimeoutSeconds: 3, // 网络请求超时时间，超时后使用缓存
+              cacheableResponse: {
+                statuses: [0, 200]
+              }
+            }
+          },
           {
             urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
             handler: 'CacheFirst',
