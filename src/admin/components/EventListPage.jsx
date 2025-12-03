@@ -3,7 +3,7 @@
  * 管理员事件列表页面，支持状态过滤、搜索和批量操作
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAWSClients } from '../contexts/AWSClientContext';
 import { searchEvents, getUser, EVENT_TYPES } from '../services/dynamodb';
@@ -173,6 +173,10 @@ export default function EventListPage() {
     await Promise.all(uncachedIds.map(fetchUserInfo));
   }, [clients, userCache, fetchUserInfo]);
 
+  // 使用 ref 存储 lastKey，避免将其作为 useCallback 依赖导致不必要的重渲染
+  const lastKeyRef = React.useRef(null);
+  lastKeyRef.current = lastKey;
+
   /**
    * 加载事件列表（服务端搜索）
    */
@@ -194,7 +198,7 @@ export default function EventListPage() {
         type: typeFilter,
         query: activeQuery || undefined,
         limit: 50,
-        lastEvaluatedKey: append ? lastKey : null,
+        lastEvaluatedKey: append ? lastKeyRef.current : null,
       });
 
       // 按日期排序（最新在前）
@@ -222,7 +226,7 @@ export default function EventListPage() {
       setLoading(false);
       setLoadingMore(false);
     }
-  }, [clients, statusFilter, typeFilter, activeQuery, lastKey, loadUsersForEvents]);
+  }, [clients, statusFilter, typeFilter, activeQuery, loadUsersForEvents]);
 
   // 当过滤器变化时重新加载
   useEffect(() => {

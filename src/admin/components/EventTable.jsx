@@ -80,9 +80,11 @@ function TypeTag({ type }) {
 function QuickActions({ event, onUpdate, disabled }) {
   const { clients } = useAWSClients();
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
   const handleStatusChange = async (newStatus) => {
     if (!clients || loading) return;
+    setError(null);
 
     try {
       setLoading(true);
@@ -95,7 +97,9 @@ function QuickActions({ event, onUpdate, disabled }) {
       onUpdate?.(updated);
     } catch (err) {
       console.error('更新状态失败:', err);
-      alert(`更新失败: ${err.message}`);
+      setError(err.message);
+      // 3秒后自动清除错误提示
+      setTimeout(() => setError(null), 3000);
     } finally {
       setLoading(false);
     }
@@ -104,7 +108,13 @@ function QuickActions({ event, onUpdate, disabled }) {
   // 如果是待审核状态，显示通过和拒绝按钮
   if (event.status === EVENT_STATUS.PENDING || !event.status) {
     return (
-      <div className="flex items-center gap-2">
+      <div className="flex flex-col gap-1">
+        {error && (
+          <span className="text-xs text-red-400 truncate max-w-[150px]" title={error}>
+            ⚠ {error}
+          </span>
+        )}
+        <div className="flex items-center gap-2">
         <button
           onClick={(e) => {
             e.stopPropagation();
@@ -129,24 +139,32 @@ function QuickActions({ event, onUpdate, disabled }) {
         >
           {loading ? '...' : '✗ 拒绝'}
         </button>
+        </div>
       </div>
     );
   }
 
   // 已处理的状态可以重新设为待审核
   return (
-    <button
-      onClick={(e) => {
-        e.stopPropagation();
-        handleStatusChange(EVENT_STATUS.PENDING);
-      }}
-      disabled={loading || disabled}
-      className="px-3 py-1.5 text-xs font-medium bg-gray-600 text-white rounded-lg 
-                 hover:bg-gray-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-      title="重置为待审核"
-    >
-      {loading ? '...' : '↺ 重置'}
-    </button>
+    <div className="flex flex-col gap-1">
+      {error && (
+        <span className="text-xs text-red-400 truncate max-w-[150px]" title={error}>
+          ⚠ {error}
+        </span>
+      )}
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          handleStatusChange(EVENT_STATUS.PENDING);
+        }}
+        disabled={loading || disabled}
+        className="px-3 py-1.5 text-xs font-medium bg-gray-600 text-white rounded-lg 
+                   hover:bg-gray-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        title="重置为待审核"
+      >
+        {loading ? '...' : '↺ 重置'}
+      </button>
+    </div>
   );
 }
 

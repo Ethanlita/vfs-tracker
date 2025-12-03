@@ -11,9 +11,9 @@ import {
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
 /**
- * S3 存储桶名称
+ * S3 存储桶名称 - 从环境变量读取，回退到默认值
  */
-const BUCKET_NAME = 'vfs-tracker-objstor';
+const BUCKET_NAME = import.meta.env.VITE_S3_BUCKET || 'vfs-tracker-objstor';
 
 /**
  * 获取文件的预签名 URL（用于下载/查看）

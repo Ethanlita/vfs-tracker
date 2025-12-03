@@ -3,7 +3,7 @@
  * 管理员嗓音测试列表页面，支持状态过滤、搜索和音频播放
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAWSClients } from '../contexts/AWSClientContext';
 import { searchTests, getUser } from '../services/dynamodb';
@@ -166,6 +166,10 @@ export default function TestListPage() {
     await Promise.all(uncachedIds.map(fetchUserInfo));
   }, [clients, userCache, fetchUserInfo]);
 
+  // 使用 ref 存储 lastKey，避免将其作为 useCallback 依赖导致不必要的重渲染
+  const lastKeyRef = React.useRef(null);
+  lastKeyRef.current = lastKey;
+
   /**
    * 加载测试列表（服务端搜索）
    */
@@ -186,7 +190,7 @@ export default function TestListPage() {
         status: statusFilter,
         query: activeQuery || undefined,
         limit: 50,
-        lastEvaluatedKey: append ? lastKey : null,
+        lastEvaluatedKey: append ? lastKeyRef.current : null,
       });
 
       // 按创建时间排序（最新在前）
@@ -214,7 +218,7 @@ export default function TestListPage() {
       setLoading(false);
       setLoadingMore(false);
     }
-  }, [clients, statusFilter, activeQuery, lastKey, loadUsersForTests]);
+  }, [clients, statusFilter, activeQuery, loadUsersForTests]);
 
   // 当过滤器变化时重新加载
   useEffect(() => {

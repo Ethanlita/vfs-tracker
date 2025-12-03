@@ -48,6 +48,7 @@ function EventStatusControl({ event, onUpdate }) {
   const { clients } = useAWSClients();
   const [loading, setLoading] = useState(false);
   const [activeStatus, setActiveStatus] = useState(event?.status || 'pending');
+  const [error, setError] = useState(null);
 
   // 同步外部状态变化
   useEffect(() => {
@@ -56,6 +57,7 @@ function EventStatusControl({ event, onUpdate }) {
 
   const handleStatusChange = async (newStatus) => {
     if (!clients || loading || !event) return;
+    setError(null);
 
     try {
       setLoading(true);
@@ -69,7 +71,9 @@ function EventStatusControl({ event, onUpdate }) {
       onUpdate?.(updated);
     } catch (err) {
       console.error('更新状态失败:', err);
-      alert(`更新失败: ${err.message}`);
+      setError(err.message);
+      // 5秒后自动清除错误提示
+      setTimeout(() => setError(null), 5000);
     } finally {
       setLoading(false);
     }
@@ -100,20 +104,27 @@ function EventStatusControl({ event, onUpdate }) {
   ];
 
   return (
-    <div className="flex items-center gap-2">
-      {statusOptions.map((option) => (
-        <button
-          key={option.value}
-          onClick={() => handleStatusChange(option.value)}
-          disabled={loading}
-          className={`flex-1 px-4 py-3 rounded-lg border text-sm font-medium transition-all
-                      disabled:opacity-50 disabled:cursor-not-allowed
-                      ${activeStatus === option.value ? option.activeClass : option.inactiveClass}`}
-        >
-          <span className="mr-1">{option.icon}</span>
-          {option.label}
-        </button>
-      ))}
+    <div className="space-y-2">
+      <div className="flex items-center gap-2">
+        {statusOptions.map((option) => (
+          <button
+            key={option.value}
+            onClick={() => handleStatusChange(option.value)}
+            disabled={loading}
+            className={`flex-1 px-4 py-3 rounded-lg border text-sm font-medium transition-all
+                        disabled:opacity-50 disabled:cursor-not-allowed
+                        ${activeStatus === option.value ? option.activeClass : option.inactiveClass}`}
+          >
+            <span className="mr-1">{option.icon}</span>
+            {option.label}
+          </button>
+        ))}
+      </div>
+      {error && (
+        <div className="text-sm text-red-400 bg-red-900/30 border border-red-700/50 rounded-lg px-3 py-2">
+          ⚠ 更新失败: {error}
+        </div>
+      )}
     </div>
   );
 }

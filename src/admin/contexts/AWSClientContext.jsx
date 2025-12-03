@@ -21,8 +21,8 @@ import {
   validatePIN
 } from '../utils/secureCredentialStorage';
 
-// AWS 区域配置
-const AWS_REGION = 'us-east-1';
+// AWS 区域配置 - 从环境变量读取，回退到默认值
+const AWS_REGION = import.meta.env.VITE_AWS_REGION || 'us-east-1';
 
 // 创建上下文
 const AWSClientContext = createContext(null);

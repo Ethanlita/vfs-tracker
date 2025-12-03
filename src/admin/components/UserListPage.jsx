@@ -3,7 +3,7 @@
  * 管理员用户列表页面，支持搜索和分页
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAWSClients } from '../contexts/AWSClientContext';
 import { scanTable, TABLES } from '../services/dynamodb';
 import UserTable from './UserTable';
@@ -56,6 +56,10 @@ export default function UserListPage() {
   const [selectedUser, setSelectedUser] = useState(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
+  // 使用 ref 存储 lastKey，避免将其作为 useCallback 依赖导致不必要的重渲染
+  const lastKeyRef = React.useRef(null);
+  lastKeyRef.current = lastKey;
+
   /**
    * 加载用户列表
    */
@@ -73,7 +77,7 @@ export default function UserListPage() {
 
       const result = await scanTable(clients.dynamoDB, TABLES.USERS, {
         limit: 20,
-        lastEvaluatedKey: append ? lastKey : null,
+        lastEvaluatedKey: append ? lastKeyRef.current : null,
       });
 
       if (append) {
@@ -91,7 +95,7 @@ export default function UserListPage() {
       setLoading(false);
       setLoadingMore(false);
     }
-  }, [clients, lastKey]);
+  }, [clients]);
 
   // 初始加载
   useEffect(() => {
