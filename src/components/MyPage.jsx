@@ -170,6 +170,12 @@ const MyPage = () => {
         >
           🎼 Hz-音符转换器
         </button>
+        <button
+          onClick={() => navigate('/vfs-effect-preview')}
+          className="bg-gradient-to-r from-violet-500 to-fuchsia-600 text-white px-6 py-3 rounded-lg font-semibold shadow-lg hover:from-violet-600 hover:to-fuchsia-700 transition-all duration-300 transform hover:scale-105"
+        >
+          🔊 VFS效果预览
+        </button>
         <PendingSyncButton className="bg-gradient-to-r from-yellow-500 to-amber-600 text-white px-6 py-3 rounded-lg font-semibold shadow-lg hover:from-yellow-600 hover:to-amber-700 transition-all duration-300 transform hover:scale-105" />
       </div>
 
