@@ -37,9 +37,10 @@ describe('EventDetailsPanel 组件集成测试', () => {
   const getSelfTestEvent = () => mockPrivateEvents.find(e => e.type === 'self_test');
   const getSurgeryEvent = () => mockPrivateEvents.find(e => e.type === 'surgery');
   const getFeelingLogEvent = () => mockPrivateEvents.find(e => e.type === 'feeling_log');
-  const getVoiceTrainingEvent = () => mockPrivateEvents.find(e => e.type === 'voice_training');
-  const getSelfPracticeEvent = () => mockPrivateEvents.find(e => e.type === 'self_practice');
-  const getHospitalTestEvent = () => mockPrivateEvents.find(e => e.type === 'hospital_test');
+  // 预留：后续可扩展更多事件类型的测试
+  // const getVoiceTrainingEvent = () => mockPrivateEvents.find(e => e.type === 'voice_training');
+  // const getSelfPracticeEvent = () => mockPrivateEvents.find(e => e.type === 'self_practice');
+  // const getHospitalTestEvent = () => mockPrivateEvents.find(e => e.type === 'hospital_test');
   
   // ============================================
   // 基础渲染测试

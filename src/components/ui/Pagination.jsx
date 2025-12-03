@@ -51,9 +51,9 @@ const Pagination = ({
   goToPage,
   prevPage,
   nextPage,
-  startIndex,
-  endIndex,
-  totalItems,
+  startIndex = 0,
+  endIndex = 0,
+  totalItems = 0,
   variant = 'default',
 }) => {
   // 如果只有一页，不显示分页
@@ -257,13 +257,6 @@ Pagination.propTypes = {
   endIndex: PropTypes.number,
   totalItems: PropTypes.number,
   variant: PropTypes.oneOf(['default', 'compact', 'simple']),
-};
-
-Pagination.defaultProps = {
-  startIndex: 0,
-  endIndex: 0,
-  totalItems: 0,
-  variant: 'default',
 };
 
 export default Pagination;

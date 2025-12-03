@@ -3,7 +3,7 @@
  * @description 提供分页逻辑，支持跳转、上一页、下一页等操作
  */
 
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 
 /**
  * 分页 Hook - 管理分页状态和逻辑
@@ -24,7 +24,7 @@ export function usePagination({ items = [], itemsPerPage = 10, initialPage = 1 }
   }, [items.length, itemsPerPage]);
 
   // 当总页数变化时，确保当前页不超过总页数
-  useMemo(() => {
+  useEffect(() => {
     if (currentPage > totalPages) {
       setCurrentPage(totalPages);
     }

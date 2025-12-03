@@ -15,10 +15,7 @@ import {
   formatCount,
   formatDate,
   formatArray,
-  formatPitchRange,
-  formatFormants,
   formatRBH,
-  getNestedValue,
 } from '../utils/formatters';
 
 /**

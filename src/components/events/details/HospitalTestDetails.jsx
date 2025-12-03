@@ -9,8 +9,6 @@ import { MetricCardGroup } from '../shared/MetricCard';
 import CollapsibleSection from '../shared/CollapsibleSection';
 import {
   formatHz,
-  formatDb,
-  formatPercent,
   formatDate,
   formatArray,
 } from '../utils/formatters';

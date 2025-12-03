@@ -223,7 +223,9 @@ export const autoFormat = (fieldPath, value) => {
     path.includes('jitter') ||
     path.includes('shimmer') ||
     path.includes('percent') ||
-    path.includes('ratio')
+    path === 'ratio' ||
+    path.endsWith('_ratio') ||
+    path.endsWith('.ratio')
   ) {
     return formatPercent(value);
   }

@@ -84,7 +84,7 @@ export const MetricCardGroup = ({ metrics, className = '' }) => {
   return (
     <div className={`grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 ${className}`}>
       {validMetrics.map((metric, index) => (
-        <MetricCard key={index} {...metric} />
+        <MetricCard key={`${metric.label}-${index}`} {...metric} />
       ))}
     </div>
   );

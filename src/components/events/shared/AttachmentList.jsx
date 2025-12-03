@@ -124,7 +124,7 @@ const AttachmentList = ({ attachments, className = '' }) => {
       <div className="space-y-2">
         {attachments.map((attachment, index) => (
           <AttachmentItem
-            key={index}
+            key={attachment.fileUrl || `attachment-${index}`}
             attachment={attachment}
             onDownload={handleDownload}
             isLoading={loadingUrl === attachment.fileUrl}
