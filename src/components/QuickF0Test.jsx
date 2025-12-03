@@ -6,6 +6,7 @@ import { PitchDetector } from 'pitchy';
 import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
 import { ensureAppError, PermissionError, StorageError, ValidationError } from '../utils/apiError.js';
 import { ApiErrorNotice } from './ApiErrorNotice.jsx';
+import { useDocumentMeta } from '../hooks/useDocumentMeta';
 
 const frequencyToNoteName = (frequency) => {
   if (!frequency || frequency <= 0) return '--';
@@ -31,6 +32,12 @@ const CustomTooltip = ({ active, payload }) => {
 const OFFLINE_QUEUE_KEY = 'pendingEvents:v1';
 
 const QuickF0Test = () => {
+  // 设置页面 meta 标签
+  useDocumentMeta({
+    title: '快速基频测试',
+    description: '实时测量您的基频（F0），通过可视化图表了解您的嗓音稳定性和音高范围。'
+  });
+
   const navigate = useNavigate();
   const { user } = useAuth();
 

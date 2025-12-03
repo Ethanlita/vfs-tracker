@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Soundfont from 'soundfont-player';
+import { useDocumentMeta } from '../hooks/useDocumentMeta';
 
 const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 const NOTE_BASES = {
@@ -159,6 +160,12 @@ const formatFrequency = (value) => {
  * @returns {JSX.Element} Page component.
  */
 const NoteFrequencyTool = () => {
+  // 设置页面 meta 标签
+  useDocumentMeta({
+    title: 'Hz-音符转换器',
+    description: '在线 Hz 和音名互转工具，支持钢琴键盘可视化和声音试听，帮助您理解基频对应的音符。'
+  });
+
   const { keys, whiteKeyCount } = useMemo(() => generatePianoKeys(), []);
   const [frequencyInput, setFrequencyInput] = useState('440');
   const [noteInput, setNoteInput] = useState('A4');

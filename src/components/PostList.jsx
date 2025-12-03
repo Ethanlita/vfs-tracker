@@ -3,8 +3,15 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { useAsync } from '../utils/useAsync.js';
 import { ApiError } from '../utils/apiError.js';
 import { ApiErrorNotice } from './ApiErrorNotice.jsx';
+import { useDocumentMeta } from '../hooks/useDocumentMeta';
 
 const PostList = () => {
+  // 设置页面 meta 标签
+  useDocumentMeta({
+    title: '文档中心',
+    description: '浏览 VFS Tracker 的使用指南、嗓音测试报告解读、基频参数说明等文档。'
+  });
+
   const [posts, setPosts] = useState([]);
   const [searchParams] = useSearchParams();
   const folderFilter = searchParams.get('folder');

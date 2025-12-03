@@ -14,6 +14,7 @@ import SurveyTVQG from './SurveyTVQG';
 import TestResultsDisplay from './TestResultsDisplay';
 import { ensureAppError, ServiceError } from '../utils/apiError.js';
 import { ApiErrorNotice } from './ApiErrorNotice.jsx';
+import { useDocumentMeta } from '../hooks/useDocumentMeta';
 
 /**
  * @en Defines the structure and content for each step of the voice test wizard.
@@ -81,6 +82,12 @@ const STEPS = [
  * @returns {JSX.Element} The rendered voice test wizard component.
  */
 const VoiceTestWizard = () => {
+  // 设置页面 meta 标签
+  useDocumentMeta({
+    title: '嗓音测试',
+    description: '进行全面的嗓音女性化测试，包括基频测量、音域测定、共振峰分析和主观评估问卷。'
+  });
+
   const { user } = useAuth();
   const [currentStep, setCurrentStep] = useState(0);
   const [sessionId, setSessionId] = useState(null);

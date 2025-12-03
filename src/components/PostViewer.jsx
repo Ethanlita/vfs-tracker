@@ -5,11 +5,18 @@ import remarkGfm from 'remark-gfm';
 import { useAsync } from '../utils/useAsync.js';
 import { ApiError, ClientError } from '../utils/apiError.js';
 import { ApiErrorNotice } from './ApiErrorNotice.jsx';
+import { useDocumentMeta } from '../hooks/useDocumentMeta';
 
 const PostViewer = () => {
   const [searchParams] = useSearchParams();
   const docPath = searchParams.get('doc');
   const docTitle = docPath ? docPath.split('/').pop().replace(/\.md$/, '') : '';
+
+  // 设置页面 meta 标签（根据文档标题动态设置）
+  useDocumentMeta({
+    title: docTitle || '文档',
+    description: docTitle ? `阅读 VFS Tracker 文档：${docTitle}` : '浏览 VFS Tracker 的帮助文档和使用指南。'
+  });
 
   // 安全检查函数 - 只允许.md文件
   const isValidMarkdownFile = (filePath) => {

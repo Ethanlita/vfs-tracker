@@ -8,6 +8,7 @@ import { getUserDisplayName } from '../utils/avatar.js';
 import { useAuth } from '../contexts/AuthContext.jsx';
 import PendingSyncButton from './PendingSyncButton.jsx';
 import { ApiErrorNotice } from './ApiErrorNotice.jsx';
+import { useDocumentMeta } from '../hooks/useDocumentMeta';
 
 /**
  * @en The MyPage component serves as the user's personal dashboard. It fetches,
@@ -18,6 +19,12 @@ import { ApiErrorNotice } from './ApiErrorNotice.jsx';
  * @returns {JSX.Element} The rendered personal dashboard page.
  */
 const MyPage = () => {
+  // 设置页面 meta 标签
+  useDocumentMeta({
+    title: '我的页面',
+    description: '管理您的嗓音女性化训练记录，查看个人基频变化图表和事件时间线。'
+  });
+
   // --- STATE MANAGEMENT ---
   const navigate = useNavigate();
 

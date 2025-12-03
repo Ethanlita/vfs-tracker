@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { Amplify } from 'aws-amplify';
 import { Home } from 'lucide-react';
 import CustomAuthenticator from './CustomAuthenticator';
+import { useDocumentMeta } from '../hooks/useDocumentMeta';
 
 /**
  * 独立的登录页面组件
@@ -21,6 +22,12 @@ import CustomAuthenticator from './CustomAuthenticator';
  * @returns {JSX.Element} 登录页面
  */
 const LoginPage = () => {
+  // 设置页面 meta 标签
+  useDocumentMeta({
+    title: '登录',
+    description: '登录 VFS Tracker 开始记录您的嗓音女性化训练旅程。'
+  });
+
   const navigate = useNavigate();
   const location = useLocation();
   const { user, isAuthenticated, handleAuthSuccess, authInitialized } = useAuth();

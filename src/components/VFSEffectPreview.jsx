@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import Recorder from './Recorder';
 import { processWithRubberBand } from '../utils/rubberbandProcessor';
 import { createTemporaryAudioContext } from '../utils/audioContextManager';
+import { useDocumentMeta } from '../hooks/useDocumentMeta';
 
 /**
  * @zh VFS效果预览组件
@@ -23,6 +24,12 @@ import { createTemporaryAudioContext } from '../utils/audioContextManager';
  * @returns {JSX.Element} VFS效果预览组件
  */
 const VFSEffectPreview = ({ initialProcessedBlobs = null } = {}) => {
+  // 设置页面 meta 标签
+  useDocumentMeta({
+    title: 'VFS效果预览',
+    description: '在线预览嗓音女性化变调效果，录制您的声音并试听不同程度的音高调整。'
+  });
+
   const navigate = useNavigate();
   
   // 状态管理

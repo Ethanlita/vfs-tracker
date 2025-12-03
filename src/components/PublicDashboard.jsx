@@ -15,6 +15,7 @@ import { getAllEvents, getUserPublicProfile } from '../api';
 import { useAsync } from '../utils/useAsync.js';
 import EnhancedDataCharts from './EnhancedDataCharts.jsx';
 import { ApiErrorNotice } from './ApiErrorNotice.jsx';
+import { useDocumentMeta } from '../hooks/useDocumentMeta';
 
 /**
  * @en The PublicDashboard component displays aggregated and anonymized data from all users.
@@ -49,6 +50,12 @@ const parseNumber = (value) => {
 };
 
 const PublicDashboard = () => {
+  // 设置页面 meta 标签
+  useDocumentMeta({
+    title: '公共仪表板',
+    description: '查看所有用户的嗓音女性化训练数据汇总，包括基频变化趋势、共振峰分析和统计指标。'
+  });
+
   const [selectedUserId, setSelectedUserId] = useState(null);
   const [selectedUserProfile, setSelectedUserProfile] = useState(null);
   const [stats, setStats] = useState({

@@ -2,12 +2,19 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import EventForm from './EventForm';
 import { useAuth } from '../contexts/AuthContext.jsx';
+import { useDocumentMeta } from '../hooks/useDocumentMeta';
 
 /**
  * @en AddEvent component for adding new voice events
  * @zh 用于添加新嗓音事件的页面组件
  */
 const AddEvent = () => {
+  // 设置页面 meta 标签
+  useDocumentMeta({
+    title: '添加事件',
+    description: '记录您的嗓音女性化训练事件，包括自测结果、医院检查、手术记录和日常感受。'
+  });
+
   const navigate = useNavigate();
 
   // @en Use AuthContext exclusively - it already uses Amplify v6 standard APIs

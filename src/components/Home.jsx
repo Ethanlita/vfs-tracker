@@ -2,6 +2,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import Timeline from './Timeline';
+import { useDocumentMeta } from '../hooks/useDocumentMeta';
 
 /**
  * @en The Home page component, serving as the main landing page for the application.
@@ -10,6 +11,12 @@ import Timeline from './Timeline';
 const Home = () => {
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
+
+  // 设置页面 meta 标签
+  useDocumentMeta({
+    title: null, // 首页使用默认标题
+    description: 'VFS Tracker 是一个免费开源的嗓音女性化训练追踪工具。记录您的嗓音训练历程，分析基频、共振峰等声学参数，可视化展示进步趋势。'
+  });
 
   const handleViewDashboard = () => {
     navigate('/dashboard');

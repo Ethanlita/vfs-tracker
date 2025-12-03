@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { useEffect } from 'react';
+import { useDocumentMeta } from '../hooks/useDocumentMeta';
 
 /**
  * 404 页面组件
@@ -14,18 +14,12 @@ import { useEffect } from 'react';
  * @returns {JSX.Element} 404 页面组件
  */
 function NotFoundPage() {
-  useEffect(() => {
-    // 动态添加 noindex meta 标签，告诉搜索引擎不要索引这个页面
-    const meta = document.createElement('meta');
-    meta.name = 'robots';
-    meta.content = 'noindex';
-    document.head.appendChild(meta);
-
-    // 组件卸载时移除 meta 标签
-    return () => {
-      document.head.removeChild(meta);
-    };
-  }, []);
+  // 设置页面 meta 标签，noIndex 阻止搜索引擎索引
+  useDocumentMeta({
+    title: '页面不存在',
+    description: '您访问的页面不存在或已被移动',
+    noIndex: true
+  });
 
   return (
     <div className="min-h-[60vh] flex items-center justify-center">

@@ -10,6 +10,7 @@ import {
 import { getSongRecommendations } from '../api.js'; // Import the new API function
 import { ensureAppError } from '../utils/apiError.js';
 import { ApiErrorNotice } from './ApiErrorNotice.jsx';
+import { useDocumentMeta } from '../hooks/useDocumentMeta';
 
 /**
  * @zh 将给定的频率（Hz）转换为最接近的音乐音名。
@@ -49,6 +50,12 @@ const median = (arr) => {
  * 为保持示例简单，音高判定采用 pitchy 的实时 F0 估计，判定条件较为宽松。
  */
 const ScalePractice = () => {
+  // 设置页面 meta 标签
+  useDocumentMeta({
+    title: '音阶练习',
+    description: '跟着钢琴音练习音阶，实时检测您的音高准确度，帮助您提升嗓音控制能力。'
+  });
+
   const navigate = useNavigate();
 
   // --- 向导步骤状态 ---
