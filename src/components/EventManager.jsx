@@ -1,6 +1,7 @@
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { deleteEvent, getFileUrl } from '../api';
+import { deleteEvent } from '../api';
+import EventDetailsPanel from './events/EventDetailsPanel';
 
 // 防止某些构建下 motion 被判定未使用
 void motion;
@@ -25,7 +26,6 @@ const EventManager = ({ events, onEventDeleted }) => { // 移除未使用参数
   const [sortBy, setSortBy] = useState('newest');
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [showDetails, setShowDetails] = useState(false);
-  const [resolvedAtts, setResolvedAtts] = useState([]);
 
   // 安全获取类型配置（兜底）
   const getTypeConfig = useCallback((type) => {
@@ -120,32 +120,6 @@ const EventManager = ({ events, onEventDeleted }) => { // 移除未使用参数
     });
     return stats;
   }, [events]);
-
-  useEffect(() => {
-    const fetchAttachments = async () => {
-      if (selectedEvent && selectedEvent.attachments) {
-        const urls = await Promise.all(
-          selectedEvent.attachments.map(async (attachment) => {
-            if (!attachment.fileUrl) return null;
-            // 如果 fileUrl 已经是可访问的 URL，则直接使用
-            if (attachment.fileUrl.startsWith('http')) {
-              return { ...attachment, signedUrl: attachment.fileUrl };
-            }
-            // 否则，它是一个 S3 key，需要获取签名 URL
-            try {
-              const signedUrl = await getFileUrl(attachment.fileUrl);
-              return { ...attachment, signedUrl };
-            } catch (error) {
-              console.error(`获取文件 ${attachment.fileName} 的签名URL失败:`, error);
-              return { ...attachment, signedUrl: null, error: true }; // 标记错误
-            }
-          })
-        );
-        setResolvedAtts(urls.filter(Boolean));
-      }
-    };
-    fetchAttachments();
-  }, [selectedEvent]);
 
   const handleEventClick = (event) => {
     setSelectedEvent(event);
@@ -378,17 +352,17 @@ const EventManager = ({ events, onEventDeleted }) => { // 移除未使用参数
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-white rounded-xl max-w-2xl w-full max-h-screen overflow-y-auto p-6"
+              className="bg-white dark:bg-gray-900 rounded-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6"
               data-testid="event-detail"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-xl font-semibold text-gray-800">
+                <h3 className="text-xl font-semibold text-gray-800 dark:text-gray-100">
                   {getTypeConfig(selectedEvent.type).icon} {getTypeConfig(selectedEvent.type).label}
                 </h3>
                 <button
                   onClick={() => setShowDetails(false)}
-                  className="text-gray-400 hover:text-gray-600"
+                  className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
                 >
                   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -396,67 +370,27 @@ const EventManager = ({ events, onEventDeleted }) => { // 移除未使用参数
                 </button>
               </div>
 
-              <div className="space-y-4">
-                <div>
-                  <h4 className="font-medium text-gray-800 mb-1">事件日期</h4>
-                  <p className="text-gray-600">{formatDate(selectedEvent.date || selectedEvent.createdAt)}</p>
-                </div>
+              {/* 使用 EventDetailsPanel 展示详情 */}
+              <EventDetailsPanel 
+                event={selectedEvent} 
+                showHeader={false}
+                showAttachments={true}
+                showMetadata={true}
+              />
 
-                {/* 根据事件类型显示详细信息 */}
-                {selectedEvent.details && (
-                  <div>
-                    <h4 className="font-medium text-gray-800 mb-2">详细信息</h4>
-                    <div className="bg-gray-50 rounded-lg p-4 space-y-2">
-                      {Object.entries(selectedEvent.details).map(([key, value]) => {
-                        if (!value || key === 'attachmentUrl') return null; // 旧字段忽略
-                        return (
-                          <div key={key} className="flex justify-between">
-                            <span className="text-gray-600 capitalize">{key}:</span>
-                            <span className="font-medium text-right">
-                              {Array.isArray(value) ? value.join(', ') :
-                               typeof value === 'object' ? JSON.stringify(value) :
-                               value.toString()}
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                {resolvedAtts && resolvedAtts.length > 0 && (
-                  <div data-testid="attachments">
-                    <h4 className="font-medium text-gray-800 mb-2 mt-4">附件</h4>
-                    <div className="flex flex-wrap gap-2" data-testid="attachment-list">
-                      {resolvedAtts.map((att, i) => (
-                        <a
-                          key={i}
-                          href={att.downloadUrl || att.fileUrl}
-                          target="_blank" rel="noreferrer"
-                          className="inline-flex items-center px-3 py-1.5 rounded-md bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200"
-                          data-testid="attachment-item"
-                        >
-                          📎 {att.fileName || `附件${i+1}`}
-                        </a>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                <div className="flex space-x-3 pt-4">
-                  <button
-                    onClick={() => setShowDetails(false)}
-                    className="flex-1 bg-gray-200 text-gray-800 py-2 px-4 rounded-lg hover:bg-gray-300 transition-colors"
-                  >
-                    关闭
-                  </button>
-                  <button
-                    onClick={() => handleDeleteEvent(selectedEvent.eventId)}
-                    className="bg-red-500 text-white py-2 px-4 rounded-lg hover:bg-red-600 transition-colors"
-                  >
-                    删除事件
-                  </button>
-                </div>
+              <div className="flex space-x-3 pt-4 mt-4 border-t border-gray-200 dark:border-gray-700">
+                <button
+                  onClick={() => setShowDetails(false)}
+                  className="flex-1 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 py-2 px-4 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
+                >
+                  关闭
+                </button>
+                <button
+                  onClick={() => handleDeleteEvent(selectedEvent.eventId)}
+                  className="bg-red-500 text-white py-2 px-4 rounded-lg hover:bg-red-600 transition-colors"
+                >
+                  删除事件
+                </button>
               </div>
             </motion.div>
           </motion.div>

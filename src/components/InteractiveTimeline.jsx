@@ -1,176 +1,18 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { createPortal } from 'react-dom';
-import { resolveAttachmentLinks } from '../utils/attachments.js';
+import { EventDetailsPanel } from './events';
+import { usePagination } from '../hooks/usePagination';
+import Pagination from './ui/Pagination';
 
 // Prevent motion from being flagged as unused in some builds
 void motion;
 
-const EventDetails = ({ event }) => {
-  const d = event?.details || {};
-  const rows = [];
-  const shownKeys = new Set();
-
-  const addRow = (label, key, valueOverride) => {
-    const value = valueOverride !== undefined ? valueOverride : d[key];
-    if (value !== undefined && value !== null && value !== '') {
-      rows.push(
-        <div key={label} className="flex justify-between">
-          <span className="text-gray-600">{label}:</span>
-          <span className="font-medium text-right break-all">
-            {Array.isArray(value) ? value.join(', ') : String(value)}
-          </span>
-        </div>
-      );
-      if (key) shownKeys.add(key);
-    }
-  };
-  const addParam = (label, key, unit) => {
-    const v = d[key];
-    if (v !== undefined && v !== null && v !== '') {
-      rows.push(
-        <div key={label} className="flex justify-between">
-          <span className="text-gray-600">{label}:</span>
-          <span className="font-medium">{v} {unit}</span>
-        </div>
-      );
-      shownKeys.add(key);
-    }
-  };
-
-  const headerBlocks = [];
-  if (d.content) {
-    headerBlocks.push(
-      <div key="content" className="col-span-2">
-        <h4 className="font-medium text-gray-800 mb-1">内容</h4>
-        <p className="text-sm text-gray-700 whitespace-pre-wrap">{d.content}</p>
-      </div>
-    );
-    shownKeys.add('content');
-  }
-  if (d.notes || d.remark || d.remarks) {
-    const n = d.notes || d.remark || d.remarks;
-    headerBlocks.push(
-      <div key="notes" className="col-span-2">
-        <h4 className="font-medium text-gray-800 mb-1">备注</h4>
-        <p className="text-sm text-gray-700 whitespace-pre-wrap">{n}</p>
-      </div>
-    );
-    shownKeys.add('notes'); shownKeys.add('remark'); shownKeys.add('remarks');
-  }
-
-  switch (event?.type) {
-    case 'self_test':
-    case 'hospital_test':
-      addRow('地点', 'location');
-      addRow('设备', 'equipmentUsed');
-      addRow('App', 'appUsed');
-      addRow('声音状态', 'sound');
-      addRow('发声方式', 'voicing');
-      addParam('基频', 'fundamentalFrequency', 'Hz');
-      addParam('Jitter', 'jitter', '%');
-      addParam('Shimmer', 'shimmer', '%');
-      addParam('谐噪比', 'hnr', 'dB');
-      if (d.pitch && typeof d.pitch === 'object') {
-        const { max, min, avg } = d.pitch;
-        addRow('最高音', null, `${max} Hz`);
-        addRow('最低音', null, `${min} Hz`);
-        addRow('平均音', null, `${avg} Hz`);
-        shownKeys.add('pitch');
-      }
-      break;
-    case 'voice_training':
-    case 'self_practice':
-      addRow('主题', 'topic');
-      addRow('时长', 'duration');
-      addRow('练习要点', 'keypoints');
-      break;
-    case 'feeling_log':
-      break;
-    case 'surgery':
-      addRow('医院', 'hospital');
-      addRow('医生', 'doctor');
-      addRow('备注', 'notes');
-      break;
-    default:
-      break;
-  }
-
-  // --- 统一解析附件 ---
-  const [resolvedAtts, setResolvedAtts] = useState([]);
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      if (!event?.attachments || event.attachments.length === 0) {
-        setResolvedAtts([]);
-        return;
-      }
-      // The backend saves the PDF report as a standard attachment.
-      // We just need to resolve all attachments and the link will be correct.
-      const list = await resolveAttachmentLinks(event.attachments);
-      if (!cancelled) {
-        setResolvedAtts(list);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [event]);
-
-  Object.entries(d).forEach(([k, v]) => {
-    if (shownKeys.has(k)) return;
-    if (v === undefined || v === null || v === '') return;
-    if (typeof v === 'object') {
-      try {
-        rows.push(
-          <div key={k} className="flex justify-between">
-            <span className="text-gray-600">{k}:</span>
-            <span className="font-medium text-right break-all">{JSON.stringify(v)}</span>
-          </div>
-        );
-      } catch (e) {
-        // 忽略无法序列化的对象
-        void e;
-      }
-    } else {
-      addRow(k, k);
-    }
-  });
-
-  return (
-    <div className="space-y-4">
-      {headerBlocks.length > 0 && <div className="space-y-3">{headerBlocks}</div>}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2 text-sm">
-        {rows}
-      </div>
-
-      {resolvedAtts.length > 0 && (
-        <div className="pt-3">
-          <h4 className="font-medium text-gray-800 mb-2">附件与报告</h4>
-          <div className="flex flex-wrap gap-2">
-            {resolvedAtts.map((att, i) => {
-              // Differentiate the report PDF by its filename for special styling
-              const isReport = att.fileName === 'voice_test_report.pdf';
-              const linkClass = isReport
-                ? "inline-flex items-center px-3 py-1.5 rounded-md bg-green-50 text-green-700 hover:bg-green-100 border border-green-200 text-sm font-semibold"
-                : "inline-flex items-center px-3 py-1.5 rounded-md bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200 text-sm";
-              const icon = isReport ? '📄' : '📎';
-
-              return (
-                <a
-                  key={i}
-                  href={att.downloadUrl || att.fileUrl}
-                  target="_blank" rel="noreferrer"
-                  className={linkClass}
-                >
-                  {icon} {att.fileName || `附件${i+1}`}
-                </a>
-              );
-            })}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
+/**
+ * 移动端每页显示的事件数量
+ * 可以根据需要调整
+ */
+const MOBILE_ITEMS_PER_PAGE = 10;
 
 const InteractiveTimeline = ({ events = [] }) => {
   const [selectedEvent, setSelectedEvent] = useState(null);
@@ -199,6 +41,15 @@ const InteractiveTimeline = ({ events = [] }) => {
     };
   };
 
+  // 按时间排序的事件
+  const ordered = [...events].sort((a, b) => new Date(a.date || a.createdAt) - new Date(b.date || b.createdAt));
+
+  // 移动端分页 - 使用 usePagination Hook
+  const pagination = usePagination({
+    items: ordered,
+    itemsPerPage: MOBILE_ITEMS_PER_PAGE,
+  });
+
   if (!events || events.length === 0) {
     return (
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center py-12">
@@ -209,8 +60,6 @@ const InteractiveTimeline = ({ events = [] }) => {
     );
   }
 
-  const ordered = [...events].sort((a, b) => new Date(a.date || a.createdAt) - new Date(b.date || b.createdAt));
-
   // 尺寸与对齐参数 （仅用于横向模式）
   const AXIS_THICKNESS = 1;       // 轴线 1px
   const DOT = 10;                 // 圆点直径
@@ -219,9 +68,10 @@ const InteractiveTimeline = ({ events = [] }) => {
 
   return (
     <div className="relative isolate pt-4 pb-4">
-      {/* 移动端：纵向列表（不显示时间轴与箭头） */}
+      {/* 移动端：纵向列表（使用分页） */}
       <div className="md:hidden px-1 space-y-4">
-        {ordered.map((event, index) => {
+        {/* 分页后的事件列表 */}
+        {pagination.paginatedItems.map((event, index) => {
           const cfg = typeConfig[event.type] || { label: event.type, icon: '📌', bg: 'bg-gray-400' };
           const dateInfo = formatDate(event.date || event.createdAt);
           const summary =
@@ -253,6 +103,24 @@ const InteractiveTimeline = ({ events = [] }) => {
             </div>
           );
         })}
+
+        {/* 移动端分页组件 - 使用紧凑模式 */}
+        {pagination.totalPages > 1 && (
+          <Pagination
+            currentPage={pagination.currentPage}
+            totalPages={pagination.totalPages}
+            pageRange={pagination.pageRange}
+            hasPrevPage={pagination.hasPrevPage}
+            hasNextPage={pagination.hasNextPage}
+            goToPage={pagination.goToPage}
+            prevPage={pagination.prevPage}
+            nextPage={pagination.nextPage}
+            startIndex={pagination.startIndex}
+            endIndex={pagination.endIndex}
+            totalItems={pagination.totalItems}
+            variant="compact"
+          />
+        )}
       </div>
 
       {/* 桌面端：横向时间轴（保留轴与箭头） */}
@@ -343,37 +211,25 @@ const InteractiveTimeline = ({ events = [] }) => {
         </div>
       </div>
 
-      {/* 事件详情弹窗 */}
+      {/* 事件详情弹窗 - 使用 EventDetailsPanel 组件展示格式化的事件详情 */}
       {selectedEvent && createPortal(
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[80vh] overflow-y-auto">
-            <div className="sticky top-0 bg-white border-b border-gray-200 p-6 rounded-t-2xl">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <span className="text-2xl">
-                    {(typeConfig[selectedEvent.type] || { icon: '📌' }).icon}
-                  </span>
-                  <div>
-                    <h2 className="text-xl font-bold text-gray-900">
-                      {(typeConfig[selectedEvent.type] || { label: selectedEvent.type }).label}
-                    </h2>
-                    <p className="text-sm text-gray-500">
-                      {formatDate(selectedEvent.date || selectedEvent.createdAt).full}
-                    </p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setSelectedEvent(null)}
-                  className="p-2 hover:bg-gray-100 rounded-full transition-colors"
-                >
-                  <svg className="w-6 h-6 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
+          <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[85vh] overflow-y-auto">
+            {/* 弹窗头部：关闭按钮 */}
+            <div className="sticky top-0 bg-white border-b border-gray-200 p-4 rounded-t-2xl flex justify-end">
+              <button
+                onClick={() => setSelectedEvent(null)}
+                className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+                aria-label="关闭"
+              >
+                <svg className="w-6 h-6 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
             </div>
+            {/* 事件详情面板 */}
             <div className="p-6">
-              <EventDetails event={selectedEvent} />
+              <EventDetailsPanel event={selectedEvent} />
             </div>
           </div>
         </div>,
