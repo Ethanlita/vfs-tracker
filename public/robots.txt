@@ -1,0 +1,14 @@
+# VFS Tracker robots.txt
+# https://vfs-tracker.app
+
+User-agent: *
+Allow: /
+
+# 站点地图
+Sitemap: https://vfs-tracker.app/sitemap.xml
+
+# 不索引管理后台
+Disallow: /admin/
+
+# 不索引 API 测试页面
+Disallow: /api-test

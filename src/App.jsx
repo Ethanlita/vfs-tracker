@@ -25,6 +25,7 @@ import ScalePractice from './components/ScalePractice'; // 新增导入
 import VFSEffectPreview from './components/VFSEffectPreview'; // VFS效果预览
 import RegionSwitchBanner from './components/RegionSwitchBanner.jsx';
 import NoteFrequencyTool from './components/NoteFrequencyTool.jsx';
+import NotFoundPage from './components/NotFoundPage'; // 404 页面
 
 // 管理后台 - 使用懒加载以避免影响主应用的打包体积
 const AdminApp = lazy(() => import('./admin/AdminApp'));
@@ -233,8 +234,8 @@ const AppContent = () => {
             <Route path="/quick-f0-test" element={<QuickF0Test />} /> {/* 新增快速基频测试路由 */}
             <Route path="/scale-practice" element={<ScalePractice />} /> {/* 新增音阶练习路由 */}
           </Route>
-          {/* @en A catch-all route to redirect any unknown paths to the homepage. @zh 一个包罗万象的路由，可将任何未知路径重定向到主页。 */}
-          <Route path="*" element={<Navigate to="/" replace />} />
+          {/* @en A catch-all route to show 404 page for unknown paths. @zh 显示 404 页面的通配路由，用于处理未知路径。 */}
+          <Route path="*" element={<NotFoundPage />} />
         </Routes>
       </Layout>
 
