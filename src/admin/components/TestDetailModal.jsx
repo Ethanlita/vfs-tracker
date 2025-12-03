@@ -6,7 +6,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useAWSClients } from '../contexts/AWSClientContext';
 import { getUser } from '../services/dynamodb';
-import { getTestSessionFiles, getPresignedUrl, listObjects } from '../services/s3';
+import { getTestSessionFiles, getPresignedUrl } from '../services/s3';
 
 /**
  * 格式化日期时间

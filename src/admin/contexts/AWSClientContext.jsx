@@ -8,7 +8,7 @@
  * - 自动检测已保存的凭证，需要 PIN 解锁
  */
 
-import { createContext, useContext, useMemo, useState, useCallback, useEffect } from 'react';
+import { createContext, useContext, useMemo, useState, useCallback } from 'react';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
 import { S3Client } from '@aws-sdk/client-s3';

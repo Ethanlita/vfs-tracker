@@ -139,9 +139,9 @@ export default function UserDetailDrawer({ user, open, onClose }) {
 
       {/* 抽屉面板 */}
       <div 
-        className={`fixed right-0 top-0 h-full w-full max-w-lg bg-gray-900 border-l border-gray-700 
+        className="fixed right-0 top-0 h-full w-full max-w-lg bg-gray-900 border-l border-gray-700 
                     shadow-2xl z-50 transform transition-transform duration-300 
-                    ${open ? 'translate-x-0' : 'translate-x-full'}`}
+                    translate-x-0"
       >
         {/* 头部 */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-700">

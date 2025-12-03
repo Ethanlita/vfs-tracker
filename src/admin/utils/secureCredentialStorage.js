@@ -195,11 +195,12 @@ export function getCredentialInfo() {
 
 /**
  * Uint8Array 转 Base64 字符串
+ * 使用 Array.from 避免大数组时 String.fromCharCode.apply 超出调用栈限制
  * @param {Uint8Array} array
  * @returns {string}
  */
 function arrayToBase64(array) {
-  return btoa(String.fromCharCode.apply(null, array));
+  return btoa(Array.from(array, byte => String.fromCharCode(byte)).join(''));
 }
 
 /**

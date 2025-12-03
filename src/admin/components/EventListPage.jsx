@@ -6,7 +6,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAWSClients } from '../contexts/AWSClientContext';
-import { searchEvents, getUser, EVENT_STATUS, EVENT_TYPES, TABLES } from '../services/dynamodb';
+import { searchEvents, getUser, EVENT_TYPES } from '../services/dynamodb';
 import EventTable from './EventTable';
 import EventDetailModal from './EventDetailModal';
 

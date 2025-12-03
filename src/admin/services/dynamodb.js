@@ -328,6 +328,7 @@ export async function scanTests(client, options = {}) {
 
 /**
  * 搜索测试（服务端搜索，支持多条件）
+ * DynamoDB FilterExpression 不支持 OR 条件，需要分别扫描并合并结果
  * @param {DynamoDBDocumentClient} client
  * @param {object} options
  * @param {string} [options.query] - 搜索关键词（搜索 sessionId、userId）
@@ -340,54 +341,86 @@ export async function scanTests(client, options = {}) {
 export async function searchTests(client, options = {}) {
   const { query, status, startTime, endTime, limit = 50, lastEvaluatedKey } = options;
 
-  const filters = [];
-  const expressionValues = {};
-  const expressionNames = {};
+  // 构建基础过滤条件（不包括 OR 搜索）
+  const baseFilters = [];
+  const baseExpressionValues = {};
+  const baseExpressionNames = {};
 
   // 状态过滤
   if (status && status !== 'all') {
-    filters.push('#status = :status');
-    expressionValues[':status'] = status;
-    expressionNames['#status'] = 'status';
+    baseFilters.push('#status = :status');
+    baseExpressionValues[':status'] = status;
+    baseExpressionNames['#status'] = 'status';
   }
 
   // 时间范围过滤
   if (startTime) {
-    filters.push('createdAt >= :startTime');
-    expressionValues[':startTime'] = startTime;
+    baseFilters.push('createdAt >= :startTime');
+    baseExpressionValues[':startTime'] = startTime;
   }
   if (endTime) {
-    filters.push('createdAt <= :endTime');
-    expressionValues[':endTime'] = endTime;
+    baseFilters.push('createdAt <= :endTime');
+    baseExpressionValues[':endTime'] = endTime;
   }
 
-  // 关键词搜索：sessionId 或 userId
-  // 注意：DynamoDB 不支持 OR 条件和 contains 同时使用，需要分别查询或使用 Scan
+  // 如果有 UUID 格式的查询词，需要分别查询 sessionId 和 userId
+  // DynamoDB FilterExpression 不支持 OR 条件
   if (query) {
-    // 如果是完整的 UUID 格式，尝试精确匹配
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     if (uuidRegex.test(query)) {
-      // 可能是 sessionId 或 userId
-      filters.push('(sessionId = :query OR userId = :query)');
-      expressionValues[':query'] = query;
+      // UUID 格式：分别查询 sessionId 和 userId，然后合并结果
+      const sessionIdFilters = [...baseFilters, 'sessionId = :query'];
+      const userIdFilters = [...baseFilters, 'userId = :query'];
+
+      const [sessionIdResult, userIdResult] = await Promise.all([
+        scanTable(client, TABLES.TESTS, {
+          limit,
+          lastEvaluatedKey,
+          filterExpression: sessionIdFilters.join(' AND '),
+          expressionValues: { ...baseExpressionValues, ':query': query },
+          expressionNames: Object.keys(baseExpressionNames).length > 0 ? baseExpressionNames : undefined,
+        }),
+        scanTable(client, TABLES.TESTS, {
+          limit,
+          lastEvaluatedKey,
+          filterExpression: userIdFilters.join(' AND '),
+          expressionValues: { ...baseExpressionValues, ':query': query },
+          expressionNames: Object.keys(baseExpressionNames).length > 0 ? baseExpressionNames : undefined,
+        }),
+      ]);
+
+      // 合并并去重（使用 sessionId 作为唯一标识）
+      const itemsMap = new Map();
+      for (const item of sessionIdResult.items) {
+        itemsMap.set(item.sessionId, item);
+      }
+      for (const item of userIdResult.items) {
+        itemsMap.set(item.sessionId, item);
+      }
+
+      return {
+        items: Array.from(itemsMap.values()).slice(0, limit),
+        lastEvaluatedKey: sessionIdResult.lastEvaluatedKey || userIdResult.lastEvaluatedKey,
+      };
     } else {
-      // 前缀匹配 sessionId
-      filters.push('begins_with(sessionId, :query)');
-      expressionValues[':query'] = query;
+      // 非 UUID：使用前缀匹配 sessionId
+      baseFilters.push('begins_with(sessionId, :query)');
+      baseExpressionValues[':query'] = query;
     }
   }
 
   return scanTable(client, TABLES.TESTS, {
     limit,
     lastEvaluatedKey,
-    filterExpression: filters.length > 0 ? filters.join(' AND ') : undefined,
-    expressionValues: Object.keys(expressionValues).length > 0 ? expressionValues : undefined,
-    expressionNames: Object.keys(expressionNames).length > 0 ? expressionNames : undefined,
+    filterExpression: baseFilters.length > 0 ? baseFilters.join(' AND ') : undefined,
+    expressionValues: Object.keys(baseExpressionValues).length > 0 ? baseExpressionValues : undefined,
+    expressionNames: Object.keys(baseExpressionNames).length > 0 ? baseExpressionNames : undefined,
   });
 }
 
 /**
  * 搜索事件（服务端搜索，支持多条件）
+ * DynamoDB FilterExpression 不支持 OR 条件，需要分别扫描并合并结果
  * @param {DynamoDBDocumentClient} client
  * @param {object} options
  * @param {string} [options.query] - 搜索关键词（搜索 eventId、userId）
@@ -400,55 +433,89 @@ export async function searchTests(client, options = {}) {
 export async function searchEvents(client, options = {}) {
   const { query, status, type, userId, limit = 50, lastEvaluatedKey } = options;
 
-  const filters = [];
-  const expressionValues = {};
-  const expressionNames = {};
+  // 构建基础过滤条件（不包括 OR 搜索）
+  const baseFilters = [];
+  const baseExpressionValues = {};
+  const baseExpressionNames = {};
 
   // 状态过滤
   if (status && status !== 'all') {
-    filters.push('#status = :status');
-    expressionValues[':status'] = status;
-    expressionNames['#status'] = 'status';
+    baseFilters.push('#status = :status');
+    baseExpressionValues[':status'] = status;
+    baseExpressionNames['#status'] = 'status';
   }
 
   // 类型过滤
   if (type && type !== 'all') {
-    filters.push('#type = :type');
-    expressionValues[':type'] = type;
-    expressionNames['#type'] = 'type';
+    baseFilters.push('#type = :type');
+    baseExpressionValues[':type'] = type;
+    baseExpressionNames['#type'] = 'type';
   }
 
   // 用户 ID 精确过滤
   if (userId) {
-    filters.push('userId = :userId');
-    expressionValues[':userId'] = userId;
+    baseFilters.push('userId = :userId');
+    baseExpressionValues[':userId'] = userId;
   }
 
-  // 关键词搜索
+  // 如果有 UUID 格式的查询词，需要分别查询 eventId 和 userId
+  // DynamoDB FilterExpression 不支持 OR 条件
   if (query) {
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     if (uuidRegex.test(query)) {
-      // 精确匹配 eventId 或 userId
-      filters.push('(eventId = :query OR userId = :query)');
-      expressionValues[':query'] = query;
+      // UUID 格式：分别查询 eventId 和 userId，然后合并结果
+      const eventIdFilters = [...baseFilters, 'eventId = :query'];
+      const userIdFilters = [...baseFilters, 'userId = :query'];
+
+      const [eventIdResult, userIdResult] = await Promise.all([
+        scanTable(client, TABLES.EVENTS, {
+          limit,
+          lastEvaluatedKey,
+          filterExpression: eventIdFilters.join(' AND '),
+          expressionValues: { ...baseExpressionValues, ':query': query },
+          expressionNames: Object.keys(baseExpressionNames).length > 0 ? baseExpressionNames : undefined,
+        }),
+        scanTable(client, TABLES.EVENTS, {
+          limit,
+          lastEvaluatedKey,
+          filterExpression: userIdFilters.join(' AND '),
+          expressionValues: { ...baseExpressionValues, ':query': query },
+          expressionNames: Object.keys(baseExpressionNames).length > 0 ? baseExpressionNames : undefined,
+        }),
+      ]);
+
+      // 合并并去重（使用 eventId 作为唯一标识）
+      const itemsMap = new Map();
+      for (const item of eventIdResult.items) {
+        itemsMap.set(item.eventId, item);
+      }
+      for (const item of userIdResult.items) {
+        itemsMap.set(item.eventId, item);
+      }
+
+      return {
+        items: Array.from(itemsMap.values()).slice(0, limit),
+        lastEvaluatedKey: eventIdResult.lastEvaluatedKey || userIdResult.lastEvaluatedKey,
+      };
     } else {
-      // 前缀匹配 eventId
-      filters.push('begins_with(eventId, :query)');
-      expressionValues[':query'] = query;
+      // 非 UUID：使用前缀匹配 eventId
+      baseFilters.push('begins_with(eventId, :query)');
+      baseExpressionValues[':query'] = query;
     }
   }
 
   return scanTable(client, TABLES.EVENTS, {
     limit,
     lastEvaluatedKey,
-    filterExpression: filters.length > 0 ? filters.join(' AND ') : undefined,
-    expressionValues: Object.keys(expressionValues).length > 0 ? expressionValues : undefined,
-    expressionNames: Object.keys(expressionNames).length > 0 ? expressionNames : undefined,
+    filterExpression: baseFilters.length > 0 ? baseFilters.join(' AND ') : undefined,
+    expressionValues: Object.keys(baseExpressionValues).length > 0 ? baseExpressionValues : undefined,
+    expressionNames: Object.keys(baseExpressionNames).length > 0 ? baseExpressionNames : undefined,
   });
 }
 
 /**
- * 搜索用户（服务端搜索）
+ * 搜索用户（服务端搜索，支持分页）
+ * DynamoDB 不支持对嵌套属性的 contains 搜索，需要扫描所有数据后本地过滤
  * @param {DynamoDBDocumentClient} client
  * @param {object} options
  * @param {string} [options.query] - 搜索关键词（搜索 userId、显示名称）
@@ -456,24 +523,24 @@ export async function searchEvents(client, options = {}) {
  * @returns {Promise<{items: Array, lastEvaluatedKey: object|null}>}
  */
 export async function searchUsers(client, options = {}) {
-  const { query, limit = 50, lastEvaluatedKey } = options;
+  const { query, limit = 50 } = options;
 
-  // DynamoDB 不支持对嵌套属性的 contains 搜索，需要全表扫描后过滤
-  // 或者可以在用户表上添加 GSI
-  const result = await scanTable(client, TABLES.USERS, {
-    limit: limit * 2, // 获取更多以便本地过滤
-    lastEvaluatedKey,
-  });
+  // DynamoDB 不支持对嵌套属性的 contains 搜索
+  // 对于用户搜索，需要扫描所有数据后本地过滤
+  // 这在小规模表（<1000 用户）上是可接受的
+  const allUsers = await scanAllItems(client, TABLES.USERS);
 
   if (!query) {
+    // 无搜索条件时返回前 limit 个
     return {
-      items: result.items.slice(0, limit),
-      lastEvaluatedKey: result.lastEvaluatedKey,
+      items: allUsers.slice(0, limit),
+      lastEvaluatedKey: allUsers.length > limit ? { userId: allUsers[limit - 1].userId } : null,
     };
   }
 
+  // 本地过滤匹配的用户
   const queryLower = query.toLowerCase();
-  const filtered = result.items.filter(user => {
+  const filtered = allUsers.filter(user => {
     // 搜索 userId
     if (user.userId?.toLowerCase().includes(queryLower)) return true;
     // 搜索 profile.name
@@ -485,7 +552,7 @@ export async function searchUsers(client, options = {}) {
 
   return {
     items: filtered.slice(0, limit),
-    lastEvaluatedKey: result.lastEvaluatedKey,
+    lastEvaluatedKey: filtered.length > limit ? { userId: filtered[limit - 1].userId } : null,
   };
 }
 

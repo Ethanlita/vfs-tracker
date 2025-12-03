@@ -6,7 +6,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAWSClients } from '../contexts/AWSClientContext';
-import { searchTests, getUser, TABLES } from '../services/dynamodb';
+import { searchTests, getUser } from '../services/dynamodb';
 import TestTable from './TestTable';
 import TestDetailModal from './TestDetailModal';
 
