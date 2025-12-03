@@ -55,6 +55,35 @@
 ## 前端组件
 - **样式**: 注意UI的美观，创建和修改页面组件时要确保其外观风格和这个项目中其他地方一致。样式要符合Tailwind CSS的最佳实践。
 
+## 前端路由 / Frontend Routing
+
+### SPA 路由与 Cloudflare Worker
+
+本项目使用 Cloudflare Worker 处理 SPA 路由，解决 GitHub Pages 直接访问非首页路径返回 404 的问题。
+
+**⚠️ 重要：添加新路由时必须同步更新 Cloudflare Worker！**
+
+当你在 `src/App.jsx` 中添加新的 `<Route>` 时：
+
+1. **同时更新** `infra/cloudflare-worker/spa-router.js` 中的 `knownRoutes` 数组
+2. 在 Cloudflare Dashboard 重新部署 Worker
+
+```javascript
+// infra/cloudflare-worker/spa-router.js
+const knownRoutes = [
+  '/',
+  '/dashboard',
+  '/mypage',
+  // ... 
+  '/your-new-route',  // ← 添加新路由
+];
+```
+
+**不更新的后果**：新路由虽然能工作（有 fallback 机制），但会被标记为 `X-SPA-Fallback` 而非 `X-SPA-Route`，影响缓存策略和调试。
+
+### 相关文档
+- 📖 [CDN 架构说明](docs/cdn-architecture.md) - 包含 SPA 路由处理的完整说明
+
 ## 测试框架 / Testing Framework
 - **测试技术栈 / Testing Stack**: 
   - **Vitest**: 测试运行器,使用 jsdom 环境模拟浏览器 DOM
