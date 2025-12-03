@@ -153,7 +153,7 @@ export const handler = async (event) => {
         return createResponse(400, { success: false, error: 'Invalid JSON in request body.' });
     }
 
-    const final_prompt = `You are an expert in voice feminization. Based on the following knowledge base, provide an encouraging and informative analysis of the user's voice data. Make it in Simplified Chinese. Do not mention 'knowledgebase', it's for your reference, not for the user.
+    const final_prompt = `You are an expert in voice feminization. Based on the following knowledge base, provide an encouraging and informative analysis of the user's voice data. Make it in Simplified Chinese. Do not mention 'knowledgebase' or 'encouraging', it's for your reference, not for the user.
 
 <knowledge_base>
 ${KNOWLEDGE_BASE}

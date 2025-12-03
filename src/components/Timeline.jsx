@@ -10,6 +10,8 @@ import {
   Tooltip,
   Legend,
 } from 'chart.js';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { getEncouragingMessage, getEventsByUserId } from '../api';
 import { useAsync } from '../utils/useAsync.js';
 import { useAuth } from '../contexts/AuthContext.jsx';
@@ -488,7 +490,12 @@ const Timeline = () => {
                         <span className="text-sm text-gray-500">正在加载</span>
                       </div>
                     ) : (
-                      <p className="text-sm sm:text-base">{aiAsync.value}</p>
+                      /* 使用 ReactMarkdown 渲染 AI 消息中的 Markdown 格式 */
+                      <div className="prose prose-sm max-w-none prose-p:my-1 prose-ul:my-1 prose-ol:my-1 prose-li:my-0 prose-strong:text-pink-600 prose-a:text-pink-500 prose-a:no-underline hover:prose-a:underline">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                          {aiAsync.value || ''}
+                        </ReactMarkdown>
+                      </div>
                     )}
                   </div>
                 </div>
