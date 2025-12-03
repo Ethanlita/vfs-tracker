@@ -182,13 +182,16 @@ const ProfileSetupWizard = ({ onComplete, canSkip = true }) => {
     setLoading(true);
     setError('');
 
+    // 跳过设置时，设置 setupSkipped: true 标志
+    // 这样 isUserProfileComplete 会返回 true，避免循环跳转
     const payload = {
       profile: {
         name: '',
         bio: '',
         isNamePublic: false,
         socials: [],
-        areSocialsPublic: false
+        areSocialsPublic: false,
+        setupSkipped: true  // 标记用户主动跳过了设置
       }
     };
 

@@ -575,12 +575,21 @@ export const getAvatarUrl = async (userId, avatarKey) => {
 
 /**
  * [CN] 检查用户的个人资料是否填写完整。
+ * 用户资料被视为"完整"的条件之一：
+ * 1. 用户有非空的名称，并且设置了隐私选项
+ * 2. 用户明确跳过了资料设置（setupSkipped: true）
  * @param {object | null | undefined} userProfile - 用户的个人资料对象。
- * @returns {boolean} 如果个人资料完整，则返回 true；否则返回 false。
+ * @returns {boolean} 如果个人资料完整或用户已跳过设置，则返回 true；否则返回 false。
  */
 export const isUserProfileComplete = (userProfile) => {
   if (!userProfile || !userProfile.profile) return false;
-  const { name, isNamePublic, areSocialsPublic } = userProfile.profile;
+  const { name, isNamePublic, areSocialsPublic, setupSkipped } = userProfile.profile;
+
+  // 如果用户明确选择跳过设置，视为"完整"（不再弹出向导）
+  if (setupSkipped === true) {
+    return true;
+  }
+
   const hasNonEmptyName = typeof name === 'string' && name.trim().length > 0;
   const hasPrivacySettings = typeof isNamePublic === 'boolean' && typeof areSocialsPublic === 'boolean';
   return hasNonEmptyName && hasPrivacySettings;

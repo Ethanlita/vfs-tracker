@@ -312,6 +312,42 @@ describe('User Profile Setup API 集成测试', () => {
       expect(isUserProfileComplete(profileWithSocials)).toBe(true);
       expect(isUserProfileComplete(profileWithoutSocials)).toBe(true);
     });
+
+    it('setupSkipped: true 应该使资料视为完整（用户主动跳过设置）', () => {
+      // 用户跳过设置时，name 为空但有 setupSkipped 标志
+      const skippedProfile = {
+        profile: {
+          name: '',
+          bio: '',
+          isNamePublic: false,
+          socials: [],
+          areSocialsPublic: false,
+          setupSkipped: true
+        }
+      };
+
+      expect(isUserProfileComplete(skippedProfile)).toBe(true);
+    });
+
+    it('setupSkipped: false 不应该影响正常逻辑', () => {
+      // 即使有 setupSkipped: false，空名称仍然返回 false
+      const profileWithExplicitFalse = {
+        profile: {
+          name: '',
+          isNamePublic: false,
+          areSocialsPublic: false,
+          setupSkipped: false
+        }
+      };
+
+      expect(isUserProfileComplete(profileWithExplicitFalse)).toBe(false);
+    });
+
+    it('有 setupSkipped 但没有 profile 对象应该返回 false', () => {
+      // 边界情况：profile 对象本身不存在
+      expect(isUserProfileComplete({ setupSkipped: true })).toBe(false);
+      expect(isUserProfileComplete(null)).toBe(false);
+    });
   });
 
   describe('错误状态码处理 (P1.2.4 - Phase 3.3 Code Review)', () => {
