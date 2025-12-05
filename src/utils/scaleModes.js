@@ -133,3 +133,50 @@ export const deriveModePitchMeta = (
     targetOffset
   };
 };
+
+const BEAT_UNITS = [
+  { name: 'quarter', factor: 1 }, // 四分音符
+  { name: 'eighth', factor: 0.5 }, // 八分音符
+  { name: 'sixteenth', factor: 0.25 } // 十六分音符
+];
+
+/**
+ * @zh 规划节拍时值，保证一轮练习总时长不超过两个全音符；若不足整小节（4 拍）则补齐空拍。
+ * @param {ScaleMode} mode 模式配置
+ * @param {number} [baseQuarterMs=600] 基准四分音符时长（毫秒）
+ * @returns {{ timeline: BeatStep[], beatMs: number, beatUnit: 'quarter'|'eighth'|'sixteenth', beatsPerMeasure: number }}
+ */
+export const planBeatSchedule = (mode, baseQuarterMs = 600) => {
+  const timeline = buildBeatTimeline(mode);
+  const rawBeats = timeline.length;
+  const beatsPerMeasure = 4;
+  const paddedBeats = Math.ceil(rawBeats / beatsPerMeasure) * beatsPerMeasure;
+  const maxBeatsInQuarter = 8; // 两个全音符 = 8 个四分音符
+
+  let selectedUnit = null;
+  for (const unit of BEAT_UNITS) {
+    if (paddedBeats * unit.factor <= maxBeatsInQuarter) {
+      selectedUnit = unit;
+      break;
+    }
+  }
+
+  if (!selectedUnit) {
+    throw new Error(`模式节拍过长，无法在两个全音符内完成（总拍数 ${paddedBeats}）。`);
+  }
+
+  const beatMs = baseQuarterMs * selectedUnit.factor;
+
+  const paddedTimeline = [...timeline];
+  const needPad = paddedBeats - rawBeats;
+  for (let i = 0; i < needPad; i++) {
+    paddedTimeline.push({ index: paddedTimeline.length, type: 'rest', offset: 0 });
+  }
+
+  return {
+    timeline: paddedTimeline,
+    beatMs,
+    beatUnit: selectedUnit.name,
+    beatsPerMeasure
+  };
+};

@@ -8,7 +8,7 @@ import {
   gateByStability
 } from '../utils/pitchEval.js';
 import modesConfig from '../config/scaleModes.json';
-import { buildBeatTimeline, deriveModePitchMeta } from '../utils/scaleModes.js';
+import { buildBeatTimeline, deriveModePitchMeta, planBeatSchedule } from '../utils/scaleModes.js';
 import { getSongRecommendations } from '../api.js'; // Import the new API function
 import { ensureAppError } from '../utils/apiError.js';
 import { ApiErrorNotice } from './ApiErrorNotice.jsx';
@@ -111,6 +111,7 @@ const ScalePractice = () => {
   const clarityTheta = 0.6;
   const deltaDb = 12;
   const paddingCents = 150; // 音高指示器上下留白（cents）
+  const baseQuarterMs = 600; // 基准四分音符时长，后续按模式缩放
   const currentFramesRef = useRef([]);
   const collectingRef = useRef(false);
   const frameDurationRef = useRef(0);
@@ -123,19 +124,20 @@ const ScalePractice = () => {
 
   // 预计算当前模式的拍数分布
   const modeStats = useMemo(() => {
-    if (!currentMode) return { examples: 0, rests: 0, notes: 0, total: 0 };
+    if (!currentMode) return { examples: 0, rests: 0, notes: 0, total: 0, beatUnit: 'quarter' };
     try {
-      const tl = buildBeatTimeline(currentMode);
+      const { timeline, beatUnit } = planBeatSchedule(currentMode, baseQuarterMs);
       return {
-        examples: tl.filter(t => t.type === 'example').length,
-        rests: tl.filter(t => t.type === 'rest').length,
-        notes: tl.filter(t => t.type === 'note').length,
-        total: tl.length
+        examples: timeline.filter(t => t.type === 'example').length,
+        rests: timeline.filter(t => t.type === 'rest').length,
+        notes: timeline.filter(t => t.type === 'note').length,
+        total: timeline.length,
+        beatUnit
       };
     } catch {
-      return { examples: 0, rests: 0, notes: 0, total: 0 };
+      return { examples: 0, rests: 0, notes: 0, total: 0, beatUnit: 'quarter' };
     }
-  }, [currentMode]);
+  }, [currentMode, baseQuarterMs]);
 
   // --- 模式校验与拍数同步 ---
   useEffect(() => {
@@ -148,8 +150,8 @@ const ScalePractice = () => {
       return;
     }
     try {
-      const beats = buildBeatTimeline(currentMode).length;
-      setCycleBeats(beats);
+      const { timeline } = planBeatSchedule(currentMode);
+      setCycleBeats(timeline.length);
       setModeError('');
     } catch (err) {
       setModeError(err.message);
@@ -375,6 +377,12 @@ const ScalePractice = () => {
       setModeError('请选择一个包含音阶序列的模式后再开始。');
       return false;
     }
+    try {
+      planBeatSchedule(currentMode, baseQuarterMs);
+    } catch (err) {
+      setModeError(err.message);
+      return false;
+    }
     return true;
   }, [currentMode]);
 
@@ -386,8 +394,19 @@ const ScalePractice = () => {
       : descendingIndexRef.current;
     const baseFreq = 261.63 * Math.pow(semitoneRatio, baseIndex);
 
-    const timeline = buildBeatTimeline(currentMode);
-    setCycleBeats(timeline.length);
+    let timeline;
+    let beatDur;
+    let beatUnit = 'quarter';
+    try {
+      const plan = planBeatSchedule(currentMode, baseQuarterMs);
+      timeline = plan.timeline;
+      beatDur = plan.beatMs;
+      beatUnit = plan.beatUnit;
+      setCycleBeats(timeline.length);
+    } catch (err) {
+      setModeError(err.message);
+      return;
+    }
 
     const {
       indicatorRange: modeRange,
@@ -844,7 +863,7 @@ const ScalePractice = () => {
                 <div className="font-semibold mb-1">{currentMode.name}</div>
                 <p className="mb-1">{currentMode.description}</p>
                 <p className="text-xs text-gray-500">
-                  每轮拍数：{modeStats.total}（示范 {modeStats.examples} 拍 / 空拍 {modeStats.rests} 拍 / 音符 {modeStats.notes} 拍）
+                  每轮拍数：{modeStats.total}（示范 {modeStats.examples} 拍 / 空拍 {modeStats.rests} 拍 / 音符 {modeStats.notes} 拍），节奏单位：{modeStats.beatUnit === 'quarter' ? '四分音符' : modeStats.beatUnit === 'eighth' ? '八分音符' : '十六分音符'}
                 </p>
               </div>
             )}

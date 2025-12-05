@@ -4,7 +4,7 @@
  * 覆盖节拍生成与模式元信息推导逻辑，确保多模式配置可用。
  */
 import { describe, it, expect } from 'vitest';
-import { buildBeatTimeline, deriveModePitchMeta } from '../../../src/utils/scaleModes.js';
+import { buildBeatTimeline, deriveModePitchMeta, planBeatSchedule } from '../../../src/utils/scaleModes.js';
 
 describe('scaleModes.js 单元测试', () => {
   it('按节拍配置生成完整的拍点时间线', () => {
@@ -85,5 +85,28 @@ describe('scaleModes.js 单元测试', () => {
     const rawMax = baseFreq * Math.pow(semitoneRatio, 4);
     expect(meta.indicatorRange.min).toBeLessThan(rawMin);
     expect(meta.indicatorRange.max).toBeGreaterThan(rawMax);
+  });
+
+  it('planBeatSchedule 会根据时长限制选择合适的拍时并补齐小节', () => {
+    const mode = {
+      patternOffsets: [0, 2, 4, 2, 0],
+      beatStructure: { exampleBeats: 1, initialRests: 1, finalRests: 0 }
+    };
+    const { timeline, beatMs, beatUnit } = planBeatSchedule(mode, 600);
+    expect(timeline.length % 4).toBe(0); // 补齐整小节
+    expect(['quarter', 'eighth', 'sixteenth']).toContain(beatUnit);
+    // 最大时长不超过两个全音符（8 个四分音符）
+    const totalQuarterUnits = timeline.length * (beatUnit === 'quarter' ? 1 : beatUnit === 'eighth' ? 0.5 : 0.25);
+    expect(totalQuarterUnits).toBeLessThanOrEqual(8);
+    expect(beatMs).toBeGreaterThan(0);
+  });
+
+  it('planBeatSchedule 对无法满足时长限制的模式抛出错误', () => {
+    const mode = {
+      // 极长模式触发失败
+      patternOffsets: new Array(40).fill(0),
+      beatStructure: { exampleBeats: 1, initialRests: 1, finalRests: 0 }
+    };
+    expect(() => planBeatSchedule(mode, 600)).toThrow(/无法在两个全音符内完成/);
   });
 });
