@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PitchDetector } from 'pitchy';
 import Soundfont from 'soundfont-player';
@@ -7,6 +7,8 @@ import {
   gateByEnergy,
   gateByStability
 } from '../utils/pitchEval.js';
+import modesConfig from '../config/scaleModes.json';
+import { buildBeatTimeline, deriveModePitchMeta } from '../utils/scaleModes.js';
 import { getSongRecommendations } from '../api.js'; // Import the new API function
 import { ensureAppError } from '../utils/apiError.js';
 import { ApiErrorNotice } from './ApiErrorNotice.jsx';
@@ -45,15 +47,15 @@ const median = (arr) => {
 };
 
 /**
- * @zh ScalePractice 组件实现爬音阶指导与音域测定。
+ * @zh ScalePractice 组件用于配置化的音阶练习与音域测定。
  * 流程：权限与耳机检测 → 演示 → 爬升练习 → 下降练习 → 结果展示。
- * 为保持示例简单，音高判定采用 pitchy 的实时 F0 估计，判定条件较为宽松。
+ * 练习节奏与目标音由 JSON 模式定义驱动，便于扩展不同音阶套路。
  */
 const ScalePractice = () => {
   // 设置页面 meta 标签
   useDocumentMeta({
     title: '音阶练习',
-    description: '跟着钢琴音练习音阶，实时检测您的音高准确度，帮助您提升嗓音控制能力。'
+    description: '跟随示范音练习不同音阶模式，并实时检测音高精准度，辅助提升发声控制力。'
   });
 
   const navigate = useNavigate();
@@ -67,10 +69,23 @@ const ScalePractice = () => {
   const [startOffset, setStartOffset] = useState(0); // 起始音相对C4的半音数
   const [beat, setBeat] = useState(0);
   const [beatLabel, setBeatLabel] = useState('');
-  const [dotX, setDotX] = useState(0);
   const [indicatorRange, setIndicatorRange] = useState({ min: 0, max: 0 });
   const [ladderNotes, setLadderNotes] = useState([]);
   const [showOfflineNotice, setShowOfflineNotice] = useState(false);
+  const [modes] = useState(() => modesConfig?.modes ?? []);
+  const [selectedModeId, setSelectedModeId] = useState(() => modesConfig?.modes?.[0]?.id ?? '');
+  const [modeError, setModeError] = useState('');
+  const [cycleBeats, setCycleBeats] = useState(() => {
+    try {
+      return modesConfig?.modes?.[0] ? buildBeatTimeline(modesConfig.modes[0]).length : 8;
+    } catch {
+      return 8;
+    }
+  });
+  const currentMode = useMemo(
+    () => modes.find(mode => mode.id === selectedModeId),
+    [modes, selectedModeId]
+  );
 
   // --- 练习结果 ---
   const [highestHz, setHighestHz] = useState(0);
@@ -95,6 +110,7 @@ const ScalePractice = () => {
   const stableWindowMs = 300; // 判定所需的稳定时间
   const clarityTheta = 0.6;
   const deltaDb = 12;
+  const paddingCents = 150; // 音高指示器上下留白（cents）
   const currentFramesRef = useRef([]);
   const collectingRef = useRef(false);
   const frameDurationRef = useRef(0);
@@ -104,6 +120,44 @@ const ScalePractice = () => {
 
   // 当前实时 F0，用于 UI 显示
   const [currentF0, setCurrentF0] = useState(0);
+
+  // 预计算当前模式的拍数分布
+  const modeStats = useMemo(() => {
+    if (!currentMode) return { examples: 0, rests: 0, notes: 0, total: 0 };
+    try {
+      const tl = buildBeatTimeline(currentMode);
+      return {
+        examples: tl.filter(t => t.type === 'example').length,
+        rests: tl.filter(t => t.type === 'rest').length,
+        notes: tl.filter(t => t.type === 'note').length,
+        total: tl.length
+      };
+    } catch {
+      return { examples: 0, rests: 0, notes: 0, total: 0 };
+    }
+  }, [currentMode]);
+
+  // --- 模式校验与拍数同步 ---
+  useEffect(() => {
+    if (!modes.length) {
+      setModeError('未找到可用的音阶模式，请补充配置文件。');
+      return;
+    }
+    if (!currentMode) {
+      setModeError('请选择一个音阶模式后再开始练习。');
+      return;
+    }
+    try {
+      const beats = buildBeatTimeline(currentMode).length;
+      setCycleBeats(beats);
+      setModeError('');
+    } catch (err) {
+      setModeError(err.message);
+    }
+    setHighestHz(0);
+    setLowestHz(0);
+    setBeat(0);
+  }, [currentMode, modes]);
 
   // --- 音频初始化与清理 ---
   const cleanupAudio = useCallback(() => {
@@ -306,47 +360,68 @@ const ScalePractice = () => {
     setStep('setup');
   };
 
+  // --- 切换练习模式 ---
+  const handleModeChange = (modeId) => {
+    setSelectedModeId(modeId);
+    setMessage('');
+    setBeat(0);
+    rootIndexRef.current = startOffset;
+    descendingIndexRef.current = startOffset;
+  };
+
+  // --- 模式可用性校验 ---
+  const ensureModeReady = useCallback(() => {
+    if (!currentMode || !currentMode.patternOffsets?.length) {
+      setModeError('请选择一个包含音阶序列的模式后再开始。');
+      return false;
+    }
+    return true;
+  }, [currentMode]);
+
   // --- 节拍循环与练习逻辑 ---
   const runCycle = async (direction, isDemo = false) => {
+    if (!ensureModeReady()) return;
     const baseIndex = direction === 'ascending'
       ? rootIndexRef.current
       : descendingIndexRef.current;
     const baseFreq = 261.63 * Math.pow(semitoneRatio, baseIndex);
 
-    // 每个循环内部的音程与爬升练习相同，都是从起始音向上两音再回到起始音
-    const offsets = [0, 2, 4, 2, 0];
+    const timeline = buildBeatTimeline(currentMode);
+    setCycleBeats(timeline.length);
 
-    // 爬升练习关注最高音是否达到，下降练习关注最低音是否达到
-    const targetFreq = direction === 'ascending'
-      ? baseFreq * Math.pow(semitoneRatio, 4)
-      : baseFreq;
+    const {
+      indicatorRange: modeRange,
+      ladderNotes: modeLadder,
+      targetFreq,
+      minOffset,
+      maxOffset
+    } = deriveModePitchMeta(currentMode, baseFreq, semitoneRatio, direction, paddingCents);
 
-    setIndicatorRange({
-      min: baseFreq,
-      max: baseFreq * Math.pow(semitoneRatio, 4)
-    });
+    setIndicatorRange(modeRange);
+    setLadderNotes(modeLadder);
 
     setStep(isDemo ? 'demoLoop' : direction);
-    setLadderNotes([
-      baseFreq,
-      baseFreq * Math.pow(semitoneRatio, 2),
-      baseFreq * Math.pow(semitoneRatio, 4)
-    ]);
     const beatDur = 600;
     const beatData = [];
-    for (let i = 1; i <= 8; i++) {
+    const noteSteps = timeline
+      .map((item, idx) => (item.type === 'note' ? { ...item, beatIdx: idx } : null))
+      .filter(Boolean);
+    const firstNoteIdx = noteSteps.length ? noteSteps[0].beatIdx : timeline.length;
+    for (let i = 0; i < timeline.length; i++) {
       currentFramesRef.current = [];
       collectingRef.current = true;
-      setBeat(i);
-      setDotX(((i - 1) / 7) * 100);
+      const beatNumber = i + 1;
+      setBeat(beatNumber);
       let freq = null;
-      if (i === 1) {
-        freq = baseFreq;
+      const beatInfo = timeline[i];
+      if (beatInfo.type === 'example') {
+        const exampleOffset = beatInfo.offset ?? 0;
+        freq = baseFreq * Math.pow(semitoneRatio, exampleOffset);
         setBeatLabel(`演示 ${frequencyToNoteName(freq)}`);
-      } else if (i === 2 || i === 8) {
+      } else if (beatInfo.type === 'rest') {
         setBeatLabel('空拍');
-      } else {
-        const offset = offsets[i - 3];
+      } else if (beatInfo.type === 'note') {
+        const offset = beatInfo.offset ?? 0;
         freq = baseFreq * Math.pow(semitoneRatio, offset);
         setBeatLabel(`${isDemo ? '演示' : '练习'} ${frequencyToNoteName(freq)}`);
       }
@@ -368,13 +443,15 @@ const ScalePractice = () => {
 
     if (isDemo) {
       let resultMsg = '演示结束，做得很好！';
-      const early = gateFrames(beatData[0]).length || gateFrames(beatData[1]).length;
+      const early = beatData
+        .slice(0, firstNoteIdx)
+        .some(frames => gateFrames(frames).length);
       if (early) {
         resultMsg = '切入太早，应该和系统播放的目标音同时切入';
       } else {
-        for (let j = 0; j < offsets.length; j++) {
-          const expected = baseFreq * Math.pow(semitoneRatio, offsets[j]);
-          const frames = gateFrames(beatData[j + 2]);
+        for (let j = 0; j < noteSteps.length; j++) {
+          const expected = baseFreq * Math.pow(semitoneRatio, noteSteps[j].offset ?? 0);
+          const frames = gateFrames(beatData[noteSteps[j].beatIdx]);
           if (!frames.length) {
             resultMsg = `第${j + 1}个音${frequencyToNoteName(expected)}未检测到`;
             break;
@@ -399,11 +476,11 @@ const ScalePractice = () => {
 
     // 辅助函数：找出失败的音符序号
     const findFailedNote = () => {
-      for (let j = 0; j < offsets.length; j++) {
-        const expected = baseFreq * Math.pow(semitoneRatio, offsets[j]);
-        const frames = gateFrames(beatData[j + 2]);
+      for (let j = 0; j < noteSteps.length; j++) {
+        const expected = baseFreq * Math.pow(semitoneRatio, noteSteps[j].offset ?? 0);
+        const frames = gateFrames(beatData[noteSteps[j].beatIdx]);
         if (!frames.length) {
-          return { idx: j + 1, freq: expected, type: 'low' };
+          return { idx: j + 1, freq: expected, type: 'miss' };
         }
         const pitch = median(frames.map(f => f.pitch));
         const cents = 1200 * Math.log2(pitch / expected);
@@ -429,14 +506,16 @@ const ScalePractice = () => {
         frameDurationRef.current
       );
       if (stable >= stableWindowMs) {
-        const cycleHigh = baseFreq * Math.pow(semitoneRatio, 4);
+        const cycleHigh = baseFreq * Math.pow(semitoneRatio, maxOffset);
         setHighestHz(Math.max(highestHz, cycleHigh));
-        rootIndexRef.current += 1;
+        rootIndexRef.current += currentMode.transposeStep ?? 1;
         setTimeout(() => runCycle('ascending'), 800);
       } else {
         const failed = findFailedNote();
         const failMsg = failed
-          ? `第${failed.idx}个音${frequencyToNoteName(failed.freq)}不够${failed.type === 'low' ? '高' : '低'}`
+          ? failed.type === 'miss'
+            ? `第${failed.idx}个音${frequencyToNoteName(failed.freq)}未检测到`
+            : `第${failed.idx}个音${frequencyToNoteName(failed.freq)}不够${failed.type === 'low' ? '高' : '低'}`
           : '未达到目标音，是否重试？';
         setMessage(failMsg);
         setStep('ascendFail');
@@ -453,14 +532,16 @@ const ScalePractice = () => {
         frameDurationRef.current
       );
       if (stable >= stableWindowMs) {
-        const cycleLow = baseFreq;
+        const cycleLow = baseFreq * Math.pow(semitoneRatio, minOffset);
         setLowestHz(lowestHz === 0 ? cycleLow : Math.min(lowestHz, cycleLow));
-        descendingIndexRef.current -= 1;
+        descendingIndexRef.current -= currentMode.transposeStep ?? 1;
         setTimeout(() => runCycle('descending'), 800);
       } else {
         const failed = findFailedNote();
         const failMsg = failed
-          ? `第${failed.idx}个音${frequencyToNoteName(failed.freq)}不够${failed.type === 'low' ? '高' : '低'}`
+          ? failed.type === 'miss'
+            ? `第${failed.idx}个音${frequencyToNoteName(failed.freq)}未检测到`
+            : `第${failed.idx}个音${frequencyToNoteName(failed.freq)}不够${failed.type === 'low' ? '高' : '低'}`
           : '未达到目标音，是否重试？';
         setMessage(failMsg);
         setStep('descendFail');
@@ -469,11 +550,13 @@ const ScalePractice = () => {
   };
 
   const handleDemoStart = () => {
+    if (!ensureModeReady()) return;
     rootIndexRef.current = startOffset;
     runCycle('ascending', true);
   };
 
   const handlePracticeStart = () => {
+    if (!ensureModeReady()) return;
     rootIndexRef.current = startOffset;
     runCycle('ascending');
   };
@@ -484,12 +567,14 @@ const ScalePractice = () => {
   };
 
   const handleStartDescending = () => {
+    if (!ensureModeReady()) return;
     // 下降练习从爬升练习最后一轮的起始音开始
     descendingIndexRef.current = rootIndexRef.current - 1;
     runCycle('descending');
   };
 
   const handleRetryDescend = () => {
+    if (!ensureModeReady()) return;
     setMessage('再试一次');
     runCycle('descending');
   };
@@ -497,7 +582,10 @@ const ScalePractice = () => {
   const handleFinishPractice = () => {
     cleanupAudio();
     if (lowestHz === 0) {
-      const startFreq = 261.63 * Math.pow(semitoneRatio, startOffset);
+      const minOffset = currentMode?.patternOffsets?.length
+        ? Math.min(...currentMode.patternOffsets, 0)
+        : 0;
+      const startFreq = 261.63 * Math.pow(semitoneRatio, startOffset + minOffset);
       setLowestHz(startFreq);
     }
     setStep('result');
@@ -524,6 +612,46 @@ const ScalePractice = () => {
     }
 
     setIsGenerating(false);
+  };
+
+  // --- 音高指示器（重构版，带标注与安全边界） ---
+  const renderPitchIndicator = () => {
+    if (!indicatorRange.min || !indicatorRange.max || !ladderNotes.length) return null;
+    const sortedNotes = [...new Set(ladderNotes)].sort((a, b) => a - b);
+    const dotPercent = Math.max(0, Math.min(100, freqToPercent(currentF0, indicatorRange) * 100));
+
+    return (
+      <div className="relative h-64 bg-gray-100 rounded mb-4 overflow-hidden">
+        <div className="absolute inset-4">
+          {sortedNotes.map((f, idx) => {
+            const lower = freqToPercent(f * Math.pow(2, -tolerance / 1200), indicatorRange) * 100;
+            const upper = freqToPercent(f * Math.pow(2, tolerance / 1200), indicatorRange) * 100;
+            const center = freqToPercent(f, indicatorRange) * 100;
+            const bandHeight = Math.max(0, upper - lower);
+            return (
+              <React.Fragment key={`${f}-${idx}`}>
+                <div
+                  className="absolute inset-x-0 bg-pink-200 opacity-40"
+                  style={{ bottom: `${lower}%`, height: `${bandHeight}%`, zIndex: 5 }}
+                ></div>
+                <div
+                  className="absolute inset-x-0 flex items-center justify-between text-xs text-gray-700"
+                  style={{ bottom: `${center}%`, zIndex: 10 }}
+                >
+                  <span className="bg-white/80 px-1 rounded">{frequencyToNoteName(f)}</span>
+                  <div className="flex-1 h-px bg-pink-500 mx-2"></div>
+                  <span className="bg-white/80 px-1 rounded">{f.toFixed(1)} Hz</span>
+                </div>
+              </React.Fragment>
+            );
+          })}
+          <div
+            className="absolute left-1/2 -translate-x-1/2 w-3 h-3 bg-pink-500 rounded-full shadow-md"
+            style={{ bottom: `${dotPercent}%`, zIndex: 15 }}
+          ></div>
+        </div>
+      </div>
+    );
   };
 
   // 绘制钢琴键盘并标注声域范围
@@ -693,6 +821,35 @@ const ScalePractice = () => {
       {step === 'setup' && (
         <div className="bg-white p-6 rounded-xl shadow-md mb-6 text-center">
           <p className="mb-4 text-gray-700">
+            请选择练习模式与音节，系统会按模式节拍播放示范并实时检测音高。
+          </p>
+          {modeError && (
+            <div className="mb-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              {modeError}
+            </div>
+          )}
+          <div className="mb-4 text-left">
+            <p className="text-gray-700 mb-2">选择练习模式：</p>
+            <select
+              value={selectedModeId}
+              onChange={e => handleModeChange(e.target.value)}
+              className="border rounded px-2 py-1 w-full sm:w-auto"
+            >
+              {modes.map(mode => (
+                <option key={mode.id} value={mode.id}>{mode.name}</option>
+              ))}
+            </select>
+            {currentMode && (
+              <div className="mt-2 bg-gray-50 border border-gray-200 rounded-lg p-3 text-sm text-gray-700">
+                <div className="font-semibold mb-1">{currentMode.name}</div>
+                <p className="mb-1">{currentMode.description}</p>
+                <p className="text-xs text-gray-500">
+                  每轮拍数：{modeStats.total}（示范 {modeStats.examples} 拍 / 空拍 {modeStats.rests} 拍 / 音符 {modeStats.notes} 拍）
+                </p>
+              </div>
+            )}
+          </div>
+          <p className="mb-2 text-gray-700">
             请选择练习音节。不同音节可以练习不同的共鸣位置。
           </p>
           <div className="bg-blue-100 rounded-lg p-4 text-left text-gray-700 mb-4">
@@ -777,43 +934,21 @@ const ScalePractice = () => {
         <div className="bg-white p-6 rounded-xl shadow-md mb-6 text-center">
           {step === 'demoLoop' && (
             <div className="bg-blue-100 rounded-lg p-4 text-left text-gray-700 mb-4">
-                <p className="mb-4 text-gray-700">
-                    演示说明：全过程共 8 拍，第 1 拍为音高示例无需出声，第 2、8 拍为空拍，第 3-7 拍需与系统同时出声。
-                </p>
-                <p>
-                    演示周期结束后将会显示提示信息。在正式练习周期中，如果当前周期通过了，则会自动进入下一周期。
-                </p>
-                <p>
-                    在音高指示器下方有节拍指示器，建议在第一、第二拍时吸气，然后在第三拍开始时发声。
-                </p>
+              <p className="mb-3 text-gray-700">
+                演示说明：本模式每轮 {cycleBeats} 拍，示范 {modeStats.examples} 拍、空拍 {modeStats.rests} 拍、练习音 {modeStats.notes} 拍。
+              </p>
+              <p className="mb-2">
+                演示周期结束后会显示提示信息；正式练习周期如果通过，会自动移调进入下一轮。
+              </p>
+              <p>
+                建议在示范与空拍阶段吸气，在首个练习音拍同时进入发声，与系统保持同拍。
+              </p>
               </div>
           )}
-          <div className="relative h-48 bg-gray-100 rounded mb-4">
-            {ladderNotes.map((f, idx) => {
-              const lower = freqToPercent(f * Math.pow(2, -tolerance / 1200), indicatorRange) * 100;
-              const upper = freqToPercent(f * Math.pow(2, tolerance / 1200), indicatorRange) * 100;
-              const center = freqToPercent(f, indicatorRange) * 100;
-              return (
-                <React.Fragment key={idx}>
-                  <div
-                    className="absolute w-full bg-pink-200 opacity-40"
-                    style={{ bottom: `${lower}%`, height: `${upper - lower}%` }}
-                  ></div>
-                  <div
-                    className="absolute w-full h-px bg-pink-500"
-                    style={{ bottom: `${center}%` }}
-                  ></div>
-                </React.Fragment>
-              );
-            })}
-            <div
-              className="absolute w-3 h-3 bg-pink-500 rounded-full"
-              style={{ left: `${dotX}%`, bottom: `${freqToPercent(currentF0, indicatorRange) * 100}%` }}
-            ></div>
-          </div>
+          {renderPitchIndicator()}
           <div className="flex flex-col items-center mb-2">
             <div className="flex justify-center mb-2">
-              {Array.from({ length: 8 }).map((_, idx) => (
+              {Array.from({ length: Math.max(cycleBeats, 1) }).map((_, idx) => (
                 <div key={idx} className="flex flex-col items-center mx-1">
                   <span className="text-xs text-gray-500 mb-1">{idx + 1}</span>
                   <div
@@ -822,7 +957,7 @@ const ScalePractice = () => {
                 </div>
               ))}
             </div>
-            <p className="text-gray-700">第{beat}/8拍 {beatLabel}</p>
+            <p className="text-gray-700">第{beat}/{Math.max(cycleBeats, 1)}拍 {beatLabel}</p>
           </div>
           <p className="text-sm text-gray-500">当前F0: {currentF0 > 0 ? currentF0.toFixed(1) : '--'} Hz</p>
         </div>
