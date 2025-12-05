@@ -123,6 +123,19 @@
       "beatStructure": { "finalRests": 0 },
       "transposeStep": 1,
       "targetNoteIndex": 4
+    },
+    {
+      "id": "turnback_123454321",
+      "name": "九度回转 123454321",
+      "description": "完整九度回转：示范 1，空拍，练习 1-2-3-4-5-4-3-2-1，末尾五拍空拍收尾。",
+      "prologue": [
+        { "type": "example", "count": 1, "offset": 0 },
+        { "type": "rest", "count": 1 }
+      ],
+      "patternOffsets": [0, 2, 4, 5, 7, 5, 4, 2, 0],
+      "beatStructure": { "finalRests": 5 },
+      "transposeStep": 1,
+      "targetNoteIndex": 4
     }
   ]
 }
