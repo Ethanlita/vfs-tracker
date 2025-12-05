@@ -387,6 +387,12 @@ const ScalePractice = () => {
   }, [currentMode]);
 
   // --- 节拍循环与练习逻辑 ---
+  /**
+   * @zh 执行一轮节拍播放与音高采集，依据模式配置决定节奏与音高序列。
+   * @param {'ascending' | 'descending'} direction 练习方向，决定音阶走向。
+   * @param {boolean} [isDemo=false] 是否为演示模式（仅播放示例，不计结果）。
+   * @returns {Promise<void>}
+   */
   const runCycle = async (direction, isDemo = false) => {
     if (!ensureModeReady()) return;
     const baseIndex = direction === 'ascending'
@@ -400,7 +406,7 @@ const ScalePractice = () => {
     try {
       const plan = planBeatSchedule(currentMode, baseQuarterMs);
       timeline = plan.timeline;
-      beatDur = plan.beatMs;
+      beatDur = plan.beatMs; // 使用模式规划的拍长，避免硬编码节奏偏差
       beatUnit = plan.beatUnit;
       setCycleBeats(timeline.length);
     } catch (err) {
@@ -420,7 +426,6 @@ const ScalePractice = () => {
     setLadderNotes(modeLadder);
 
     setStep(isDemo ? 'demoLoop' : direction);
-    const beatDur = 600;
     const beatData = [];
     const noteSteps = timeline
       .map((item, idx) => (item.type === 'note' ? { ...item, beatIdx: idx } : null))
