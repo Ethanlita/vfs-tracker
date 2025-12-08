@@ -266,7 +266,7 @@ const getUserPublicProfileHandler = http.get(`${API_URL}/user/:userId/public`, (
 
 /**
  * POST /user/profile-setup - 新用户资料设置
- * 接收: {profile: {name, isNamePublic, socials, areSocialsPublic}}
+ * 接收: {profile: {name, isNamePublic, socials, areSocialsPublic, setupSkipped?}}
  * 返回: {message, user, isNewUser}
  */
 const setupUserProfileHandler = http.post(`${API_URL}/user/profile-setup`, async ({ request }) => {
@@ -283,11 +283,25 @@ const setupUserProfileHandler = http.post(`${API_URL}/user/profile-setup`, async
     
     console.log('[MSW] Profile setup data:', profile);
     
+    // 构建新用户的 profile，保留 setupSkipped 字段
+    const userProfile = {
+      nickname: 'Test User',  // 从 Cognito 获取
+      name: profile.name || '',
+      bio: profile.bio || '',
+      isNamePublic: profile.isNamePublic !== undefined ? profile.isNamePublic : false,
+      socials: profile.socials || [],
+      areSocialsPublic: profile.areSocialsPublic !== undefined ? profile.areSocialsPublic : false
+    };
+    
+    // 保存 setupSkipped 字段，避免用户重复进入向导
+    // 与 Lambda 行为保持一致：总是设置为 true 或 false
+    userProfile.setupSkipped = profile.setupSkipped === true;
+    
     // 创建新用户
     const newUser = {
       userId: `us-east-1:new-user-${Date.now()}`,
       email: 'newuser@example.com',
-      profile: profile,
+      profile: userProfile,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };

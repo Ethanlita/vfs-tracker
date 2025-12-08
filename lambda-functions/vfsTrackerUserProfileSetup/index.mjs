@@ -156,7 +156,8 @@ export const handler = async (event) => {
       bio: cleanProfileData.bio || '',
       isNamePublic: cleanProfileData.isNamePublic !== undefined ? cleanProfileData.isNamePublic : false,
       socials: cleanProfileData.socials || [],
-      areSocialsPublic: cleanProfileData.areSocialsPublic !== undefined ? cleanProfileData.areSocialsPublic : false
+      areSocialsPublic: cleanProfileData.areSocialsPublic !== undefined ? cleanProfileData.areSocialsPublic : false,
+      setupSkipped: cleanProfileData.setupSkipped === true // 保存用户跳过设置的标记，避免循环跳转向导
     };
 
     console.log('📋 最终的profile对象:', JSON.stringify(profile, null, 2));
