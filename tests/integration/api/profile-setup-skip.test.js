@@ -4,12 +4,8 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import { http, HttpResponse } from 'msw';
 import { setupUserProfile, isUserProfileComplete } from '../../../src/api.js';
 import { setAuthenticated } from '../../../src/test-utils/mocks/amplify-auth.js';
-import { server } from '../../../src/test-utils/mocks/msw-server.js';
-
-const API_URL = 'https://2rzxc2x5l8.execute-api.us-east-1.amazonaws.com/dev';
 
 describe('Profile Setup Skip 功能测试', () => {
   beforeEach(() => {
@@ -130,6 +126,26 @@ describe('Profile Setup Skip 功能测试', () => {
 
       const isComplete = isUserProfileComplete(userProfile);
       expect(isComplete).toBe(false);  // 应该返回 false，需要进入向导
+    });
+
+    it('setupSkipped 未定义时应该保存为 false（向后兼容）', async () => {
+      const payload = {
+        profile: {
+          name: 'Test User',
+          bio: 'Test bio',
+          isNamePublic: true,
+          socials: [],
+          areSocialsPublic: false
+          // 注意：没有 setupSkipped 字段
+        }
+      };
+
+      const response = await setupUserProfile(payload);
+
+      expect(response).toBeDefined();
+      expect(response.user).toBeDefined();
+      // Lambda 应该保存 setupSkipped: false（因为 undefined === true 返回 false）
+      expect(response.user.profile.setupSkipped).toBe(false);
     });
   });
 

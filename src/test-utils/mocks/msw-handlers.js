@@ -294,9 +294,8 @@ const setupUserProfileHandler = http.post(`${API_URL}/user/profile-setup`, async
     };
     
     // 保存 setupSkipped 字段，避免用户重复进入向导
-    if (profile.setupSkipped !== undefined) {
-      userProfile.setupSkipped = profile.setupSkipped;
-    }
+    // 与 Lambda 行为保持一致：总是设置为 true 或 false
+    userProfile.setupSkipped = profile.setupSkipped === true;
     
     // 创建新用户
     const newUser = {
