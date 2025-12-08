@@ -9,6 +9,7 @@ import {
 } from '../utils/pitchEval.js';
 import modesConfig from '../config/scaleModes.json';
 import { buildBeatTimeline, deriveModePitchMeta, planBeatSchedule } from '../utils/scaleModes.js';
+import { calcMedian, evaluateNoteStability } from '../utils/scalePracticeEval.js';
 import { getSongRecommendations } from '../api.js'; // Import the new API function
 import { ensureAppError } from '../utils/apiError.js';
 import { ApiErrorNotice } from './ApiErrorNotice.jsx';
@@ -30,20 +31,36 @@ const frequencyToNoteName = (frequency) => {
   return `${note}${octave}`;
 };
 
+/**
+ * @zh 根据失败原因生成提示文案。
+ * @param {{ idx: number, freq: number, type: 'miss'|'high'|'low'|'unstable'|'invalidFrame', requiredMs?: number, stableMs?: number }} fail 失败信息
+ * @returns {string} 用户可读提示
+ */
+const formatFailMessage = (fail) => {
+  if (!fail) return '未达到目标音，是否重试？';
+  const noteLabel = frequencyToNoteName(fail.freq);
+  switch (fail.type) {
+    case 'miss':
+      return `第${fail.idx}个音${noteLabel}未检测到`;
+    case 'high':
+      return `第${fail.idx}个音${noteLabel}不够低`;
+    case 'low':
+      return `第${fail.idx}个音${noteLabel}不够高`;
+    case 'unstable':
+      return `第${fail.idx}个音${noteLabel}保持不足${Math.round(fail.requiredMs ?? 0)}ms`;
+    case 'invalidFrame':
+      return '录音数据异常，请检查麦克风输入或刷新页面后重试';
+    default:
+      return '未达到目标音，是否重试？';
+  }
+};
+
 // 将频率映射为指示器的垂直百分比位置
 const freqToPercent = (f, range) => {
   if (!range.max || !range.min || f <= 0) return 0;
   const { min, max } = range;
   const ratio = Math.log2(f / min) / Math.log2(max / min);
   return Math.min(1, Math.max(0, ratio));
-};
-
-// 中位数计算
-const median = (arr) => {
-  if (arr.length === 0) return 0;
-  const sorted = [...arr].sort((a, b) => a - b);
-  const mid = Math.floor(sorted.length / 2);
-  return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
 };
 
 /**
@@ -118,9 +135,14 @@ const ScalePractice = () => {
   const semitoneRatio = Math.pow(2, 1 / 12);
   const rootIndexRef = useRef(0); // 起始音相对C4的半音数
   const descendingIndexRef = useRef(0);
+  const progressRafRef = useRef(null);
+  const progressStartRef = useRef(0);
+  const lastProgressRef = useRef(0);
 
   // 当前实时 F0，用于 UI 显示
   const [currentF0, setCurrentF0] = useState(0);
+  const [timelineProgress, setTimelineProgress] = useState(0);
+  const [beatCenters, setBeatCenters] = useState([]);
 
   // 预计算当前模式的拍数分布
   const modeStats = useMemo(() => {
@@ -161,6 +183,49 @@ const ScalePractice = () => {
     setBeat(0);
   }, [currentMode, modes]);
 
+  // --- 水平进度动画 ---
+  const stopProgressAnimation = useCallback((reset = false) => {
+    if (progressRafRef.current) {
+      cancelAnimationFrame(progressRafRef.current);
+      progressRafRef.current = null;
+    }
+    if (reset) {
+      lastProgressRef.current = 0;
+      setTimelineProgress(0);
+    }
+  }, []);
+
+  const startProgressAnimation = useCallback((beatDurations = []) => {
+    stopProgressAnimation();
+    lastProgressRef.current = 0;
+    setTimelineProgress(0);
+    if (!beatDurations.length) {
+      setBeatCenters([]);
+      return;
+    }
+    const total = beatDurations.reduce((sum, cur) => sum + cur, 0);
+    let acc = 0;
+    const centers = beatDurations.map(dur => {
+      const center = (acc + dur / 2) / total;
+      acc += dur;
+      return center * 100;
+    });
+    setBeatCenters(centers);
+    progressStartRef.current = performance.now();
+    const tick = () => {
+      const elapsed = Math.min(performance.now() - progressStartRef.current, total);
+      const next = total ? elapsed / total : 0;
+      if (Math.abs(next - lastProgressRef.current) > 0.003) {
+        lastProgressRef.current = next;
+        setTimelineProgress(next);
+      }
+      if (elapsed < total) {
+        progressRafRef.current = requestAnimationFrame(tick);
+      }
+    };
+    progressRafRef.current = requestAnimationFrame(tick);
+  }, [stopProgressAnimation]);
+
   // --- 音频初始化与清理 ---
   const cleanupAudio = useCallback(() => {
     if (rafRef.current) {
@@ -175,7 +240,8 @@ const ScalePractice = () => {
       audioCtxRef.current.close().catch(() => {});
       audioCtxRef.current = null;
     }
-  }, []);
+    stopProgressAnimation(true);
+  }, [stopProgressAnimation]);
 
   useEffect(() => () => cleanupAudio(), [cleanupAudio]);
 
@@ -354,7 +420,7 @@ const ScalePractice = () => {
     collectingRef.current = false;
     const valid = currentFramesRef.current.filter(f => f.pitch > 50 && f.pitch < 1200);
     const f0s = valid.map(f => f.pitch);
-    const sff = median(f0s);
+    const sff = calcMedian(f0s);
     let idx = Math.round(12 * Math.log2(sff / 261.63)) - 2;
     if (idx > 12) idx = 12;
     if (idx < -12) idx = -12;
@@ -402,22 +468,22 @@ const ScalePractice = () => {
 
     let timeline;
     let beatDur;
-    let beatUnit = 'quarter';
     try {
       const plan = planBeatSchedule(currentMode, baseQuarterMs);
       timeline = plan.timeline;
       beatDur = plan.beatMs; // 使用模式规划的拍长，避免硬编码节奏偏差
-      beatUnit = plan.beatUnit;
       setCycleBeats(timeline.length);
     } catch (err) {
       setModeError(err.message);
       return;
     }
+    const beatDurations = timeline.map(item =>
+      typeof item.durationMs === 'number' && item.durationMs > 0 ? item.durationMs : beatDur
+    );
 
     const {
       indicatorRange: modeRange,
       ladderNotes: modeLadder,
-      targetFreq,
       minOffset,
       maxOffset
     } = deriveModePitchMeta(currentMode, baseFreq, semitoneRatio, direction, paddingCents);
@@ -426,6 +492,7 @@ const ScalePractice = () => {
     setLadderNotes(modeLadder);
 
     setStep(isDemo ? 'demoLoop' : direction);
+    startProgressAnimation(beatDurations);
     const beatData = [];
     const noteSteps = timeline
       .map((item, idx) => (item.type === 'note' ? { ...item, beatIdx: idx } : null))
@@ -465,6 +532,20 @@ const ScalePractice = () => {
       gateByStability(f.clarity, clarityTheta)
     );
 
+    const evaluation = evaluateNoteStability({
+      beatData,
+      noteSteps,
+      baseFreq,
+      semitoneRatio,
+      tolerance,
+      baselineRms: baselineRmsRef.current,
+      deltaDb,
+      clarityTheta,
+      frameDuration: frameDurationRef.current,
+      stableWindowMs,
+      beatDurations
+    });
+
     if (isDemo) {
       let resultMsg = '演示结束，做得很好！';
       const early = beatData
@@ -472,104 +553,35 @@ const ScalePractice = () => {
         .some(frames => gateFrames(frames).length);
       if (early) {
         resultMsg = '切入太早，应该和系统播放的目标音同时切入';
-      } else {
-        for (let j = 0; j < noteSteps.length; j++) {
-          const expected = baseFreq * Math.pow(semitoneRatio, noteSteps[j].offset ?? 0);
-          const frames = gateFrames(beatData[noteSteps[j].beatIdx]);
-          if (!frames.length) {
-            resultMsg = `第${j + 1}个音${frequencyToNoteName(expected)}未检测到`;
-            break;
-          }
-          const pitch = median(frames.map(f => f.pitch));
-          const cents = 1200 * Math.log2(pitch / expected);
-          if (cents < -tolerance) {
-            resultMsg = `第${j + 1}个音${frequencyToNoteName(expected)}不够高`;
-            break;
-          } else if (cents > tolerance) {
-            resultMsg = `第${j + 1}个音${frequencyToNoteName(expected)}不够低`;
-            break;
-          }
-        }
+      } else if (!evaluation.passed) {
+        resultMsg = formatFailMessage(evaluation.failedNote);
       }
       setMessage(resultMsg);
       setStep('demoEnd');
+      stopProgressAnimation(true);
       return;
     }
 
-    const frames = beatData.flat();
-
-    // 辅助函数：找出失败的音符序号
-    const findFailedNote = () => {
-      for (let j = 0; j < noteSteps.length; j++) {
-        const expected = baseFreq * Math.pow(semitoneRatio, noteSteps[j].offset ?? 0);
-        const frames = gateFrames(beatData[noteSteps[j].beatIdx]);
-        if (!frames.length) {
-          return { idx: j + 1, freq: expected, type: 'miss' };
-        }
-        const pitch = median(frames.map(f => f.pitch));
-        const cents = 1200 * Math.log2(pitch / expected);
-        if (cents < -tolerance) {
-          return { idx: j + 1, freq: expected, type: 'low' };
-        }
-        if (cents > tolerance) {
-          return { idx: j + 1, freq: expected, type: 'high' };
-        }
-      }
-      return null;
-    };
+    if (!evaluation.passed) {
+      const failMsg = formatFailMessage(evaluation.failedNote);
+      setMessage(failMsg);
+      stopProgressAnimation(true);
+      setStep(direction === 'ascending' ? 'ascendFail' : 'descendFail');
+      return;
+    }
 
     if (direction === 'ascending') {
       setStep('ascending');
-      const stable = accumulateStableWindow(
-        frames,
-        targetFreq,
-        tolerance,
-        baselineRmsRef.current,
-        deltaDb,
-        clarityTheta,
-        frameDurationRef.current
-      );
-      if (stable >= stableWindowMs) {
-        const cycleHigh = baseFreq * Math.pow(semitoneRatio, maxOffset);
-        setHighestHz(Math.max(highestHz, cycleHigh));
-        rootIndexRef.current += currentMode.transposeStep ?? 1;
-        setTimeout(() => runCycle('ascending'), 800);
-      } else {
-        const failed = findFailedNote();
-        const failMsg = failed
-          ? failed.type === 'miss'
-            ? `第${failed.idx}个音${frequencyToNoteName(failed.freq)}未检测到`
-            : `第${failed.idx}个音${frequencyToNoteName(failed.freq)}不够${failed.type === 'low' ? '高' : '低'}`
-          : '未达到目标音，是否重试？';
-        setMessage(failMsg);
-        setStep('ascendFail');
-      }
+      const cycleHigh = baseFreq * Math.pow(semitoneRatio, maxOffset);
+      setHighestHz(Math.max(highestHz, cycleHigh));
+      rootIndexRef.current += currentMode.transposeStep ?? 1;
+      setTimeout(() => runCycle('ascending'), 800);
     } else {
       setStep('descending');
-      const stable = accumulateStableWindow(
-        frames,
-        targetFreq,
-        tolerance,
-        baselineRmsRef.current,
-        deltaDb,
-        clarityTheta,
-        frameDurationRef.current
-      );
-      if (stable >= stableWindowMs) {
-        const cycleLow = baseFreq * Math.pow(semitoneRatio, minOffset);
-        setLowestHz(lowestHz === 0 ? cycleLow : Math.min(lowestHz, cycleLow));
-        descendingIndexRef.current -= currentMode.transposeStep ?? 1;
-        setTimeout(() => runCycle('descending'), 800);
-      } else {
-        const failed = findFailedNote();
-        const failMsg = failed
-          ? failed.type === 'miss'
-            ? `第${failed.idx}个音${frequencyToNoteName(failed.freq)}未检测到`
-            : `第${failed.idx}个音${frequencyToNoteName(failed.freq)}不够${failed.type === 'low' ? '高' : '低'}`
-          : '未达到目标音，是否重试？';
-        setMessage(failMsg);
-        setStep('descendFail');
-      }
+      const cycleLow = baseFreq * Math.pow(semitoneRatio, minOffset);
+      setLowestHz(lowestHz === 0 ? cycleLow : Math.min(lowestHz, cycleLow));
+      descendingIndexRef.current -= currentMode.transposeStep ?? 1;
+      setTimeout(() => runCycle('descending'), 800);
     }
   };
 
@@ -612,6 +624,7 @@ const ScalePractice = () => {
       const startFreq = 261.63 * Math.pow(semitoneRatio, startOffset + minOffset);
       setLowestHz(startFreq);
     }
+    stopProgressAnimation(true);
     setStep('result');
   };
 
@@ -643,10 +656,23 @@ const ScalePractice = () => {
     if (!indicatorRange.min || !indicatorRange.max || !ladderNotes.length) return null;
     const sortedNotes = [...new Set(ladderNotes)].sort((a, b) => a - b);
     const dotPercent = Math.max(0, Math.min(100, freqToPercent(currentF0, indicatorRange) * 100));
+    const dotPercentX = Math.max(0, Math.min(100, timelineProgress * 100));
+    const safeDotX = Math.max(3, Math.min(97, dotPercentX));
 
     return (
       <div className="relative h-64 bg-gray-100 rounded mb-4 overflow-hidden">
         <div className="absolute inset-4">
+          <div className="absolute inset-0 pointer-events-none">
+            {beatCenters.map((center, idx) => (
+              <div
+                key={`center-${idx}`}
+                className="absolute top-4 bottom-4 border-l border-dashed border-pink-200"
+                style={{ left: `${center}%`, zIndex: 6 }}
+              >
+                <div className="absolute bottom-1/2 translate-y-1/2 -translate-x-1/2 w-2 h-2 bg-pink-200 rounded-full opacity-80"></div>
+              </div>
+            ))}
+          </div>
           {sortedNotes.map((f, idx) => {
             const lower = freqToPercent(f * Math.pow(2, -tolerance / 1200), indicatorRange) * 100;
             const upper = freqToPercent(f * Math.pow(2, tolerance / 1200), indicatorRange) * 100;
@@ -670,8 +696,13 @@ const ScalePractice = () => {
             );
           })}
           <div
-            className="absolute left-1/2 -translate-x-1/2 w-3 h-3 bg-pink-500 rounded-full shadow-md"
-            style={{ bottom: `${dotPercent}%`, zIndex: 15 }}
+            className="absolute w-3 h-3 bg-pink-500 rounded-full shadow-md transition-[left] duration-150 ease-linear"
+            style={{
+              bottom: `${dotPercent}%`,
+              left: `${safeDotX}%`,
+              zIndex: 15,
+              transform: 'translate(-50%, 50%)'
+            }}
           ></div>
         </div>
       </div>

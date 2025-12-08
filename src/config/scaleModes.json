@@ -83,6 +83,20 @@
       "targetNoteIndex": 2
     },
     {
+      "id": "half_step_mini",
+      "name": "半音阶小山 1-♭2-2-♭2-1",
+      "description": "小跨度热身：半音与全音组合，适合术后音域较窄的用户缓慢启声。",
+      "prologue": [
+        { "type": "rest", "count": 1 },
+        { "type": "example", "count": 1, "offset": 0 },
+        { "type": "rest", "count": 1 }
+      ],
+      "patternOffsets": [0, 1, 2, 1, 0],
+      "beatStructure": { "finalRests": 0 },
+      "transposeStep": 1,
+      "targetNoteIndex": 2
+    },
+    {
       "id": "triad_with_octave",
       "name": "加高八度 1-3-5-8-5",
       "description": "快速触及高声区，练习一口气托到 8 再回落。",
@@ -92,6 +106,48 @@
         { "type": "rest", "count": 1 }
       ],
       "patternOffsets": [0, 4, 7, 12, 7],
+      "beatStructure": { "finalRests": 0 },
+      "transposeStep": 1,
+      "targetNoteIndex": 3
+    },
+    {
+      "id": "wide_mountain_14841",
+      "name": "大跨度山形 1-3-#5-3-1",
+      "description": "山形升级版：从大三度直跳增五度再落回，锻炼跨度与换气的平衡。",
+      "prologue": [
+        { "type": "rest", "count": 1 },
+        { "type": "example", "count": 1, "offset": 0 },
+        { "type": "rest", "count": 1 }
+      ],
+      "patternOffsets": [0, 4, 8, 4, 0],
+      "beatStructure": { "finalRests": 0 },
+      "transposeStep": 1,
+      "targetNoteIndex": 2
+    },
+    {
+      "id": "perfect_fifth_cycle",
+      "name": "五度音程 1-♭3-4-5-4-♭3-1",
+      "description": "持续触碰纯五度，再回落到主音，保持咬字统一与口型支撑。",
+      "prologue": [
+        { "type": "rest", "count": 1 },
+        { "type": "example", "count": 1, "offset": 0 },
+        { "type": "rest", "count": 1 }
+      ],
+      "patternOffsets": [0, 3, 5, 7, 5, 3, 0],
+      "beatStructure": { "finalRests": 0 },
+      "transposeStep": 1,
+      "targetNoteIndex": 3
+    },
+    {
+      "id": "octave_interval",
+      "name": "八度音程 1-3-5-8-5-3-1",
+      "description": "八度跳跃与回落，检验头胸声区衔接与气息连贯度。",
+      "prologue": [
+        { "type": "rest", "count": 1 },
+        { "type": "example", "count": 1, "offset": 0 },
+        { "type": "rest", "count": 1 }
+      ],
+      "patternOffsets": [0, 4, 7, 12, 7, 4, 0],
       "beatStructure": { "finalRests": 0 },
       "transposeStep": 1,
       "targetNoteIndex": 3
@@ -134,6 +190,19 @@
       ],
       "patternOffsets": [0, 2, 4, 5, 7, 5, 4, 2, 0],
       "beatStructure": { "finalRests": 5 },
+      "transposeStep": 1,
+      "targetNoteIndex": 4
+    },
+    {
+      "id": "turnback_123454321_16th",
+      "name": "九度回转 123454321（16分音符版）",
+      "description": "与标准九度回转相同音型，但采用更短拍值（16 分音符）快速往返，适合灵活度练习。",
+      "prologue": [
+        { "type": "example", "count": 1, "offset": 0 },
+        { "type": "rest", "count": 1 }
+      ],
+      "patternOffsets": [0, 2, 4, 5, 7, 5, 4, 2, 0],
+      "beatStructure": { "finalRests": 9 },
       "transposeStep": 1,
       "targetNoteIndex": 4
     }
