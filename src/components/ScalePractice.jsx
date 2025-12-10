@@ -710,19 +710,22 @@ const ScalePractice = () => {
             ))}
           </div>
           {sortedNotes.map((f, idx) => {
-            const lower = freqToPercent(f * Math.pow(2, -tolerance / 1200), indicatorRange) * 100;
-            const upper = freqToPercent(f * Math.pow(2, tolerance / 1200), indicatorRange) * 100;
             const center = freqToPercent(f, indicatorRange) * 100;
-            const bandHeight = Math.max(0, upper - lower);
+            const lowerRaw = freqToPercent(f * Math.pow(2, -tolerance / 1200), indicatorRange) * 100;
+            const upperRaw = freqToPercent(f * Math.pow(2, tolerance / 1200), indicatorRange) * 100;
+            const halfBand = Math.max(0, (upperRaw - lowerRaw) / 2);
+            const top = Math.max(0, center - halfBand);
+            const bottom = Math.min(100, center + halfBand);
+            const bandHeight = Math.max(0, bottom - top);
             return (
               <React.Fragment key={`${f}-${idx}`}>
                 <div
                   className="absolute inset-x-0 bg-pink-200 opacity-40"
-                  style={{ bottom: `${lower}%`, height: `${bandHeight}%`, zIndex: 5 }}
+                  style={{ top: `${top}%`, height: `${bandHeight}%`, zIndex: 5 }}
                 ></div>
                 <div
-                  className="absolute inset-x-0 flex items-center justify-between text-xs text-gray-700"
-                  style={{ bottom: `${center}%`, zIndex: 10 }}
+                  className="absolute inset-x-0 -translate-y-1/2 flex items-center justify-between text-xs text-gray-700"
+                  style={{ top: `${center}%`, zIndex: 10 }}
                 >
                   <span className="bg-white/80 px-1 rounded">{frequencyToNoteName(f)}</span>
                   <div className="flex-1 h-px bg-pink-500 mx-2"></div>
