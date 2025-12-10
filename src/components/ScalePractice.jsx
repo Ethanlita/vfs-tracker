@@ -898,6 +898,24 @@ const ScalePractice = () => {
               <div className="mt-2 bg-gray-50 border border-gray-200 rounded-lg p-3 text-sm text-gray-700">
                 <div className="font-semibold mb-1">{currentMode.name}</div>
                 <p className="mb-1">{currentMode.description}</p>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-xs text-gray-600">难度：</span>
+                  <span
+                    className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${
+                      currentMode.difficulty === '入门'
+                        ? 'bg-green-100 text-green-700'
+                        : currentMode.difficulty === '简单'
+                          ? 'bg-blue-100 text-blue-700'
+                          : currentMode.difficulty === '一般'
+                            ? 'bg-amber-100 text-amber-700'
+                            : currentMode.difficulty === '高级'
+                              ? 'bg-rose-100 text-rose-700'
+                              : 'bg-gray-100 text-gray-700'
+                    }`}
+                  >
+                    {currentMode.difficulty || '未标注'}
+                  </span>
+                </div>
                 <p className="text-xs text-gray-500">
                   每轮拍数：{modeStats.total}（示范 {modeStats.examples} 拍 / 空拍 {modeStats.rests} 拍 / 音符 {modeStats.notes} 拍），节奏单位：{modeStats.beatUnit === 'quarter' ? '四分音符' : modeStats.beatUnit === 'eighth' ? '八分音符' : '十六分音符'}
                 </p>

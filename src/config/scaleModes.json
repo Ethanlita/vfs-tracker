@@ -11,7 +11,8 @@
       ],
       "patternOffsets": [0, 2, 4, 2, 0],
       "beatStructure": { "finalRests": 0 },
-      "transposeStep": 1
+      "transposeStep": 1,
+      "difficulty": "入门"
     },
     {
       "id": "ascending_12345",
@@ -25,7 +26,8 @@
       "patternOffsets": [0, 2, 4, 5, 7],
       "beatStructure": { "finalRests": 0 },
       "transposeStep": 1,
-      "targetNoteIndex": 4
+      "targetNoteIndex": 4,
+      "difficulty": "简单"
     },
     {
       "id": "descending_54321",
@@ -39,7 +41,8 @@
       "patternOffsets": [7, 5, 4, 2, 0],
       "beatStructure": { "finalRests": 0 },
       "transposeStep": 1,
-      "targetNoteIndex": 0
+      "targetNoteIndex": 0,
+      "difficulty": "简单"
     },
     {
       "id": "turnback_12341",
@@ -53,7 +56,8 @@
       "patternOffsets": [0, 2, 4, 5, 12],
       "beatStructure": { "finalRests": 0 },
       "transposeStep": 1,
-      "targetNoteIndex": 4
+      "targetNoteIndex": 4,
+      "difficulty": "一般"
     },
     {
       "id": "turnback_123454",
@@ -66,7 +70,8 @@
       "patternOffsets": [0, 2, 4, 5, 7, 5],
       "beatStructure": { "finalRests": 0 },
       "transposeStep": 1,
-      "targetNoteIndex": 4
+      "targetNoteIndex": 4,
+      "difficulty": "一般"
     },
     {
       "id": "triad_arpeggio",
@@ -80,7 +85,8 @@
       "patternOffsets": [0, 4, 7, 4, 0],
       "beatStructure": { "finalRests": 0 },
       "transposeStep": 1,
-      "targetNoteIndex": 2
+      "targetNoteIndex": 2,
+      "difficulty": "简单"
     },
     {
       "id": "half_step_mini",
@@ -94,7 +100,8 @@
       "patternOffsets": [0, 1, 2, 1, 0],
       "beatStructure": { "finalRests": 0 },
       "transposeStep": 1,
-      "targetNoteIndex": 2
+      "targetNoteIndex": 2,
+      "difficulty": "入门"
     },
     {
       "id": "triad_with_octave",
@@ -108,7 +115,8 @@
       "patternOffsets": [0, 4, 7, 12, 7],
       "beatStructure": { "finalRests": 0 },
       "transposeStep": 1,
-      "targetNoteIndex": 3
+      "targetNoteIndex": 3,
+      "difficulty": "高级"
     },
     {
       "id": "wide_mountain_14841",
@@ -122,7 +130,8 @@
       "patternOffsets": [0, 4, 8, 4, 0],
       "beatStructure": { "finalRests": 0 },
       "transposeStep": 1,
-      "targetNoteIndex": 2
+      "targetNoteIndex": 2,
+      "difficulty": "一般"
     },
     {
       "id": "perfect_fifth_cycle",
@@ -136,7 +145,8 @@
       "patternOffsets": [0, 3, 5, 7, 5, 3, 0],
       "beatStructure": { "finalRests": 0 },
       "transposeStep": 1,
-      "targetNoteIndex": 3
+      "targetNoteIndex": 3,
+      "difficulty": "一般"
     },
     {
       "id": "octave_interval",
@@ -150,7 +160,8 @@
       "patternOffsets": [0, 4, 7, 12, 7, 4, 0],
       "beatStructure": { "finalRests": 0 },
       "transposeStep": 1,
-      "targetNoteIndex": 3
+      "targetNoteIndex": 3,
+      "difficulty": "高级"
     },
     {
       "id": "third_step",
@@ -164,7 +175,8 @@
       "patternOffsets": [0, 4, 2, 5, 4],
       "beatStructure": { "finalRests": 0 },
       "transposeStep": 1,
-      "targetNoteIndex": 3
+      "targetNoteIndex": 3,
+      "difficulty": "简单"
     },
     {
       "id": "third_chain",
@@ -178,7 +190,8 @@
       "patternOffsets": [0, 4, 2, 5, 4],
       "beatStructure": { "finalRests": 0 },
       "transposeStep": 1,
-      "targetNoteIndex": 4
+      "targetNoteIndex": 4,
+      "difficulty": "一般"
     },
     {
       "id": "turnback_123454321",
@@ -191,7 +204,8 @@
       "patternOffsets": [0, 2, 4, 5, 7, 5, 4, 2, 0],
       "beatStructure": { "finalRests": 5 },
       "transposeStep": 1,
-      "targetNoteIndex": 4
+      "targetNoteIndex": 4,
+      "difficulty": "一般"
     },
     {
       "id": "turnback_123454321_16th",
@@ -204,7 +218,8 @@
       "patternOffsets": [0, 2, 4, 5, 7, 5, 4, 2, 0],
       "beatStructure": { "finalRests": 9 },
       "transposeStep": 1,
-      "targetNoteIndex": 4
+      "targetNoteIndex": 4,
+      "difficulty": "高级"
     }
   ]
 }
