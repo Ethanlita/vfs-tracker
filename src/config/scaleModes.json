@@ -12,7 +12,7 @@
       "patternOffsets": [0, 2, 4, 2, 0],
       "beatStructure": { "finalRests": 0 },
       "transposeStep": 1,
-      "difficulty": "入门"
+      "difficulty": "简单"
     },
     {
       "id": "ascending_12345",
@@ -86,12 +86,12 @@
       "beatStructure": { "finalRests": 0 },
       "transposeStep": 1,
       "targetNoteIndex": 2,
-      "difficulty": "简单"
+      "difficulty": "一般"
     },
     {
       "id": "half_step_mini",
       "name": "半音阶小山 1-♭2-2-♭2-1",
-      "description": "小跨度热身：半音与全音组合，适合术后音域较窄的用户缓慢启声。",
+      "description": "小跨度热身：半音与全音组合。如果你刚进行了嗓音手术或者音域极其狭窄，可以尝试此模式。否则建议你从简单难度开始。",
       "prologue": [
         { "type": "rest", "count": 1 },
         { "type": "example", "count": 1, "offset": 0 },
@@ -176,7 +176,7 @@
       "beatStructure": { "finalRests": 0 },
       "transposeStep": 1,
       "targetNoteIndex": 3,
-      "difficulty": "简单"
+      "difficulty": "一般"
     },
     {
       "id": "third_chain",
@@ -205,7 +205,7 @@
       "beatStructure": { "finalRests": 5 },
       "transposeStep": 1,
       "targetNoteIndex": 4,
-      "difficulty": "一般"
+      "difficulty": "高级"
     },
     {
       "id": "turnback_123454321_16th",

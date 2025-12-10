@@ -64,6 +64,40 @@ const freqToPercent = (f, range) => {
 };
 
 /**
+ * @zh 按难度对练习模式排序，便于用户从易到难选择。
+ * @param {Array<Object>} modeList 模式列表
+ * @returns {Array<Object>} 排序后的模式列表
+ */
+const sortModesByDifficulty = (modeList = []) => {
+  const order = { '入门': 0, '简单': 1, '一般': 2, '高级': 3 };
+  return [...modeList]
+    .map((mode, idx) => ({ ...mode, _idx: idx }))
+    .sort((a, b) => {
+      const da = order[a.difficulty] ?? 999;
+      const db = order[b.difficulty] ?? 999;
+      if (da === db) return a._idx - b._idx;
+      return da - db;
+    })
+    .map(({ _idx, ...rest }) => rest);
+};
+
+/**
+ * @zh 计算当前模式在给定起始音下的最低参考频率，确保结果页的最低音不高于练习起点。
+ * @param {Object} mode 当前模式
+ * @param {number} startOffsetVal 起始音相对 C4 的半音偏移
+ * @param {number} semitoneRatioVal 半音比值
+ * @returns {number} 最低参考频率（Hz）
+ */
+const computeModeFloorFreq = (mode, startOffsetVal, semitoneRatioVal) => {
+  const base = 261.63;
+  if (!mode || !Array.isArray(mode.patternOffsets) || mode.patternOffsets.length === 0) {
+    return base * Math.pow(semitoneRatioVal, startOffsetVal);
+  }
+  const minOffset = Math.min(...mode.patternOffsets, 0);
+  return base * Math.pow(semitoneRatioVal, startOffsetVal + minOffset);
+};
+
+/**
  * @zh ScalePractice 组件用于配置化的音阶练习与音域测定。
  * 流程：权限与耳机检测 → 演示 → 爬升练习 → 下降练习 → 结果展示。
  * 练习节奏与目标音由 JSON 模式定义驱动，便于扩展不同音阶套路。
@@ -78,7 +112,7 @@ const ScalePractice = () => {
   const navigate = useNavigate();
 
   // --- 向导步骤状态 ---
-  const [step, setStep] = useState('permission');
+  const [step, setStep] = useState('intro');
   const [message, setMessage] = useState('');
   const [syllable, setSyllable] = useState('a');
   const [permissionError, setPermissionError] = useState('');
@@ -89,7 +123,7 @@ const ScalePractice = () => {
   const [indicatorRange, setIndicatorRange] = useState({ min: 0, max: 0 });
   const [ladderNotes, setLadderNotes] = useState([]);
   const [showOfflineNotice, setShowOfflineNotice] = useState(false);
-  const [modes] = useState(() => modesConfig?.modes ?? []);
+  const [modes] = useState(() => sortModesByDifficulty(modesConfig?.modes ?? []));
   const [selectedModeId, setSelectedModeId] = useState(() => modesConfig?.modes?.[0]?.id ?? '');
   const [modeError, setModeError] = useState('');
   const [cycleBeats, setCycleBeats] = useState(() => {
@@ -138,6 +172,7 @@ const ScalePractice = () => {
   const progressRafRef = useRef(null);
   const progressStartRef = useRef(0);
   const lastProgressRef = useRef(0);
+  const lowestFloorRef = useRef(0); // 记录起始音可达的最低参考频率，避免结果页低于起点
 
   // 当前实时 F0，用于 UI 显示
   const [currentF0, setCurrentF0] = useState(0);
@@ -180,6 +215,7 @@ const ScalePractice = () => {
     }
     setHighestHz(0);
     setLowestHz(0);
+    lowestFloorRef.current = 0;
     setBeat(0);
   }, [currentMode, modes]);
 
@@ -384,11 +420,6 @@ const ScalePractice = () => {
     }
   }, [initAudio]);
 
-  // 页面加载即请求权限
-  useEffect(() => {
-    requestPermission();
-  }, [requestPermission]);
-
   // --- Step1: 耳机检测 ---
   const handleHeadphoneCheck = async () => {
     setStep('headphone');
@@ -579,7 +610,11 @@ const ScalePractice = () => {
     } else {
       setStep('descending');
       const cycleLow = baseFreq * Math.pow(semitoneRatio, minOffset);
-      setLowestHz(lowestHz === 0 ? cycleLow : Math.min(lowestHz, cycleLow));
+      setLowestHz(prev => {
+        const floorFreq = lowestFloorRef.current || computeModeFloorFreq(currentMode, startOffset, semitoneRatio);
+        const baseLow = prev === 0 ? cycleLow : Math.min(prev, cycleLow);
+        return floorFreq ? Math.min(baseLow, floorFreq) : baseLow;
+      });
       descendingIndexRef.current -= currentMode.transposeStep ?? 1;
       setTimeout(() => runCycle('descending'), 800);
     }
@@ -593,6 +628,8 @@ const ScalePractice = () => {
 
   const handlePracticeStart = () => {
     if (!ensureModeReady()) return;
+    // 记录当前起始音下可达到的最低参考频率，用于结果页兜底
+    lowestFloorRef.current = computeModeFloorFreq(currentMode, startOffset, semitoneRatio);
     rootIndexRef.current = startOffset;
     runCycle('ascending');
   };
@@ -617,12 +654,11 @@ const ScalePractice = () => {
 
   const handleFinishPractice = () => {
     cleanupAudio();
+    const floorFreq = lowestFloorRef.current || computeModeFloorFreq(currentMode, startOffset, semitoneRatio);
     if (lowestHz === 0) {
-      const minOffset = currentMode?.patternOffsets?.length
-        ? Math.min(...currentMode.patternOffsets, 0)
-        : 0;
-      const startFreq = 261.63 * Math.pow(semitoneRatio, startOffset + minOffset);
-      setLowestHz(startFreq);
+      setLowestHz(floorFreq);
+    } else if (lowestHz > floorFreq) {
+      setLowestHz(Math.min(lowestHz, floorFreq));
     }
     stopProgressAnimation(true);
     setStep('result');
@@ -798,7 +834,6 @@ const ScalePractice = () => {
           </div>
         </div>
       )}
-
       {showOfflineNotice && (
         <div className="bg-amber-50 border border-amber-200 text-amber-900 p-4 rounded-lg mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <span>当前未联网或音色资源加载失败，已切换为本地合成器（Oscillator），音色效果将不够理想。</span>
@@ -811,10 +846,48 @@ const ScalePractice = () => {
         </div>
       )}
 
+      {step === 'intro' && (
+        <div className="bg-white p-6 rounded-xl shadow-md mb-6">
+          <div className="flex items-start gap-4">
+            <div className="text-4xl">🎶</div>
+            <div className="text-left text-gray-700 space-y-3">
+              <h2 className="text-2xl font-semibold text-gray-900">音阶练习说明</h2>
+              <p>音阶练习是一种在声乐练习中最常见的练习形式，用于训练音准、气息和换声。通常这一练习需要声乐教师和练习者配合完成，声乐教师会弹奏钢琴提供引导，并且判断练习者的发声是否达标。VFS Tracker将在此扮演声乐教师的角色，提供示范音并进行实时检测。请在开始前阅读以下提示：</p>
+              <ul className="list-disc list-inside space-y-1 text-sm">
+                <li>请在安静环境、佩戴耳机进行练习，避免外放回录。</li>
+                <li>麦克风仅用于本次实时检测，不会上传音频。</li>
+                <li>确保浏览器已授权麦克风权限；若系统提示，请点击“允许”。</li>
+                <li>练习过程包含上行/下行多轮移调，可随时在失败时选择结束。</li>
+              </ul>
+              <p>接下来的训练步骤如下：</p>
+              <ul className="list-disc list-inside space-y-1 text-sm">
+                <li>VFS Tracker将会申请麦克风权限，请戴上耳机并允许访问麦克风。</li>
+                <li>VFS Tracker将会通过检测漏音的方式判断你是否有戴好耳机。</li>
+                <li>你需要点击开始录音按钮，并在听到嘀声后以最舒适的音高发 /a/ 音进行校准。VFS Tracker将会为你选择一个起始音，你也可以调整这个起始音。</li>
+                <li>你需要选择练习模式，然后你可以直接开始练习，或者先在模拟练习中熟悉操作。模拟练习可以重复进行直到你觉得你已经准备好了。</li>
+                <li>你需要进行多轮练习，每一轮练习后如果系统判定达标，将会自动进行下一轮练习。如果系统判定不达标，你可以选择结束或重试。</li>
+                <li>结束后你可以查看练习报告，了解自己的表现和进步。此时你也可以调用AI基于你的练习数据为你推荐适合的歌曲。</li>
+                <li>建议常来练习，这样才可以持续进步哦！</li>
+              </ul>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => {
+                    setStep('permission');
+                    requestPermission();
+                  }}
+                  className="bg-pink-500 hover:bg-pink-600 text-white px-4 py-2 rounded-lg font-semibold"
+                >
+                  我已知晓，开始
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       {step === 'permission' && (
         <div className="bg-white p-6 rounded-xl shadow-md mb-6 text-center">
           <div className="text-6xl mb-4 animate-bounce">🎧</div>
-          <p className="text-gray-700 mb-4">{permissionMsg}</p>
+          <p className="text-gray-700 mb-4">{permissionMsg || '正在申请麦克风权限，请允许浏览器访问。'}</p>
           {permissionMsg.includes('成功') && (
             <button
               onClick={handleHeadphoneCheck}
