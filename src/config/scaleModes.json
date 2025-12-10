@@ -1,0 +1,225 @@
+{
+  "modes": [
+    {
+      "id": "mountain_12321",
+      "name": "山形五音 12321",
+      "description": "温和热身，音型 1-2-3-2-1，适合早期启声与气息共鸣巩固。",
+      "prologue": [
+        { "type": "rest", "count": 1 },
+        { "type": "example", "count": 1, "offset": 0 },
+        { "type": "rest", "count": 1 }
+      ],
+      "patternOffsets": [0, 2, 4, 2, 0],
+      "beatStructure": { "finalRests": 0 },
+      "transposeStep": 1,
+      "difficulty": "简单"
+    },
+    {
+      "id": "ascending_12345",
+      "name": "五音上行 12345",
+      "description": "向上托音，逐步推高当天音区：1-2-3-4-5。",
+      "prologue": [
+        { "type": "rest", "count": 1 },
+        { "type": "example", "count": 1, "offset": 0 },
+        { "type": "rest", "count": 1 }
+      ],
+      "patternOffsets": [0, 2, 4, 5, 7],
+      "beatStructure": { "finalRests": 0 },
+      "transposeStep": 1,
+      "targetNoteIndex": 4,
+      "difficulty": "简单"
+    },
+    {
+      "id": "descending_54321",
+      "name": "五音下行 54321",
+      "description": "从高往低放松收声，示范音为五度：5-4-3-2-1。",
+      "prologue": [
+        { "type": "rest", "count": 1 },
+        { "type": "example", "count": 1, "offset": 7 },
+        { "type": "rest", "count": 1 }
+      ],
+      "patternOffsets": [7, 5, 4, 2, 0],
+      "beatStructure": { "finalRests": 0 },
+      "transposeStep": 1,
+      "targetNoteIndex": 0,
+      "difficulty": "简单"
+    },
+    {
+      "id": "turnback_12341",
+      "name": "扩展小山 1234(1')",
+      "description": "跨一个八度的回转：1-2-3-4-1'，训练换声区仍保持圆润。",
+      "prologue": [
+        { "type": "rest", "count": 1 },
+        { "type": "example", "count": 1, "offset": 0 },
+        { "type": "rest", "count": 1 }
+      ],
+      "patternOffsets": [0, 2, 4, 5, 12],
+      "beatStructure": { "finalRests": 0 },
+      "transposeStep": 1,
+      "targetNoteIndex": 4,
+      "difficulty": "一般"
+    },
+    {
+      "id": "turnback_123454",
+      "name": "九度回转精简 123454",
+      "description": "精简九度回转：示范 1，空拍，练习 1-2-3-4-5-4（6 音，8 拍内完成）。",
+      "prologue": [
+        { "type": "example", "count": 1, "offset": 0 },
+        { "type": "rest", "count": 1 }
+      ],
+      "patternOffsets": [0, 2, 4, 5, 7, 5],
+      "beatStructure": { "finalRests": 0 },
+      "transposeStep": 1,
+      "targetNoteIndex": 4,
+      "difficulty": "一般"
+    },
+    {
+      "id": "triad_arpeggio",
+      "name": "主和弦琶音 1-3-5-3-1",
+      "description": "经典声乐练习，立起中高声区，强化 1/3/5 和声关系。",
+      "prologue": [
+        { "type": "rest", "count": 1 },
+        { "type": "example", "count": 1, "offset": 0 },
+        { "type": "rest", "count": 1 }
+      ],
+      "patternOffsets": [0, 4, 7, 4, 0],
+      "beatStructure": { "finalRests": 0 },
+      "transposeStep": 1,
+      "targetNoteIndex": 2,
+      "difficulty": "一般"
+    },
+    {
+      "id": "half_step_mini",
+      "name": "半音阶小山 1-♭2-2-♭2-1",
+      "description": "小跨度热身：半音与全音组合。如果你刚进行了嗓音手术或者音域极其狭窄，可以尝试此模式。否则建议你从简单难度开始。",
+      "prologue": [
+        { "type": "rest", "count": 1 },
+        { "type": "example", "count": 1, "offset": 0 },
+        { "type": "rest", "count": 1 }
+      ],
+      "patternOffsets": [0, 1, 2, 1, 0],
+      "beatStructure": { "finalRests": 0 },
+      "transposeStep": 1,
+      "targetNoteIndex": 2,
+      "difficulty": "入门"
+    },
+    {
+      "id": "triad_with_octave",
+      "name": "加高八度 1-3-5-8-5",
+      "description": "快速触及高声区，练习一口气托到 8 再回落。",
+      "prologue": [
+        { "type": "rest", "count": 1 },
+        { "type": "example", "count": 1, "offset": 0 },
+        { "type": "rest", "count": 1 }
+      ],
+      "patternOffsets": [0, 4, 7, 12, 7],
+      "beatStructure": { "finalRests": 0 },
+      "transposeStep": 1,
+      "targetNoteIndex": 3,
+      "difficulty": "高级"
+    },
+    {
+      "id": "wide_mountain_14841",
+      "name": "大跨度山形 1-3-#5-3-1",
+      "description": "山形升级版：从大三度直跳增五度再落回，锻炼跨度与换气的平衡。",
+      "prologue": [
+        { "type": "rest", "count": 1 },
+        { "type": "example", "count": 1, "offset": 0 },
+        { "type": "rest", "count": 1 }
+      ],
+      "patternOffsets": [0, 4, 8, 4, 0],
+      "beatStructure": { "finalRests": 0 },
+      "transposeStep": 1,
+      "targetNoteIndex": 2,
+      "difficulty": "一般"
+    },
+    {
+      "id": "perfect_fifth_cycle",
+      "name": "五度音程 1-♭3-4-5-4-♭3-1",
+      "description": "持续触碰纯五度，再回落到主音，保持咬字统一与口型支撑。",
+      "prologue": [
+        { "type": "rest", "count": 1 },
+        { "type": "example", "count": 1, "offset": 0 },
+        { "type": "rest", "count": 1 }
+      ],
+      "patternOffsets": [0, 3, 5, 7, 5, 3, 0],
+      "beatStructure": { "finalRests": 0 },
+      "transposeStep": 1,
+      "targetNoteIndex": 3,
+      "difficulty": "一般"
+    },
+    {
+      "id": "octave_interval",
+      "name": "八度音程 1-3-5-8-5-3-1",
+      "description": "八度跳跃与回落，检验头胸声区衔接与气息连贯度。",
+      "prologue": [
+        { "type": "rest", "count": 1 },
+        { "type": "example", "count": 1, "offset": 0 },
+        { "type": "rest", "count": 1 }
+      ],
+      "patternOffsets": [0, 4, 7, 12, 7, 4, 0],
+      "beatStructure": { "finalRests": 0 },
+      "transposeStep": 1,
+      "targetNoteIndex": 3,
+      "difficulty": "高级"
+    },
+    {
+      "id": "third_step",
+      "name": "三度级进 1-3-2-4-3",
+      "description": "三度听感与灵活度练习：1-3-2-4-3。",
+      "prologue": [
+        { "type": "rest", "count": 1 },
+        { "type": "example", "count": 1, "offset": 0 },
+        { "type": "rest", "count": 1 }
+      ],
+      "patternOffsets": [0, 4, 2, 5, 4],
+      "beatStructure": { "finalRests": 0 },
+      "transposeStep": 1,
+      "targetNoteIndex": 3,
+      "difficulty": "一般"
+    },
+    {
+      "id": "third_chain",
+      "name": "三度串联 1-3-2-4-3（循环上行）",
+      "description": "与上行移调串联，形成一串三度音型，适合进阶连贯度训练。",
+      "prologue": [
+        { "type": "rest", "count": 1 },
+        { "type": "example", "count": 1, "offset": 0 },
+        { "type": "rest", "count": 1 }
+      ],
+      "patternOffsets": [0, 4, 2, 5, 4],
+      "beatStructure": { "finalRests": 0 },
+      "transposeStep": 1,
+      "targetNoteIndex": 4,
+      "difficulty": "一般"
+    },
+    {
+      "id": "turnback_123454321",
+      "name": "九度回转 123454321",
+      "description": "完整九度回转：示范 1，空拍，练习 1-2-3-4-5-4-3-2-1，末尾五拍空拍收尾。",
+      "prologue": [
+        { "type": "example", "count": 1, "offset": 0 },
+        { "type": "rest", "count": 1 }
+      ],
+      "patternOffsets": [0, 2, 4, 5, 7, 5, 4, 2, 0],
+      "beatStructure": { "finalRests": 5 },
+      "transposeStep": 1,
+      "targetNoteIndex": 4,
+      "difficulty": "高级"
+    },
+    {
+      "id": "turnback_123454321_16th",
+      "name": "九度回转 123454321（16分音符版）",
+      "description": "与标准九度回转相同音型，但采用更短拍值（16 分音符）快速往返，适合灵活度练习。",
+      "prologue": [
+        { "type": "example", "count": 1, "offset": 0 },
+        { "type": "rest", "count": 1 }
+      ],
+      "patternOffsets": [0, 2, 4, 5, 7, 5, 4, 2, 0],
+      "beatStructure": { "finalRests": 9 },
+      "transposeStep": 1,
+      "targetNoteIndex": 4,
+      "difficulty": "高级"
+    }
+  ]
+}
