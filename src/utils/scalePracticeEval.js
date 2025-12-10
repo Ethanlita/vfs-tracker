@@ -65,7 +65,7 @@ export const evaluateNoteStability = (params) => {
     const filtered = passFrames(frames);
     const expected = baseFreq * Math.pow(semitoneRatio, step.offset ?? 0);
     const beatWindow = beatDurations[beatIdx] ?? stableWindowMs;
-    const requiredMs = Math.min(stableWindowMs, beatWindow);
+    const requiredMs = Math.min(stableWindowMs, beatWindow * 0.6);
     result.requiredDurations.push(requiredMs);
 
     if (!filtered.length) {

@@ -9,11 +9,11 @@ import { evaluateNoteStability } from '../../../src/utils/scalePracticeEval.js';
 const baseParams = {
   baseFreq: 440,
   semitoneRatio: Math.pow(2, 1 / 12),
-  tolerance: 50,
+  tolerance: 75,
   baselineRms: 0.01,
   deltaDb: 0,
   clarityTheta: 0.6,
-  stableWindowMs: 300
+  stableWindowMs: 250
 };
 
 const makeFrame = (pitch, clarity = 0.9, rms = 0.5) => ({ pitch, clarity, rms });
@@ -36,8 +36,8 @@ describe('evaluateNoteStability', () => {
       beatDurations: [500, 500]
     });
     expect(result.passed).toBe(true);
-    expect(result.stableDurations[0]).toBeGreaterThanOrEqual(300);
-    expect(result.stableDurations[1]).toBeGreaterThanOrEqual(300);
+    expect(result.stableDurations[0]).toBeGreaterThanOrEqual(250);
+    expect(result.stableDurations[1]).toBeGreaterThanOrEqual(250);
   });
 
   it('音准偏高时应返回对应的失败原因', () => {

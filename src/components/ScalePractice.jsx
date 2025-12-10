@@ -157,8 +157,8 @@ const ScalePractice = () => {
 
   // --- 练习参数与缓存 ---
   const baselineRmsRef = useRef(0);
-  const tolerance = 50; // 允许的音差（cents）
-  const stableWindowMs = 300; // 判定所需的稳定时间
+  const tolerance = 75; // 允许的音差（cents）
+  const stableWindowMs = 250; // 判定所需的稳定时间（与拍长取较小值的60%）
   const clarityTheta = 0.6;
   const deltaDb = 12;
   const paddingCents = 150; // 音高指示器上下留白（cents）
