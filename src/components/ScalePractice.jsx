@@ -696,7 +696,7 @@ const ScalePractice = () => {
     const safeDotX = Math.max(3, Math.min(97, dotPercentX));
 
     return (
-      <div className="relative h-64 bg-gray-100 rounded mb-4 overflow-hidden">
+      <div className="relative bg-gray-100 rounded mb-4 overflow-hidden h-[32rem]">
         <div className="absolute inset-4">
           <div className="absolute inset-0 pointer-events-none">
             {beatCenters.map((center, idx) => (
