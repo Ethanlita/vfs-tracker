@@ -165,7 +165,7 @@ ${user_prompt}
 
     try {
         // 3. Initialize the Google Generative AI client
-        const modelName = 'gemini-3.0-flash'; // Using a more capable model for knowledge-based tasks
+        const modelName = 'gemini-3-flash-preview'; // Using a more capable model for knowledge-based tasks
         const genAI = new GoogleGenerativeAI(apiKey);
         const model = genAI.getGenerativeModel({ model: modelName });
 
