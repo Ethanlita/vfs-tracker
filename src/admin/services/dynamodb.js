@@ -196,6 +196,29 @@ export async function getTestBySessionId(client, sessionId) {
 }
 
 /**
+ * 更新用户的管理员状态
+ * @param {DynamoDBDocumentClient} client
+ * @param {string} userId
+ * @param {boolean} isAdmin
+ * @returns {Promise<object>} 更新后的用户
+ */
+export async function updateUserAdminStatus(client, userId, isAdmin) {
+  const params = {
+    TableName: TABLES.USERS,
+    Key: { userId },
+    UpdateExpression: 'SET isAdmin = :isAdmin, updatedAt = :updatedAt',
+    ExpressionAttributeValues: {
+      ':isAdmin': isAdmin,
+      ':updatedAt': new Date().toISOString(),
+    },
+    ReturnValues: 'ALL_NEW',
+  };
+
+  const result = await client.send(new UpdateCommand(params));
+  return result.Attributes;
+}
+
+/**
  * 更新事件状态
  * @param {DynamoDBDocumentClient} client
  * @param {string} userId

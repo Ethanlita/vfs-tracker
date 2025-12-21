@@ -5,7 +5,7 @@
 
 import { useEffect, useState } from 'react';
 import { useAWSClients } from '../contexts/AWSClientContext';
-import { queryByUserId, TABLES, EVENT_TYPES } from '../services/dynamodb';
+import { queryByUserId, TABLES, EVENT_TYPES, updateUserAdminStatus } from '../services/dynamodb';
 import { getPresignedUrl } from '../services/s3';
 
 /**
@@ -63,11 +63,43 @@ function StatusBadge({ status }) {
 /**
  * 用户详情抽屉
  */
-export default function UserDetailDrawer({ user, open, onClose }) {
+export default function UserDetailDrawer({ user, open, onClose, onUserUpdate }) {
   const { clients } = useAWSClients();
   const [events, setEvents] = useState([]);
   const [loadingEvents, setLoadingEvents] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [updatingAdmin, setUpdatingAdmin] = useState(false);
+
+  // 当用户变化时初始化 isAdmin 状态
+  useEffect(() => {
+    if (user) {
+      setIsAdmin(user.isAdmin || false);
+    }
+  }, [user]);
+
+  // 处理管理员状态切换
+  const handleAdminToggle = async () => {
+    if (!clients || !user || updatingAdmin) return;
+    
+    const newValue = !isAdmin;
+    setUpdatingAdmin(true);
+    
+    try {
+      await updateUserAdminStatus(clients.dynamoDB, user.userId, newValue);
+      setIsAdmin(newValue);
+      // 通知父组件更新用户列表
+      if (onUserUpdate) {
+        onUserUpdate({ ...user, isAdmin: newValue });
+      }
+    } catch (err) {
+      console.error('更新管理员状态失败:', err);
+      // 恢复原状态
+      setIsAdmin(!newValue);
+    } finally {
+      setUpdatingAdmin(false);
+    }
+  };
 
   // 当用户变化时加载其事件和头像
   useEffect(() => {
@@ -203,6 +235,37 @@ export default function UserDetailDrawer({ user, open, onClose }) {
                     value={user.profile?.isNamePublic ? '是' : '否'} 
                   />
                 </dl>
+              </section>
+
+              {/* 权限设置 */}
+              <section>
+                <h3 className="text-sm font-medium text-gray-400 uppercase tracking-wider mb-3">
+                  权限设置
+                </h3>
+                <div className="bg-gray-800 rounded-lg px-4 py-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-white font-medium">管理员权限</div>
+                      <div className="text-sm text-gray-500">
+                        管理员不受 AI 请求频率限制
+                      </div>
+                    </div>
+                    <button
+                      onClick={handleAdminToggle}
+                      disabled={updatingAdmin}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors
+                        ${isAdmin ? 'bg-purple-600' : 'bg-gray-600'}
+                        ${updatingAdmin ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}
+                      `}
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform
+                          ${isAdmin ? 'translate-x-6' : 'translate-x-1'}
+                        `}
+                      />
+                    </button>
+                  </div>
+                </div>
               </section>
 
               {/* 个人资料 */}

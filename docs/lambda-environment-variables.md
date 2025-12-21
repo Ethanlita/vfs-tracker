@@ -39,11 +39,21 @@
 - **函数**: `gemini-proxy`
 - **环境变量**:
   - `GEMINI_API_KEY`: Google Gemini API 的密钥。
+  - `USERS_TABLE`: 用户资料 DynamoDB 表的名称，用于读写限速数据。(例如: `VoiceFemUsers`)
+- **SSM 参数** (限速配置):
+  - `/vfs-tracker/rate-limit/advice-window-hours`: 限速时间窗口（小时），默认 24
+  - `/vfs-tracker/rate-limit/advice-max-requests`: 时间窗口内最大请求数，默认 10
 
 ### b. 歌曲推荐
 - **函数**: `get-song-recommendations`
 - **环境变量**:
   - `GEMINI_API_KEY`: Google Gemini API 的密钥。
+  - `USERS_TABLE`: 用户资料 DynamoDB 表的名称，用于读写限速数据。(例如: `VoiceFemUsers`)
+- **SSM 参数** (限速配置):
+  - `/vfs-tracker/rate-limit/song-window-hours`: 限速时间窗口（小时），默认 24
+  - `/vfs-tracker/rate-limit/song-max-requests`: 时间窗口内最大请求数，默认 10
+
+> **注意**: 管理员账户（用户记录中 `isAdmin: true`）不受限速限制。限速配置可通过管理后台 `/admin/settings/rate-limit` 页面修改。
 
 ---
 

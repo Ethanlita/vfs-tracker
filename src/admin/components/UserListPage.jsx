@@ -218,6 +218,13 @@ export default function UserListPage() {
           setDrawerOpen(false);
           setSelectedUser(null);
         }}
+        onUserUpdate={(updatedUser) => {
+          // 更新用户列表中的用户
+          setUsers(prev => prev.map(u => 
+            u.userId === updatedUser.userId ? { ...u, ...updatedUser } : u
+          ));
+          setSelectedUser(updatedUser);
+        }}
       />
     </div>
   );

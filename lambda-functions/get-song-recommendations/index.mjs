@@ -1,8 +1,24 @@
 /**
  * @file [CN] 该文件包含一个 AWS Lambda 处理程序，用于根据用户的音域推荐歌曲。
+ * 
+ * 功能特性：
+ * - 使用 Gemini AI 生成个性化歌曲推荐
+ * - 请求频率限制（可配置的时间窗口和最大请求数）
+ * - 管理员豁免限速
+ * - 超限时返回上一次的推荐结果
  */
 
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import {
+    getRateLimitConfig,
+    getUserRateLimitData,
+    cleanExpiredHistory,
+    checkRateLimit,
+    calculateNextAvailableTime,
+    updateSongRateLimitData,
+    extractUserIdFromEvent,
+    generateSongRateLimitMessage
+} from './rateLimiter.mjs';
 
 /**
  * [CN] 创建一个具有 CORS 标头的标准化 API Gateway 响应对象。
@@ -66,7 +82,64 @@ export const handler = async (event) => {
         return createResponse(400, { success: false, error: 'Invalid JSON in request body.' });
     }
 
-    // 3. Construct the specialized prompt for Gemini
+    // 3. Extract user ID from the event (from Cognito authorizer)
+    const userId = extractUserIdFromEvent(event);
+    if (!userId) {
+        console.error('❌ Failed to extract user ID from event');
+        return createResponse(401, { success: false, error: 'Unable to identify user.' });
+    }
+    console.log(`📋 User ID: ${userId}`);
+
+    // 4. Check rate limit
+    try {
+        const [rateLimitConfig, userRateLimitData] = await Promise.all([
+            getRateLimitConfig(),
+            getUserRateLimitData(userId)
+        ]);
+
+        const { songWindowHours, songMaxRequests } = rateLimitConfig;
+        const { isAdmin, aiRateLimit } = userRateLimitData;
+
+        console.log(`⚙️ Rate limit config: ${songMaxRequests} requests per ${songWindowHours} hours`);
+        console.log(`👤 User isAdmin: ${isAdmin}`);
+
+        // 管理员跳过限速检查
+        if (!isAdmin) {
+            // 清理过期历史
+            const cleanedHistory = cleanExpiredHistory(aiRateLimit.songHistory || [], songWindowHours);
+            const rateLimitResult = checkRateLimit(cleanedHistory, songMaxRequests);
+
+            console.log(`📊 Rate limit check: ${rateLimitResult.count}/${songMaxRequests} requests used`);
+
+            if (rateLimitResult.isLimited) {
+                // 用户超限，返回上次的推荐结果
+                const nextAvailableTime = calculateNextAvailableTime(rateLimitResult.oldestTimestamp, songWindowHours);
+                const rateLimitMessage = generateSongRateLimitMessage(
+                    songWindowHours,
+                    songMaxRequests,
+                    nextAvailableTime
+                );
+
+                console.log(`⚠️ Rate limit exceeded for user: ${userId}. Next available at: ${nextAvailableTime}`);
+
+                // 返回 success: true 以便前端能正常处理
+                return createResponse(200, {
+                    success: true,
+                    recommendations: aiRateLimit.lastSongRecommendations || [],
+                    rateLimited: true,
+                    message: rateLimitMessage,
+                    nextAvailableAt: nextAvailableTime
+                });
+            }
+        } else {
+            console.log('👑 Admin user - skipping rate limit check');
+        }
+    } catch (rateLimitError) {
+        // 如果限速检查失败，记录错误但继续处理请求（降级处理）
+        console.error('⚠️ Rate limit check failed, continuing with request:', rateLimitError);
+    }
+
+    // 5. Construct the specialized prompt for Gemini
     const final_prompt = `You are an expert vocal coach and music curator. A user has provided their vocal range. Your task is to recommend 10 songs that are suitable for them.
 
 The user's vocal range is from ${lowestNote} to ${highestNote}.
@@ -81,7 +154,7 @@ Recommend 5 songs in Chinese, 3 in Japanese and 2 in English every time. Also, e
 `;
 
     try {
-        // 4. Initialize the Google Generative AI client
+        // 6. Initialize the Google Generative AI client
         const modelName = 'gemini-3-flash-preview';
         const genAI = new GoogleGenerativeAI(apiKey);
         const model = genAI.getGenerativeModel({ model: modelName });
@@ -89,7 +162,7 @@ Recommend 5 songs in Chinese, 3 in Japanese and 2 in English every time. Also, e
         console.log("➡️ --- Calling Gemini API --- ➡️");
         console.log("REQUEST TO GEMINI (Prompt):", final_prompt);
 
-        // 5. Call the Gemini API
+        // 7. Call the Gemini API
         const result = await model.generateContent(final_prompt);
         const response = result.response;
         const rawText = response.text();
@@ -97,7 +170,7 @@ Recommend 5 songs in Chinese, 3 in Japanese and 2 in English every time. Also, e
         console.log("⬅️ --- Gemini API Response Received --- ⬅️");
         console.log("RAW RESPONSE FROM GEMINI:", rawText);
 
-        // 6. Clean and parse the response to ensure it's valid JSON
+        // 8. Clean and parse the response to ensure it's valid JSON
         let recommendations;
         try {
             // Gemini might wrap the JSON in markdown, so we need to extract it.
@@ -110,7 +183,27 @@ Recommend 5 songs in Chinese, 3 in Japanese and 2 in English every time. Also, e
             return createResponse(502, { success: false, error: "Received an invalid format from the AI service." });
         }
 
-        // 7. Return the successful response
+        // 9. Update rate limit data (add new timestamp and save recommendations)
+        try {
+            const [rateLimitConfig, userRateLimitData] = await Promise.all([
+                getRateLimitConfig(),
+                getUserRateLimitData(userId)
+            ]);
+            
+            const cleanedHistory = cleanExpiredHistory(
+                userRateLimitData.aiRateLimit?.songHistory || [], 
+                rateLimitConfig.songWindowHours
+            );
+            const newHistory = [...cleanedHistory, new Date().toISOString()];
+            
+            await updateSongRateLimitData(userId, newHistory, recommendations);
+            console.log('📝 Rate limit data updated successfully');
+        } catch (updateError) {
+            // 更新失败不应影响响应返回
+            console.error('⚠️ Failed to update rate limit data:', updateError);
+        }
+
+        // 10. Return the successful response
         console.log('✅ Successfully parsed recommendations.');
         return createResponse(200, { success: true, recommendations });
 

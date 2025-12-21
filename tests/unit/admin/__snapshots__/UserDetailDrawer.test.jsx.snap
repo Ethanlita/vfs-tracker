@@ -1,0 +1,331 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`UserDetailDrawer 组件测试 > 应该渲染权限设置区域（视觉快照） 1`] = `
+<div>
+  <div
+    class="fixed inset-0 bg-black/50 z-40 transition-opacity"
+  />
+  <div
+    class="fixed right-0 top-0 h-full w-full max-w-lg bg-gray-900 border-l border-gray-700 
+                    shadow-2xl z-50 transform transition-transform duration-300 
+                    translate-x-0"
+  >
+    <div
+      class="flex items-center justify-between px-6 py-4 border-b border-gray-700"
+    >
+      <h2
+        class="text-lg font-semibold text-white"
+      >
+        用户详情
+      </h2>
+      <button
+        class="p-2 hover:bg-gray-800 rounded-lg transition-colors"
+      >
+        <svg
+          class="w-5 h-5 text-gray-400"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            d="M6 18L18 6M6 6l12 12"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+          />
+        </svg>
+      </button>
+    </div>
+    <div
+      class="h-[calc(100%-65px)] overflow-y-auto p-6 space-y-6"
+    >
+      <section
+        class="flex items-center gap-4"
+      >
+        <div
+          class="w-16 h-16 rounded-full bg-purple-600 flex items-center justify-center text-white text-2xl font-bold"
+        >
+          测
+        </div>
+        <div>
+          <div
+            class="text-xl font-semibold text-white"
+          >
+            测试用户
+          </div>
+          <div
+            class="text-gray-400 text-sm"
+          >
+            昵称: 
+            测试昵称
+          </div>
+          <div
+            class="text-gray-500 text-sm"
+          >
+            user@example.com
+          </div>
+        </div>
+      </section>
+      <section>
+        <h3
+          class="text-sm font-medium text-gray-400 uppercase tracking-wider mb-3"
+        >
+          基本信息
+        </h3>
+        <dl
+          class="bg-gray-800 rounded-lg px-4"
+        >
+          <div
+            class="py-3 border-b border-gray-700/50 last:border-b-0"
+          >
+            <dt
+              class="text-sm text-gray-500 mb-1"
+            >
+              User ID
+            </dt>
+            <dd
+              class="text-white font-mono text-sm break-all"
+            >
+              user-123
+            </dd>
+          </div>
+          <div
+            class="py-3 border-b border-gray-700/50 last:border-b-0"
+          >
+            <dt
+              class="text-sm text-gray-500 mb-1"
+            >
+              显示名称 (profile.name)
+            </dt>
+            <dd
+              class="text-white "
+            >
+              测试用户
+            </dd>
+          </div>
+          <div
+            class="py-3 border-b border-gray-700/50 last:border-b-0"
+          >
+            <dt
+              class="text-sm text-gray-500 mb-1"
+            >
+              昵称 (profile.nickname)
+            </dt>
+            <dd
+              class="text-white "
+            >
+              测试昵称
+            </dd>
+          </div>
+          <div
+            class="py-3 border-b border-gray-700/50 last:border-b-0"
+          >
+            <dt
+              class="text-sm text-gray-500 mb-1"
+            >
+              邮箱
+            </dt>
+            <dd
+              class="text-white "
+            >
+              user@example.com
+            </dd>
+          </div>
+          <div
+            class="py-3 border-b border-gray-700/50 last:border-b-0"
+          >
+            <dt
+              class="text-sm text-gray-500 mb-1"
+            >
+              名称公开
+            </dt>
+            <dd
+              class="text-white "
+            >
+              是
+            </dd>
+          </div>
+        </dl>
+      </section>
+      <section>
+        <h3
+          class="text-sm font-medium text-gray-400 uppercase tracking-wider mb-3"
+        >
+          权限设置
+        </h3>
+        <div
+          class="bg-gray-800 rounded-lg px-4 py-3"
+        >
+          <div
+            class="flex items-center justify-between"
+          >
+            <div>
+              <div
+                class="text-white font-medium"
+              >
+                管理员权限
+              </div>
+              <div
+                class="text-sm text-gray-500"
+              >
+                管理员不受 AI 请求频率限制
+              </div>
+            </div>
+            <button
+              class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors
+                        bg-gray-600
+                        cursor-pointer
+                      "
+            >
+              <span
+                class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform
+                          translate-x-1
+                        "
+              />
+            </button>
+          </div>
+        </div>
+      </section>
+      <section>
+        <h3
+          class="text-sm font-medium text-gray-400 uppercase tracking-wider mb-3"
+        >
+          个人资料
+        </h3>
+        <dl
+          class="bg-gray-800 rounded-lg px-4"
+        >
+          <div
+            class="py-3 border-b border-gray-700/50 last:border-b-0"
+          >
+            <dt
+              class="text-sm text-gray-500 mb-1"
+            >
+              个人简介
+            </dt>
+            <dd
+              class="text-white "
+            >
+              <span
+                class="text-gray-600"
+              >
+                -
+              </span>
+            </dd>
+          </div>
+          <div
+            class="py-3 border-b border-gray-700/50 last:border-b-0"
+          >
+            <dt
+              class="text-sm text-gray-500 mb-1"
+            >
+              头像 Key
+            </dt>
+            <dd
+              class="text-white font-mono text-sm break-all"
+            >
+              <span
+                class="text-gray-600"
+              >
+                -
+              </span>
+            </dd>
+          </div>
+          <div
+            class="py-3 border-b border-gray-700/50 last:border-b-0"
+          >
+            <dt
+              class="text-sm text-gray-500 mb-1"
+            >
+              社交媒体公开
+            </dt>
+            <dd
+              class="text-white "
+            >
+              否
+            </dd>
+          </div>
+        </dl>
+      </section>
+      <section>
+        <h3
+          class="text-sm font-medium text-gray-400 uppercase tracking-wider mb-3"
+        >
+          时间信息
+        </h3>
+        <dl
+          class="bg-gray-800 rounded-lg px-4"
+        >
+          <div
+            class="py-3 border-b border-gray-700/50 last:border-b-0"
+          >
+            <dt
+              class="text-sm text-gray-500 mb-1"
+            >
+              创建时间
+            </dt>
+            <dd
+              class="text-white "
+            >
+              -
+            </dd>
+          </div>
+          <div
+            class="py-3 border-b border-gray-700/50 last:border-b-0"
+          >
+            <dt
+              class="text-sm text-gray-500 mb-1"
+            >
+              更新时间
+            </dt>
+            <dd
+              class="text-white "
+            >
+              -
+            </dd>
+          </div>
+        </dl>
+      </section>
+      <section>
+        <h3
+          class="text-sm font-medium text-gray-400 uppercase tracking-wider mb-3"
+        >
+          最近事件 (
+          0
+          )
+        </h3>
+        <div
+          class="bg-gray-800 rounded-lg p-4 text-center text-gray-500"
+        >
+          暂无事件
+        </div>
+      </section>
+      <section>
+        <details
+          class="group"
+        >
+          <summary
+            class="text-sm font-medium text-gray-500 uppercase tracking-wider cursor-pointer 
+                                      hover:text-gray-400 transition-colors"
+          >
+            原始数据 (JSON)
+          </summary>
+          <pre
+            class="mt-3 bg-gray-800 rounded-lg p-4 text-xs text-gray-400 overflow-x-auto"
+          >
+            {
+  "userId": "user-123",
+  "email": "user@example.com",
+  "profile": {
+    "name": "测试用户",
+    "nickname": "测试昵称",
+    "isNamePublic": true
+  }
+}
+          </pre>
+        </details>
+      </section>
+    </div>
+  </div>
+</div>
+`;

@@ -30,6 +30,7 @@
     "@aws-amplify/ui-react": "^6.11.2",
     "@aws-sdk/client-dynamodb": "^3.940.0",
     "@aws-sdk/client-s3": "^3.940.0",
+    "@aws-sdk/client-ssm": "^3.955.0",
     "@aws-sdk/client-sts": "^3.940.0",
     "@aws-sdk/lib-dynamodb": "^3.940.0",
     "@aws-sdk/s3-request-presigner": "^3.940.0",

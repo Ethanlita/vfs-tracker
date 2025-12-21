@@ -5,6 +5,9 @@
   "main": "index.mjs",
   "type": "module",
   "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.0.0",
+    "@aws-sdk/client-ssm": "^3.0.0",
+    "@aws-sdk/util-dynamodb": "^3.0.0",
     "@google/generative-ai": "^0.24.1"
   }
 }

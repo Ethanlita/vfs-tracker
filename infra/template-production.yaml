@@ -494,6 +494,7 @@ Resources:
       Environment:
         Variables:
           GEMINI_API_KEY: '{{resolve:ssm:/vfs-tracker/gemini-api-key}}'
+          USERS_TABLE: VoiceFemUsers
       Events:
         ApiEvent:
           Type: Api
@@ -517,6 +518,7 @@ Resources:
       Environment:
         Variables:
           GEMINI_API_KEY: '{{resolve:ssm:/vfs-tracker/gemini-api-key}}'
+          USERS_TABLE: VoiceFemUsers
       Events:
         ApiEvent:
           Type: Api

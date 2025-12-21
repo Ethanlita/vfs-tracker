@@ -13,6 +13,7 @@ import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
 import { S3Client } from '@aws-sdk/client-s3';
 import { STSClient, GetCallerIdentityCommand } from '@aws-sdk/client-sts';
+import { SSMClient } from '@aws-sdk/client-ssm';
 import { 
   saveCredentialsSecure, 
   loadCredentialsSecure, 
@@ -91,6 +92,7 @@ export function AWSClientProvider({ children }) {
       dynamoDBRaw: dynamoDBClient,
       s3: s3Client,
       sts: new STSClient(config),
+      ssm: new SSMClient(config),
     };
   }, [credentials]);
 

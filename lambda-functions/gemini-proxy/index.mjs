@@ -1,8 +1,24 @@
 /**
  * @file [CN] 该文件包含一个 AWS Lambda 处理程序，作为代理将请求转发到 Google Gemini API，专门用于嗓音女性化分析。
+ * 
+ * 功能特性：
+ * - 使用知识库增强的 Gemini AI 分析
+ * - 请求频率限制（可配置的时间窗口和最大请求数）
+ * - 管理员豁免限速
+ * - 自动清理过期的请求历史
  */
 
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import {
+    getRateLimitConfig,
+    getUserRateLimitData,
+    cleanExpiredHistory,
+    checkRateLimit,
+    calculateNextAvailableTime,
+    updateAdviceRateLimitData,
+    extractUserIdFromEvent,
+    generateAdviceRateLimitMessage
+} from './rateLimiter.mjs';
 
 /**
  * [CN] 创建一个具有 CORS 标头的标准化 API Gateway 响应对象。
@@ -153,6 +169,64 @@ export const handler = async (event) => {
         return createResponse(400, { success: false, error: 'Invalid JSON in request body.' });
     }
 
+    // 3. Extract user ID from the event (from Cognito authorizer)
+    const userId = extractUserIdFromEvent(event);
+    if (!userId) {
+        console.error('❌ Failed to extract user ID from event');
+        return createResponse(401, { success: false, error: 'Unable to identify user.' });
+    }
+    console.log(`📋 User ID: ${userId}`);
+
+    // 4. Check rate limit
+    let isRateLimited = false;
+    let rateLimitResponse = null;
+    try {
+        const [rateLimitConfig, userRateLimitData] = await Promise.all([
+            getRateLimitConfig(),
+            getUserRateLimitData(userId)
+        ]);
+
+        const { adviceWindowHours, adviceMaxRequests } = rateLimitConfig;
+        const { isAdmin, aiRateLimit } = userRateLimitData;
+
+        console.log(`⚙️ Rate limit config: ${adviceMaxRequests} requests per ${adviceWindowHours} hours`);
+        console.log(`👤 User isAdmin: ${isAdmin}`);
+
+        // 管理员跳过限速检查
+        if (!isAdmin) {
+            // 清理过期历史
+            const cleanedHistory = cleanExpiredHistory(aiRateLimit.adviceHistory || [], adviceWindowHours);
+            const rateLimitResult = checkRateLimit(cleanedHistory, adviceMaxRequests);
+
+            console.log(`📊 Rate limit check: ${rateLimitResult.count}/${adviceMaxRequests} requests used`);
+
+            if (rateLimitResult.isLimited) {
+                // 用户超限，返回上次的 AI 建议
+                const nextAvailableTime = calculateNextAvailableTime(rateLimitResult.oldestTimestamp, adviceWindowHours);
+                const rateLimitMessage = generateAdviceRateLimitMessage(
+                    adviceWindowHours,
+                    adviceMaxRequests,
+                    nextAvailableTime,
+                    aiRateLimit.lastAdviceResponse
+                );
+
+                console.log(`⚠️ Rate limit exceeded for user: ${userId}. Next available at: ${nextAvailableTime}`);
+
+                return createResponse(200, {
+                    success: true,
+                    response: rateLimitMessage,
+                    rateLimited: true,
+                    nextAvailableAt: nextAvailableTime
+                });
+            }
+        } else {
+            console.log('👑 Admin user - skipping rate limit check');
+        }
+    } catch (rateLimitError) {
+        // 如果限速检查失败，记录错误但继续处理请求（降级处理）
+        console.error('⚠️ Rate limit check failed, continuing with request:', rateLimitError);
+    }
+
     const final_prompt = `You are an expert in voice feminization. Based on the following knowledge base, provide an encouraging and informative analysis of the user's voice data. Make it in Simplified Chinese. Do not mention 'knowledgebase' or 'encouraging', it's for your reference, not for the user.
 
 <knowledge_base>
@@ -164,12 +238,12 @@ ${user_prompt}
 `;
 
     try {
-        // 3. Initialize the Google Generative AI client
+        // 5. Initialize the Google Generative AI client
         const modelName = 'gemini-3-flash-preview'; // Using a more capable model for knowledge-based tasks
         const genAI = new GoogleGenerativeAI(apiKey);
         const model = genAI.getGenerativeModel({ model: modelName });
 
-        // 4. Log the exact data being sent to Gemini
+        // 6. Log the exact data being sent to Gemini
         const geminiRequestPayload = {
             model: modelName,
             prompt: final_prompt, // The actual prompt content
@@ -177,10 +251,10 @@ ${user_prompt}
         console.log("➡️ --- Calling Gemini API --- ➡️");
         console.log("REQUEST TO GEMINI:", JSON.stringify(geminiRequestPayload, null, 2));
 
-        // 5. Call the Gemini API
+        // 7. Call the Gemini API
         const result = await model.generateContent(final_prompt);
 
-        // 6. Log the full, raw response from Gemini for debugging
+        // 8. Log the full, raw response from Gemini for debugging
         console.log("⬅️ --- Gemini API Response Received --- ⬅️");
         console.log("RAW RESPONSE FROM GEMINI:", JSON.stringify(result, null, 2));
 
@@ -188,11 +262,31 @@ ${user_prompt}
         const text = response.text();
         console.log('✅ Successfully extracted text from Gemini response.');
 
-        // 7. Return the successful response
+        // 9. Update rate limit data (add new timestamp and save response)
+        try {
+            const [rateLimitConfig, userRateLimitData] = await Promise.all([
+                getRateLimitConfig(),
+                getUserRateLimitData(userId)
+            ]);
+            
+            const cleanedHistory = cleanExpiredHistory(
+                userRateLimitData.aiRateLimit?.adviceHistory || [], 
+                rateLimitConfig.adviceWindowHours
+            );
+            const newHistory = [...cleanedHistory, new Date().toISOString()];
+            
+            await updateAdviceRateLimitData(userId, newHistory, text);
+            console.log('📝 Rate limit data updated successfully');
+        } catch (updateError) {
+            // 更新失败不应影响响应返回
+            console.error('⚠️ Failed to update rate limit data:', updateError);
+        }
+
+        // 10. Return the successful response
         return createResponse(200, { success: true, response: text });
 
     } catch (error) {
-        // 8. Log the full error object for detailed debugging
+        // 11. Log the full error object for detailed debugging
         console.error("❌ --- Gemini API Call Failed --- ❌");
         console.error("ERROR DETAILS:", JSON.stringify({
             message: error.message,
