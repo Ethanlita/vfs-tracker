@@ -3,9 +3,9 @@
  * @description 测试 AI 相关服务 API 的调用和响应
  * 
  * 当前 API 接口:
- * - callGeminiProxy(prompt) - 调用 Gemini AI 代理
+ * - callGeminiProxy(prompt) - 调用 Gemini AI 代理，返回 {response, rateLimited}
  * - getEncouragingMessage(userData) - 获取鼓励消息
- * - getSongRecommendations({lowestNote, highestNote}) - 获取歌曲推荐
+ * - getSongRecommendations({lowestNote, highestNote}) - 获取歌曲推荐，返回 {recommendations, rateLimited, message}
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
@@ -31,13 +31,15 @@ describe('AI Services API 集成测试', () => {
   });
 
   describe('callGeminiProxy', () => {
-    it('应该成功调用 Gemini 代理并返回响应', async () => {
+    it('应该成功调用 Gemini 代理并返回响应对象', async () => {
       const prompt = '请给我一句鼓励的话';
-      const response = await callGeminiProxy(prompt);
+      const result = await callGeminiProxy(prompt);
 
-      expect(response).toBeDefined();
-      expect(typeof response).toBe('string');
-      expect(response.length).toBeGreaterThan(0);
+      expect(result).toBeDefined();
+      expect(result).toHaveProperty('response');
+      expect(result).toHaveProperty('rateLimited');
+      expect(typeof result.response).toBe('string');
+      expect(result.response.length).toBeGreaterThan(0);
     });
 
     it('应该能处理不同类型的提示词', async () => {
@@ -48,17 +50,43 @@ describe('AI Services API 集成测试', () => {
       ];
 
       for (const prompt of prompts) {
-        const response = await callGeminiProxy(prompt);
-        expect(response).toBeDefined();
-        expect(typeof response).toBe('string');
+        const result = await callGeminiProxy(prompt);
+        expect(result).toBeDefined();
+        expect(typeof result.response).toBe('string');
       }
     });
 
-    it('应该返回非空字符串', async () => {
+    it('应该返回非空响应字符串', async () => {
       const prompt = '测试';
-      const response = await callGeminiProxy(prompt);
+      const result = await callGeminiProxy(prompt);
 
-      expect(response.trim().length).toBeGreaterThan(0);
+      expect(result.response.trim().length).toBeGreaterThan(0);
+    });
+    
+    it('正常响应时 rateLimited 应为 false', async () => {
+      const prompt = '测试';
+      const result = await callGeminiProxy(prompt);
+
+      expect(result.rateLimited).toBe(false);
+    });
+
+    it('限速响应时应该返回 rateLimited 为 true', async () => {
+      // 模拟后端返回限速提示（保持 success: true）
+      server.use(
+        http.post(`${API_URL}/gemini-proxy`, () => {
+          return HttpResponse.json({
+            success: true,
+            response: '## ⏳ 请求频率限制',
+            rateLimited: true,
+            nextAvailableAt: '2025-01-01T12:00:00.000Z'
+          });
+        })
+      );
+
+      const result = await callGeminiProxy('测试');
+
+      expect(result.rateLimited).toBe(true);
+      expect(result.response).toContain('请求频率限制');
     });
   });
 
@@ -131,16 +159,18 @@ describe('AI Services API 集成测试', () => {
   });
 
   describe('getSongRecommendations', () => {
-    it('应该成功获取歌曲推荐', async () => {
+    it('应该成功获取歌曲推荐并返回响应对象', async () => {
       const range = {
         lowestNote: 'C3',
         highestNote: 'C5'
       };
 
-      const recommendations = await getSongRecommendations(range);
+      const result = await getSongRecommendations(range);
 
-      expect(recommendations).toBeDefined();
-      expect(Array.isArray(recommendations)).toBe(true);
+      expect(result).toBeDefined();
+      expect(result).toHaveProperty('recommendations');
+      expect(result).toHaveProperty('rateLimited');
+      expect(Array.isArray(result.recommendations)).toBe(true);
     });
 
     it('返回的推荐应该包含必要的字段', async () => {
@@ -149,10 +179,10 @@ describe('AI Services API 集成测试', () => {
         highestNote: 'A4'
       };
 
-      const recommendations = await getSongRecommendations(range);
+      const result = await getSongRecommendations(range);
 
-      expect(recommendations.length).toBeGreaterThan(0);
-      recommendations.forEach(song => {
+      expect(result.recommendations.length).toBeGreaterThan(0);
+      result.recommendations.forEach(song => {
         expect(song).toHaveProperty('songName');
         expect(song).toHaveProperty('artist');
         expect(song).toHaveProperty('reason');
@@ -170,9 +200,9 @@ describe('AI Services API 集成测试', () => {
       ];
 
       for (const range of testRanges) {
-        const recommendations = await getSongRecommendations(range);
-        expect(Array.isArray(recommendations)).toBe(true);
-        expect(recommendations.length).toBeGreaterThan(0);
+        const result = await getSongRecommendations(range);
+        expect(Array.isArray(result.recommendations)).toBe(true);
+        expect(result.recommendations.length).toBeGreaterThan(0);
       }
     });
 
@@ -182,11 +212,48 @@ describe('AI Services API 集成测试', () => {
         highestNote: 'D5'
       };
 
-      const recommendations = await getSongRecommendations(range);
+      const result = await getSongRecommendations(range);
 
-      recommendations.forEach(song => {
+      result.recommendations.forEach(song => {
         expect(song.reason.trim().length).toBeGreaterThan(0);
       });
+    });
+    
+    it('正常响应时 rateLimited 应为 false', async () => {
+      const range = {
+        lowestNote: 'C3',
+        highestNote: 'C5'
+      };
+
+      const result = await getSongRecommendations(range);
+
+      expect(result.rateLimited).toBe(false);
+    });
+
+    it('限速响应时应该返回上次推荐和提示信息', async () => {
+      // 模拟后端返回限速状态与历史推荐
+      server.use(
+        http.post(`${API_URL}/recommend-songs`, () => {
+          return HttpResponse.json({
+            success: true,
+            recommendations: [
+              { songName: '测试歌', artist: '测试歌手', reason: '测试原因' }
+            ],
+            rateLimited: true,
+            message: '您已超出AI荐歌的使用量上限',
+            nextAvailableAt: '2025-01-01T12:00:00.000Z'
+          });
+        })
+      );
+
+      const result = await getSongRecommendations({
+        lowestNote: 'C3',
+        highestNote: 'C5'
+      });
+
+      expect(result.rateLimited).toBe(true);
+      expect(result.recommendations).toHaveLength(1);
+      expect(result.message).toContain('AI荐歌');
     });
   });
 

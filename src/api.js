@@ -278,13 +278,17 @@ export const deleteEvent = async (eventId) => {
 /**
  * [CN] 调用 Gemini代理 以获取基于提示的响应。
  * @param {string} prompt - 发送到 AI 代理的提示。
- * @returns {Promise<string>} 一个解析为 AI 生成的响应字符串的 Promise。
+ * @returns {Promise<{response: string, rateLimited?: boolean}>} 一个解析为包含 AI 生成的响应字符串和可选限速标志的对象的 Promise。
  * @throws {ServiceError} 如果代理服务调用失败。
  */
 export const callGeminiProxy = async (prompt) => {
   const result = await authenticatedPost('/gemini-proxy', { prompt });
   if (result.success) {
-    return result.response;
+    // 如果被限速，返回限速信息
+    if (result.rateLimited) {
+      return { response: result.response, rateLimited: true };
+    }
+    return { response: result.response, rateLimited: false };
   }
   throw new ServiceError(result.error || 'The Gemini proxy failed to process the request.', {
     requestMethod: 'POST',
@@ -387,7 +391,8 @@ ${userProgressSummary}
 5. 回复长度适中，不要太短，也不要过于冗长（建议不超过600字）。
 6. 一致性分数对用户是不可见的，不要提到这个名词。
 `;
-    return await callGeminiProxy(prompt);
+    const result = await callGeminiProxy(prompt);
+    return result.response;  // 返回响应内容（无论是否限速，后端都会返回有意义的消息）
   } catch (error) {
     console.error("获取AI消息失败:", error);
     return "持续跟踪，持续进步 ✨"; // Fallback message
@@ -397,13 +402,24 @@ ${userProgressSummary}
 /**
  * [CN] 根据用户的音域推荐歌曲。
  * @param {object} range - 包含用户音域的对象。
- * @returns {Promise<Array<object>>} 一个解析为歌曲推荐对象数组的 Promise。
+ * @returns {Promise<{recommendations: Array<object>, rateLimited?: boolean, message?: string}>} 一个解析为包含歌曲推荐、限速标志和可选消息的对象的 Promise。
  * @throws {ServiceError} 如果歌曲推荐服务调用失败。
  */
 export const getSongRecommendations = async ({ lowestNote, highestNote }) => {
   const result = await authenticatedPost('/recommend-songs', { lowestNote, highestNote });
   if (result.success) {
-    return result.recommendations;
+    // 如果被限速，返回上次的推荐结果和限速信息
+    if (result.rateLimited) {
+      return {
+        recommendations: result.recommendations || [],
+        rateLimited: true,
+        message: result.message
+      };
+    }
+    return {
+      recommendations: result.recommendations,
+      rateLimited: false
+    };
   }
   throw new ServiceError(result.error || 'The song recommendation service failed.', {
     requestMethod: 'POST',

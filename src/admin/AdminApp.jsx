@@ -11,6 +11,7 @@ import AdminDashboard from './components/AdminDashboard';
 import UserListPage from './components/UserListPage';
 import EventListPage from './components/EventListPage';
 import TestListPage from './components/TestListPage';
+import RateLimitConfigPage from './components/RateLimitConfigPage';
 
 /**
  * 受保护的路由组件
@@ -77,6 +78,9 @@ function AdminRoutes() {
                 
                 {/* 嗓音测试管理 */}
                 <Route path="tests" element={<TestListPage />} />
+
+                {/* 速率限制配置 */}
+                <Route path="settings/rate-limit" element={<RateLimitConfigPage />} />
 
                 {/* 未匹配的路由重定向到仪表盘 */}
                 <Route path="*" element={<Navigate to="/admin" replace />} />
