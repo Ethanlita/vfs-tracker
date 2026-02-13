@@ -8,13 +8,26 @@ import { ensureAppError, PermissionError, StorageError, ValidationError } from '
 import { ApiErrorNotice } from './ApiErrorNotice.jsx';
 import { useDocumentMeta } from '../hooks/useDocumentMeta';
 
-const frequencyToNoteName = (frequency) => {
+/**
+ * @en Convert frequency in Hz to the nearest equal-tempered note name.
+ * @zh 将频率（Hz）转换为最接近的十二平均律音名。
+ *
+ * Single-path formula:
+ * midi = round(69 + 12 * log2(f / 440))
+ *
+ * @param {number} frequency - Frequency in Hz.
+ * @returns {string} Note name (e.g. A4). Returns '--' for invalid input.
+ */
+export const frequencyToNoteName = (frequency) => {
   if (!frequency || frequency <= 0) return '--';
+
   const A4 = 440;
-  const noteNames = ['A', 'A#', 'B', 'C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#'];
-  const halfStepsFromA4 = Math.round(12 * Math.log2(frequency / A4));
-  const noteIndex = (halfStepsFromA4 + 57) % 12;
-  const octave = Math.floor((halfStepsFromA4 + 57) / 12);
+  // 使用 C 系索引，避免 A 系数组与 MIDI 偏移常量混用导致错位。
+  const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+  const midi = Math.round(69 + 12 * Math.log2(frequency / A4));
+  const noteIndex = ((midi % 12) + 12) % 12;
+  const octave = Math.floor(midi / 12) - 1;
+
   return `${noteNames[noteIndex]}${octave}`;
 };
 
