@@ -32,6 +32,7 @@
 | `socials` | `Array<SocialAccount>` | No | 用户社交信息列表 |
 | `socials.handle` | `String` | No | 社交账号的用户名或Handle |
 | `socials.platform` | `String` | No | 社交账号的平台，如Twitter |
+| `setupSkipped` | `Boolean` | No | 用户是否跳过了资料设置向导。为 `true` 时前端不再弹出向导。 |
 
 ## VoiceFemEvents
 

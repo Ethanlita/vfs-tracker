@@ -190,9 +190,19 @@ const getUserProfileHandler = http.get(`${API_URL}/user/:userId`, ({ params }) =
   const { userId } = params;
   console.log(`[MSW] Handling GET /user/${userId}`);
   
-  // 返回嵌套结构（匹配真实 API）
-  const user = mockUsers.find(u => u.userId === userId) || mockUsers[0];
+  // 查找用户，匹配真实 Lambda 行为：不存在时返回 exists: false
+  const user = mockUsers.find(u => u.userId === userId);
+  if (!user) {
+    // 用户不存在于数据库中，只返回 exists: false + userId
+    return HttpResponse.json({
+      exists: false,
+      userId: userId
+    });
+  }
+
+  // 用户存在，返回完整数据并标记 exists: true
   return HttpResponse.json({
+    exists: true,
     userId: user.userId,
     profile: user.profile
   });

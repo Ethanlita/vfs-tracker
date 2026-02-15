@@ -279,6 +279,7 @@ Creates a new `Event` for the authenticated user. The request body can include a
 - `isNamePublic` (Boolean, optional): Whether name is shown on public dashboard
 - `socials` (List, optional): Array of social media accounts
 - `areSocialsPublic` (Boolean, optional): Whether social accounts are shown publicly
+- `setupSkipped` (Boolean, optional): Whether the user skipped the profile setup wizard. When `true`, the frontend will not show the setup wizard again.
 
 **Social Account Object Structure** (within `profile.socials`):
 - `platform` (String, required): Social media platform name
@@ -302,7 +303,8 @@ Creates a new `Event` for the authenticated user. The request body can include a
         "handle": "username#1234"
       }
     ],
-    "areSocialsPublic": false
+    "areSocialsPublic": false,
+    "setupSkipped": false
   },
   "createdAt": "2025-08-16T10:00:00.000Z",
   "updatedAt": "2025-08-16T10:30:00.000Z"
@@ -310,9 +312,10 @@ Creates a new `Event` for the authenticated user. The request body can include a
 ```
 
 **Access Patterns**:
-1. Get user profile: Get item by `userId`
-2. Check if user exists: Get item by `userId` (returns empty if not found)
+1. Get user profile: Get item by `userId` (返回 `exists: true/false` 标识用户是否在数据库中)
+2. Check if user exists: Get item by `userId` (通过响应中的 `exists` 字段判断)
 3. Update user profile: Update item by `userId`
+4. Skip profile setup: UpdateCommand only sets `profile.setupSkipped = true` (不覆盖已有资料)
 
 ---
 

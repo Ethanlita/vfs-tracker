@@ -241,9 +241,10 @@ Content-Type: application/json
 **Parameters**:
 - `userId` (path): Cognito user sub ID (must match authenticated user)
 
-**Response Format**:
+**Response Format (用户存在)**:
 ```json
 {
+  "exists": true,
   "userId": "string",
   "email": "string",
   "profile": {
@@ -257,19 +258,29 @@ Content-Type: application/json
         "handle": "string"
       }
     ],
-    "areSocialsPublic": "boolean (optional, defaults to false)"
+    "areSocialsPublic": "boolean (optional, defaults to false)",
+    "setupSkipped": "boolean (optional, 用户是否跳过了资料向导)"
   },
   "createdAt": "string (ISO 8601)",
   "updatedAt": "string (ISO 8601, optional)"
 }
 ```
 
+**Response Format (用户不存在)**:
+```json
+{
+  "exists": false,
+  "userId": "string"
+}
+```
+
 **Notes**:
-- 如果数据库中不存在该用户资料，服务会根据 token 构造一个占位资料并返回 `200 OK`（`createdAt/updatedAt` 为当前时间）。
+- 响应中始终包含 `exists` 字段，前端可通过该字段区分"用户存在"和"用户不存在于 DynamoDB"。
+- 当 `exists: false` 时，不返回 `profile`、`email`、`createdAt` 等字段，避免前端将虚构的默认数据误写入缓存。
 - `nickname` 字段始终由 token 决定，客户端传入的同名字段会被忽略。
 
 **HTTP Status Codes**:
-- `200 OK`: Success
+- `200 OK`: Success（无论用户是否存在都返回 200，通过 `exists` 字段区分）
 - `401 Unauthorized`: Missing or invalid JWT token
 - `403 Forbidden`: Attempting to access another user's data
 - `500 Internal Server Error`: Server error
@@ -364,7 +375,7 @@ Authorization: Bearer {jwt-token}
 Content-Type: application/json
 ```
 
-**Request Body**:
+**Request Body (完整设置)**:
 ```json
 {
   "profile": {
@@ -377,10 +388,24 @@ Content-Type: application/json
         "handle": "string"
       }
     ],
-    "areSocialsPublic": "boolean (optional, defaults to false)"
+    "areSocialsPublic": "boolean (optional, defaults to false)",
+    "setupSkipped": "boolean (optional, 设为 true 表示用户跳过向导)"
   }
 }
 ```
+
+**Request Body (跳过场景)**:
+```json
+{
+  "profile": {
+    "setupSkipped": true
+  }
+}
+```
+
+**跳过行为**:
+- 当 `setupSkipped: true` 且用户已存在于 DynamoDB 时，仅通过 `UpdateCommand` 写入 `profile.setupSkipped = true`，**不会覆盖用户已有的资料**。
+- 当 `setupSkipped: true` 但用户不存在时（新用户），仍使用 `PutCommand` 创建包含 `email`、`createdAt` 的最小完整记录。
 
 **Server-Generated Fields**: The following fields are automatically generated/updated:
 - `userId`: Extracted from JWT token
@@ -401,7 +426,8 @@ Content-Type: application/json
       "bio": "", //这个字段目前暂时没有使用，是预留
       "isNamePublic": false,
       "socials": [],
-      "areSocialsPublic": false
+      "areSocialsPublic": false,
+      "setupSkipped": false
     },
     "createdAt": "2025-08-16T10:30:00.000Z",
     "updatedAt": "2025-08-16T10:30:00.000Z"
@@ -411,6 +437,7 @@ Content-Type: application/json
 ```
 
 > 当 `profile` 缺失时会使用默认值；`nickname` 同样来自 ID token。
+> 跳过场景下（已有用户），响应中的 `user` 为 `UpdateCommand` 返回的完整最新记录，已有资料字段不会被清空。
 
 **HTTP Status Codes**:
 - `201 Created`: New user profile created successfully

@@ -4,7 +4,7 @@
  */
 
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
-import { DynamoDBDocumentClient, GetCommand, PutCommand } from '@aws-sdk/lib-dynamodb';
+import { DynamoDBDocumentClient, GetCommand, PutCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
 
 // 初始化DynamoDB客户端
 const client = new DynamoDBClient({});
@@ -170,45 +170,64 @@ export const handler = async (event) => {
 
     const existingUser = await dynamodb.send(getCommand);
     const isNewUser = !existingUser.Item;
+    const isSkipOnly = cleanProfileData.setupSkipped === true;
 
     console.log('🔍 用户状态检查:', {
       isNewUser,
+      isSkipOnly,
       hasExistingUser: !!existingUser.Item,
       existingUserProfile: existingUser.Item?.profile
     });
 
-    // 准备用户数据
-    const userData = {
-      userId: authenticatedUser.userId,
-      email: authenticatedUser.email,
-      profile: profile,
-      updatedAt: now
-    };
+    let responseUser;
+    let statusCode;
 
-    if (isNewUser) {
-      userData.createdAt = now;
+    if (isSkipOnly && !isNewUser) {
+      // 跳过场景 + 用户已存在：仅更新 setupSkipped 标记，不覆盖已有资料
+      console.log('⏭️ 用户跳过设置（已存在），仅更新 setupSkipped 标记');
+      const updateCommand = new UpdateCommand({
+        TableName: USERS_TABLE,
+        Key: { userId: authenticatedUser.userId },
+        UpdateExpression: 'SET profile.setupSkipped = :skipped, updatedAt = :now',
+        ExpressionAttributeValues: {
+          ':skipped': true,
+          ':now': now
+        },
+        ReturnValues: 'ALL_NEW'
+      });
+
+      const updateResult = await dynamodb.send(updateCommand);
+      responseUser = updateResult.Attributes;
+      statusCode = 200;
+      console.log('✅ setupSkipped 标记已更新，用户资料未被覆盖');
     } else {
-      userData.createdAt = existingUser.Item.createdAt;
+      // 完整设置场景 或 新用户跳过场景：使用 PutCommand 写入完整记录
+      const userData = {
+        userId: authenticatedUser.userId,
+        email: authenticatedUser.email,
+        profile: profile,
+        updatedAt: now
+      };
+
+      if (isNewUser) {
+        userData.createdAt = now;
+      } else {
+        userData.createdAt = existingUser.Item.createdAt;
+      }
+
+      console.log('💾 准备写入的用户数据:', JSON.stringify(userData, null, 2));
+
+      const putCommand = new PutCommand({
+        TableName: USERS_TABLE,
+        Item: userData
+      });
+
+      await dynamodb.send(putCommand);
+      responseUser = { ...userData };
+      statusCode = isNewUser ? 201 : 200;
+      console.log('✅ 数据已成功写入DynamoDB');
     }
 
-    console.log('💾 准备写入的用户数据:', JSON.stringify(userData, null, 2));
-
-    // 使用PUT操作创建或更新用户记录
-    const putCommand = new PutCommand({
-      TableName: USERS_TABLE,
-      Item: userData
-    });
-
-    await dynamodb.send(putCommand);
-
-    console.log('✅ 数据已成功写入DynamoDB');
-
-    // 返回结果中的用户数据
-    const responseUser = {
-      ...userData
-    };
-
-    const statusCode = isNewUser ? 201 : 200;
     const response = createResponse(statusCode, {
       message: 'User profile setup completed successfully',
       user: responseUser,

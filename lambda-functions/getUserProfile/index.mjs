@@ -169,27 +169,19 @@ export const handler = async (event) => {
     const result = await dynamodb.send(command);
 
     if (!result.Item) {
-      // 如果用户不存在，返回基本信息
-      const basicProfile = {
-        userId: authenticatedUser.userId,
-        email: authenticatedUser.email,
-        profile: {
-          nickname: authenticatedUser.nickname,
-          name: '',
-          bio: '',
-          isNamePublic: false,
-          socials: [],
-          areSocialsPublic: false
-        },
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      };
-
-      return createResponse(200, basicProfile);
+      // 用户不存在于 DynamoDB 中，只返回 exists: false 和 userId
+      // 不再返回虚构的默认数据，避免前端无法区分"不存在"和"存在但为空"
+      console.log('📋 用户不存在于数据库中 (exists: false)');
+      return createResponse(200, {
+        exists: false,
+        userId: authenticatedUser.userId
+      });
     }
 
-    // 确保返回的数据包含nickname信息
+    // 用户存在，返回真实数据并标记 exists: true
+    // 确保返回的数据包含来自 Cognito token 的 nickname 信息
     const userProfile = {
+      exists: true,
       ...result.Item,
       profile: {
         nickname: authenticatedUser.nickname,
