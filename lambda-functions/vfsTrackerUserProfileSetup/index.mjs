@@ -202,13 +202,35 @@ export const handler = async (event) => {
         Key: { userId: authenticatedUser.userId },
         UpdateExpression: updateExpression,
         ExpressionAttributeValues: expressionValues,
+        // 防止并发/最终一致性场景下 UpdateCommand 意外创建不完整的新记录
+        ConditionExpression: 'attribute_exists(userId)',
         ReturnValues: 'ALL_NEW'
       });
 
-      const updateResult = await dynamodb.send(updateCommand);
-      responseUser = updateResult.Attributes;
-      statusCode = 200;
-      console.log('✅ setupSkipped 标记已更新，用户资料未被覆盖');
+      try {
+        const updateResult = await dynamodb.send(updateCommand);
+        responseUser = updateResult.Attributes;
+        statusCode = 200;
+        console.log('✅ setupSkipped 标记已更新，用户资料未被覆盖');
+      } catch (condErr) {
+        if (condErr.name === 'ConditionalCheckFailedException') {
+          // GetCommand 认为用户存在但 UpdateCommand 时已不存在（极端并发），回退到 PutCommand 新建
+          console.warn('⚠️ UpdateCommand 条件检查失败，用户可能已被删除，回退到 PutCommand 创建');
+          const fallbackData = {
+            userId: authenticatedUser.userId,
+            email: authenticatedUser.email,
+            profile: { ...profile, setupSkipped: true },
+            createdAt: now,
+            updatedAt: now
+          };
+          const fallbackPut = new PutCommand({ TableName: USERS_TABLE, Item: fallbackData });
+          await dynamodb.send(fallbackPut);
+          responseUser = { ...fallbackData };
+          statusCode = 201;
+        } else {
+          throw condErr;
+        }
+      }
     } else {
       // 完整设置场景 或 新用户跳过场景：使用 PutCommand 写入完整记录
       const userData = {

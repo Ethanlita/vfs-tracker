@@ -183,7 +183,9 @@ const getSongRecommendationsHandler = http.post(`${API_URL}/recommend-songs`, as
 
 /**
  * GET /user/:userId - 获取用户资料
- * 真实 API 返回格式: {userId, profile: {nickname, name, bio, ...}}
+ * 真实 API 返回格式:
+ *   用户存在: {exists: true, userId, profile: {nickname, name, bio, ...}, createdAt, updatedAt}
+ *   用户不存在: {exists: false, userId}
  * 契约测试验证: tests/contract/api-contract.test.js:205
  */
 const getUserProfileHandler = http.get(`${API_URL}/user/:userId`, ({ params }) => {

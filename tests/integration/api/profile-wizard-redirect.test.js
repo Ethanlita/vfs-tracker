@@ -1,10 +1,10 @@
 /**
- * @file ProfileSetupWizard 跳转和跳过逻辑测试
- * @description Issue #83 修复验证：
+ * @file Issue #83: 用户资料 API 与状态判断测试
+ * @description Issue #83 相关行为验证：
  *   1. getUserProfile 用户不存在时返回 exists: false，不返回默认数据
- *   2. API 失败 + 无缓存时不启动 Wizard（避免误判）
- *   3. 跳过后不调用 refreshUserProfile（避免竞态条件）
- *   4. isUserProfileComplete 正确处理 exists: false 的空壳对象
+ *   2. getUserProfile 用户存在时返回 exists: true 和完整数据
+ *   3. isUserProfileComplete 正确处理各种边界情况（exists: false、空资料、setupSkipped、null）
+ *   4. MSW handler 默认行为与后端 exists 字段语义一致
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';

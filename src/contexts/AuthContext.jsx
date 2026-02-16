@@ -136,15 +136,21 @@ export const AuthProvider = ({ children }) => {
           const cached = localStorage.getItem(key);
           if (cached) {
             const parsed = JSON.parse(cached);
-            // 验证缓存属于当前用户，防止多账户场景下读到别人的缓存
-            if (parsed && (!parsed._cacheMeta?.userId || parsed._cacheMeta.userId === userId)) {
+            // 严格验证缓存属于当前用户，防止多账户场景下读到别人的缓存
+            if (parsed && parsed._cacheMeta?.userId === userId) {
               console.log('📦 API 失败，使用缓存的用户资料来判断状态');
               setUserProfile(parsed);
               setNeedsProfileSetup(!isUserProfileComplete(parsed));
               recoveredFromCache = true;
               break;
             } else if (parsed) {
-              console.warn('⚠️ 缓存属于其他用户，跳过:', parsed._cacheMeta?.userId);
+              if (!parsed._cacheMeta?.userId) {
+                // 旧版本缓存没有 userId 标记，无法安全判断所有权，直接清理
+                console.warn('⚠️ 检测到缺少 userId 的旧缓存，已清理:', key);
+                localStorage.removeItem(key);
+              } else {
+                console.warn('⚠️ 缓存属于其他用户，跳过:', parsed._cacheMeta.userId);
+              }
             }
           }
         } catch (cacheError) {
