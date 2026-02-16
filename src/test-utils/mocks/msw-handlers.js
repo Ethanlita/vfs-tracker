@@ -202,11 +202,10 @@ const getUserProfileHandler = http.get(`${API_URL}/user/:userId`, ({ params }) =
     });
   }
 
-  // 用户存在，返回完整数据并标记 exists: true
+  // 用户存在，返回完整数据并标记 exists: true（包含 createdAt, updatedAt 等所有顶层字段）
   return HttpResponse.json({
     exists: true,
-    userId: user.userId,
-    profile: user.profile
+    ...user,
   });
 });
 

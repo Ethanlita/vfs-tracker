@@ -79,7 +79,10 @@ export const AuthProvider = ({ children }) => {
       const cached = localStorage.getItem(cacheKey);
       if (cached) {
         const parsed = JSON.parse(cached);
-        // 验证缓存归属：与 error recovery 路径保持一致的安全策略
+        // 验证缓存归属：
+        // - 初始加载路径对旧缓存格式保持宽松（允许无 _cacheMeta，便于向后兼容）
+        //   因为紧接着会发 API 请求用真实数据覆盖，即使用了旧缓存也只是临时预显示
+        // - error recovery 路径更严格（要求 _cacheMeta.userId 匹配），因为没有后续 API 兜底
         if (parsed && (!parsed._cacheMeta || parsed._cacheMeta.userId === userId)) {
           setUserProfile(parsed);
           setNeedsProfileSetup(!isUserProfileComplete(parsed));
