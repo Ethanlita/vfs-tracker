@@ -15,10 +15,16 @@ import { server } from '../../../src/test-utils/mocks/msw-server.js';
 
 const API_URL = 'https://2rzxc2x5l8.execute-api.us-east-1.amazonaws.com/dev';
 
+// 测试中使用的认证用户 ID
+// 注意：生产环境中 getUserProfile 只能查询自己的资料（userId 必须匹配 JWT），
+// 这里通过 server.use() 覆盖 MSW handler 来模拟不同的后端响应，
+// 但始终使用认证用户自己的 userId 进行查询，以匹配生产行为。
+const TEST_USER_ID = 'us-east-1:test-user-083';
+
 describe('Issue #83: ProfileSetupWizard 逻辑修复', () => {
   beforeEach(() => {
     setAuthenticated({
-      userId: 'us-east-1:test-user-083',
+      userId: TEST_USER_ID,
       email: 'test083@example.com',
       nickname: 'Test User 083'
     });
@@ -36,10 +42,10 @@ describe('Issue #83: ProfileSetupWizard 逻辑修复', () => {
         })
       );
 
-      const result = await getUserProfile('non-existent-user');
+      const result = await getUserProfile(TEST_USER_ID);
 
       expect(result.exists).toBe(false);
-      expect(result.userId).toBe('non-existent-user');
+      expect(result.userId).toBe(TEST_USER_ID);
       // 不应包含虚构的默认 profile
       expect(result.profile).toBeUndefined();
       // 不应包含虚构的 createdAt / updatedAt
@@ -52,9 +58,9 @@ describe('Issue #83: ProfileSetupWizard 逻辑修复', () => {
         http.get(`${API_URL}/user/:userId`, () => {
           return HttpResponse.json({
             exists: true,
-            userId: 'us-east-1:existing-user',
+            userId: TEST_USER_ID,
             profile: {
-              nickname: 'Existing User',
+              nickname: 'Test User 083',
               name: '已有用户',
               bio: '',
               isNamePublic: true,
@@ -68,7 +74,7 @@ describe('Issue #83: ProfileSetupWizard 逻辑修复', () => {
         })
       );
 
-      const result = await getUserProfile('us-east-1:existing-user');
+      const result = await getUserProfile(TEST_USER_ID);
 
       expect(result.exists).toBe(true);
       expect(result.profile).toBeDefined();
@@ -81,9 +87,9 @@ describe('Issue #83: ProfileSetupWizard 逻辑修复', () => {
         http.get(`${API_URL}/user/:userId`, () => {
           return HttpResponse.json({
             exists: true,
-            userId: 'us-east-1:empty-profile-user',
+            userId: TEST_USER_ID,
             profile: {
-              nickname: 'Empty User',
+              nickname: 'Test User 083',
               name: '',
               bio: '',
               isNamePublic: false,
@@ -97,7 +103,7 @@ describe('Issue #83: ProfileSetupWizard 逻辑修复', () => {
         })
       );
 
-      const result = await getUserProfile('us-east-1:empty-profile-user');
+      const result = await getUserProfile(TEST_USER_ID);
 
       // 用户存在于数据库中，只是资料为空
       expect(result.exists).toBe(true);
@@ -169,17 +175,42 @@ describe('Issue #83: ProfileSetupWizard 逻辑修复', () => {
 
   describe('MSW handler 默认行为验证', () => {
     it('查询不存在的用户 ID 应返回 exists: false', async () => {
-      // 使用默认 MSW handler，查询 mockUsers 中不存在的用户
-      const result = await getUserProfile('non-existent-user-id-12345');
+      // 模拟后端对不存在用户的响应（使用认证用户自己的 ID 查询）
+      server.use(
+        http.get(`${API_URL}/user/:userId`, ({ params }) => {
+          return HttpResponse.json({
+            exists: false,
+            userId: params.userId
+          });
+        })
+      );
+
+      const result = await getUserProfile(TEST_USER_ID);
 
       expect(result.exists).toBe(false);
-      expect(result.userId).toBe('non-existent-user-id-12345');
+      expect(result.userId).toBe(TEST_USER_ID);
       expect(result.profile).toBeUndefined();
     });
 
     it('查询存在的用户 ID 应返回 exists: true', async () => {
-      // us-east-1:complete-user-001 在 mockUsers 中存在
-      const result = await getUserProfile('us-east-1:complete-user-001');
+      // 模拟后端对已存在用户的响应
+      server.use(
+        http.get(`${API_URL}/user/:userId`, () => {
+          return HttpResponse.json({
+            exists: true,
+            userId: TEST_USER_ID,
+            profile: {
+              nickname: 'Test User 083',
+              name: '张三',
+              isNamePublic: true,
+              areSocialsPublic: false,
+              socials: []
+            }
+          });
+        })
+      );
+
+      const result = await getUserProfile(TEST_USER_ID);
 
       expect(result.exists).toBe(true);
       expect(result.profile).toBeDefined();

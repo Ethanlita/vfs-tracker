@@ -170,7 +170,9 @@ export const handler = async (event) => {
 
     const existingUser = await dynamodb.send(getCommand);
     const isNewUser = !existingUser.Item;
-    const isSkipOnly = cleanProfileData.setupSkipped === true;
+    // 只有当 payload 仅包含 setupSkipped 字段时才走轻量 UpdateCommand 路径
+    // 如果同时传了其他字段（如 name），则走完整 PutCommand 路径以正确保存所有字段
+    const isSkipOnly = cleanProfileData.setupSkipped === true && Object.keys(cleanProfileData).length === 1;
 
     console.log('🔍 用户状态检查:', {
       isNewUser,
@@ -185,14 +187,21 @@ export const handler = async (event) => {
     if (isSkipOnly && !isNewUser) {
       // 跳过场景 + 用户已存在：仅更新 setupSkipped 标记，不覆盖已有资料
       console.log('⏭️ 用户跳过设置（已存在），仅更新 setupSkipped 标记');
+
+      // 防御性处理：如果已有记录缺少 profile map（数据损坏/迁移），先确保 profile 存在
+      const hasProfile = !!existingUser.Item.profile;
+      const updateExpression = hasProfile
+        ? 'SET profile.setupSkipped = :skipped, updatedAt = :now'
+        : 'SET profile = :newProfile, updatedAt = :now';
+      const expressionValues = hasProfile
+        ? { ':skipped': true, ':now': now }
+        : { ':newProfile': { setupSkipped: true }, ':now': now };
+
       const updateCommand = new UpdateCommand({
         TableName: USERS_TABLE,
         Key: { userId: authenticatedUser.userId },
-        UpdateExpression: 'SET profile.setupSkipped = :skipped, updatedAt = :now',
-        ExpressionAttributeValues: {
-          ':skipped': true,
-          ':now': now
-        },
+        UpdateExpression: updateExpression,
+        ExpressionAttributeValues: expressionValues,
         ReturnValues: 'ALL_NEW'
       });
 

@@ -136,12 +136,15 @@ export const AuthProvider = ({ children }) => {
           const cached = localStorage.getItem(key);
           if (cached) {
             const parsed = JSON.parse(cached);
-            if (parsed) {
+            // 验证缓存属于当前用户，防止多账户场景下读到别人的缓存
+            if (parsed && (!parsed._cacheMeta?.userId || parsed._cacheMeta.userId === userId)) {
               console.log('📦 API 失败，使用缓存的用户资料来判断状态');
               setUserProfile(parsed);
               setNeedsProfileSetup(!isUserProfileComplete(parsed));
               recoveredFromCache = true;
               break;
+            } else if (parsed) {
+              console.warn('⚠️ 缓存属于其他用户，跳过:', parsed._cacheMeta?.userId);
             }
           }
         } catch (cacheError) {
@@ -251,11 +254,22 @@ export const AuthProvider = ({ children }) => {
   }, [loadUserProfile]);
 
   const logout = useCallback(() => {
+    // 清理当前用户的 localStorage 缓存，防止多账户场景下读到旧缓存
+    try {
+      const currentUserId = user?.userId || user?.attributes?.sub;
+      if (currentUserId) {
+        localStorage.removeItem(`userProfile:v1:${currentUserId}`);
+      }
+      localStorage.removeItem(PROFILE_CACHE_KEY);
+    } catch (e) {
+      console.warn('⚠️ 登出时清理缓存失败', e);
+    }
+
     setUser(null);
     setUserProfile(null);
     setCognitoUserInfo(null);
     setNeedsProfileSetup(false);
-  }, []);
+  }, [user]);
 
   const debugAuthCredentials = useCallback(async () => {
     try {
@@ -409,6 +423,24 @@ export const AuthProvider = ({ children }) => {
       const result = await setupUserProfile(profileData);
       setUserProfile(result.user);
       setNeedsProfileSetup(false);
+
+      // 同步更新 localStorage 缓存，避免下次 API 失败时恢复旧的"不完整"缓存
+      if (result.user) {
+        try {
+          const userId = result.user.userId || user?.userId || user?.attributes?.sub;
+          const cachedProfile = {
+            ...result.user,
+            exists: true,
+            _cacheMeta: { t: Date.now(), userId }
+          };
+          if (userId) {
+            localStorage.setItem(`userProfile:v1:${userId}`, JSON.stringify(cachedProfile));
+          }
+          localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify(cachedProfile));
+        } catch (cacheError) {
+          console.warn('⚠️ 无法在 completeProfileSetup 后写入缓存', cacheError);
+        }
+      }
 
       console.log('✅ 用户资料设置完成:', result);
       return result;
