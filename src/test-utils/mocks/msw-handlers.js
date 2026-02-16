@@ -183,18 +183,29 @@ const getSongRecommendationsHandler = http.post(`${API_URL}/recommend-songs`, as
 
 /**
  * GET /user/:userId - 获取用户资料
- * 真实 API 返回格式: {userId, profile: {nickname, name, bio, ...}}
+ * 真实 API 返回格式:
+ *   用户存在: {exists: true, userId, profile: {nickname, name, bio, ...}, createdAt, updatedAt}
+ *   用户不存在: {exists: false, userId}
  * 契约测试验证: tests/contract/api-contract.test.js:205
  */
 const getUserProfileHandler = http.get(`${API_URL}/user/:userId`, ({ params }) => {
   const { userId } = params;
   console.log(`[MSW] Handling GET /user/${userId}`);
   
-  // 返回嵌套结构（匹配真实 API）
-  const user = mockUsers.find(u => u.userId === userId) || mockUsers[0];
+  // 查找用户，匹配真实 Lambda 行为：不存在时返回 exists: false
+  const user = mockUsers.find(u => u.userId === userId);
+  if (!user) {
+    // 用户不存在于数据库中，只返回 exists: false + userId
+    return HttpResponse.json({
+      exists: false,
+      userId: userId
+    });
+  }
+
+  // 用户存在，返回完整数据并标记 exists: true（包含 createdAt, updatedAt 等所有顶层字段）
   return HttpResponse.json({
-    userId: user.userId,
-    profile: user.profile
+    exists: true,
+    ...user,
   });
 });
 

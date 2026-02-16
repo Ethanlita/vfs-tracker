@@ -6,7 +6,7 @@ import { ensureAppError } from '../utils/apiError.js';
 import { ApiErrorNotice } from './ApiErrorNotice.jsx';
 
 const ProfileSetupWizard = ({ onComplete, canSkip = true }) => {
-  const { user, refreshUserProfile, completeProfileSetup } = useAuth();
+  const { user, completeProfileSetup } = useAuth();
   const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -163,7 +163,9 @@ const ProfileSetupWizard = ({ onComplete, canSkip = true }) => {
       }
 
       await completeProfileSetup(payload);
-      await refreshUserProfile();
+      // 不再调用 refreshUserProfile()，因为 completeProfileSetup 已经
+      // 更新了 userProfile 和 needsProfileSetup 状态，再次请求后端
+      // 可能因延迟/失败导致状态被覆盖回 needsProfileSetup=true（竞态条件）
       finishSetup();
     } catch (error) {
       console.error('设置用户资料失败:', error);
@@ -182,16 +184,11 @@ const ProfileSetupWizard = ({ onComplete, canSkip = true }) => {
     setLoading(true);
     setError('');
 
-    // 跳过设置时，设置 setupSkipped: true 标志
-    // 这样 isUserProfileComplete 会返回 true，避免循环跳转
+    // 跳过设置时，只发送 setupSkipped: true 标记
+    // 后端会使用 UpdateCommand 仅更新此标记，不会覆盖用户已有资料
     const payload = {
       profile: {
-        name: '',
-        bio: '',
-        isNamePublic: false,
-        socials: [],
-        areSocialsPublic: false,
-        setupSkipped: true  // 标记用户主动跳过了设置
+        setupSkipped: true
       }
     };
 
@@ -214,7 +211,8 @@ const ProfileSetupWizard = ({ onComplete, canSkip = true }) => {
       }
 
       await completeProfileSetup(payload);
-      await refreshUserProfile();
+      // 不再调用 refreshUserProfile()，避免竞态条件
+      // completeProfileSetup 已经正确设置了 needsProfileSetup=false
       finishSetup();
     } catch (error) {
       console.error('跳过并写入基础资料失败:', error);

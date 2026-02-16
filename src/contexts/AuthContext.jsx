@@ -73,12 +73,24 @@ export const AuthProvider = ({ children }) => {
     if (!userId) return;
 
     const cacheKey = `userProfile:v1:${userId}`;
+    // 先尝试从缓存恢复用户资料和 needsProfileSetup 状态
+    // 这样即使后续 API 请求失败，也有一个合理的默认值
     try {
       const cached = localStorage.getItem(cacheKey);
       if (cached) {
         const parsed = JSON.parse(cached);
-        if (parsed) {
+        // 验证缓存归属：
+        // - 初始加载路径对旧缓存格式保持宽松（允许无 _cacheMeta，便于向后兼容）
+        //   因为紧接着会发 API 请求用真实数据覆盖，即使用了旧缓存也只是临时预显示
+        // - error recovery 路径更严格（要求 _cacheMeta.userId 匹配），因为没有后续 API 兜底
+        if (parsed && (!parsed._cacheMeta || parsed._cacheMeta.userId === userId)) {
           setUserProfile(parsed);
+          setNeedsProfileSetup(!isUserProfileComplete(parsed));
+          console.log('📦 从缓存恢复用户资料，isComplete:', isUserProfileComplete(parsed));
+        } else if (parsed && parsed._cacheMeta?.userId !== userId) {
+          // 缓存属于其他用户（key 包含 userId 的情况下极少发生，但做防御性清理）
+          console.warn('⚠️ 初始缓存归属不匹配，已清理:', cacheKey);
+          localStorage.removeItem(cacheKey);
         }
       }
     } catch (error) {
@@ -87,20 +99,27 @@ export const AuthProvider = ({ children }) => {
 
     setProfileLoading(true);
     try {
-      console.log('🔍 正在检查用户是否存在于数据库中:', userId);
+      console.log('🔍 正在从后端加载用户资料:', userId);
       const profile = await getUserProfile(userId);
 
-      console.log('✅ 用户存在于数据库中，加载用户资料:', profile);
+      // 后端现在返回 exists 字段来区分用户是否存在于数据库中
+      const userExists = profile.exists !== false;
+      console.log('📋 后端返回用户资料:', { exists: profile.exists, userExists });
+
       setUserProfile(profile);
-      try {
-        const cachedProfile = {
-          ...profile,
-          _cacheMeta: { t: Date.now(), userId }
-        };
-        localStorage.setItem(cacheKey, JSON.stringify(cachedProfile));
-        localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify(cachedProfile));
-      } catch (error) {
-        console.warn('⚠️ 无法写入用户资料缓存', error);
+
+      if (userExists) {
+        // 用户存在于数据库中，更新缓存
+        try {
+          const cachedProfile = {
+            ...profile,
+            _cacheMeta: { t: Date.now(), userId }
+          };
+          localStorage.setItem(cacheKey, JSON.stringify(cachedProfile));
+          localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify(cachedProfile));
+        } catch (error) {
+          console.warn('⚠️ 无法写入用户资料缓存', error);
+        }
       }
 
       // 检查资料是否完整 - 只根据资料内容判断，不考虑时间因素
@@ -108,41 +127,52 @@ export const AuthProvider = ({ children }) => {
       setNeedsProfileSetup(!isComplete);
 
       console.log('📋 用户资料加载完成:', {
-        profile,
+        exists: userExists,
         isComplete,
         needsSetup: !isComplete
       });
     } catch (error) {
-      console.error('❌ 用户不存在于数据库中或加载失败:', error);
+      // API 请求失败（超时、网络错误、500 等）
+      // 优先使用缓存判断 needsProfileSetup，避免因网络问题误判已有用户
+      console.error('❌ 加载用户资料失败:', error);
 
-      const isOffline = typeof navigator !== 'undefined' && navigator && navigator.onLine === false;
-      if (isOffline) {
-        console.log('📴 当前处于离线状态，尝试使用缓存的用户资料');
-        const cacheCandidates = [cacheKey, PROFILE_CACHE_KEY];
-        for (const key of cacheCandidates) {
-          try {
-            const cached = localStorage.getItem(key);
-            if (cached) {
-              const parsed = JSON.parse(cached);
-              if (parsed) {
-                setUserProfile(parsed);
-                setNeedsProfileSetup(!isUserProfileComplete(parsed));
-                break;
+      const cacheCandidates = [cacheKey, PROFILE_CACHE_KEY];
+      let recoveredFromCache = false;
+
+      for (const key of cacheCandidates) {
+        try {
+          const cached = localStorage.getItem(key);
+          if (cached) {
+            const parsed = JSON.parse(cached);
+            // 严格验证缓存属于当前用户，防止多账户场景下读到别人的缓存
+            if (parsed && parsed._cacheMeta?.userId === userId) {
+              console.log('📦 API 失败，使用缓存的用户资料来判断状态');
+              setUserProfile(parsed);
+              setNeedsProfileSetup(!isUserProfileComplete(parsed));
+              recoveredFromCache = true;
+              break;
+            } else if (parsed) {
+              if (!parsed._cacheMeta?.userId) {
+                // 旧版本缓存没有 userId 标记，无法安全判断所有权，直接清理
+                console.warn('⚠️ 检测到缺少 userId 的旧缓存，已清理:', key);
+                localStorage.removeItem(key);
+              } else {
+                console.warn('⚠️ 缓存属于其他用户，跳过:', parsed._cacheMeta.userId);
               }
             }
-          } catch (cacheError) {
-            console.warn('⚠️ 解析用户资料缓存失败，忽略本地缓存', cacheError);
           }
+        } catch (cacheError) {
+          console.warn('⚠️ 解析用户资料缓存失败，忽略本地缓存', cacheError);
         }
-      } else {
-        // 用户不在 VoiceFemUsers 表中，需要强制跳转到用户信息完善页面
-        console.log('🚨 用户未在数据库中找到，强制跳转到用户信息完善页面');
-        setNeedsProfileSetup(true);
-        setUserProfile(null);
+      }
 
-        // 注意：不在这里直接跳转，而是依赖 App.jsx 中的 useEffect 来处理跳转
-        // 这样可以避免跳转逻辑冲突
-        console.log('📍 设置 needsProfileSetup=true，等待 App.jsx 处理跳转');
+      if (!recoveredFromCache) {
+        // 完全没有缓存且请求失败：不启动 Wizard
+        // 因为无法区分"真正的新用户"和"网络抖动"，宁可不弹 Wizard 也不误判
+        // 用户下次请求成功时，如果确实需要设置，会正常触发
+        console.log('⚠️ 无缓存可用且请求失败，暂不启动 Wizard（避免误判）');
+        setNeedsProfileSetup(false);
+        setUserProfile(null);
       }
     } finally {
       setProfileLoading(false);
@@ -238,11 +268,22 @@ export const AuthProvider = ({ children }) => {
   }, [loadUserProfile]);
 
   const logout = useCallback(() => {
+    // 清理当前用户的 localStorage 缓存，防止多账户场景下读到旧缓存
+    try {
+      const currentUserId = user?.userId || user?.attributes?.sub;
+      if (currentUserId) {
+        localStorage.removeItem(`userProfile:v1:${currentUserId}`);
+      }
+      localStorage.removeItem(PROFILE_CACHE_KEY);
+    } catch (e) {
+      console.warn('⚠️ 登出时清理缓存失败', e);
+    }
+
     setUser(null);
     setUserProfile(null);
     setCognitoUserInfo(null);
     setNeedsProfileSetup(false);
-  }, []);
+  }, [user]);
 
   const debugAuthCredentials = useCallback(async () => {
     try {
@@ -396,6 +437,24 @@ export const AuthProvider = ({ children }) => {
       const result = await setupUserProfile(profileData);
       setUserProfile(result.user);
       setNeedsProfileSetup(false);
+
+      // 同步更新 localStorage 缓存，避免下次 API 失败时恢复旧的"不完整"缓存
+      if (result.user) {
+        try {
+          const userId = result.user.userId || user?.userId || user?.attributes?.sub;
+          const cachedProfile = {
+            ...result.user,
+            exists: true,
+            _cacheMeta: { t: Date.now(), userId }
+          };
+          if (userId) {
+            localStorage.setItem(`userProfile:v1:${userId}`, JSON.stringify(cachedProfile));
+          }
+          localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify(cachedProfile));
+        } catch (cacheError) {
+          console.warn('⚠️ 无法在 completeProfileSetup 后写入缓存', cacheError);
+        }
+      }
 
       console.log('✅ 用户资料设置完成:', result);
       return result;
