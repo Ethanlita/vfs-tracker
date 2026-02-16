@@ -79,10 +79,15 @@ export const AuthProvider = ({ children }) => {
       const cached = localStorage.getItem(cacheKey);
       if (cached) {
         const parsed = JSON.parse(cached);
-        if (parsed) {
+        // 验证缓存归属：与 error recovery 路径保持一致的安全策略
+        if (parsed && (!parsed._cacheMeta || parsed._cacheMeta.userId === userId)) {
           setUserProfile(parsed);
           setNeedsProfileSetup(!isUserProfileComplete(parsed));
           console.log('📦 从缓存恢复用户资料，isComplete:', isUserProfileComplete(parsed));
+        } else if (parsed && parsed._cacheMeta?.userId !== userId) {
+          // 缓存属于其他用户（key 包含 userId 的情况下极少发生，但做防御性清理）
+          console.warn('⚠️ 初始缓存归属不匹配，已清理:', cacheKey);
+          localStorage.removeItem(cacheKey);
         }
       }
     } catch (error) {

@@ -193,9 +193,10 @@ export const handler = async (event) => {
       const updateExpression = hasProfile
         ? 'SET profile.setupSkipped = :skipped, updatedAt = :now'
         : 'SET profile = :newProfile, updatedAt = :now';
+      // 无 profile map 时补充 nickname（数据模型基础字段，getUserProfile 始终从 Cognito 注入）
       const expressionValues = hasProfile
         ? { ':skipped': true, ':now': now }
-        : { ':newProfile': { setupSkipped: true }, ':now': now };
+        : { ':newProfile': { nickname: authenticatedUser.nickname, setupSkipped: true }, ':now': now };
 
       const updateCommand = new UpdateCommand({
         TableName: USERS_TABLE,
@@ -216,10 +217,14 @@ export const handler = async (event) => {
         if (condErr.name === 'ConditionalCheckFailedException') {
           // GetCommand 认为用户存在但 UpdateCommand 时已不存在（极端并发），回退到 PutCommand 新建
           console.warn('⚠️ UpdateCommand 条件检查失败，用户可能已被删除，回退到 PutCommand 创建');
+          // skip-only 场景下只创建最小化 profile，避免写入大量空默认值
+          const minimalProfile = authenticatedUser.nickname
+            ? { nickname: authenticatedUser.nickname, setupSkipped: true }
+            : { setupSkipped: true };
           const fallbackData = {
             userId: authenticatedUser.userId,
             email: authenticatedUser.email,
-            profile: { ...profile, setupSkipped: true },
+            profile: minimalProfile,
             createdAt: now,
             updatedAt: now
           };
