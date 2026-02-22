@@ -24,11 +24,8 @@ RUN if [ -n "${PARSELMOUTH_DEV_WHEEL_PATH}" ]; then \
                 echo "${PARSELMOUTH_DEV_WHEEL_SHA256}  ${WHEEL_FILE}" | sha256sum -c -; \
             fi; \
             pip install --force-reinstall "${WHEEL_FILE}"; \
-            python - <<'PY' \
-import parselmouth \
-print(f"[INFO] Parselmouth={parselmouth.__version__}, Praat={getattr(parselmouth, 'PRAAT_VERSION', '<missing>')}") \
-PY \
-        ; fi
+            python -c "import parselmouth; print(f'[INFO] Parselmouth={parselmouth.__version__}, Praat={getattr(parselmouth, \"PRAAT_VERSION\", \"<missing>\")}')"; \
+        fi
 
 # Lambda 入口
 CMD [ "handler.handler" ]
