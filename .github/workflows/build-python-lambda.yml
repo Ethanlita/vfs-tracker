@@ -68,11 +68,11 @@ jobs:
               exit 1
             fi
 
-            cp "${FOUND_WHEEL}" "lambda-functions/online-praat-analysis/parselmouth-dev.whl"
-            WHEEL_PATH="parselmouth-dev.whl"
+            cp "${FOUND_WHEEL}" "lambda-functions/online-praat-analysis/${PARSELMOUTH_DEV_WHEEL_FILENAME}"
+            WHEEL_PATH="${PARSELMOUTH_DEV_WHEEL_FILENAME}"
 
             if [[ -n "${PARSELMOUTH_DEV_WHEEL_SHA256}" ]]; then
-              echo "${PARSELMOUTH_DEV_WHEEL_SHA256}  lambda-functions/online-praat-analysis/parselmouth-dev.whl" | sha256sum -c -
+              echo "${PARSELMOUTH_DEV_WHEEL_SHA256}  lambda-functions/online-praat-analysis/${PARSELMOUTH_DEV_WHEEL_FILENAME}" | sha256sum -c -
               WHEEL_SHA256="${PARSELMOUTH_DEV_WHEEL_SHA256}"
             fi
 
