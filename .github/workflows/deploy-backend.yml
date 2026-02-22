@@ -24,6 +24,7 @@ on:
 permissions:
   id-token: write
   contents: read
+  actions: read
 
 jobs:
   # 检查是否需要构建 Python Lambda 镜像
