@@ -1,0 +1,155 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<manifest name="online-praat-analysis" version="1.0" locale="zh-CN">
+  <overview>
+    <summary>Online Praat Analysis Lambda 目录清单与职责说明。</summary>
+    <runtime>AWS Lambda (Container)</runtime>
+    <entrypoint>handler.handler</entrypoint>
+    <purpose>接收前端嗓音测试录音，执行声学分析（含共振峰/VRP），生成图表与 PDF 报告并写入 DynamoDB。</purpose>
+    <branchSwitch env="ONLINE_PRAAT_ANALYSIS_PIPELINE" default="v2">v2=重构分支；legacy=旧分支</branchSwitch>
+  </overview>
+
+  <uploadFlowTrace>
+    <frontendSource path="src/components/VoiceTestWizard.jsx">
+      <note>录音文件名规则：fileName = "${stepId}_${recordingIndex+1}.wav"。</note>
+      <note>上传对象键规则：voice-tests/{sessionId}/raw/{stepId}/{fileName}。</note>
+      <step id="4" title="定点音 + 共振峰">
+        <recordingOrder>
+          <item index="1" label="较小音量 /a/（soft_a）" expectedFileName="4_1.wav"/>
+          <item index="2" label="较大音量 /a/（loud_a）" expectedFileName="4_2.wav"/>
+        </recordingOrder>
+      </step>
+    </frontendSource>
+    <backendConsumption path="lambda-functions/online-praat-analysis/handler.py">
+      <note>legacy 路径中 _sort_and_select_notes() 曾按文件名字典序推断 high/low，存在语义误配风险。</note>
+      <note>v2 路径已改为单一路径映射：4_1=>soft_a, 4_2=>loud_a，并输出 legacy 兼容键 formants_low/formants_high。</note>
+      <risk level="mitigated">在默认 v2 分支下，Step 4 已不再依赖字典序猜测；DynamoDB 与 PDF 仍保持兼容结构。</risk>
+    </backendConsumption>
+  </uploadFlowTrace>
+
+  <files>
+    <file path="handler.py" type="python" role="lambda-entrypoint">
+      <description>Lambda 主入口与 API 路由；会话创建、上传 URL 生成、异步分析触发、结果查询；编排完整分析流程并写入 DynamoDB/Events 表。</description>
+      <keyFunctions>
+        <function>handler</function>
+        <function>perform_full_analysis</function>
+        <function>handle_create_session</function>
+        <function>handle_get_upload_url</function>
+        <function>handle_analyze_trigger</function>
+        <function>handle_get_results</function>
+        <function>handle_analyze_task</function>
+        <function>_sort_and_select_notes</function>
+      </keyFunctions>
+    </file>
+
+    <file path="analysis.py" type="python" role="acoustic-analysis-core">
+      <description>声学分析核心：持续元音分析、语流分析、滑音 VRP 分析、稳健共振峰提取、LPC 频谱提取。</description>
+      <keyFunctions>
+        <function>analyze_sustained_vowel</function>
+        <function>analyze_note_file_robust</function>
+        <function>analyze_glide_files</function>
+        <function>extract_pitch_spl_series</function>
+        <function>analyze_speech_flow</function>
+        <function>get_lpc_spectrum</function>
+      </keyFunctions>
+    </file>
+
+    <file path="analysis_refactor_v2.py" type="python" role="acoustic-analysis-core-v2">
+      <description>重构版分析核心：统一帧级 CSV 输出、filtered AC + Formant(burg) 提取、QC、VRP 包络、soft/loud 锚点、扩展 Formant-SPL 指标聚合。</description>
+      <keyFunctions>
+        <function>perform_full_analysis_v2</function>
+      </keyFunctions>
+    </file>
+
+    <file path="artifacts_refactor_v2.py" type="python" role="report-artifacts-generator-v2">
+      <description>重构版图表模块：VRP（散点+分箱包络+锚点）与扩展 Formant-SPL（F1/F2/F3 vs SPL 三联图）。</description>
+      <keyFunctions>
+        <function>create_vrp_chart_v2</function>
+        <function>create_formant_spl_expanded_chart_v2</function>
+      </keyFunctions>
+    </file>
+
+    <file path="refactor_config.py" type="python" role="analysis-branch-config">
+      <description>重构分支配置读取：默认 v2，可切换 legacy。</description>
+    </file>
+
+    <file path="artifacts.py" type="python" role="report-artifacts-generator">
+      <description>图表与报告生成：时序图、VRP 图、F1-F2 图、LPC 频谱图、诊断图与 PDF 报告版式输出。</description>
+      <keyFunctions>
+        <function>create_time_series_chart</function>
+        <function>create_vrp_chart</function>
+        <function>create_formant_chart</function>
+        <function>create_formant_spl_chart</function>
+        <function>create_pdf_report</function>
+      </keyFunctions>
+    </file>
+
+    <file path="requirements.txt" type="text" role="dependencies">
+      <description>Python 依赖列表（parselmouth/librosa/matplotlib/reportlab/boto3 等）。</description>
+    </file>
+
+    <file path="Dockerfile" type="docker" role="container-build">
+      <description>Lambda 容器镜像构建定义。</description>
+    </file>
+
+    <file path=".dockerignore" type="text" role="build-optimization">
+      <description>容器构建时忽略文件配置。</description>
+    </file>
+
+    <file path="README.md" type="markdown" role="module-doc">
+      <description>该 Lambda 模块说明文档（接口、用途、部署/测试概览）。</description>
+    </file>
+
+    <file path="push-image.sh" type="shell" role="deployment-script">
+      <description>Linux/macOS 镜像构建与推送脚本。</description>
+    </file>
+
+    <file path="push-image.ps1" type="powershell" role="deployment-script">
+      <description>Windows PowerShell 镜像构建与推送脚本。</description>
+    </file>
+
+    <file path="NotoSansSC-Regular.ttf" type="font" role="report-font-cjk">
+      <description>PDF/图表中文字体。</description>
+    </file>
+
+    <file path="Roboto-Regular.ttf" type="font" role="report-font-latin">
+      <description>PDF/图表英文与数字字体。</description>
+    </file>
+
+    <file path="__init__.py" type="python" role="package-marker">
+      <description>Python 包标记文件。</description>
+    </file>
+
+    <file path="tests/conftest.py" type="python" role="test-fixtures">
+      <description>测试夹具与合成音频生成器（含可控 formants/F0 的测试音频）。</description>
+    </file>
+
+    <file path="tests/test_analysis.py" type="python" role="unit-tests">
+      <description>analysis.py 相关单元测试（持续元音、语流、稳健共振峰）。</description>
+    </file>
+
+    <file path="tests/test_handler.py" type="python" role="integration-tests">
+      <description>handler.py 相关集成/E2E 测试（moto 模拟 AWS，验证写库、产物与指标结构）。</description>
+    </file>
+
+    <file path="tests/__init__.py" type="python" role="package-marker">
+      <description>tests 包标记文件。</description>
+    </file>
+
+    <file path="tests/fixtures/.gitkeep" type="text" role="repo-structure-keeper">
+      <description>保持空目录纳入版本控制。</description>
+    </file>
+
+    <file path="__pycache__/" type="generated" role="runtime-cache">
+      <description>Python 字节码缓存目录，非业务逻辑文件。</description>
+    </file>
+
+    <file path="tests/__pycache__/" type="generated" role="runtime-cache">
+      <description>测试运行产生的 Python 字节码缓存目录，非业务逻辑文件。</description>
+    </file>
+  </files>
+
+  <refactorNotes>
+    <note priority="P0">优先修复 Step 4 高低音映射：不要再依赖文件名字典序 + 语义猜测，应使用“上传顺序标签/明确元数据”单一路径映射。</note>
+    <note priority="P1">重构时同步更新 tests/test_handler.py 与前端展示字段映射，确保 formants_low/high 语义稳定。</note>
+  </refactorNotes>
+</manifest>

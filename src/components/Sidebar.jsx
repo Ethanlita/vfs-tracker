@@ -44,8 +44,7 @@ function NavItem({ to, label, onClick }) {
 const Sidebar = ({ open, onClose, user, avatarUrl, docLink, AuthComponent }) => {
   const location = useLocation();
 
-  const { authStatus } = useAuthenticator(context => [context.authStatus]);
-  const isAuthenticated = authStatus === 'authenticated';
+  useAuthenticator(context => [context.authStatus]);
   const [installPromptEvent, setInstallPromptEvent] = useState(null);
   const [isStandalone, setIsStandalone] = useState(false);
   const [isOnline, setIsOnline] = useState(typeof navigator === 'undefined' ? true : navigator.onLine);

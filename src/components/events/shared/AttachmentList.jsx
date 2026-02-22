@@ -92,9 +92,8 @@ const AttachmentList = ({ attachments, className = '' }) => {
   /**
    * 处理下载附件
    * @param {string} fileUrl - S3 对象键
-   * @param {string} fileName - 文件名
    */
-  const handleDownload = async (fileUrl, fileName) => {
+  const handleDownload = async (fileUrl) => {
     if (!fileUrl) return;
     
     setLoadingUrl(fileUrl);

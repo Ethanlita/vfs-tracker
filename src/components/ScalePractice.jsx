@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { PitchDetector } from 'pitchy';
 import Soundfont from 'soundfont-player';
 import {
-  accumulateStableWindow,
   gateByEnergy,
   gateByStability
 } from '../utils/pitchEval.js';
@@ -71,14 +70,12 @@ const freqToPercent = (f, range) => {
 const sortModesByDifficulty = (modeList = []) => {
   const order = { '入门': 0, '简单': 1, '一般': 2, '高级': 3 };
   return [...modeList]
-    .map((mode, idx) => ({ ...mode, _idx: idx }))
     .sort((a, b) => {
       const da = order[a.difficulty] ?? 999;
       const db = order[b.difficulty] ?? 999;
-      if (da === db) return a._idx - b._idx;
+      if (da === db) return 0;
       return da - db;
-    })
-    .map(({ _idx, ...rest }) => rest);
+    });
 };
 
 /**

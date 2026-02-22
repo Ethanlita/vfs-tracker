@@ -22,10 +22,9 @@ export default {
   /**
    * 处理传入的 HTTP 请求
    * @param {Request} request - 传入的请求对象
-   * @param {Object} env - 环境变量
    * @returns {Promise<Response>} 响应对象
    */
-  async fetch(request, env) {
+  async fetch(request) {
     const url = new URL(request.url);
     const pathname = url.pathname;
 

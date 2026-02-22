@@ -153,10 +153,9 @@ export async function getObjectAsBlob(client, key) {
  * 音频文件存储路径: voice-tests/{sessionId}/raw/{step}/{step}_{subIndex}.wav
  * @param {S3Client} client
  * @param {string} sessionId - 会话 ID
- * @param {object} test - 测试数据对象（可选）
  * @returns {Promise<Array<{key: string, name: string, size: number, lastModified: Date}>>}
  */
-export async function getTestSessionFiles(client, sessionId, test = null) {
+export async function getTestSessionFiles(client, sessionId) {
   if (!sessionId) {
     console.warn('[S3] getTestSessionFiles: sessionId 为空');
     return [];

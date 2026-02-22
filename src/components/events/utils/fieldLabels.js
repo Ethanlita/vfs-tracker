@@ -201,10 +201,9 @@ export const ANALYSIS_SECTION_LABELS = {
 /**
  * 获取字段的中文标签
  * @param {string} fieldPath - 字段路径，如 'fundamentalFrequency' 或 'full_metrics.sustained.f0_mean'
- * @param {string} eventType - 事件类型
  * @returns {string} 中文标签，如果找不到则返回原字段名
  */
-export const getFieldLabel = (fieldPath, eventType = '') => {
+export const getFieldLabel = (fieldPath) => {
   // 尝试从各个标签映射中查找
   const allLabels = {
     ...BASE_FIELD_LABELS,

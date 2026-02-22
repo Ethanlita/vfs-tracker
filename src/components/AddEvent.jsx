@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import EventForm from './EventForm';
-import { useAuth } from '../contexts/AuthContext.jsx';
 import { useDocumentMeta } from '../hooks/useDocumentMeta';
 
 /**
@@ -16,10 +15,6 @@ const AddEvent = () => {
   });
 
   const navigate = useNavigate();
-
-  // @en Use AuthContext exclusively - it already uses Amplify v6 standard APIs
-  // @zh 专门使用 AuthContext - 它已经使用了 Amplify v6 标准 API
-  const { user: authContextUser } = useAuth();
 
   const [showSuccessMessage, setShowSuccessMessage] = useState(false);
 

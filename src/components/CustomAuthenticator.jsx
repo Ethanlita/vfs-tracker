@@ -16,39 +16,42 @@ import { Mail, Lock, User, AlertCircle, Loader2, Eye, EyeOff } from 'lucide-reac
  * @param {boolean} props.showPassword - 是否显示密码（密码框专用）
  * @param {Function} props.onTogglePassword - 切换密码显示（密码框专用）
  */
-const Input = ({ icon: Icon, type = 'text', name, placeholder, required = true, value, autoComplete, onChange, showPassword, onTogglePassword }) => (
-  <div className="relative">
-    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-      <Icon className="h-5 w-5 text-gray-400" />
+const Input = ({ icon, type = 'text', name, placeholder, required = true, value, autoComplete, onChange, showPassword, onTogglePassword }) => {
+  const InputIcon = icon;
+
+  return (
+    <div className="relative">
+      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+        <InputIcon className="h-5 w-5 text-gray-400" />
+      </div>
+      <input
+        type={type === 'password' && showPassword ? 'text' : type}
+        name={name}
+        value={value}
+        onChange={onChange}
+        className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+        placeholder={placeholder}
+        required={required}
+        autoComplete={autoComplete}
+      />
+      {type === 'password' && onTogglePassword && (
+        <button
+          type="button"
+          onClick={onTogglePassword}
+          className="absolute inset-y-0 right-0 pr-3 flex items-center"
+        >
+          {showPassword ? (
+            <EyeOff className="h-5 w-5 text-gray-400" />
+          ) : (
+            <Eye className="h-5 w-5 text-gray-400" />
+          )}
+        </button>
+      )}
     </div>
-    <input
-      type={type === 'password' && showPassword ? 'text' : type}
-      name={name}
-      value={value}
-      onChange={onChange}
-      className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
-      placeholder={placeholder}
-      required={required}
-      autoComplete={autoComplete}
-    />
-    {type === 'password' && onTogglePassword && (
-      <button
-        type="button"
-        onClick={onTogglePassword}
-        className="absolute inset-y-0 right-0 pr-3 flex items-center"
-      >
-        {showPassword ? (
-          <EyeOff className="h-5 w-5 text-gray-400" />
-        ) : (
-          <Eye className="h-5 w-5 text-gray-400" />
-        )}
-      </button>
-    )}
-  </div>
-);
+  );
+};
 
 /**
- * 按钮组件
  * @param {Object} props
  * @param {string} props.type - 按钮类型
  * @param {Function} props.onClick - 点击处理函数

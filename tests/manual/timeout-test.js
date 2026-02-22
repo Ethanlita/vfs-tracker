@@ -14,11 +14,12 @@ const SLOW_API_DELAY = 10000; // 10秒延迟,应该触发超时
 // 模拟慢速 API 响应
 async function simulateSlowApi() {
   console.log('🧪 [超时测试] 模拟慢速 API 响应...');
+  let startTime = Date.now();
   
   // 这个请求应该在 8 秒后超时
   try {
     console.log('📤 [超时测试] 发起 getUserProfile 请求 (预期8秒超时)...');
-    const startTime = Date.now();
+    startTime = Date.now();
     
     // 假设使用真实 API (需要在实际环境中测试)
     // const result = await getUserProfile(TEST_USER_ID);
