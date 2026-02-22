@@ -9,6 +9,7 @@ on:
 permissions:
   id-token: write
   contents: read
+  actions: read
 
 env:
   ECR_REPOSITORY: vfs-tracker-images

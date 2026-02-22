@@ -124,16 +124,28 @@ def _build_pitch(sound: parselmouth.Sound, p: Params):
 
 
 def _compute_calibration_offset(noise_intensity_db: float, calib: Calibration) -> Calibration:
-    """[CN] 计算 calibration_offset_db。"""
+    """[CN] 计算 calibration_offset_db。返回新的 Calibration 实例，不修改输入。
+
+    :param noise_intensity_db: 噪声录音的平均强度 (dB)。
+    :param calib: 原始校准配置（不会被修改）。
+    :return: 带有计算后 offset 的新 Calibration 实例。
+    """
     if calib.mode == 'absolute':
         if calib.noise_spl_db is None:
             raise ValueError('absolute calibration requires noise_spl_db')
-        calib.calibration_offset_db = float(calib.noise_spl_db - noise_intensity_db)
-        calib.spl_kind = 'absolute'
+        return Calibration(
+            mode=calib.mode,
+            noise_spl_db=calib.noise_spl_db,
+            calibration_offset_db=float(calib.noise_spl_db - noise_intensity_db),
+            spl_kind='absolute',
+        )
     else:
-        calib.calibration_offset_db = float(-noise_intensity_db)
-        calib.spl_kind = 'relative'
-    return calib
+        return Calibration(
+            mode=calib.mode,
+            noise_spl_db=calib.noise_spl_db,
+            calibration_offset_db=float(-noise_intensity_db),
+            spl_kind='relative',
+        )
 
 
 def _estimate_noise_intensity_db(noise_wav: str, p: Params) -> float:
@@ -340,7 +352,15 @@ def _compute_vrp(glide_rows: List[Dict]) -> Dict:
     spl = np.asarray([r.get('spl_db', np.nan) for r in glide_rows], dtype=float)
     vp = np.asarray([r.get('voicing_prob', np.nan) for r in glide_rows], dtype=float)
 
-    valid = np.isfinite(f0) & np.isfinite(spl) & np.isfinite(vp) & (vp >= 0.60)
+    # [CN] voicing_prob 来自 Praat Pitch 对象的 strength 通道。使用 filtered_autocorrelation
+    # 时该通道始终存在；voicing_prob 为 NaN 仅在帧索引越界（静默段、极短音频）时出现。
+    # 若极端情况下 strength 通道整体缺失（版本兼容），降级为仅依赖 f0+spl 过滤。
+    has_any_finite_vp = np.any(np.isfinite(vp))
+    if has_any_finite_vp:
+        valid = np.isfinite(f0) & np.isfinite(spl) & np.isfinite(vp) & (vp >= 0.60)
+    else:
+        logger.warning('voicing_prob 全部为 NaN，降级为仅 f0+spl 过滤')
+        valid = np.isfinite(f0) & np.isfinite(spl)
     f0 = f0[valid]
     spl = spl[valid]
     if f0.size == 0:
