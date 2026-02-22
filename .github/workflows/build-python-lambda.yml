@@ -85,11 +85,15 @@ jobs:
           echo "wheel_sha256=${WHEEL_SHA256}" >> "$GITHUB_OUTPUT"
 
       - name: Build and push Docker image
+        id: build-image
         uses: docker/build-push-action@v5
         with:
           context: ./lambda-functions/online-praat-analysis
           platforms: linux/arm64
           push: true
+          # provenance: false 防止生成 OCI attestation 清单，
+          # AWS Lambda 不支持带有 attestation 的多架构镜像索引格式
+          provenance: false
           tags: |
             ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest
             ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
@@ -99,12 +103,20 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Update Lambda function
+      - name: Update Lambda function image
+        # 直接更新 Lambda 函数镜像，不使用 || echo 吞掉错误
         run: |
+          IMAGE_URI="${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}"
+          echo "Updating Lambda function with image: ${IMAGE_URI}"
           aws lambda update-function-code \
             --function-name online-praat-analysis \
-            --image-uri ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }} \
-            --region ${{ secrets.AWS_REGION }} || echo "Lambda function update skipped (function may not exist yet)"
+            --image-uri "${IMAGE_URI}" \
+            --region ${{ secrets.AWS_REGION }}
+          echo "Waiting for Lambda function update to complete..."
+          aws lambda wait function-updated \
+            --function-name online-praat-analysis \
+            --region ${{ secrets.AWS_REGION }}
+          echo "Lambda function successfully updated."
 
       - name: Output image info
         run: |
