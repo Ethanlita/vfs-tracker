@@ -60,8 +60,11 @@ class Params:
 
     # Formant (burg)
     n_formants: float = 5.0
-    formant_ceiling: float = 8000.0
-    window_length: float = 0.025
+    # [CN] formant_ceiling / window_length 设为 None 表示使用 per-file 自适应选择
+    # （由 _pick_formant_params 根据文件的 F0 中位数决定），
+    # 显式赋值时跳过自适应、使用固定值
+    formant_ceiling: Optional[float] = None
+    window_length: Optional[float] = None
     pre_emphasis_from: float = 50.0
 
     # QC
@@ -203,6 +206,29 @@ def _task_from_s3_key(s3_key: str) -> str:
     return 'unknown'
 
 
+def _pick_formant_params(f0_median: float) -> Tuple[float, float]:
+    """[CN] 根据 F0 中位数选择 Praat 推荐的共振峰分析参数。
+
+    Praat 推荐 3 个档位（对应 LPC 分析带宽 = 2 × ceiling）：
+    - 5000 Hz：成年男性（F0 < 200 Hz），窗长 0.025s
+    - 5500 Hz：成年女性 / 跨性别者（200 ≤ F0 < 300 Hz），窗长 0.030s
+    - 8000 Hz：儿童 / 极高音（F0 ≥ 300 Hz），窗长 0.035s
+
+    窗长随 ceiling 增大而加长，以保证高 F0 声音的频率分辨率。
+
+    :param f0_median: 该文件的 F0 中位数（Hz），NaN 或 ≤ 0 时回退到 5500。
+    :return: (formant_ceiling, window_length) 元组。
+    """
+    if not np.isfinite(f0_median) or f0_median <= 0:
+        # [CN] 无法判断音域时取中间档，最大化兼容性
+        return 5500.0, 0.030
+    if f0_median < 200.0:
+        return 5000.0, 0.025
+    if f0_median < 300.0:
+        return 5500.0, 0.030
+    return 8000.0, 0.035
+
+
 def _extract_frames(
     sound: parselmouth.Sound,
     p: Params,
@@ -216,13 +242,28 @@ def _extract_frames(
 
     pitch = _build_pitch(sound, p)
     intensity = call(sound, 'To Intensity', p.intensity_pitch_floor, p.time_step, 'yes' if p.subtract_mean else 'no')
+
+    # [CN] per-file 自适应：先从 pitch 取 F0 中位数，再选择 ceiling / window_length；
+    # 若 Params 显式指定了值，则跳过自适应
+    if p.formant_ceiling is not None and p.window_length is not None:
+        fc, wl = p.formant_ceiling, p.window_length
+    else:
+        pitch_vals = pitch.selected_array['frequency']
+        voiced = pitch_vals[pitch_vals > 0]
+        f0_med = float(np.median(voiced)) if voiced.size > 0 else np.nan
+        fc, wl = _pick_formant_params(f0_med)
+        logger.info(
+            'Adaptive formant params for %s (task=%s): F0_median=%.1f Hz → ceiling=%.0f Hz, window=%.3f s',
+            file_id, task, f0_med if np.isfinite(f0_med) else 0.0, fc, wl,
+        )
+
     formant = call(
         sound,
         'To Formant (burg)',
         p.time_step,
         p.n_formants,
-        p.formant_ceiling,
-        p.window_length,
+        fc,
+        wl,
         p.pre_emphasis_from,
     )
 
@@ -329,6 +370,36 @@ def _extract_frames(
             }
         )
 
+    # [CN] QC 帧级汇总日志：统计各 flag 触发次数和占比，
+    # 帮助调试共振峰参数问题（如 ceiling 过高导致大面积 NaN）
+    if rows:
+        flag_counter: Dict[str, int] = {}
+        flagged_frame_count = 0
+        for r in rows:
+            flags_str = r.get('qc_flags', '')
+            if flags_str:
+                flagged_frame_count += 1
+                for f in flags_str.split('|'):
+                    flag_counter[f] = flag_counter.get(f, 0) + 1
+        total = len(rows)
+        if flag_counter:
+            pct = round(100.0 * flagged_frame_count / total, 1)
+            summary = ', '.join(f'{k}={v}' for k, v in sorted(flag_counter.items(), key=lambda x: -x[1]))
+            logger.warning(
+                'QC flags summary for %s (task=%s): %d/%d frames flagged (%.1f%%) — %s',
+                file_id, task, flagged_frame_count, total, pct, summary,
+            )
+
+        # [CN] 检查共振峰 NaN 占比：即使未触发 QC flag，Praat 本身也可能返回 NaN
+        f1_nan = sum(1 for r in rows if not np.isfinite(r.get('f1_hz', np.nan)))
+        f2_nan = sum(1 for r in rows if not np.isfinite(r.get('f2_hz', np.nan)))
+        if f1_nan > total * 0.5 or f2_nan > total * 0.5:
+            logger.warning(
+                'High NaN rate in formants for %s (task=%s): F1 NaN=%d/%d (%.1f%%), F2 NaN=%d/%d (%.1f%%)',
+                file_id, task, f1_nan, total, 100.0 * f1_nan / total,
+                f2_nan, total, 100.0 * f2_nan / total,
+            )
+
     return rows
 
 
@@ -410,6 +481,7 @@ def _extract_anchor(rows: List[Dict], task_name: str, file_selection: str = 'fir
     """
     sel = [r for r in rows if r.get('task') == task_name]
     if not sel:
+        logger.warning('Anchor extraction failed for task=%s: no matching rows', task_name)
         return {'task': task_name, 'error': 'no_rows'}
 
     file_name = sel[0].get('file', '')
@@ -430,11 +502,13 @@ def _extract_anchor(rows: List[Dict], task_name: str, file_selection: str = 'fir
 
     file_rows = [r for r in sel if r.get('file') == file_name]
     if not file_rows:
+        logger.warning('Anchor extraction failed for task=%s, file=%s: no file rows', task_name, file_name)
         return {'task': task_name, 'error': 'no_file_rows'}
 
     ts = np.asarray([r.get('time_s', np.nan) for r in file_rows], dtype=float)
     tmin, tmax = np.nanmin(ts), np.nanmax(ts)
     if not np.isfinite(tmin) or not np.isfinite(tmax) or tmax <= tmin:
+        logger.warning('Anchor extraction failed for task=%s, file=%s: invalid time range tmin=%s tmax=%s', task_name, file_name, tmin, tmax)
         return {'task': task_name, 'error': 'invalid_time_range'}
 
     # 稳态窗：中间 50%（避免起止边缘）
@@ -452,6 +526,11 @@ def _extract_anchor(rows: List[Dict], task_name: str, file_selection: str = 'fir
         stable.append(r)
 
     if len(stable) < 5:
+        logger.warning(
+            'Anchor extraction failed for task=%s, file=%s: insufficient stable frames (%d < 5, '
+            'total file_rows=%d, mid-50%% window=[%.3f, %.3f]s)',
+            task_name, file_name, len(stable), len(file_rows), left, right,
+        )
         return {'task': task_name, 'error': 'insufficient_stable_frames'}
 
     def med(key):
@@ -463,7 +542,7 @@ def _extract_anchor(rows: List[Dict], task_name: str, file_selection: str = 'fir
     spl_vals = spl_vals[np.isfinite(spl_vals)]
     spl_mad = float(np.nanmedian(np.abs(spl_vals - np.nanmedian(spl_vals)))) if spl_vals.size else np.nan
 
-    return {
+    anchor = {
         'task': task_name,
         'file': file_name,
         'f0_hz': med('f0_hz'),
@@ -477,6 +556,16 @@ def _extract_anchor(rows: List[Dict], task_name: str, file_selection: str = 'fir
         'spl_mad_db': spl_mad,
         'n_frames': len(stable),
     }
+
+    # [CN] 检查锚点关键指标是否为 NaN，记录 WARNING 便于追踪共振峰分析的静默失败
+    nan_keys = [k for k in ('f0_hz', 'f1_hz', 'f2_hz', 'f3_hz', 'spl_db') if not np.isfinite(anchor.get(k, np.nan))]
+    if nan_keys:
+        logger.warning(
+            'Anchor for task=%s, file=%s has NaN values: %s (n_stable_frames=%d)',
+            task_name, file_name, ', '.join(nan_keys), len(stable),
+        )
+
+    return anchor
 
 
 def _compute_sustained_quality_metrics(local_wav: Optional[str], p: Params) -> Dict:
@@ -541,8 +630,36 @@ def _build_legacy_formant_block(anchor: Dict) -> Dict:
     [CN] 将 soft/loud 锚点映射为 legacy 的 formant 字段结构。
 
     说明：为保持 DynamoDB 结构与旧链路兼容，统一输出 F1/F2/F3、f0_mean、spl_dbA_est、reason、error_details 等键。
+    当锚点提取成功（无 error 键）但关键共振峰值为 NaN 时，标记 reason 为 FORMANT_NAN
+    而非 SUCCESS，避免下游的静默失败。
     """
-    has_error = bool(anchor.get('error'))
+    explicit_error = anchor.get('error')
+    task_name = anchor.get('task', 'unknown')
+
+    # [CN] 确定 reason：优先使用显式错误；
+    # 若无显式错误但 F1/F2 为 NaN，则标记为 FORMANT_NAN
+    if explicit_error:
+        reason = str(explicit_error)
+    else:
+        f1 = anchor.get('f1_hz')
+        f2 = anchor.get('f2_hz')
+        f1_nan = f1 is None or (isinstance(f1, float) and not np.isfinite(f1))
+        f2_nan = f2 is None or (isinstance(f2, float) and not np.isfinite(f2))
+        if f1_nan or f2_nan:
+            reason = 'FORMANT_NAN'
+            nan_detail = []
+            if f1_nan:
+                nan_detail.append('F1')
+            if f2_nan:
+                nan_detail.append('F2')
+            logger.warning(
+                'Formant block for task=%s: %s are NaN despite no extraction error '
+                '(likely caused by formant_ceiling mismatch or QC filtering)',
+                task_name, '+'.join(nan_detail),
+            )
+        else:
+            reason = 'SUCCESS'
+
     return {
         'F1': anchor.get('f1_hz'),
         'B1': anchor.get('b1_hz'),
@@ -553,8 +670,8 @@ def _build_legacy_formant_block(anchor: Dict) -> Dict:
         'f0_mean': anchor.get('f0_hz'),
         'spl_dbA_est': anchor.get('spl_db'),
         'source_file': anchor.get('file'),
-        'reason': anchor.get('error', 'SUCCESS'),
-        'error_details': anchor.get('error', ''),
+        'reason': reason,
+        'error_details': explicit_error or ('F1/F2 NaN' if reason == 'FORMANT_NAN' else ''),
         'best_segment_time': None,
         'is_high_pitch': False,
     }
@@ -597,6 +714,9 @@ def _ensure_legacy_metrics_structure(metrics: Dict, soft_anchor: Dict, loud_anch
     )
 
     # v2 语义字段（新字段，不影响旧链路）
+    # [CN] 复用 legacy block 的 reason 逻辑，确保 FORMANT_NAN 检测一致
+    soft_block = metrics['formants_low']
+    loud_block = metrics['formants_high']
     metrics['formants_soft'] = {
         'F1': soft_anchor.get('f1_hz'),
         'B1': soft_anchor.get('b1_hz'),
@@ -607,7 +727,7 @@ def _ensure_legacy_metrics_structure(metrics: Dict, soft_anchor: Dict, loud_anch
         'f0_mean': soft_anchor.get('f0_hz'),
         'spl_dbA_est': soft_anchor.get('spl_db'),
         'source_file': soft_anchor.get('file'),
-        'reason': soft_anchor.get('error', 'SUCCESS'),
+        'reason': soft_block.get('reason', 'SUCCESS'),
     }
     metrics['formants_loud'] = {
         'F1': loud_anchor.get('f1_hz'),
@@ -619,7 +739,7 @@ def _ensure_legacy_metrics_structure(metrics: Dict, soft_anchor: Dict, loud_anch
         'f0_mean': loud_anchor.get('f0_hz'),
         'spl_dbA_est': loud_anchor.get('spl_db'),
         'source_file': loud_anchor.get('file'),
-        'reason': loud_anchor.get('error', 'SUCCESS'),
+        'reason': loud_block.get('reason', 'SUCCESS'),
     }
 
 
