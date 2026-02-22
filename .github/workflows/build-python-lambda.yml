@@ -12,6 +12,12 @@ permissions:
 
 env:
   ECR_REPOSITORY: vfs-tracker-images
+  PARSELMOUTH_DEV_WHEEL_ENABLED: 'true'
+  PARSELMOUTH_DEV_WHEEL_RUN_ID: '21285172527'
+  PARSELMOUTH_DEV_WHEEL_REPO: 'YannickJadoul/Parselmouth'
+  PARSELMOUTH_DEV_WHEEL_ARTIFACT: 'wheels-manylinux_aarch64'
+  PARSELMOUTH_DEV_WHEEL_FILENAME: 'praat_parselmouth-0.5.0.dev0-cp313-cp313-manylinux2014_aarch64.manylinux_2_17_aarch64.whl'
+  PARSELMOUTH_DEV_WHEEL_SHA256: ''
 
 jobs:
   build-and-push:
@@ -35,6 +41,48 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Prepare Parselmouth dev wheel (optional)
+        id: parselmouth-wheel
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          WHEEL_PATH=""
+          WHEEL_SHA256=""
+
+          if [[ "${PARSELMOUTH_DEV_WHEEL_ENABLED}" == "true" ]]; then
+            ARTIFACT_DIR="lambda-functions/online-praat-analysis/tmp/parselmouth-dev-ci"
+            mkdir -p "${ARTIFACT_DIR}"
+
+            echo "Downloading artifact ${PARSELMOUTH_DEV_WHEEL_ARTIFACT} from run ${PARSELMOUTH_DEV_WHEEL_RUN_ID}"
+            gh run download "${PARSELMOUTH_DEV_WHEEL_RUN_ID}" \
+              -R "${PARSELMOUTH_DEV_WHEEL_REPO}" \
+              -n "${PARSELMOUTH_DEV_WHEEL_ARTIFACT}" \
+              -D "${ARTIFACT_DIR}"
+
+            FOUND_WHEEL=$(find "${ARTIFACT_DIR}" -type f -name "${PARSELMOUTH_DEV_WHEEL_FILENAME}" | head -n 1)
+            if [[ -z "${FOUND_WHEEL}" ]]; then
+              echo "[ERROR] Required wheel not found: ${PARSELMOUTH_DEV_WHEEL_FILENAME}"
+              exit 1
+            fi
+
+            cp "${FOUND_WHEEL}" "lambda-functions/online-praat-analysis/parselmouth-dev.whl"
+            WHEEL_PATH="parselmouth-dev.whl"
+
+            if [[ -n "${PARSELMOUTH_DEV_WHEEL_SHA256}" ]]; then
+              echo "${PARSELMOUTH_DEV_WHEEL_SHA256}  lambda-functions/online-praat-analysis/parselmouth-dev.whl" | sha256sum -c -
+              WHEEL_SHA256="${PARSELMOUTH_DEV_WHEEL_SHA256}"
+            fi
+
+            echo "Using dev wheel: ${FOUND_WHEEL}"
+          else
+            echo "Dev wheel injection disabled. Using requirements.txt default package versions."
+          fi
+
+          echo "wheel_path=${WHEEL_PATH}" >> "$GITHUB_OUTPUT"
+          echo "wheel_sha256=${WHEEL_SHA256}" >> "$GITHUB_OUTPUT"
+
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
@@ -44,6 +92,9 @@ jobs:
           tags: |
             ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest
             ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+          build-args: |
+            PARSELMOUTH_DEV_WHEEL_PATH=${{ steps.parselmouth-wheel.outputs.wheel_path }}
+            PARSELMOUTH_DEV_WHEEL_SHA256=${{ steps.parselmouth-wheel.outputs.wheel_sha256 }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 

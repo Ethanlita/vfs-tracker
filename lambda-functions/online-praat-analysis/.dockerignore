@@ -24,3 +24,6 @@ tests/
 push-image.ps1
 README.md
 
+# CI 下载的临时 wheel 缓存（构建时只用根目录的 parselmouth-dev.whl）
+tmp/
+

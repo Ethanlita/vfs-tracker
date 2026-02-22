@@ -16,6 +16,7 @@ from decimal import Decimal
 import math
 import numpy as np
 from urllib.parse import urlparse, urlunparse
+from refactor_config import load_analysis_branch_config
 
 # ---- Environment and Cache Setup ----
 os.environ.setdefault('LOG_LEVEL', 'INFO')
@@ -46,6 +47,48 @@ EVENTS_TABLE = os.environ.get('EVENTS_TABLE', 'VoiceFemEvents')
 FUNCTION_NAME = os.environ.get('AWS_LAMBDA_FUNCTION_NAME')
 AWS_REGION = os.getenv("AWS_REGION", "us-east-1")
 US_EAST_1_REGIONAL_ENDPOINT = os.getenv("US_EAST_1_REGIONAL_ENDPOINT", "regional")
+USE_LOCALSTACK = os.getenv("USE_LOCALSTACK", "false").strip().lower() in {"1", "true", "yes", "on"}
+LOCALSTACK_ENDPOINT = os.getenv("LOCALSTACK_ENDPOINT", "http://localhost:4566")
+_branch_cfg = load_analysis_branch_config()
+ANALYSIS_PIPELINE = _branch_cfg.pipeline
+USE_REFACTOR_V2 = _branch_cfg.use_refactor_v2
+
+def _resolve_service_endpoint(service_name: str) -> Optional[str]:
+    """
+    [CN] 解析指定 AWS 服务的端点地址，优先级如下：
+    1) `AWS_{SERVICE}_ENDPOINT_URL`（如 `AWS_S3_ENDPOINT_URL`）
+    2) `AWS_ENDPOINT_URL`
+    3) 当 `USE_LOCALSTACK=true` 时使用 `LOCALSTACK_ENDPOINT`
+    未命中时返回 None，表示使用 boto3 默认行为。
+
+    :param service_name: 服务名（`s3`/`dynamodb`/`lambda`）。
+    :return: 端点 URL 或 None。
+    """
+    service_key = service_name.strip().upper()
+    explicit_service_endpoint = os.getenv(f"AWS_{service_key}_ENDPOINT_URL")
+    if explicit_service_endpoint:
+        return explicit_service_endpoint
+
+    shared_endpoint = os.getenv("AWS_ENDPOINT_URL")
+    if shared_endpoint:
+        return shared_endpoint
+
+    if USE_LOCALSTACK:
+        return LOCALSTACK_ENDPOINT
+
+    return None
+
+def _is_local_endpoint(endpoint_url: Optional[str]) -> bool:
+    """
+    [CN] 判断给定端点是否为本地/仿真环境端点。
+
+    :param endpoint_url: 待判断端点。
+    :return: True 表示本地端点（localhost/127.0.0.1/localstack）。
+    """
+    if not endpoint_url:
+        return False
+    lowered = endpoint_url.lower()
+    return ("localhost" in lowered) or ("127.0.0.1" in lowered) or ("localstack" in lowered)
 
 def get_s3_client():
     """
@@ -55,16 +98,24 @@ def get_s3_client():
     """
     global _s3_client
     if _s3_client is None:
+        endpoint_url = _resolve_service_endpoint("s3")
+        is_local_endpoint = _is_local_endpoint(endpoint_url)
+        # [CN] 本地 S3 仿真通常要求 path-style 访问；AWS 生产环境保持 virtual-host style。
+        s3_config_payload = {
+            "addressing_style": "path" if is_local_endpoint else "virtual",
+        }
+        if not is_local_endpoint:
+            s3_config_payload["us_east_1_regional_endpoint"] = US_EAST_1_REGIONAL_ENDPOINT
+
+        # [CN] 若无显式端点配置，则继续使用原有区域端点策略，保证线上行为不变。
+        resolved_endpoint_url = endpoint_url or f"https://s3.{AWS_REGION}.amazonaws.com"
         _s3_client = boto3.client(
                          "s3",
                          region_name=AWS_REGION,
-                         endpoint_url=f"https://s3.{AWS_REGION}.amazonaws.com",  # ← 区域端点（不要用 s3.amazonaws.com）
+                         endpoint_url=resolved_endpoint_url,
                          config=Config(
                              signature_version="s3v4",
-                             s3={
-                                 "addressing_style": "virtual",                   # ← host 里带 bucket
-                                 "us_east_1_regional_endpoint": US_EAST_1_REGIONAL_ENDPOINT,       # ← 强制 us-east-1 用区域端点
-                             },
+                             s3=s3_config_payload,
                          ),
                      )
     return _s3_client
@@ -76,7 +127,11 @@ def get_dynamodb():
     """
     global _dynamodb
     if _dynamodb is None:
-        _dynamodb = boto3.resource('dynamodb')
+        endpoint_url = _resolve_service_endpoint("dynamodb")
+        dynamodb_kwargs = {'region_name': AWS_REGION}
+        if endpoint_url:
+            dynamodb_kwargs['endpoint_url'] = endpoint_url
+        _dynamodb = boto3.resource('dynamodb', **dynamodb_kwargs)
     return _dynamodb
 
 def get_lambda_client():
@@ -86,7 +141,11 @@ def get_lambda_client():
     """
     global _lambda_client
     if _lambda_client is None:
-        _lambda_client = boto3.client('lambda')
+        endpoint_url = _resolve_service_endpoint("lambda")
+        lambda_kwargs = {'region_name': AWS_REGION}
+        if endpoint_url:
+            lambda_kwargs['endpoint_url'] = endpoint_url
+        _lambda_client = boto3.client('lambda', **lambda_kwargs)
     return _lambda_client
 
 def get_table():
@@ -156,6 +215,33 @@ def _from_dynamo(v):
     return v
 
 # ---------- JWT Helper ----------
+def _resolve_display_name_from_claims(claims: Dict[str, Optional[str]]) -> str:
+    """
+    [CN] 从 JWT claims 中解析用于报告展示的用户名。
+    解析优先级遵循产品显示约定：nickname -> name -> username -> cognito:username -> email 前缀。
+
+    :param claims: JWT claims 字典。
+    :return: 用户显示名，若无法解析则返回 'N/A'。
+    """
+    if not claims:
+        return 'N/A'
+
+    # [CN] 与 getUserProfile 的解析策略对齐，优先使用昵称。
+    display_name = (
+        claims.get('nickname')
+        or claims.get('name')
+        or claims.get('username')
+        or claims.get('cognito:username')
+    )
+
+    if not display_name:
+        email = claims.get('email')
+        if isinstance(email, str) and '@' in email:
+            display_name = email.split('@', 1)[0]
+
+    return display_name or 'N/A'
+
+
 def extract_user_info(event) -> Dict[str, Optional[str]]:
     """
     [CN] 从 API Gateway 事件中提取用户ID和用户名。
@@ -165,12 +251,13 @@ def extract_user_info(event) -> Dict[str, Optional[str]]:
     """
     info = {'userId': None, 'userName': 'Anonymous'}
 
-    # First try the easy way via API Gateway authorizer context
+    # [CN] 先尝试 API Gateway 注入的 claims（兼容 HTTP API v2 与 REST API 两种结构）。
     rc = event.get('requestContext', {}) or {}
-    claims = rc.get('authorizer', {}).get('jwt', {}).get('claims', {})
+    authorizer = rc.get('authorizer', {}) or {}
+    claims = authorizer.get('jwt', {}).get('claims', {}) or authorizer.get('claims', {}) or {}
     if claims.get('sub'):
         info['userId'] = claims.get('sub')
-        info['userName'] = claims.get('username') or claims.get('name') or 'N/A'
+        info['userName'] = _resolve_display_name_from_claims(claims)
         return info
 
     # Fallback to manual decoding of Authorization header
@@ -184,7 +271,7 @@ def extract_user_info(event) -> Dict[str, Optional[str]]:
             payload = json.loads(base64.urlsafe_b64decode(payload_b64.encode()).decode())
 
             info['userId'] = payload.get('sub')
-            info['userName'] = payload.get('username') or payload.get('name') or 'N/A'
+            info['userName'] = _resolve_display_name_from_claims(payload)
         except Exception as e:
             logger.warning(f"Could not decode auth header manually: {e}")
             # Return default info with no userId
@@ -230,11 +317,29 @@ def perform_full_analysis(session_id: str, calibration: dict = None, forms: dict
     :param userInfo: (可选) 包含用户信息的字典。
     :return: 一个包含 (metrics, charts, report_url) 的元组。
     """
-    from analysis import analyze_sustained_vowel, analyze_speech_flow, analyze_glide_files, analyze_note_file_robust, get_lpc_spectrum
-    from artifacts import create_time_series_chart, create_vrp_chart, create_pdf_report, create_formant_chart, create_formant_spl_chart, create_placeholder_chart
-
     audio_groups = list_session_audio_keys(session_id)
     logger.info(f'perform_full_analysis: Audio groups found: { {k:len(v) for k,v in audio_groups.items()} }')
+
+    # v2 重构分支（默认开启）。保留 legacy 代码以便回滚。
+    if USE_REFACTOR_V2:
+        from analysis_refactor_v2 import perform_full_analysis_v2
+
+        logger.info(
+            f"Using refactored analysis pipeline: ONLINE_PRAAT_ANALYSIS_PIPELINE={ANALYSIS_PIPELINE}"
+        )
+        return perform_full_analysis_v2(
+            session_id=session_id,
+            audio_groups=audio_groups,
+            safe_download=safe_download,
+            artifact_prefix=ARTIFACT_PREFIX_TEMPLATE.format(sessionId=session_id),
+            bucket=BUCKET,
+            s3_client=get_s3_client(),
+            forms=forms,
+            userInfo=userInfo,
+        )
+
+    from analysis import analyze_sustained_vowel, analyze_speech_flow, analyze_glide_files, analyze_note_file_robust, get_lpc_spectrum
+    from artifacts import create_time_series_chart, create_vrp_chart, create_pdf_report, create_formant_chart, create_formant_spl_chart, create_placeholder_chart
 
     metrics = {}
     charts = {}

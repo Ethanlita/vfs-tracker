@@ -29,6 +29,26 @@ LIGHT_GRAY = colors.HexColor("#f9fafb")
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
+def _resolve_artifacts_s3_endpoint() -> str | None:
+    """Resolve optional S3 endpoint for artifacts module.
+
+    [CN] 优先级：`AWS_S3_ENDPOINT_URL` > `AWS_ENDPOINT_URL` > (`USE_LOCALSTACK` 时 `LOCALSTACK_ENDPOINT`)。
+    返回 None 时，使用 boto3 默认 S3 端点。
+    """
+    explicit_s3_endpoint = os.getenv('AWS_S3_ENDPOINT_URL')
+    if explicit_s3_endpoint:
+        return explicit_s3_endpoint
+
+    shared_endpoint = os.getenv('AWS_ENDPOINT_URL')
+    if shared_endpoint:
+        return shared_endpoint
+
+    use_localstack = os.getenv('USE_LOCALSTACK', 'false').strip().lower() in {'1', 'true', 'yes', 'on'}
+    if use_localstack:
+        return os.getenv('LOCALSTACK_ENDPOINT', 'http://localhost:4566')
+
+    return None
+
 # --- Font Configuration ---
 _CJK_FONT_NAME = 'NotoSansSC'
 _EN_FONT_NAME = 'Roboto'
@@ -473,7 +493,13 @@ def create_pdf_report(session_id, metrics, chart_urls, debug_info=None, userInfo
         ])
         info_rows.append([
             Paragraph(_bilingual("User / 用户"), text_style),
-            Paragraph(f"{userInfo.get('userName', 'N/A')} (ID: {userInfo.get('userId', 'N/A')})", text_style)
+            Paragraph(
+                (
+                    f"{(userInfo.get('userName') or userInfo.get('userId') or 'N/A')}"
+                    f" ({userInfo.get('userId', 'N/A')})"
+                ),
+                text_style
+            )
         ])
         info_rows.append([
             Paragraph(_bilingual("Report Date / 报告时间"), text_style),
@@ -547,7 +573,13 @@ def create_pdf_report(session_id, metrics, chart_urls, debug_info=None, userInfo
                 return
             rows = []
             for k, v in data.items():
-                if k in ['formants_low', 'formants_high', 'bins', 'formant_analysis_failed', 'formants_sustained', 'best_segment_time']:
+                # [CN] 控制报告展示：隐藏内部诊断/解释字段，避免对用户造成不必要干扰。
+                if k in [
+                    'formants_low', 'formants_high', 'bins', 'formant_analysis_failed',
+                    'formants_sustained', 'best_segment_time',
+                    'formant_analysis_reason_low', 'formant_analysis_reason_high', 'formant_analysis_reason_sustained',
+                    'envelope_kind', 'interpretation',
+                ]:
                     continue
                 if isinstance(v, dict):
                     # 展开二级
@@ -667,7 +699,8 @@ def create_pdf_report(session_id, metrics, chart_urls, debug_info=None, userInfo
             parts = url[5:].split('/', 1)
             return (parts[0], parts[1]) if len(parts) == 2 else (None, None)
 
-        s3 = boto3.client('s3')
+        s3_endpoint = _resolve_artifacts_s3_endpoint()
+        s3 = boto3.client('s3', endpoint_url=s3_endpoint) if s3_endpoint else boto3.client('s3')
 
         def embed_chart(key_name: str, title: str, caption: str, max_height=None, scale_ratio=1.0):
             """Create a flowable for a chart image from S3 with optional caption.
@@ -791,19 +824,6 @@ def create_pdf_report(session_id, metrics, chart_urls, debug_info=None, userInfo
             ]))
             formant_section.append(ft)
 
-            notes = []
-            if formant_low and formant_low.get('reason'):
-                notes.append(f"<b>Lowest Note Analysis:</b> {formant_low['reason']}")
-            if formant_high and formant_high.get('reason'):
-                notes.append(f"<b>Highest Note Analysis:</b> {formant_high['reason']}")
-            if formant_sustained and formant_sustained.get('reason'):
-                notes.append(f"<b>Sustained Vowel Analysis:</b> {formant_sustained['reason']}")
-
-            if notes:
-                full_note_text = "<br/><br/>".join(notes)
-                formant_section.append(Spacer(1, 4))
-                formant_section.append(Paragraph(f"<b>Analysis Notes:</b><br/>{full_note_text}", small_style))
-
             formant_section.append(Spacer(1, 6))
 
             if not formant_failed:
@@ -821,7 +841,7 @@ def create_pdf_report(session_id, metrics, chart_urls, debug_info=None, userInfo
                 embed_chart(
                     'formant_spl_spectrum',
                     'Formant-SPL Spectrum / 共振峰-声压谱',
-                    'Based on lowest, highest, and sustained note / 基于最低、最高和持续元音',
+                    'Primary: soft/loud sustained anchors; Exploratory: read/free frame cloud (non-causal) / 主分析：轻声/响声稳态锚点；探索补充：朗读/自由发音帧云图（非因果）',
                     max_height=3.0*inch,
                 )
             )

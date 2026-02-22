@@ -4,7 +4,7 @@
  * 测试异步请求管理 React Hook
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { renderHook, waitFor, act } from '@testing-library/react';
 import { useAsync } from '../../../src/utils/useAsync.js';
 import { AppError } from '../../../src/utils/apiError.js';

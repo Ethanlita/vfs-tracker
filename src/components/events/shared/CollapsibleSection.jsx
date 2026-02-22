@@ -3,7 +3,7 @@
  * 用于展示可展开/收起的详细信息
  */
 import { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { AnimatePresence } from 'framer-motion';
 import PropTypes from 'prop-types';
 
 /**

@@ -1,5 +1,6 @@
 import os
 import json
+import base64
 import boto3
 import pytest
 from moto import mock_aws
@@ -81,6 +82,67 @@ def test_handle_create_session(mocked_aws_services, mock_api_gateway_event):
     item = table.get_item(Key={'sessionId': body['sessionId']}).get('Item')
     assert item is not None
     assert item['status'] == 'created'
+
+
+def test_extract_user_info_prefers_nickname_from_http_api_claims():
+    """[CN] 当 HTTP API v2 claims 含 nickname 时，应优先作为报告用户名。"""
+    event = {
+        'requestContext': {
+            'authorizer': {
+                'jwt': {
+                    'claims': {
+                        'sub': 'user-123',
+                        'nickname': 'Alice',
+                        'cognito:username': 'alice_login'
+                    }
+                }
+            }
+        }
+    }
+
+    info = handler.extract_user_info(event)
+    assert info['userId'] == 'user-123'
+    assert info['userName'] == 'Alice'
+
+
+def test_extract_user_info_supports_rest_api_claims_shape():
+    """[CN] 兼容 REST API authorizer.claims 结构，避免 userName 变成 N/A。"""
+    event = {
+        'requestContext': {
+            'authorizer': {
+                'claims': {
+                    'sub': 'user-456',
+                    'cognito:username': 'rest_user'
+                }
+            }
+        }
+    }
+
+    info = handler.extract_user_info(event)
+    assert info['userId'] == 'user-456'
+    assert info['userName'] == 'rest_user'
+
+
+def test_extract_user_info_fallbacks_to_bearer_token_claims():
+    """[CN] 当 requestContext 无 claims 时，应能从 Authorization token 解析显示名。"""
+    payload = {
+        'sub': 'user-789',
+        'cognito:username': 'token_user',
+        'email': 'token_user@example.com'
+    }
+    payload_b64 = base64.urlsafe_b64encode(json.dumps(payload).encode()).decode().rstrip('=')
+    token = f'header.{payload_b64}.signature'
+
+    event = {
+        'headers': {
+            'Authorization': f'Bearer {token}'
+        },
+        'requestContext': {}
+    }
+
+    info = handler.extract_user_info(event)
+    assert info['userId'] == 'user-789'
+    assert info['userName'] == 'token_user'
 
 def test_handle_get_upload_url(mocked_aws_services, mock_api_gateway_event):
     table = boto3.resource('dynamodb').Table(handler.DDB_TABLE)

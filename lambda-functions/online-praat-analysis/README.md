@@ -13,6 +13,21 @@ The core functionality includes:
 - **Artifact Generation**: Creates visual artifacts from the analysis, including time-series charts of waveforms and F0 contours using `matplotlib`, and generates comprehensive PDF reports using `reportlab`.
 - **Data Persistence**: Stores session information, analysis metrics, and artifact locations in a DynamoDB table.
 
+### Refactored v2 pipeline (default)
+
+This module now contains a refactored analysis branch for VRP and Formant-SPL:
+
+- `analysis_refactor_v2.py`: frame-level extraction (Pitch/Intensity/Formant), QC, VRP envelope, soft/loud anchors, CSV export.
+- `artifacts_refactor_v2.py`: VRP scatter+envelope chart and expanded F1/F2/F3 vs SPL chart.
+- `refactor_config.py`: branch switch config helper.
+
+Branch switch environment variable:
+
+- `ONLINE_PRAAT_ANALYSIS_PIPELINE=v2` (default): use refactored pipeline.
+- `ONLINE_PRAAT_ANALYSIS_PIPELINE=legacy`: use original pipeline.
+
+> Note: Step 4 is interpreted as loudness anchors in v2 (`4_1.wav` => `soft_a`, `4_2.wav` => `loud_a`).
+
 ---
 
 ## 2. API Endpoints
@@ -140,6 +155,68 @@ See data_structures.md for details
 
 - **`DDB_TABLE`**: The name of the DynamoDB table used to store voice test session data (e.g., `VoiceTests`).
 - **`BUCKET`**: The name of the S3 bucket used for storing raw audio files and generated artifacts (e.g., `vfs-tracker-test-data`).
+- **`ONLINE_PRAAT_ANALYSIS_PIPELINE`**: Branch switch, `v2` (default) or `legacy`.
+
+### LocalStack / Custom Endpoint (Optional)
+
+For local integration testing, you can point AWS SDK calls to LocalStack (or any custom endpoint).
+
+- **`USE_LOCALSTACK`**: `true/false`. When `true`, default endpoint becomes `LOCALSTACK_ENDPOINT`.
+- **`LOCALSTACK_ENDPOINT`**: default `http://localhost:4566`.
+- **`AWS_ENDPOINT_URL`**: shared endpoint for all AWS services used by this Lambda.
+- **`AWS_S3_ENDPOINT_URL`**: service-specific override for S3.
+- **`AWS_DYNAMODB_ENDPOINT_URL`**: service-specific override for DynamoDB.
+- **`AWS_LAMBDA_ENDPOINT_URL`**: service-specific override for Lambda invoke client.
+
+Priority:
+
+1. `AWS_{SERVICE}_ENDPOINT_URL`
+2. `AWS_ENDPOINT_URL`
+3. `LOCALSTACK_ENDPOINT` (only when `USE_LOCALSTACK=true`)
+
+### Install Parselmouth dev wheel (Windows/macOS/Linux)
+
+If you need `To Pitch (filtered autocorrelation)` before an official release, install a development wheel:
+
+1. Download wheel artifacts from the Parselmouth Actions run (or use `gh run download`).
+2. Run the cross-platform installer script in this repository:
+
+```bash
+python scripts/install_parselmouth_dev.py --run-id 21285172527
+```
+
+The script will:
+
+- Auto-select artifact name by platform (Windows/macOS/Linux)
+- Recursively find compatible `praat_parselmouth-*.whl`
+- Match against current interpreter tags
+- Install selected wheel into current environment and print `PARSELMOUTH_VERSION` and `PRAAT_VERSION`
+
+Optional parameters:
+
+- `--wheel-dir <path>`: Use local wheel cache directory
+- `--artifact-name <name>`: Force artifact name (e.g., `wheels-manylinux_aarch64`)
+- `--version-fragment 0.5.0.dev0`: Limit candidate version
+
+### CI auto-install Parselmouth dev wheel (optional)
+
+The backend image workflow `.github/workflows/build-python-lambda.yml` supports Parselmouth dev wheel injection:
+
+- Current default is enabled in workflow env.
+- CI downloads the wheel artifact first, then overrides the package during Docker build.
+
+Current workflow defaults are defined directly in the workflow `env` block:
+
+- `PARSELMOUTH_DEV_WHEEL_ENABLED`: `true`/`false`, current `true`
+- `PARSELMOUTH_DEV_WHEEL_RUN_ID`: Actions run id that produced wheel artifacts (default example `21285172527`)
+- `PARSELMOUTH_DEV_WHEEL_REPO`: source repository (default `YannickJadoul/Parselmouth`)
+- `PARSELMOUTH_DEV_WHEEL_ARTIFACT`: artifact name (default `wheels-manylinux_aarch64`)
+- `PARSELMOUTH_DEV_WHEEL_FILENAME`: exact wheel filename (default `praat_parselmouth-0.5.0.dev0-cp313-cp313-manylinux2014_aarch64.manylinux_2_17_aarch64.whl`)
+- `PARSELMOUTH_DEV_WHEEL_SHA256`: optional integrity check value (if set, CI verifies hash)
+
+If you need to change source/version, update those env values in `.github/workflows/build-python-lambda.yml`.
+
+For current production Lambda (`linux/arm64 + python3.13`), use a compatible wheel (`cp313` + `manylinux_aarch64`).
 
 ---
 

@@ -49,5 +49,18 @@ infra/backup/
 playwright-report/
 test-results/
 
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Parselmouth dev wheel (CI 下载/本地安装时产生)
+*.whl
+lambda-functions/online-praat-analysis/tmp/
+lambda-functions/online-praat-analysis/.tmp_local_analysis/
+
+# Scripts cache
+scripts/__pycache__/
+
 # Generated files
 public/posts.json

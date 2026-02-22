@@ -8,7 +8,7 @@ import { fileURLToPath, URL } from 'node:url';
  * 契约测试不使用 MSW mock，直接调用真实的 AWS API
  * 需要配置真实的环境变量（通过 .env.contract 文件）
  */
-export default defineConfig(({ mode }) => {
+export default defineConfig(() => {
   // 加载 .env.contract 文件
   const env = loadEnv('contract', process.cwd(), '');
   

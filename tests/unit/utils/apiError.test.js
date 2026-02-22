@@ -5,7 +5,7 @@
  * 参考: docs/error-handling-guide.md
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import {
   AppError,
   ApiError,

@@ -792,10 +792,9 @@ const VFSEffectPreview = ({ initialProcessedBlobs = null } = {}) => {
    * @param {Array} analysisFrames - 分析帧数组
    * @param {number[]} synthesisPositions - 合成位置数组（可以是小数）
    * @param {number} outputLength - 建议的输出长度
-   * @param {Array} originalMarks - 原始标记点信息
    * @returns {Float32Array} 合成的音频数据
    */
-  const overlapAddSynthesis = (analysisFrames, synthesisPositions, outputLength, originalMarks) => {
+  const overlapAddSynthesis = (analysisFrames, synthesisPositions, outputLength) => {
     // 确定输出长度
     const lastSynthPos = synthesisPositions[synthesisPositions.length - 1];
     const lastFrameLength = analysisFrames[analysisFrames.length - 1].data.length;
