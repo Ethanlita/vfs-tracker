@@ -353,14 +353,9 @@ def _compute_vrp(glide_rows: List[Dict]) -> Dict:
     vp = np.asarray([r.get('voicing_prob', np.nan) for r in glide_rows], dtype=float)
 
     # [CN] voicing_prob 来自 Praat Pitch 对象的 strength 通道。使用 filtered_autocorrelation
-    # 时该通道始终存在；voicing_prob 为 NaN 仅在帧索引越界（静默段、极短音频）时出现。
-    # 若极端情况下 strength 通道整体缺失（版本兼容），降级为仅依赖 f0+spl 过滤。
-    has_any_finite_vp = np.any(np.isfinite(vp))
-    if has_any_finite_vp:
-        valid = np.isfinite(f0) & np.isfinite(spl) & np.isfinite(vp) & (vp >= 0.60)
-    else:
-        logger.warning('voicing_prob 全部为 NaN，降级为仅 f0+spl 过滤')
-        valid = np.isfinite(f0) & np.isfinite(spl)
+    # 时该通道始终存在；voicing_prob 为 NaN 表示该帧未检测到语音（静默段、帧索引越界）。
+    # 过滤掉这些帧是正确行为——用户没说话时不应产生分析结果。
+    valid = np.isfinite(f0) & np.isfinite(spl) & np.isfinite(vp) & (vp >= 0.60)
     f0 = f0[valid]
     spl = spl[valid]
     if f0.size == 0:
