@@ -3,8 +3,11 @@
  * 用于展示可展开/收起的详细信息
  */
 import { useState } from 'react';
-import { AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import PropTypes from 'prop-types';
+
+// 防止在部分 ESLint/构建配置下将 motion 误判为未使用
+void motion;
 
 /**
  * 可折叠区域组件

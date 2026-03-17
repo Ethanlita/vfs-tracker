@@ -237,8 +237,8 @@ export default function TestDetailModal({ test, open, onClose }) {
 
       try {
         setLoadingFiles(true);
-        // 传入 test 对象以便从 test.tests 数组中提取音频路径
-        const files = await getTestSessionFiles(clients.s3, test.sessionId, test);
+        // 根据 sessionId 获取该次测试会话的音频文件
+        const files = await getTestSessionFiles(clients.s3, test.sessionId);
         console.log('[TestDetailModal] 获取到文件:', files);
         
         // 为每个文件获取预签名 URL

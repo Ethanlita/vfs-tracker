@@ -351,8 +351,7 @@ const VFSEffectPreview = ({ initialProcessedBlobs = null } = {}) => {
     const synthesizedData = overlapAddSynthesis(
       analysisFrames,
       synthesisPositions,
-      channelData.length,
-      pitchMarks
+      channelData.length
     );
     console.log(`[TD-PSOLA] 合成完成，输出长度=${synthesizedData.length}`);
     
