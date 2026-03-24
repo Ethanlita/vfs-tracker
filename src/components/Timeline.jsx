@@ -262,10 +262,12 @@ const Timeline = () => {
     setTimelineEvents(recentEvents);
     setIsLoadingChart(false);
     setIsLoadingTimeline(false);
-
-    // 事件数据变更后，重置 AI 请求状态，确保仅在用户手动点击后再次调用。
-    setHasRequestedAi(false);
   }, [eventsAsync.value]);
+
+  // 仅在用户切换时重置 AI 手动触发状态，避免重试期间被事件刷新打断。
+  useEffect(() => {
+    setHasRequestedAi(false);
+  }, [currentUserId]);
 
   // 处理加载状态
   useEffect(() => {

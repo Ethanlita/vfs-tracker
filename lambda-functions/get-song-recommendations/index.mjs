@@ -172,6 +172,31 @@ Do not include any text, markdown formatting, or code block syntax outside of th
 Recommend 5 songs in Chinese, 3 in Japanese and 2 in English every time. Also, ensure these songs are covered by female artists. If the original artist is not female, please suggest a version covered by a female artist.
 `;
 
+    /**
+     * [CN] 回退本次预扣的 song quota。
+     * 仅在 quotaReservation 存在时执行，确保“失败回退”覆盖所有失败路径。
+     */
+    const rollbackSongQuotaReservation = async () => {
+        if (!quotaReservation) {
+            return;
+        }
+
+        try {
+            const latestUserRateLimitData = await getUserRateLimitData(userId);
+            const currentHistory = latestUserRateLimitData.aiRateLimit?.songHistory || [];
+            const rolledBackHistory = currentHistory.filter(ts => ts !== quotaReservation.timestamp);
+
+            await updateSongRateLimitData(
+                userId,
+                rolledBackHistory,
+                latestUserRateLimitData.aiRateLimit?.lastSongRecommendations || quotaReservation.previousRecommendations || null
+            );
+            console.log(`↩️ Rolled back song quota for user: ${userId} at ${quotaReservation.timestamp}`);
+        } catch (rollbackError) {
+            console.error('⚠️ Failed to rollback song quota:', rollbackError);
+        }
+    };
+
     try {
         // 6. Initialize the Google Generative AI client
         const modelName = 'gemini-flash-latest';
@@ -199,6 +224,7 @@ Recommend 5 songs in Chinese, 3 in Japanese and 2 in English every time. Also, e
         } catch (parseError) {
             console.error("❌ Failed to parse Gemini response as JSON:", parseError);
             console.error("Problematic raw text:", rawText);
+            await rollbackSongQuotaReservation();
             return createResponse(502, { success: false, error: "Received an invalid format from the AI service." });
         }
 
@@ -219,22 +245,7 @@ Recommend 5 songs in Chinese, 3 in Japanese and 2 in English every time. Also, e
 
     } catch (error) {
         // AI 请求失败时回退本次预扣的配额。
-        if (quotaReservation) {
-            try {
-                const latestUserRateLimitData = await getUserRateLimitData(userId);
-                const currentHistory = latestUserRateLimitData.aiRateLimit?.songHistory || [];
-                const rolledBackHistory = currentHistory.filter(ts => ts !== quotaReservation.timestamp);
-
-                await updateSongRateLimitData(
-                    userId,
-                    rolledBackHistory,
-                    latestUserRateLimitData.aiRateLimit?.lastSongRecommendations || quotaReservation.previousRecommendations || null
-                );
-                console.log(`↩️ Rolled back song quota for user: ${userId} at ${quotaReservation.timestamp}`);
-            } catch (rollbackError) {
-                console.error('⚠️ Failed to rollback song quota:', rollbackError);
-            }
-        }
+        await rollbackSongQuotaReservation();
 
         console.error("❌ --- Gemini API Call Failed --- ❌");
         console.error("ERROR DETAILS:", JSON.stringify({
