@@ -174,7 +174,7 @@ Recommend 5 songs in Chinese, 3 in Japanese and 2 in English every time. Also, e
 
     try {
         // 6. Initialize the Google Generative AI client
-        const modelName = 'gemini-3-flash-preview';
+        const modelName = 'gemini-flash-latest';
         const genAI = new GoogleGenerativeAI(apiKey);
         const model = genAI.getGenerativeModel({ model: modelName });
 
