@@ -218,12 +218,7 @@ const Timeline = () => {
       timelineEventsCount: timelineEvents.length
     });
 
-    try {
-      return await getEncouragingMessage(userData);
-    } catch (error) {
-      console.error('获取AI消息失败:', error);
-      return DEFAULT_MESSAGE;
-    }
+    return await getEncouragingMessage(userData, { throwOnError: true });
   }, [eventsAsync.value], { immediate: false });
 
   // 处理事件数据变化
