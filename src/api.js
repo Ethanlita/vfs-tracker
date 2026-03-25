@@ -338,9 +338,12 @@ const calculateConsistencyScore = (events) => {
 /**
  * [CN] 根据用户的事件数据生成一条鼓励性消息。如果 AI 未启用或调用失败，则返回默认消息。
  * @param {object} userData - 包含用户事件数据的对象。
+ * @param {object} [options] - 额外选项。
+ * @param {boolean} [options.throwOnError=false] - 发生错误时是否抛出异常，而不是返回默认文案。
  * @returns {Promise<string>} 一个解析为鼓励性消息字符串的 Promise。
  */
-export const getEncouragingMessage = async (userData) => {
+export const getEncouragingMessage = async (userData, options = {}) => {
+  const { throwOnError = false } = options;
   // AI 功能默认启用，除非显式禁用
   const isAiEnabled = import.meta.env.VITE_ENABLE_AI !== 'false';
   if (!isAiEnabled) return "持续跟踪，持续进步 ✨";
@@ -395,6 +398,9 @@ ${userProgressSummary}
     return result.response;  // 返回响应内容（无论是否限速，后端都会返回有意义的消息）
   } catch (error) {
     console.error("获取AI消息失败:", error);
+    if (throwOnError) {
+      throw error;
+    }
     return "持续跟踪，持续进步 ✨"; // Fallback message
   }
 };

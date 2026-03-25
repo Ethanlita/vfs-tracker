@@ -37,6 +37,7 @@ const Timeline = () => {
   const [timelineEvents, setTimelineEvents] = useState([]);
   const [isLoadingChart, setIsLoadingChart] = useState(true);
   const [isLoadingTimeline, setIsLoadingTimeline] = useState(true);
+  const [hasRequestedAi, setHasRequestedAi] = useState(false);
 
   // 获取用户ID
   const getUserId = () => {
@@ -217,13 +218,8 @@ const Timeline = () => {
       timelineEventsCount: timelineEvents.length
     });
 
-    try {
-      return await getEncouragingMessage(userData);
-    } catch (error) {
-      console.error('获取AI消息失败:', error);
-      return DEFAULT_MESSAGE;
-    }
-  }, [eventsAsync.value]);
+    return await getEncouragingMessage(userData, { throwOnError: true });
+  }, [eventsAsync.value], { immediate: false });
 
   // 处理事件数据变化
   useEffect(() => {
@@ -262,6 +258,11 @@ const Timeline = () => {
     setIsLoadingChart(false);
     setIsLoadingTimeline(false);
   }, [eventsAsync.value]);
+
+  // 仅在用户切换时重置 AI 手动触发状态，避免重试期间被事件刷新打断。
+  useEffect(() => {
+    setHasRequestedAi(false);
+  }, [currentUserId]);
 
   // 处理加载状态
   useEffect(() => {
@@ -347,9 +348,14 @@ const Timeline = () => {
 
   const handleRetry = () => {
     eventsAsync.execute();
-    if (typeof aiAsync.execute === 'function') {
+    if (hasRequestedAi && typeof aiAsync.execute === 'function') {
       aiAsync.execute();
     }
+  };
+
+  const handleRequestAiMessage = () => {
+    setHasRequestedAi(true);
+    aiAsync.execute();
   };
 
   // 生成时间轴数据
@@ -466,6 +472,18 @@ const Timeline = () => {
       <div className="relative z-10 mb-8">
         <div className="flex justify-center">
           <div className="max-w-md sm:max-w-lg md:max-w-xl lg:max-w-2xl">
+            {!hasRequestedAi && (
+              <div className="mb-4 text-center">
+                <button
+                  type="button"
+                  onClick={handleRequestAiMessage}
+                  className="bg-gradient-to-r from-pink-500 to-purple-600 text-white px-5 py-2 rounded-lg font-medium shadow hover:from-pink-600 hover:to-purple-700 transition"
+                >
+                  获取 AI 建议
+                </button>
+                <p className="text-xs text-gray-500 mt-2">仅在您点击后才会发起 AI 请求</p>
+              </div>
+            )}
             <div className="relative">
               <div className="flex items-start space-x-3">
                 <div className="flex-shrink-0 w-10 h-10 rounded-full overflow-hidden border-2 border-gray-300 shadow-sm">
@@ -480,7 +498,11 @@ const Timeline = () => {
                   <div className="absolute -left-2 top-3 w-0 h-0 border-r-8 border-r-white border-t-4 border-t-transparent border-b-4 border-b-transparent"></div>
 
                   <div className="text-gray-800 leading-relaxed">
-                    {aiAsync.loading ? (
+                    {!hasRequestedAi ? (
+                      <div className="text-sm text-gray-500">
+                        点击上方按钮后将生成个性化建议。
+                      </div>
+                    ) : aiAsync.loading ? (
                       <div className="flex items-center space-x-2">
                         <div className="animate-pulse flex space-x-1">
                           <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>

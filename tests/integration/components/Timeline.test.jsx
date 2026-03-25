@@ -8,6 +8,7 @@ import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithProviders } from '../../../src/test-utils/custom-render.jsx';
 import Timeline from '../../../src/components/Timeline.jsx';
+import * as api from '../../../src/api.js';
 import { mockPrivateEvents } from '../../../src/test-utils/fixtures/index.js';
 import { fetchAuthSession } from 'aws-amplify/auth';
 
@@ -355,19 +356,54 @@ describe('Timeline 组件集成测试', () => {
       expect(avatar).toHaveAttribute('src', '/img.png');
     });
     
-    it('应该显示AI消息内容', async () => {
+    it('初始渲染应显示手动触发按钮和占位提示', async () => {
       renderTimelineAuthenticated();
-      
-      // AI消息可能在加载中或已显示
-      // 等待加载完成后应该有文本内容（默认消息或API返回的消息）
+
       await waitFor(() => {
-        // 查找包含中文文本的元素（AI消息区域）
-        const messageArea = screen.queryByText(/持续跟踪|持续进步|加油/i);
-        const loadingDots = document.querySelector('.animate-bounce');
-        
-        // 加载中或已显示消息
-        expect(messageArea || loadingDots).toBeTruthy();
+        expect(screen.queryByText(/正在加载用户资料/i)).not.toBeInTheDocument();
       }, { timeout: 3000 });
+
+      expect(screen.getByRole('button', { name: '获取 AI 建议' })).toBeInTheDocument();
+      expect(screen.getByText('仅在您点击后才会发起 AI 请求')).toBeInTheDocument();
+      expect(screen.getByText('点击上方按钮后将生成个性化建议。')).toBeInTheDocument();
+    });
+
+    it('点击按钮后才应请求并显示AI消息', async () => {
+      const user = userEvent.setup();
+      renderTimelineAuthenticated();
+
+      await waitFor(() => {
+        expect(screen.queryByText(/正在加载用户资料/i)).not.toBeInTheDocument();
+      }, { timeout: 3000 });
+
+      const triggerButton = screen.getByRole('button', { name: '获取 AI 建议' });
+      await user.click(triggerButton);
+
+      await waitFor(() => {
+        expect(screen.getByText(/这是一个来自模拟 Gemini AI 的鼓励性消息/i)).toBeInTheDocument();
+      }, { timeout: 3000 });
+    });
+
+    it('AI请求失败时应显示错误提示', async () => {
+      const user = userEvent.setup();
+      const encouragingSpy = vi
+        .spyOn(api, 'getEncouragingMessage')
+        .mockRejectedValueOnce(new Error('AI boom'));
+
+      renderTimelineAuthenticated();
+
+      await waitFor(() => {
+        expect(screen.queryByText(/正在加载用户资料/i)).not.toBeInTheDocument();
+      }, { timeout: 3000 });
+
+      await user.click(screen.getByRole('button', { name: '获取 AI 建议' }));
+
+      await waitFor(() => {
+        expect(screen.getByRole('alert')).toBeInTheDocument();
+        expect(screen.getByText('AI boom')).toBeInTheDocument();
+      }, { timeout: 3000 });
+
+      encouragingSpy.mockRestore();
     });
   });
   

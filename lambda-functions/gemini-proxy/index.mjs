@@ -177,9 +177,9 @@ export const handler = async (event) => {
     }
     console.log(`📋 User ID: ${userId}`);
 
-    // 4. Check rate limit
-    let isRateLimited = false;
-    let rateLimitResponse = null;
+    // 4. Check rate limit and pre-charge quota before the AI request.
+    // 仅当后续请求失败时再回退本次扣减。
+    let quotaReservation = null;
     try {
         const [rateLimitConfig, userRateLimitData] = await Promise.all([
             getRateLimitConfig(),
@@ -219,12 +219,29 @@ export const handler = async (event) => {
                     nextAvailableAt: nextAvailableTime
                 });
             }
+
+            // 预扣本次请求配额（请求前扣减）
+            const reservationTimestamp = new Date().toISOString();
+            const reservedHistory = [...cleanedHistory, reservationTimestamp];
+            await updateAdviceRateLimitData(
+                userId,
+                reservedHistory,
+                aiRateLimit.lastAdviceResponse || null
+            );
+
+            quotaReservation = {
+                timestamp: reservationTimestamp,
+                history: reservedHistory,
+                previousResponse: aiRateLimit.lastAdviceResponse || null
+            };
+            console.log(`📝 Pre-charged advice quota for user: ${userId} at ${reservationTimestamp}`);
         } else {
             console.log('👑 Admin user - skipping rate limit check');
         }
     } catch (rateLimitError) {
-        // 如果限速检查失败，记录错误但继续处理请求（降级处理）
-        console.error('⚠️ Rate limit check failed, continuing with request:', rateLimitError);
+        // 限速/预扣失败时不继续调用 AI，避免配额状态不一致。
+        console.error('❌ Rate limit check or pre-charge failed:', rateLimitError);
+        return createResponse(503, { success: false, error: 'Rate limit service unavailable.' });
     }
 
     const final_prompt = `You are an expert in voice feminization. Based on the following knowledge base, provide an encouraging and informative analysis of the user's voice data. Make it in Simplified Chinese. Do not mention 'knowledgebase' or 'encouraging', it's for your reference, not for the user.
@@ -239,7 +256,7 @@ ${user_prompt}
 
     try {
         // 5. Initialize the Google Generative AI client
-        const modelName = 'gemini-3-flash-preview'; // Using a more capable model for knowledge-based tasks
+        const modelName = 'gemini-flash-latest';
         const genAI = new GoogleGenerativeAI(apiKey);
         const model = genAI.getGenerativeModel({ model: modelName });
 
@@ -262,20 +279,11 @@ ${user_prompt}
         const text = response.text();
         console.log('✅ Successfully extracted text from Gemini response.');
 
-        // 9. Update rate limit data (add new timestamp and save response)
+        // 9. Persist latest response while keeping the pre-charged history.
         try {
-            const [rateLimitConfig, userRateLimitData] = await Promise.all([
-                getRateLimitConfig(),
-                getUserRateLimitData(userId)
-            ]);
-            
-            const cleanedHistory = cleanExpiredHistory(
-                userRateLimitData.aiRateLimit?.adviceHistory || [], 
-                rateLimitConfig.adviceWindowHours
-            );
-            const newHistory = [...cleanedHistory, new Date().toISOString()];
-            
-            await updateAdviceRateLimitData(userId, newHistory, text);
+            if (quotaReservation) {
+                await updateAdviceRateLimitData(userId, quotaReservation.history, text);
+            }
             console.log('📝 Rate limit data updated successfully');
         } catch (updateError) {
             // 更新失败不应影响响应返回
@@ -286,6 +294,24 @@ ${user_prompt}
         return createResponse(200, { success: true, response: text });
 
     } catch (error) {
+        // AI 请求失败时回退本次预扣的配额。
+        if (quotaReservation) {
+            try {
+                const latestUserRateLimitData = await getUserRateLimitData(userId);
+                const currentHistory = latestUserRateLimitData.aiRateLimit?.adviceHistory || [];
+                const rolledBackHistory = currentHistory.filter(ts => ts !== quotaReservation.timestamp);
+
+                await updateAdviceRateLimitData(
+                    userId,
+                    rolledBackHistory,
+                    latestUserRateLimitData.aiRateLimit?.lastAdviceResponse || quotaReservation.previousResponse || null
+                );
+                console.log(`↩️ Rolled back advice quota for user: ${userId} at ${quotaReservation.timestamp}`);
+            } catch (rollbackError) {
+                console.error('⚠️ Failed to rollback advice quota:', rollbackError);
+            }
+        }
+
         // 11. Log the full error object for detailed debugging
         console.error("❌ --- Gemini API Call Failed --- ❌");
         console.error("ERROR DETAILS:", JSON.stringify({

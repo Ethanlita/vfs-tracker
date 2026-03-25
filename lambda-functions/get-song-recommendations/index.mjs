@@ -90,7 +90,9 @@ export const handler = async (event) => {
     }
     console.log(`📋 User ID: ${userId}`);
 
-    // 4. Check rate limit
+    // 4. Check rate limit and pre-charge quota before the AI request.
+    // 仅当后续请求失败时回退本次扣减。
+    let quotaReservation = null;
     try {
         const [rateLimitConfig, userRateLimitData] = await Promise.all([
             getRateLimitConfig(),
@@ -131,12 +133,29 @@ export const handler = async (event) => {
                     nextAvailableAt: nextAvailableTime
                 });
             }
+
+            // 预扣本次请求配额（请求前扣减）
+            const reservationTimestamp = new Date().toISOString();
+            const reservedHistory = [...cleanedHistory, reservationTimestamp];
+            await updateSongRateLimitData(
+                userId,
+                reservedHistory,
+                aiRateLimit.lastSongRecommendations || null
+            );
+
+            quotaReservation = {
+                timestamp: reservationTimestamp,
+                history: reservedHistory,
+                previousRecommendations: aiRateLimit.lastSongRecommendations || null
+            };
+            console.log(`📝 Pre-charged song quota for user: ${userId} at ${reservationTimestamp}`);
         } else {
             console.log('👑 Admin user - skipping rate limit check');
         }
     } catch (rateLimitError) {
-        // 如果限速检查失败，记录错误但继续处理请求（降级处理）
-        console.error('⚠️ Rate limit check failed, continuing with request:', rateLimitError);
+        // 限速/预扣失败时不继续调用 AI，避免配额状态不一致。
+        console.error('❌ Rate limit check or pre-charge failed:', rateLimitError);
+        return createResponse(503, { success: false, error: 'Rate limit service unavailable.' });
     }
 
     // 5. Construct the specialized prompt for Gemini
@@ -153,9 +172,34 @@ Do not include any text, markdown formatting, or code block syntax outside of th
 Recommend 5 songs in Chinese, 3 in Japanese and 2 in English every time. Also, ensure these songs are covered by female artists. If the original artist is not female, please suggest a version covered by a female artist.
 `;
 
+    /**
+     * [CN] 回退本次预扣的 song quota。
+     * 仅在 quotaReservation 存在时执行，确保“失败回退”覆盖所有失败路径。
+     */
+    const rollbackSongQuotaReservation = async () => {
+        if (!quotaReservation) {
+            return;
+        }
+
+        try {
+            const latestUserRateLimitData = await getUserRateLimitData(userId);
+            const currentHistory = latestUserRateLimitData.aiRateLimit?.songHistory || [];
+            const rolledBackHistory = currentHistory.filter(ts => ts !== quotaReservation.timestamp);
+
+            await updateSongRateLimitData(
+                userId,
+                rolledBackHistory,
+                latestUserRateLimitData.aiRateLimit?.lastSongRecommendations || quotaReservation.previousRecommendations || null
+            );
+            console.log(`↩️ Rolled back song quota for user: ${userId} at ${quotaReservation.timestamp}`);
+        } catch (rollbackError) {
+            console.error('⚠️ Failed to rollback song quota:', rollbackError);
+        }
+    };
+
     try {
         // 6. Initialize the Google Generative AI client
-        const modelName = 'gemini-3-flash-preview';
+        const modelName = 'gemini-flash-latest';
         const genAI = new GoogleGenerativeAI(apiKey);
         const model = genAI.getGenerativeModel({ model: modelName });
 
@@ -180,23 +224,15 @@ Recommend 5 songs in Chinese, 3 in Japanese and 2 in English every time. Also, e
         } catch (parseError) {
             console.error("❌ Failed to parse Gemini response as JSON:", parseError);
             console.error("Problematic raw text:", rawText);
+            await rollbackSongQuotaReservation();
             return createResponse(502, { success: false, error: "Received an invalid format from the AI service." });
         }
 
-        // 9. Update rate limit data (add new timestamp and save recommendations)
+        // 9. Persist latest recommendations while keeping the pre-charged history.
         try {
-            const [rateLimitConfig, userRateLimitData] = await Promise.all([
-                getRateLimitConfig(),
-                getUserRateLimitData(userId)
-            ]);
-            
-            const cleanedHistory = cleanExpiredHistory(
-                userRateLimitData.aiRateLimit?.songHistory || [], 
-                rateLimitConfig.songWindowHours
-            );
-            const newHistory = [...cleanedHistory, new Date().toISOString()];
-            
-            await updateSongRateLimitData(userId, newHistory, recommendations);
+            if (quotaReservation) {
+                await updateSongRateLimitData(userId, quotaReservation.history, recommendations);
+            }
             console.log('📝 Rate limit data updated successfully');
         } catch (updateError) {
             // 更新失败不应影响响应返回
@@ -208,6 +244,9 @@ Recommend 5 songs in Chinese, 3 in Japanese and 2 in English every time. Also, e
         return createResponse(200, { success: true, recommendations });
 
     } catch (error) {
+        // AI 请求失败时回退本次预扣的配额。
+        await rollbackSongQuotaReservation();
+
         console.error("❌ --- Gemini API Call Failed --- ❌");
         console.error("ERROR DETAILS:", JSON.stringify({
             message: error.message,
