@@ -257,7 +257,7 @@ Resources:
       Description: Add a new voice event
       CodeUri: ../lambda-functions/addVoiceEvent/
       Handler: index.handler
-      Runtime: nodejs20.x
+      Runtime: nodejs24.x
       Architectures:
         - x86_64
       Role: !GetAtt LambdaExecutionRole.Arn
@@ -279,7 +279,7 @@ Resources:
       Description: Get voice events for a user
       CodeUri: ../lambda-functions/getVoiceEvents/
       Handler: index.handler
-      Runtime: nodejs20.x
+      Runtime: nodejs24.x
       Architectures:
         - x86_64
       Role: !GetAtt LambdaExecutionRole.Arn
@@ -301,7 +301,7 @@ Resources:
       Description: Get all public events (no auth required)
       CodeUri: ../lambda-functions/getAllPublicEvents/
       Handler: index.handler
-      Runtime: nodejs20.x
+      Runtime: nodejs24.x
       Architectures:
         - x86_64
       MemorySize: 3008
@@ -327,7 +327,7 @@ Resources:
       Description: Delete an event
       CodeUri: ../lambda-functions/deleteEvent/
       Handler: index.handler
-      Runtime: nodejs20.x
+      Runtime: nodejs24.x
       Architectures:
         - x86_64
       Role: !GetAtt LambdaExecutionRole.Arn
@@ -349,7 +349,7 @@ Resources:
       Description: Auto-approve events from DynamoDB Stream
       CodeUri: ../lambda-functions/autoApproveEvent/
       Handler: index.handler
-      Runtime: nodejs20.x
+      Runtime: nodejs24.x
       Architectures:
         - x86_64
       MemorySize: 1024
@@ -378,7 +378,7 @@ Resources:
       Description: Get user profile
       CodeUri: ../lambda-functions/getUserProfile/
       Handler: index.handler
-      Runtime: nodejs20.x
+      Runtime: nodejs24.x
       Architectures:
         - x86_64
       Role: !GetAtt LambdaExecutionRole.Arn
@@ -400,7 +400,7 @@ Resources:
       Description: Get user public profile (no auth required)
       CodeUri: ../lambda-functions/getUserPublicProfile/
       Handler: index.handler
-      Runtime: nodejs20.x
+      Runtime: nodejs24.x
       Architectures:
         - x86_64
       Role: !GetAtt LambdaExecutionRole.Arn
@@ -424,7 +424,7 @@ Resources:
       Description: Update user profile
       CodeUri: ../lambda-functions/updateUserProfile/
       Handler: index.handler
-      Runtime: nodejs20.x
+      Runtime: nodejs24.x
       Architectures:
         - x86_64
       Role: !GetAtt LambdaExecutionRole.Arn
@@ -446,7 +446,7 @@ Resources:
       Description: Initial user profile setup
       CodeUri: ../lambda-functions/vfsTrackerUserProfileSetup/
       Handler: index.handler
-      Runtime: nodejs20.x
+      Runtime: nodejs24.x
       Architectures:
         - x86_64
       Role: !GetAtt LambdaExecutionRole.Arn
@@ -472,7 +472,7 @@ Resources:
       Description: Get presigned URL for file upload
       CodeUri: ../lambda-functions/getUploadUrl/
       Handler: index.handler
-      Runtime: nodejs20.x
+      Runtime: nodejs24.x
       Architectures:
         - x86_64
       Role: !GetAtt LambdaExecutionRole.Arn
@@ -494,7 +494,7 @@ Resources:
       Description: Get presigned URL for file download
       CodeUri: ../lambda-functions/getFileUrl/
       Handler: index.handler
-      Runtime: nodejs20.x
+      Runtime: nodejs24.x
       Architectures:
         - x86_64
       Role: !GetAtt LambdaExecutionRole.Arn
@@ -517,7 +517,7 @@ Resources:
       Description: Get avatar URL for a user
       CodeUri: ../lambda-functions/getAvatarUrl/
       Handler: index.handler
-      Runtime: nodejs20.x
+      Runtime: nodejs24.x
       Architectures:
         - x86_64
       Role: !GetAtt LambdaExecutionRole.Arn
@@ -591,7 +591,7 @@ Resources:
       Description: Proxy for Google Gemini API
       CodeUri: ../lambda-functions/gemini-proxy/
       Handler: index.handler
-      Runtime: nodejs20.x
+      Runtime: nodejs24.x
       Architectures:
         - x86_64
       Timeout: 30
@@ -615,7 +615,7 @@ Resources:
       Description: Get song recommendations using Gemini
       CodeUri: ../lambda-functions/get-song-recommendations/
       Handler: index.handler
-      Runtime: nodejs20.x
+      Runtime: nodejs24.x
       Architectures:
         - x86_64
       Timeout: 29
@@ -639,7 +639,7 @@ Resources:
       Description: Edge location probe for latency testing
       CodeUri: ../lambda-functions/edge-probe/
       Handler: index.handler
-      Runtime: nodejs20.x
+      Runtime: nodejs24.x
       Architectures:
         - x86_64
       Role: !GetAtt LambdaExecutionRole.Arn

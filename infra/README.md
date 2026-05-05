@@ -4,7 +4,7 @@
 
 ## 🎉 当前状态
 
-> **最后更新**: 2025-11-27
+> **最后更新**: 2026-05-06
 
 | 资源类型 | 状态 | CloudFormation Stack |
 |----------|------|---------------------|
@@ -34,22 +34,22 @@
 
 | 函数名 | 运行时 | 内存 | 超时 | 触发方式 |
 |--------|--------|------|------|----------|
-| `addVoiceEvent` | nodejs20.x | 128MB | 3s | API Gateway POST /events |
-| `getVoiceEvents` | nodejs20.x | 128MB | 3s | API Gateway GET /events/{userId} |
-| `getAllPublicEvents` | nodejs20.x | 3008MB | 29s | API Gateway GET /all-events |
-| `deleteEvent` | nodejs22.x | 128MB | 3s | API Gateway DELETE /event/{eventId} |
-| `autoApproveEvent` | nodejs22.x | 1024MB | 300s | DynamoDB Stream |
-| `getUserProfile` | nodejs22.x | 128MB | 3s | API Gateway GET /user/{userId} |
-| `getUserPublicProfile` | nodejs22.x | 128MB | 3s | API Gateway GET /user/{userId}/public |
-| `updateUserProfile` | nodejs22.x | 128MB | 3s | API Gateway PUT /user/{userId} |
-| `vfsTrackerUserProfileSetup` | nodejs22.x | 128MB | 3s | API Gateway POST /user/profile-setup |
-| `getUploadUrl` | nodejs22.x | 128MB | 3s | API Gateway POST /upload-url |
-| `getFileUrl` | nodejs22.x | 128MB | 3s | API Gateway POST /file-url |
-| `getAvatarUrl` | nodejs22.x | 128MB | 3s | API Gateway GET /avatar/{userId} |
+| `addVoiceEvent` | nodejs24.x | 128MB | 3s | API Gateway POST /events |
+| `getVoiceEvents` | nodejs24.x | 128MB | 3s | API Gateway GET /events/{userId} |
+| `getAllPublicEvents` | nodejs24.x | 3008MB | 29s | API Gateway GET /all-events |
+| `deleteEvent` | nodejs24.x | 128MB | 3s | API Gateway DELETE /event/{eventId} |
+| `autoApproveEvent` | nodejs24.x | 1024MB | 300s | DynamoDB Stream |
+| `getUserProfile` | nodejs24.x | 128MB | 3s | API Gateway GET /user/{userId} |
+| `getUserPublicProfile` | nodejs24.x | 128MB | 3s | API Gateway GET /user/{userId}/public |
+| `updateUserProfile` | nodejs24.x | 128MB | 3s | API Gateway PUT /user/{userId} |
+| `vfsTrackerUserProfileSetup` | nodejs24.x | 128MB | 3s | API Gateway POST /user/profile-setup |
+| `getUploadUrl` | nodejs24.x | 128MB | 3s | API Gateway POST /upload-url |
+| `getFileUrl` | nodejs24.x | 128MB | 3s | API Gateway POST /file-url |
+| `getAvatarUrl` | nodejs24.x | 128MB | 3s | API Gateway GET /avatar/{userId} |
 | `online-praat-analysis` | Container (Python) | 3008MB | 300s | API Gateway (多个端点) |
-| `gemini-proxy` | nodejs22.x | 128MB | 30s | API Gateway POST /gemini-proxy |
-| `get-song-recommendations` | nodejs22.x | 128MB | 29s | API Gateway POST /recommend-songs |
-| `edge-probe` | nodejs22.x | 128MB | 3s | API Gateway GET/POST /edge-probe |
+| `gemini-proxy` | nodejs24.x | 128MB | 30s | API Gateway POST /gemini-proxy |
+| `get-song-recommendations` | nodejs24.x | 128MB | 29s | API Gateway POST /recommend-songs |
+| `edge-probe` | nodejs24.x | 128MB | 3s | API Gateway GET/POST /edge-probe |
 
 ### API 路由
 
@@ -133,6 +133,8 @@ GET/POST /edge-probe        → edge-probe (公开)
 npm run deploy:backend
 ```
 
+> Node.js Lambda 统一使用 `nodejs24.x`。本地部署前请确认 AWS SAM CLI 版本不低于 `1.147.1`，旧版本会在 `sam build` 阶段报 `nodejs24.x runtime is not supported`。
+
 ### 添加新 Lambda 函数
 
 1. **创建函数代码**：
@@ -149,7 +151,7 @@ npm run deploy:backend
        FunctionName: newFunction
        CodeUri: ../lambda-functions/newFunction/
        Handler: index.handler
-       Runtime: nodejs22.x
+       Runtime: nodejs24.x
        Role: arn:aws:iam::296821242554:role/service-role/addVoiceEvent-role-l30o387r
        Events:
          ApiEvent:
@@ -226,4 +228,3 @@ infra/
 
 - [AWS SAM 文档](https://docs.aws.amazon.com/serverless-application-model/)
 - [CloudFormation 文档](https://docs.aws.amazon.com/cloudformation/)
-

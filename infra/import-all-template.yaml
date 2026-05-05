@@ -96,7 +96,7 @@ Resources:
     UpdateReplacePolicy: Retain
     Properties:
       FunctionName: addVoiceEvent
-      Runtime: nodejs20.x
+      Runtime: nodejs24.x
       Handler: index.handler
       Code:
         ZipFile: |
@@ -113,7 +113,7 @@ Resources:
     UpdateReplacePolicy: Retain
     Properties:
       FunctionName: getVoiceEvents
-      Runtime: nodejs20.x
+      Runtime: nodejs24.x
       Handler: index.handler
       Code:
         ZipFile: |
@@ -130,7 +130,7 @@ Resources:
     UpdateReplacePolicy: Retain
     Properties:
       FunctionName: getAllPublicEvents
-      Runtime: nodejs20.x
+      Runtime: nodejs24.x
       Handler: index.handler
       Code:
         ZipFile: |
@@ -147,7 +147,7 @@ Resources:
     UpdateReplacePolicy: Retain
     Properties:
       FunctionName: deleteEvent
-      Runtime: nodejs22.x
+      Runtime: nodejs24.x
       Handler: index.handler
       Code:
         ZipFile: |
@@ -164,7 +164,7 @@ Resources:
     UpdateReplacePolicy: Retain
     Properties:
       FunctionName: autoApproveEvent
-      Runtime: nodejs22.x
+      Runtime: nodejs24.x
       Handler: index.handler
       Code:
         ZipFile: |
@@ -185,7 +185,7 @@ Resources:
     UpdateReplacePolicy: Retain
     Properties:
       FunctionName: getUserProfile
-      Runtime: nodejs22.x
+      Runtime: nodejs24.x
       Handler: index.handler
       Code:
         ZipFile: |
@@ -202,7 +202,7 @@ Resources:
     UpdateReplacePolicy: Retain
     Properties:
       FunctionName: getUserPublicProfile
-      Runtime: nodejs22.x
+      Runtime: nodejs24.x
       Handler: index.handler
       Code:
         ZipFile: |
@@ -219,7 +219,7 @@ Resources:
     UpdateReplacePolicy: Retain
     Properties:
       FunctionName: updateUserProfile
-      Runtime: nodejs22.x
+      Runtime: nodejs24.x
       Handler: index.handler
       Code:
         ZipFile: |
@@ -236,7 +236,7 @@ Resources:
     UpdateReplacePolicy: Retain
     Properties:
       FunctionName: vfsTrackerUserProfileSetup
-      Runtime: nodejs22.x
+      Runtime: nodejs24.x
       Handler: index.handler
       Code:
         ZipFile: |
@@ -257,7 +257,7 @@ Resources:
     UpdateReplacePolicy: Retain
     Properties:
       FunctionName: getUploadUrl
-      Runtime: nodejs22.x
+      Runtime: nodejs24.x
       Handler: index.handler
       Code:
         ZipFile: |
@@ -274,7 +274,7 @@ Resources:
     UpdateReplacePolicy: Retain
     Properties:
       FunctionName: getFileUrl
-      Runtime: nodejs22.x
+      Runtime: nodejs24.x
       Handler: index.handler
       Code:
         ZipFile: |
@@ -291,7 +291,7 @@ Resources:
     UpdateReplacePolicy: Retain
     Properties:
       FunctionName: getAvatarUrl
-      Runtime: nodejs22.x
+      Runtime: nodejs24.x
       Handler: index.handler
       Code:
         ZipFile: |
@@ -331,7 +331,7 @@ Resources:
     UpdateReplacePolicy: Retain
     Properties:
       FunctionName: gemini-proxy
-      Runtime: nodejs22.x
+      Runtime: nodejs24.x
       Handler: index.handler
       Code:
         ZipFile: |
@@ -348,7 +348,7 @@ Resources:
     UpdateReplacePolicy: Retain
     Properties:
       FunctionName: get-song-recommendations
-      Runtime: nodejs22.x
+      Runtime: nodejs24.x
       Handler: index.handler
       Code:
         ZipFile: |
@@ -365,7 +365,7 @@ Resources:
     UpdateReplacePolicy: Retain
     Properties:
       FunctionName: edge-probe
-      Runtime: nodejs22.x
+      Runtime: nodejs24.x
       Handler: index.handler
       Code:
         ZipFile: |
