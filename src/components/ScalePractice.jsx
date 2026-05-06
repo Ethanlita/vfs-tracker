@@ -644,10 +644,32 @@ const ScalePractice = () => {
     runCycle('descending');
   };
 
+  /**
+   * @zh 强制通过上行失败，直接推进到下一个上行音阶练习。
+   */
+  const handleForcePassAscend = () => {
+    if (!ensureModeReady()) return;
+    setMessage('已强制通过本轮上行判定，进入下一个音阶。');
+    setStep('ascending');
+    rootIndexRef.current += currentMode?.transposeStep ?? 1;
+    setTimeout(() => runCycle('ascending'), 800);
+  };
+
   const handleRetryDescend = () => {
     if (!ensureModeReady()) return;
     setMessage('再试一次');
     runCycle('descending');
+  };
+
+  /**
+   * @zh 强制通过下降失败，直接推进到下一个下降音阶练习。
+   */
+  const handleForcePassDescend = () => {
+    if (!ensureModeReady()) return;
+    setMessage('已强制通过本轮下降判定，进入下一个音阶。');
+    setStep('descending');
+    descendingIndexRef.current -= currentMode?.transposeStep ?? 1;
+    setTimeout(() => runCycle('descending'), 800);
   };
 
   const handleFinishPractice = () => {
@@ -1132,6 +1154,12 @@ const ScalePractice = () => {
             >
               开始下降练习
             </button>
+            <button
+              onClick={handleForcePassAscend}
+              className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg font-semibold"
+            >
+              强制通过
+            </button>
           </div>
         </div>
       )}
@@ -1151,6 +1179,12 @@ const ScalePractice = () => {
               className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded-lg font-semibold"
             >
               结束
+            </button>
+            <button
+              onClick={handleForcePassDescend}
+              className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg font-semibold"
+            >
+              强制通过
             </button>
           </div>
         </div>
