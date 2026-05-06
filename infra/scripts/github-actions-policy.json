@@ -22,6 +22,7 @@
       ],
       "Resource": [
         "arn:aws:cloudformation:us-east-1:296821242554:stack/vfs-tracker*/*",
+        "arn:aws:cloudformation:us-east-1:296821242554:stack/aws-sam-cli-managed-default/*",
         "arn:aws:cloudformation:us-east-1:aws:transform/Serverless-2016-10-31"
       ]
     },
