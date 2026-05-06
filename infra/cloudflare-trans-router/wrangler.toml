@@ -1,0 +1,19 @@
+# Cloudflare Worker 配置文件
+# 用于部署 storage.vfs-tracker.app 的存储转发 Worker
+#
+# 使用方法：
+#   本地开发: npx wrangler dev
+#   部署: npx wrangler deploy
+#
+# 注意：route 仍然由 Cloudflare Dashboard 管理；本文件只负责脚本与绑定配置。
+
+name = "vfs-tracker-trans-router"
+main = "worker.js"
+compatibility_date = "2025-09-25"
+
+[observability]
+enabled = true
+
+[vars]
+APIGW_ORIGIN = "2rzxc2x5l8.execute-api.us-east-1.amazonaws.com"
+S3_HOST = "vfs-tracker-objstor.s3.us-east-1.amazonaws.com"

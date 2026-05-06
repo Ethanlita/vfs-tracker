@@ -7,13 +7,22 @@ on:
     paths:
       # 只有 Worker 代码变更时才触发
       - 'infra/cloudflare-worker/**'
+      - 'infra/cloudflare-trans-router/**'
   workflow_dispatch:
     # 支持手动触发
 
 jobs:
   deploy-worker:
+    strategy:
+      fail-fast: false
+      matrix:
+        worker:
+          - name: SPA Router Worker
+            workingDirectory: 'infra/cloudflare-worker'
+          - name: Storage Proxy Worker
+            workingDirectory: 'infra/cloudflare-trans-router'
     runs-on: ubuntu-latest
-    name: Deploy SPA Router Worker
+    name: Deploy ${{ matrix.worker.name }}
     
     steps:
       - name: Checkout repository
@@ -24,5 +33,5 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          workingDirectory: 'infra/cloudflare-worker'
+          workingDirectory: ${{ matrix.worker.workingDirectory }}
           command: deploy
