@@ -12,15 +12,18 @@
         "cloudformation:DescribeStackEvents",
         "cloudformation:DescribeStackResources",
         "cloudformation:GetTemplate",
+        "cloudformation:GetTemplateSummary",
         "cloudformation:ValidateTemplate",
         "cloudformation:CreateChangeSet",
         "cloudformation:DescribeChangeSet",
         "cloudformation:ExecuteChangeSet",
         "cloudformation:DeleteChangeSet",
-        "cloudformation:ListStackResources"
+        "cloudformation:ListStackResources",
+        "cloudformation:ContinueUpdateRollback"
       ],
       "Resource": [
         "arn:aws:cloudformation:us-east-1:296821242554:stack/vfs-tracker*/*",
+        "arn:aws:cloudformation:us-east-1:296821242554:stack/aws-sam-cli-managed-default/*",
         "arn:aws:cloudformation:us-east-1:aws:transform/Serverless-2016-10-31"
       ]
     },
@@ -119,6 +122,24 @@
       "Resource": [
         "arn:aws:iam::296821242554:role/vfs-tracker-*"
       ]
+    },
+    {
+      "Sid": "LambdaExecutionRolePassRole",
+      "Effect": "Allow",
+      "Action": [
+        "iam:PassRole"
+      ],
+      "Resource": [
+        "arn:aws:iam::296821242554:role/service-role/addVoiceEvent-role-l30o387r",
+        "arn:aws:iam::296821242554:role/service-role/getAllPublicEvents-role-33fp67ha",
+        "arn:aws:iam::296821242554:role/service-role/gemini-proxy-role-cegcoi6x",
+        "arn:aws:iam::296821242554:role/service-role/edge-probe-role-ttc3yql4"
+      ],
+      "Condition": {
+        "StringEquals": {
+          "iam:PassedToService": "lambda.amazonaws.com"
+        }
+      }
     },
     {
       "Sid": "CloudWatchLogsAccess",
