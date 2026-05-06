@@ -12,7 +12,6 @@ permissions:
   actions: read
 
 env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   ECR_REPOSITORY: vfs-tracker-images
   PARSELMOUTH_DEV_WHEEL_ENABLED: 'true'
   PARSELMOUTH_DEV_WHEEL_RUN_ID: '21285172527'

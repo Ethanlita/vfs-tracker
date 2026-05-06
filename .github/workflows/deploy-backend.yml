@@ -26,9 +26,6 @@ permissions:
   contents: read
   actions: read
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
 jobs:
   # 检查是否需要构建 Python Lambda 镜像
   check-image-changes:
@@ -84,7 +81,7 @@ jobs:
           python-version: '3.12'
 
       - name: Setup SAM CLI
-        uses: aws-actions/setup-sam@v2
+        uses: aws-actions/setup-sam@v3
         with:
           use-installer: true
           token: ${{ secrets.GITHUB_TOKEN }}
