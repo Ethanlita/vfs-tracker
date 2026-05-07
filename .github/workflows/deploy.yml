@@ -69,3 +69,43 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v5
+
+  deploy-esa:
+    name: Deploy ESA EdgeRoutine and purge .cn cache
+    runs-on: ubuntu-latest
+    needs: deploy
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+
+      - name: Install Alibaba Cloud CLI
+        run: /bin/bash -c "$(curl -fsSL https://aliyuncli.alicdn.com/install.sh)"
+
+      - name: Configure Alibaba Cloud CLI
+        run: |
+          aliyun configure set \
+            --profile default \
+            --mode AK \
+            --access-key-id "$ALIBABA_CLOUD_ACCESS_KEY_ID" \
+            --access-key-secret "$ALIBABA_CLOUD_ACCESS_KEY_SECRET" \
+            --region "cn-hangzhou"
+        env:
+          ALIBABA_CLOUD_ACCESS_KEY_ID: ${{ secrets.ALIBABA_CLOUD_ACCESS_KEY_ID }}
+          ALIBABA_CLOUD_ACCESS_KEY_SECRET: ${{ secrets.ALIBABA_CLOUD_ACCESS_KEY_SECRET }}
+
+      - name: Deploy ESA EdgeRoutine
+        run: node scripts/deploy-esa-routine.mjs
+        env:
+          ESA_ROUTINE_NAME: vfstrackercn
+          ESA_ROUTINE_CODE: infra/esa-routine/cn-spa-fallback.js
+          ESA_ROUTINE_ENV: production
+
+      - name: Purge ESA entry cache
+        run: node scripts/purge-esa-cache.mjs
+        env:
+          ESA_SITE_ID: '929690936461856'
