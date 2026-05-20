@@ -47,6 +47,7 @@ export const TIMEOUT_CONFIG = {
 
   // 外部服务 API (复杂操作)
   '/song-recommendations': 34000,    // 调用外部推荐服务
+  '/recommend-songs': 20000,         // 音阶练习结束后的 AI 歌曲推荐
   '/gemini-proxy': 34000,            // AI 服务代理
 
   // 默认超时
