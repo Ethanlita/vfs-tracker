@@ -9,7 +9,8 @@ import {
   gateByEnergy,
   gateByStability,
   accumulateStableWindow,
-  adaptiveParamsFromMAD
+  adaptiveParamsFromMAD,
+  createDisplayPitchSmoother
 } from '../../../src/utils/pitchEval.js';
 
 describe('pitchEval.js 单元测试', () => {
@@ -351,6 +352,96 @@ describe('pitchEval.js 单元测试', () => {
         tolerance: 75,
         windowMs: 350
       });
+    });
+  });
+
+  // ============================================
+  // createDisplayPitchSmoother 函数测试
+  // ============================================
+
+  describe('createDisplayPitchSmoother', () => {
+    it('冷启动时返回首帧 pitch', () => {
+      const sm = createDisplayPitchSmoother();
+      expect(sm.push(220)).toBeCloseTo(220, 5);
+    });
+
+    it('稳定输入返回稳定的中值', () => {
+      const sm = createDisplayPitchSmoother();
+      sm.push(220);
+      sm.push(221);
+      sm.push(220);
+      sm.push(220);
+      sm.push(219);
+      expect(sm.value).toBeCloseTo(220, 0);
+    });
+
+    it('小幅抖动被中值吸收', () => {
+      const sm = createDisplayPitchSmoother();
+      sm.push(220);
+      sm.push(220);
+      sm.push(220);
+      sm.push(220);
+      // 1 帧明显偏离但还在 600 cents 内 → 进入 buffer，但被中值过滤
+      const out = sm.push(225);
+      expect(out).toBeCloseTo(220, 0);
+    });
+
+    it('单次八度跳跃被锁住，不更新显示值', () => {
+      const sm = createDisplayPitchSmoother();
+      // 建立稳态 220Hz
+      for (let i = 0; i < 5; i++) sm.push(220);
+      // 突然跳到 110Hz（一个八度）
+      const out = sm.push(110);
+      // 应该仍然显示 ~220
+      expect(out).toBeCloseTo(220, 0);
+    });
+
+    it('连续 2 帧确认八度跳跃后才接受新区间', () => {
+      const sm = createDisplayPitchSmoother();
+      for (let i = 0; i < 5; i++) sm.push(220);
+      const a = sm.push(110); // 第一次大跳，pending
+      const b = sm.push(110); // 第二次确认，接受
+      const c = sm.push(110); // 已确认
+      expect(a).toBeCloseTo(220, 0);
+      expect(b).toBeCloseTo(110, 0);
+      expect(c).toBeCloseTo(110, 0);
+    });
+
+    it('大跳后回到原区间，丢弃 pending', () => {
+      const sm = createDisplayPitchSmoother();
+      for (let i = 0; i < 5; i++) sm.push(220);
+      sm.push(110); // pending count=1
+      const out = sm.push(220); // 回到原区间，pending 应清空
+      expect(out).toBeCloseTo(220, 0);
+      // 之后再来一次单帧大跳，仍需重新开始确认
+      const single = sm.push(110);
+      expect(single).toBeCloseTo(220, 0);
+    });
+
+    it('pitch=0（无声）时缓冲区清空', () => {
+      const sm = createDisplayPitchSmoother();
+      for (let i = 0; i < 5; i++) sm.push(220);
+      expect(sm.push(0)).toBe(0);
+      // 重新开始，应当从下一个 pitch 冷启动
+      expect(sm.push(440)).toBeCloseTo(440, 5);
+    });
+
+    it('reset() 清空所有状态', () => {
+      const sm = createDisplayPitchSmoother();
+      for (let i = 0; i < 5; i++) sm.push(220);
+      sm.reset();
+      expect(sm.value).toBe(0);
+      expect(sm.push(880)).toBeCloseTo(880, 5);
+    });
+
+    it('两次跳到不同区间不会被误确认', () => {
+      const sm = createDisplayPitchSmoother();
+      for (let i = 0; i < 5; i++) sm.push(220);
+      sm.push(110); // pending=110
+      const out = sm.push(440); // 又一个大跳但与 pending 不同区间 → 重置 pending=440
+      expect(out).toBeCloseTo(220, 0); // 仍持有原值
+      const after = sm.push(440); // 第二次 440 → 确认接受
+      expect(after).toBeCloseTo(440, 0);
     });
   });
 });

@@ -30,6 +30,60 @@ export const calcMedian = (arr = []) => {
   return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
 };
 
+/**
+ * @zh 检测"切入过早"——在示例 / 空拍阶段是否已经持续发声。
+ *
+ * 判定规则：把 [0, firstNoteIdx) 区间的所有帧按时间顺序串起来，
+ * 找到最长一段连续通过 gate（能量、清晰度、基频范围、未削波）的"持续发声时长"，
+ * 当且仅当这一段 > thresholdMs 时判定切入过早。
+ *
+ * 这样可以容忍：
+ *   - 单帧 / 孤立误检（pitchy 偶发跳变）
+ *   - 示例拍因耳机漏音被麦克风录到的短暂能量泄露
+ *   - 用户清嗓子 / 麦克风咔哒声等瞬态
+ *
+ * @param {Object} params
+ * @param {Array<Array<{ pitch:number, clarity:number, rms:number, t?:number, clipped?:boolean }>>} params.beatData 整轮的逐拍帧数据
+ * @param {number} params.firstNoteIdx 第一个 note 拍的索引（< 此值的拍属于"切入前阶段"）
+ * @param {number} params.baselineRms 噪声基线
+ * @param {number} params.deltaDb 能量门限（dB）
+ * @param {number} params.clarityTheta 清晰度阈值
+ * @param {number} [params.thresholdMs=250] 触发判定所需的连续发声时长（毫秒）
+ * @returns {{ early: boolean, durationMs: number }}
+ */
+export const detectEarlyVoicing = ({
+  beatData,
+  firstNoteIdx,
+  baselineRms,
+  deltaDb,
+  clarityTheta,
+  thresholdMs = 250
+}) => {
+  if (!Array.isArray(beatData) || firstNoteIdx <= 0) {
+    return { early: false, durationMs: 0 };
+  }
+  const preNoteFrames = beatData.slice(0, firstNoteIdx).flat();
+  let runStart = null;
+  let maxMs = 0;
+  for (const f of preNoteFrames) {
+    // clipped 帧也算"发声"，只通过 UI 提示用户调小音量
+    const pass =
+      Number.isFinite(f.pitch) && f.pitch > 50 && f.pitch < 2000 &&
+      gateByEnergy(f.rms, baselineRms, deltaDb) &&
+      gateByStability(f.clarity, clarityTheta);
+    if (pass) {
+      if (typeof f.t === 'number') {
+        if (runStart === null) runStart = f.t;
+        const dur = f.t - runStart;
+        if (dur > maxMs) maxMs = dur;
+      }
+    } else {
+      runStart = null;
+    }
+  }
+  return { early: maxMs > thresholdMs, durationMs: maxMs };
+};
+
 export const evaluateNoteStability = (params) => {
   const {
     beatData,
@@ -51,9 +105,10 @@ export const evaluateNoteStability = (params) => {
     return { ...result, failedNote: { idx: 0, freq: 0, type: 'miss', beatIdx: 0 } };
   }
 
+  // 注意：clipped 帧不再排除——削波只作为 UI 提示，不影响判定。
   const passFrames = (frames) => frames.filter(f =>
     f.pitch > 50 &&
-    f.pitch < 1200 &&
+    f.pitch < 2000 &&
     gateByEnergy(f.rms, baselineRms, deltaDb) &&
     gateByStability(f.clarity, clarityTheta)
   );
@@ -80,16 +135,22 @@ export const evaluateNoteStability = (params) => {
       return { ...result, failedNote: { idx: i + 1, freq: expected, type: 'high', cents, beatIdx } };
     }
 
-    const localDt = frameDuration > 0
-      ? frameDuration
-      : (beatWindow > 0 && filtered.length > 0 ? beatWindow / filtered.length : 0);
+    // 当帧带 `t`（真实时间戳）时，accumulateStableWindow 会按时间戳计算 stable 时长，
+    // dt 仅作为无时间戳时的兜底。注意此处必须传入 *未过滤* 的 frames，否则会把 gating 失败
+    // 留下的间隙在过滤时压平，导致稳定时长被高估。
+    const hasTimestamps = frames.some(f => typeof f?.t === 'number');
+    const localDt = hasTimestamps
+      ? 0
+      : (frameDuration > 0
+        ? frameDuration
+        : (beatWindow > 0 && frames.length > 0 ? beatWindow / frames.length : 0));
 
-    if (localDt <= 0) {
+    if (!hasTimestamps && localDt <= 0) {
       return { ...result, failedNote: { idx: i + 1, freq: expected, type: 'invalidFrame', beatIdx } };
     }
 
     const stableMs = accumulateStableWindow(
-      filtered,
+      frames,
       expected,
       tolerance,
       baselineRms,

@@ -48,6 +48,7 @@ infra/backup/
 # Playwright report
 playwright-report/
 test-results/
+tests/e2e/__screenshots__/
 
 # Python
 __pycache__/
