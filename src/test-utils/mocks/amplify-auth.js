@@ -79,6 +79,51 @@ export const mockConfirmSignUp = vi.fn((username, code) =>
 );
 
 /**
+ * Mock resendSignUpCode
+ */
+export const mockResendSignUpCode = vi.fn(() =>
+  Promise.resolve({
+    destination: 't***@e***.com',
+    deliveryMedium: 'EMAIL',
+    attributeName: 'email',
+  })
+);
+
+/**
+ * Mock resetPassword
+ */
+export const mockResetPassword = vi.fn(() =>
+  Promise.resolve({
+    isPasswordReset: false,
+    nextStep: {
+      resetPasswordStep: 'CONFIRM_RESET_PASSWORD_WITH_CODE',
+      codeDeliveryDetails: {
+        destination: 't***@e***.com',
+        deliveryMedium: 'EMAIL',
+        attributeName: 'email',
+      },
+    },
+  })
+);
+
+/**
+ * Mock confirmResetPassword
+ */
+export const mockConfirmResetPassword = vi.fn(() => Promise.resolve());
+
+/**
+ * Mock confirmSignIn
+ */
+export const mockConfirmSignIn = vi.fn(() =>
+  Promise.resolve({
+    isSignedIn: true,
+    nextStep: {
+      signInStep: 'DONE',
+    },
+  })
+);
+
+/**
  * Mock getCurrentUser
  */
 export const mockGetCurrentUser = vi.fn(() => 
@@ -118,6 +163,10 @@ export const mockAmplifyAuth = {
   signIn: mockSignIn,
   signUp: mockSignUp,
   confirmSignUp: mockConfirmSignUp,
+  resendSignUpCode: mockResendSignUpCode,
+  resetPassword: mockResetPassword,
+  confirmResetPassword: mockConfirmResetPassword,
+  confirmSignIn: mockConfirmSignIn,
   getCurrentUser: mockGetCurrentUser,
   fetchUserAttributes: mockFetchUserAttributes,
   updateUserAttributes: mockUpdateUserAttributes,
@@ -132,6 +181,10 @@ export function resetAuthMocks() {
   mockSignIn.mockClear();
   mockSignUp.mockClear();
   mockConfirmSignUp.mockClear();
+  mockResendSignUpCode.mockClear();
+  mockResetPassword.mockClear();
+  mockConfirmResetPassword.mockClear();
+  mockConfirmSignIn.mockClear();
   mockGetCurrentUser.mockClear();
   mockFetchUserAttributes.mockClear();
   mockUpdateUserAttributes.mockClear();
