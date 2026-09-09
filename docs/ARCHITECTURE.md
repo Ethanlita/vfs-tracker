@@ -12,6 +12,8 @@
 - **文件存储**: Amazon S3，用于存储用户上传的附件、录音、生成的图表和PDF报告。
 - **API 网关**: Amazon API Gateway，为所有 Lambda 函数提供统一的 RESTful API 入口。
 - **认证**: AWS Cognito，负责用户身份验证和授权。
+  - 登录时按照 Amplify v6 的 `nextStep.signInStep === 'CONFIRM_SIGN_UP'` 进入邮箱验证页；Cognito 的未验证异常由 SDK 转换，不在组件的 `catch` 中重复处理。开发/生产模式的真实 SDK 网络测试见 [邮箱补充验证测试](signup-confirmation-testing.md)。
+  - 用户池以**用户名**为固定主标识，邮箱是别名（alias）。Cognito 的邮箱别名只在邮箱验证通过后才生效，因此**未验证账号只能用注册用户名**来验证或重发验证码，用邮箱操作会失败（开启"防止用户存在性错误"后重发甚至会假装成功）。新版登录页 `CustomAuthenticator` 会在注册后把待验证账号记录到 `localStorage`（见 `src/utils/pendingSignUp.js`），用户回访时提示"继续验证"并预填用户名（Issue #89）。
 - **构建与托管**: Vite 构建静态文件 (`dist` 目录)，可托管于任何静态网站服务 (如 GitHub Pages, AWS S3, Vercel)。
 - **回退策略**: 若前端在初始化时缺失必需的 AWS 环境变量，则启用“开发回退模式”，前端将使用本地 `mock_data.json` 文件并模拟文件上传，以保证开发流程的顺畅。
 

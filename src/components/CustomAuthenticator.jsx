@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { signIn, signUp, confirmSignUp, resetPassword, confirmResetPassword, resendSignUpCode, confirmSignIn } from 'aws-amplify/auth';
 import { Mail, Lock, User, AlertCircle, Loader2, Eye, EyeOff } from 'lucide-react';
+import { savePendingSignUp, loadPendingSignUp, clearPendingSignUp, looksLikeEmail } from '../utils/pendingSignUp.js';
 
 /**
  * 输入框组件
@@ -15,8 +16,9 @@ import { Mail, Lock, User, AlertCircle, Loader2, Eye, EyeOff } from 'lucide-reac
  * @param {Function} props.onChange - 变化处理函数
  * @param {boolean} props.showPassword - 是否显示密码（密码框专用）
  * @param {Function} props.onTogglePassword - 切换密码显示（密码框专用）
+ * @param {string} [props.inputMode] - 移动端虚拟键盘类型提示（如 numeric，用于验证码输入）
  */
-const Input = ({ icon, type = 'text', name, placeholder, required = true, value, autoComplete, onChange, showPassword, onTogglePassword }) => {
+const Input = ({ icon, type = 'text', name, placeholder, required = true, value, autoComplete, onChange, showPassword, onTogglePassword, inputMode }) => {
   const InputIcon = icon;
 
   return (
@@ -33,6 +35,7 @@ const Input = ({ icon, type = 'text', name, placeholder, required = true, value,
         placeholder={placeholder}
         required={required}
         autoComplete={autoComplete}
+        inputMode={inputMode}
       />
       {type === 'password' && onTogglePassword && (
         <button
@@ -80,6 +83,12 @@ const Button = ({ type = 'submit', onClick, children, variant = 'primary', disab
 );
 
 /**
+ * [CN] 在必须使用"注册用户名"的场景（邮箱验证、重发验证码）里，用户误填邮箱时的提示。
+ * Cognito 的邮箱别名只在邮箱验证通过后才生效，未验证账号只能用注册用户名定位（Issue #89）。
+ */
+const IDENTIFIER_HINT = '未完成邮箱验证的账号只能用注册时填写的用户名来验证，验证完成前邮箱还不能作为登录名，请改为输入用户名。';
+
+/**
  * 自定义认证组件
  * 
  * 提供完全自定义的登录、注册、邮箱验证和密码重置功能
@@ -88,6 +97,11 @@ const Button = ({ type = 'submit', onClick, children, variant = 'primary', disab
  * API 兼容 Amplify Authenticator:
  * - 支持 children 函数模式: <CustomAuthenticator>{({ user }) => ...}</CustomAuthenticator>
  * - 支持 hideSignUp prop 隐藏注册功能
+ *
+ * 邮箱补充验证（Issue #89）：
+ * - 注册成功后把待验证账号写入 localStorage，用户回访登录页时提示"继续验证"并预填用户名
+ * - 验证页与重发验证码在检测到填的是邮箱时直接提示改用用户名，不再向 Cognito 发起注定失败的请求
+ * - 验证成功后立即回到登录页并保留用户名，避免重复提交
  * 
  * @param {Object} props
  * @param {Function} [props.children] - 认证成功后的渲染函数，接收 { user } 参数（兼容 Amplify）
@@ -103,6 +117,9 @@ const CustomAuthenticator = ({ children, hideSignUp = false }) => {
   
   // 重新发送验证码的冷却计时器
   const [resendCooldown, setResendCooldown] = useState(0);
+
+  // 本设备上"已注册但尚未完成邮箱验证"的账号记录（Issue #89）
+  const [pendingSignUp, setPendingSignUp] = useState(() => loadPendingSignUp());
   
   // 表单数据
   const [formData, setFormData] = useState({
@@ -135,6 +152,62 @@ const CustomAuthenticator = ({ children, hideSignUp = false }) => {
     setError('');
   };
 
+  /**
+   * 记录待验证账号并同步到组件状态
+   * @param {string} username - 注册用户名
+   * @param {string} [email] - 注册邮箱（登录路径下拿不到时留空，会沿用已记录的邮箱）
+   * @returns {{username: string, email: string, createdAt: number}|null} 写入的记录
+   */
+  const rememberPendingSignUp = (username, email = '') => {
+    const record = savePendingSignUp({ username, email });
+    setPendingSignUp(record);
+    return record;
+  };
+
+  /** 清除待验证账号记录（验证完成、账号已失效或用户选择不再提示） */
+  const forgetPendingSignUp = () => {
+    clearPendingSignUp();
+    setPendingSignUp(null);
+  };
+
+  /**
+   * 判断输入的用户名/邮箱是否对应当前记录的待验证账号
+   * @param {string} identifier - 用户输入的用户名或邮箱
+   * @returns {boolean} 匹配时返回 true
+   */
+  const matchesPendingSignUp = (identifier) => {
+    if (!pendingSignUp || !identifier) return false;
+    const normalized = identifier.trim().toLowerCase();
+    return pendingSignUp.username.toLowerCase() === normalized
+      || (!!pendingSignUp.email && pendingSignUp.email.toLowerCase() === normalized);
+  };
+
+  /**
+   * 进入邮箱验证页并预填用户名与邮箱
+   * @param {{username?: string, email?: string}} [prefill] - 预填内容
+   */
+  const openConfirmSignUp = ({ username = '', email = '' } = {}) => {
+    setFormData(prev => ({ ...prev, username, email, code: '' }));
+    setError('');
+    setSuccessMessage('');
+    setMode('confirmSignUp');
+  };
+
+  /**
+   * 邮箱验证完成（或发现账号早已验证）后的统一收尾：清除待验证记录、回到登录页并保留用户名
+   * @param {string} username - 已验证的用户名
+   * @param {string} message - 展示在登录页的提示
+   */
+  const finishConfirmation = (username, message) => {
+    if (matchesPendingSignUp(username)) {
+      forgetPendingSignUp();
+    }
+    setFormData(prev => ({ ...prev, username, password: '', confirmPassword: '', code: '' }));
+    setError('');
+    setSuccessMessage(message);
+    setMode('signIn');
+  };
+
   // 冷却计时器倒计时
   useEffect(() => {
     if (resendCooldown > 0) {
@@ -145,28 +218,52 @@ const CustomAuthenticator = ({ children, hideSignUp = false }) => {
     }
   }, [resendCooldown]);
 
-  // 登录
+  /**
+   * 提交登录并按照 Amplify v6 的 nextStep 推进认证流程。
+   * @param {React.FormEvent<HTMLFormElement>} e - 登录表单提交事件
+   * @returns {Promise<void>} 完成登录或显示下一步所需的界面
+   */
   const handleSignIn = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError('');
-    
+
+    // 去掉首尾空格，避免移动端输入法自动补上的空格导致认证失败
+    const username = formData.username.trim();
+
     try {
       const result = await signIn({
-        username: formData.username,
+        username,
         password: formData.password
       });
       
       const { isSignedIn, nextStep } = result;
       
+      // SDK 将未验证账号异常转换为正常返回值，统一在 nextStep 分支处理。
+      if (nextStep?.signInStep === 'CONFIRM_SIGN_UP') {
+        const record = rememberPendingSignUp(username);
+        openConfirmSignUp({ username, email: record?.email || '' });
+        // 自动重发失败时保留验证页面，让用户继续使用已有验证码或手动重试。
+        try {
+          await resendSignUpCode({ username });
+          setSuccessMessage('验证码已重新发送到您的邮箱，请查收并输入验证码。');
+          setResendCooldown(120);
+        } catch (resendErr) {
+          console.error('[CustomAuthenticator] 自动重发验证码失败:', resendErr);
+          setError('您的账号尚未验证邮箱。请在验证页面点击"重新发送"按钮获取验证码。');
+        }
       // 检查是否需要修改临时密码
-      if (nextStep?.signInStep === 'CONFIRM_SIGN_IN_WITH_NEW_PASSWORD_REQUIRED') {
+      } else if (nextStep?.signInStep === 'CONFIRM_SIGN_IN_WITH_NEW_PASSWORD_REQUIRED') {
         console.log('[CustomAuthenticator] 需要修改临时密码');
         setSuccessMessage('检测到您正在使用临时密码，请设置新密码');
         setMode('forceChangePassword');
         // 清空密码字段，准备输入新密码
         setFormData(prev => ({ ...prev, password: '', confirmPassword: '' }));
       } else if (isSignedIn) {
+        // 能登录说明该账号已完成验证，清除本设备上对应的待验证记录
+        if (matchesPendingSignUp(username)) {
+          forgetPendingSignUp();
+        }
         // 登录成功，获取当前用户信息并调用 children 函数（兼容 Amplify API）
         try {
           const { getCurrentUser } = await import('aws-amplify/auth');
@@ -184,23 +281,14 @@ const CustomAuthenticator = ({ children, hideSignUp = false }) => {
       }
     } catch (err) {
       console.error('登录错误:', err);
-      if (err.name === 'UserNotConfirmedException') {
-        setLoading(false); // 先关闭登录loading
-        setMode('confirmSignUp');
-        // 自动重新发送验证码
-        try {
-          setLoading(true); // 为重发验证码开启loading
-          await resendSignUpCode({ username: formData.username });
-          setSuccessMessage('验证码已重新发送到您的邮箱，请查收并输入验证码。');
-          setResendCooldown(120); // 启动 120 秒冷却
-        } catch (resendErr) {
-          console.error('[CustomAuthenticator] 自动重发验证码失败:', resendErr);
-          setError('您的账号尚未验证邮箱。请在验证页面点击"重新发送"按钮获取验证码。');
-        } finally {
-          setLoading(false); // 重发操作完成
+      if (err.name === 'NotAuthorizedException' || err.name === 'UserNotFoundException') {
+        // 用户池开启"防止用户存在性错误"后，用未验证账号的邮箱登录也只会返回 NotAuthorized；
+        // 若本设备记录了对应的待验证账号，给出更有针对性的提示（Issue #89）
+        if (looksLikeEmail(username) && matchesPendingSignUp(username)) {
+          setError(`邮箱 ${username} 对应的账号「${pendingSignUp.username}」尚未完成邮箱验证，验证完成前无法用邮箱登录，请先点击上方“继续验证”。`);
+        } else {
+          setError('用户名或密码错误');
         }
-      } else if (err.name === 'NotAuthorizedException') {
-        setError('用户名或密码错误');
       } else {
         setError(err.message || '登录失败，请稍后重试');
       }
@@ -222,13 +310,16 @@ const CustomAuthenticator = ({ children, hideSignUp = false }) => {
     setError('');
     
     try {
+      // 去掉首尾空格，避免移动端输入法自动补上的空格写进 Cognito
+      const username = formData.username.trim();
+      const email = formData.email.trim();
       const { isSignUpComplete, userId, nextStep } = await signUp({
-        username: formData.username,
+        username,
         password: formData.password,
         options: {
           userAttributes: {
-            email: formData.email,
-            nickname: formData.nickname || formData.username
+            email,
+            nickname: formData.nickname.trim() || username
           }
         }
       });
@@ -236,8 +327,10 @@ const CustomAuthenticator = ({ children, hideSignUp = false }) => {
       console.log('注册结果:', { isSignUpComplete, userId, nextStep });
       
       if (nextStep.signUpStep === 'CONFIRM_SIGN_UP') {
+        // 记录待验证账号：用户若中途离开，下次回到登录页可直接"继续验证"（Issue #89）
+        rememberPendingSignUp(username, email);
+        openConfirmSignUp({ username, email });
         setSuccessMessage('注册成功！请检查您的邮箱并输入验证码。');
-        setMode('confirmSignUp');
       } else if (isSignUpComplete) {
         setSuccessMessage('注册成功！请登录。');
         setMode('signIn');
@@ -270,39 +363,46 @@ const CustomAuthenticator = ({ children, hideSignUp = false }) => {
   // 确认注册（验证邮箱）
   const handleConfirmSignUp = async (e) => {
     e.preventDefault();
+    const username = formData.username.trim();
+    const code = formData.code.trim();
+
+    // 未验证账号无法通过邮箱别名定位，填了邮箱就不再发起注定失败的请求（Issue #89）
+    if (looksLikeEmail(username)) {
+      setError(IDENTIFIER_HINT);
+      return;
+    }
+
     setLoading(true);
     setError('');
-    
+
     try {
       await confirmSignUp({
-        username: formData.username,
-        confirmationCode: formData.code
+        username,
+        confirmationCode: code
       });
-      
-      setSuccessMessage('🎉 邮箱验证成功！即将跳转到登录页面...');
-      
-      // 2秒后跳转到登录页面
-      setTimeout(() => {
-        setMode('signIn');
-        resetForm();
-      }, 2000);
-      
-      return;
+      finishConfirmation(username, '🎉 邮箱验证成功！请使用您的账号登录。');
     } catch (err) {
       console.error('验证错误:', err);
       if (err.name === 'CodeMismatchException') {
-        setError('验证码错误，请重新输入');
+        setError('验证码错误。请确认输入的是最新一封邮件中的验证码，多次重发时以最后收到的为准。');
       } else if (err.name === 'ExpiredCodeException') {
-        setError('验证码已过期，请返回注册页面重新获取');
+        setError('验证码已过期或无效，请点击下方“重新发送验证码”获取新的验证码。');
+      } else if (err.name === 'NotAuthorizedException' && /CONFIRMED/i.test(err.message || '')) {
+        // 账号早已验证完成（例如上次验证成功但页面没来得及提示），直接引导登录
+        finishConfirmation(username, '该账号已经完成邮箱验证，请直接登录。');
+      } else if (err.name === 'NotAuthorizedException') {
+        setError('无法验证该账号。请确认输入的是注册时填写的用户名，并且验证码来自最新一封邮件。');
       } else if (err.name === 'AliasExistsException') {
-        setError('该邮箱已被其他用户使用。如果这是您的邮箱，请直接登录或使用忘记密码功能。');
-        // 3秒后自动跳转到登录页面
-        setTimeout(() => {
-          setMode('signIn');
-          resetForm();
-        }, 3000);
+        // 邮箱已被另一个已验证账号占用，这个账号无法再完成验证，本设备的待验证记录也不再有意义
+        if (matchesPendingSignUp(username)) {
+          forgetPendingSignUp();
+        }
+        setError('该邮箱已被其他账号使用。如果这是您的邮箱，请直接用它登录，或使用“忘记密码”找回该账号。');
       } else if (err.name === 'UserNotFoundException') {
-        setError('用户不存在，请返回注册页面重新注册');
+        if (matchesPendingSignUp(username)) {
+          forgetPendingSignUp();
+        }
+        setError('未找到该用户名对应的账号。请确认输入的是注册用户名；超过 7 天未验证的账号会被自动清理，需要重新注册。');
       } else {
         setError(err.message || '验证失败，请稍后重试');
       }
@@ -313,8 +413,15 @@ const CustomAuthenticator = ({ children, hideSignUp = false }) => {
 
   // 重新发送注册验证码
   const handleResendSignUpCode = async () => {
-    if (!formData.username) {
+    const username = formData.username.trim();
+    if (!username) {
       setError('请输入用户名');
+      return;
+    }
+
+    // 用邮箱重发时 Cognito 找不到未验证账号，开启"防止用户存在性错误"后甚至会假装成功（Issue #89）
+    if (looksLikeEmail(username)) {
+      setError(IDENTIFIER_HINT);
       return;
     }
 
@@ -326,16 +433,16 @@ const CustomAuthenticator = ({ children, hideSignUp = false }) => {
 
     setLoading(true);
     setError('');
-    
+
     try {
-      await resendSignUpCode({ username: formData.username });
-      setSuccessMessage('验证码已重新发送到您的邮箱，请查收');
+      await resendSignUpCode({ username });
+      setSuccessMessage('验证码已重新发送到您的邮箱，请查收，并以最新一封邮件中的验证码为准');
       // 启动 120 秒冷却计时器
       setResendCooldown(120);
     } catch (err) {
       console.error('重新发送验证码错误:', err);
       if (err.name === 'UserNotFoundException') {
-        setError('用户不存在，请返回注册页面重新注册');
+        setError('未找到该用户名对应的账号。请确认输入的是注册用户名；超过 7 天未验证的账号会被自动清理，需要重新注册。');
       } else if (err.name === 'LimitExceededException') {
         setError('请求过于频繁，请稍后再试');
       } else {
@@ -460,6 +567,39 @@ const CustomAuthenticator = ({ children, hideSignUp = false }) => {
     }
   };
 
+  /**
+   * 待验证账号提示：登录页/注册页提醒用户本设备上还有未完成邮箱验证的账号（Issue #89）
+   * @returns {JSX.Element|null} 提示块；没有记录时返回 null
+   */
+  const renderPendingSignUpNotice = () => {
+    if (!pendingSignUp) return null;
+    const emailPart = pendingSignUp.email ? `，验证码会发送到 ${pendingSignUp.email}` : '';
+    return (
+      <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-900 text-sm space-y-2" role="status">
+        <div className="flex items-start gap-2">
+          <AlertCircle className="h-5 w-5 flex-shrink-0 mt-0.5" />
+          <span>{`账号「${pendingSignUp.username}」尚未完成邮箱验证${emailPart}。验证完成前无法登录，也不能用邮箱作为登录名。`}</span>
+        </div>
+        <div className="flex items-center gap-4 pl-7">
+          <button
+            type="button"
+            onClick={() => openConfirmSignUp({ username: pendingSignUp.username, email: pendingSignUp.email })}
+            className="font-medium text-pink-600 hover:text-pink-500"
+          >
+            继续验证
+          </button>
+          <button
+            type="button"
+            onClick={forgetPendingSignUp}
+            className="text-amber-700 hover:text-amber-900"
+          >
+            不再提示
+          </button>
+        </div>
+      </div>
+    );
+  };
+
   // 渲染登录表单
   if (mode === 'signIn') {
     return (
@@ -492,6 +632,8 @@ const CustomAuthenticator = ({ children, hideSignUp = false }) => {
             <span>{successMessage}</span>
           </div>
         )}
+
+        {renderPendingSignUpNotice()}
 
         <form onSubmit={handleSignIn} className="space-y-4">
           <Input
@@ -551,7 +693,10 @@ const CustomAuthenticator = ({ children, hideSignUp = false }) => {
             已注册但还没验证？{' '}
             <button
               type="button"
-              onClick={() => { setMode('confirmSignUp'); setError(''); }}
+              onClick={() => openConfirmSignUp({
+                username: formData.username.trim() || pendingSignUp?.username || '',
+                email: formData.email.trim() || pendingSignUp?.email || ''
+              })}
               className="text-blue-600 hover:text-blue-500 font-medium"
             >
               去验证邮箱
@@ -565,6 +710,8 @@ const CustomAuthenticator = ({ children, hideSignUp = false }) => {
             <span>{error}</span>
           </div>
         )}
+
+        {renderPendingSignUpNotice()}
 
         <form onSubmit={handleSignUp} className="space-y-4">
           <Input
@@ -650,14 +797,22 @@ const CustomAuthenticator = ({ children, hideSignUp = false }) => {
         )}
 
         <form onSubmit={handleConfirmSignUp} className="space-y-4">
-          <Input
-            icon={User}
-            name="username"
-            placeholder="用户名"
-            value={formData.username}
-            onChange={handleChange}
-            autoComplete="username"
-          />
+          <div className="space-y-1">
+            <Input
+              icon={User}
+              name="username"
+              placeholder="注册用户名"
+              value={formData.username}
+              onChange={handleChange}
+              autoComplete="username"
+            />
+            {/* 未验证账号只能用注册用户名定位，填了邮箱时立即提醒（Issue #89） */}
+            {looksLikeEmail(formData.username) ? (
+              <p className="text-xs text-red-600">{IDENTIFIER_HINT}</p>
+            ) : (
+              <p className="text-xs text-gray-500">请填写注册时设置的用户名，而不是邮箱。</p>
+            )}
+          </div>
           <Input
             icon={Mail}
             name="code"
@@ -665,6 +820,7 @@ const CustomAuthenticator = ({ children, hideSignUp = false }) => {
             value={formData.code}
             onChange={handleChange}
             autoComplete="one-time-code"
+            inputMode="numeric"
           />
 
           <Button type="submit" loading={loading}>验证</Button>

@@ -172,7 +172,11 @@ vi.mock('aws-amplify/auth', () => {
     mockFetchUserAttributes,
     mockUpdateUserAttributes,
     mockSignUp,
-    mockConfirmSignUp
+    mockConfirmSignUp,
+    mockResendSignUpCode,
+    mockResetPassword,
+    mockConfirmResetPassword,
+    mockConfirmSignIn
   } = require('./mocks/amplify-auth.js');
   return {
     fetchAuthSession: mockFetchAuthSession,
@@ -183,6 +187,10 @@ vi.mock('aws-amplify/auth', () => {
     updateUserAttributes: mockUpdateUserAttributes,
     signUp: mockSignUp,
     confirmSignUp: mockConfirmSignUp,
+    resendSignUpCode: mockResendSignUpCode,
+    resetPassword: mockResetPassword,
+    confirmResetPassword: mockConfirmResetPassword,
+    confirmSignIn: mockConfirmSignIn,
   };
 });
 
@@ -207,6 +215,52 @@ afterAll(() => {
   server.close();
   console.log('🔧 MSW Server closed');
 });
+
+// ==================== localStorage 兼容处理 ====================
+// Node.js 25+ 在 globalThis 上自带 localStorage/sessionStorage 访问器，未指定 --localstorage-file 时返回 undefined；
+// vitest 的 jsdom 环境不会覆盖已经存在的全局属性，导致测试中 localStorage 为 undefined（CI 的 Node 24 没有此问题）。
+// 这里用一个内存版 Storage 补上，行为与浏览器一致，测试之间通过 localStorage.clear() 隔离。
+
+/**
+ * 内存版 Web Storage 实现（仅用于测试环境）
+ */
+class MemoryStorage {
+  #store = new Map();
+
+  get length() {
+    return this.#store.size;
+  }
+
+  key(index) {
+    return Array.from(this.#store.keys())[index] ?? null;
+  }
+
+  getItem(key) {
+    return this.#store.has(String(key)) ? this.#store.get(String(key)) : null;
+  }
+
+  setItem(key, value) {
+    this.#store.set(String(key), String(value));
+  }
+
+  removeItem(key) {
+    this.#store.delete(String(key));
+  }
+
+  clear() {
+    this.#store.clear();
+  }
+}
+
+for (const name of ['localStorage', 'sessionStorage']) {
+  if (globalThis[name] === undefined) {
+    Object.defineProperty(globalThis, name, {
+      value: new MemoryStorage(),
+      configurable: true,
+      writable: true,
+    });
+  }
+}
 
 // ==================== 全局配置 ====================
 
