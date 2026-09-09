@@ -2,6 +2,32 @@
 import { test, expect } from '@playwright/test';
 import { dashboardFixture, chartEvents } from '../../src/test-utils/fixtures/index.js';
 
+test('用户列表位于最后，每页显示 20 人并支持往返翻页', async ({ page }, testInfo) => {
+  const users = dashboardFixture(45).light.map((event, index) => ({ ...event, userId: `user-${index}`, userName: `用户 ${index}` }));
+  await page.route('http://127.0.0.1:3099/**', route => route.fulfill({ json: users,
+    headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': '*' } }));
+  await page.goto('/dashboard');
+  const list = page.getByRole('region', { name: '用户列表' });
+  const navigation = list.getByRole('navigation', { name: '用户列表分页' });
+  await expect(page.getByRole('heading', { level: 2 }).last()).toHaveText('用户列表');
+  await expect(list.getByRole('button', { name: '查看档案' })).toHaveCount(20);
+  await expect(navigation.getByRole('button', { name: '上一页' })).toBeDisabled();
+  await navigation.getByRole('button', { name: '下一页' }).click();
+  await expect(list.getByRole('button', { name: '查看档案' })).toHaveCount(20);
+  await expect(list.getByText('用户 20', { exact: true })).toBeVisible();
+  await expect(list.getByText('用户 0', { exact: true })).toHaveCount(0);
+  await navigation.getByRole('button', { name: '下一页' }).click();
+  await expect(list.getByRole('button', { name: '查看档案' })).toHaveCount(5);
+  await expect(navigation.getByText('第 3 / 3 页')).toBeVisible();
+  await expect(navigation.getByRole('button', { name: '下一页' })).toBeDisabled();
+  await list.scrollIntoViewIfNeeded();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)).toBe(false);
+  await list.screenshot({ path: testInfo.outputPath('users-last-page.png') });
+  await navigation.getByRole('button', { name: '上一页' }).click();
+  await expect(list.getByRole('button', { name: '查看档案' })).toHaveCount(20);
+  await expect(navigation.getByText('第 2 / 3 页')).toBeVisible();
+});
+
 test('未登录访问、按需翻页、图表及布局', async ({ page }, testInfo) => {
   const fixture = dashboardFixture(23);
   const events = [...fixture.light, ...chartEvents.map(event => ({ ...event, userId: 'user2', userName: '用户2' }))];

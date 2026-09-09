@@ -20,15 +20,41 @@ describe('公共明细分页', () => {
     api.getUserPublicProfile.mockResolvedValue({ profile: { bio: '公开简介' } });
   });
 
-  it('用户列表先显示 50 行，展开后可访问其余用户', async () => {
-    const many = dashboardFixture(51).light.map((event, index) => ({ ...event, userId: `user-${index}`, userName: `用户 ${index}` }));
+  it('底部用户列表按 20 人翻页，末页可查看档案且全局统计不变', async () => {
+    const many = dashboardFixture(45).light.map((event, index) => ({ ...event, userId: `user-${index}`, userName: `用户 ${index}` }));
     api.getPublicDashboard.mockResolvedValue(many);
+    api.getPublicEventDetails.mockResolvedValue([]);
     render(<PublicDashboard />);
-    await screen.findByRole('button', { name: '显示更多用户' });
-    expect(screen.getAllByRole('button', { name: '查看档案' })).toHaveLength(50);
-    await userEvent.click(screen.getByRole('button', { name: '显示更多用户' }));
-    expect(screen.getAllByRole('button', { name: '查看档案' })).toHaveLength(51);
-    expect(screen.queryByRole('button', { name: '显示更多用户' })).not.toBeInTheDocument();
+    const list = within(await screen.findByRole('region', { name: '用户列表' }));
+    const navigation = within(list.getByRole('navigation', { name: '用户列表分页' }));
+    expect(screen.getAllByRole('heading', { level: 2 }).at(-1)).toHaveTextContent('用户列表');
+    expect(list.getAllByRole('button', { name: '查看档案' })).toHaveLength(20);
+    expect(navigation.getByRole('button', { name: '上一页' })).toBeDisabled();
+    await userEvent.click(navigation.getByRole('button', { name: '下一页' }));
+    expect(list.getAllByRole('button', { name: '查看档案' })).toHaveLength(20);
+    expect(list.queryByText('用户 0')).not.toBeInTheDocument();
+    expect(list.getByText('用户 20')).toBeInTheDocument();
+    await userEvent.click(navigation.getByRole('button', { name: '下一页' }));
+    expect(list.getAllByRole('button', { name: '查看档案' })).toHaveLength(5);
+    expect(navigation.getByText('第 3 / 3 页')).toBeInTheDocument();
+    expect(navigation.getByRole('button', { name: '下一页' })).toBeDisabled();
+    expect(within(screen.getByText('贡献用户数').parentElement).getByText('45')).toBeInTheDocument();
+    await userEvent.click(list.getAllByRole('button', { name: '查看档案' })[0]);
+    expect(api.getUserPublicProfile).toHaveBeenCalledWith('user-40');
+    await userEvent.click(screen.getByRole('button', { name: '关闭用户资料' }));
+    expect(navigation.getByText('第 3 / 3 页')).toBeInTheDocument();
+    await userEvent.click(navigation.getByRole('button', { name: '上一页' }));
+    expect(list.getByText('用户 20')).toBeInTheDocument();
+    expect(api.getPublicDashboard).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([0, 20])('%i 位用户时无需翻页，空列表显示说明', async count => {
+    api.getPublicDashboard.mockResolvedValue(dashboardFixture(count).light.map((event, index) => ({ ...event, userId: `user-${index}` })));
+    render(<PublicDashboard />);
+    const list = within(await screen.findByRole('region', { name: '用户列表' }));
+    expect(list.queryByRole('navigation')).not.toBeInTheDocument();
+    expect(list.queryAllByRole('button', { name: '查看档案' })).toHaveLength(count);
+    if (!count) expect(list.getByText('暂无公开用户。')).toBeInTheDocument();
   });
 
   it('首屏不读取明细，打开后每页最多 20 条，翻页保持总计', async () => {
