@@ -55,6 +55,8 @@
 
 ```
 GET    /all-events          → getAllPublicEvents (公开)
+GET    /public/dashboard    → getAllPublicEvents (公开轻量首屏，15 秒缓存)
+GET    /public/users/{userId}/events?ids=[...] → getAllPublicEvents (公开明细，每页最多 20 个 ID)
 GET    /events/{userId}     → getVoiceEvents (需认证)
 POST   /events              → addVoiceEvent (需认证)
 DELETE /event/{eventId}     → deleteEvent (需认证)

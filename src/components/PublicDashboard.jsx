@@ -11,7 +11,8 @@ import {
   Legend,
 } from 'chart.js';
 import { Bar, Line } from 'react-chartjs-2';
-import { getAllEvents, getUserPublicProfile } from '../api';
+import { getPublicDashboard, getPublicEventDetails, getUserPublicProfile } from '../api';
+import { parseFrequency as parseNumber, firstSurgery } from '../utils/publicChartData.js';
 import { useAsync } from '../utils/useAsync.js';
 import EnhancedDataCharts from './EnhancedDataCharts.jsx';
 import { ApiErrorNotice } from './ApiErrorNotice.jsx';
@@ -43,12 +44,6 @@ const diffInDays = (date1, date2) => {
   return Math.floor((d1 - d2) / (1000 * 60 * 60 * 24));
 };
 
-// Helper to safely parse numeric values
-const parseNumber = (value) => {
-  const num = Number(value);
-  return Number.isFinite(num) ? num : null;
-};
-
 const PublicDashboard = () => {
   // 设置页面 meta 标签
   useDocumentMeta({
@@ -66,8 +61,12 @@ const PublicDashboard = () => {
   });
 
   // 使用useAsync钩子获取所有公开事件
-  const eventsAsync = useAsync(getAllEvents);
+  const eventsAsync = useAsync(getPublicDashboard);
   const allEventsState = useMemo(() => eventsAsync.value || [], [eventsAsync.value]);
+  const [visibleUsers, setVisibleUsers] = useState(50);
+  const [detailPage, setDetailPage] = useState(0);
+  const [detailRetry, setDetailRetry] = useState(0);
+  const [detailState, setDetailState] = useState({ items: [], loading: false, error: null });
 
   // 计算用户列表和统计数据
   const { usersList, totalEvents, totalUsers } = useMemo(() => {
@@ -102,18 +101,21 @@ const PublicDashboard = () => {
 
   // 当选择用户时，获取用户的公开资料
   useEffect(() => {
+    let active = true;
+    setSelectedUserProfile(null);
     if (selectedUserId) {
       getUserPublicProfile(selectedUserId)
         .then(profile => {
-          setSelectedUserProfile(profile);
+          if (active) setSelectedUserProfile(profile);
         })
         .catch(error => {
           console.error('获取用户公开资料失败:', error);
-          setSelectedUserProfile(null);
+          if (active) setSelectedUserProfile(null);
         });
     } else {
       setSelectedUserProfile(null);
     }
+    return () => { active = false; };
   }, [selectedUserId]);
 
   // Bar chart data
@@ -163,12 +165,12 @@ const PublicDashboard = () => {
 
     const datasets = [];
     Object.values(userGroups).forEach((events, index) => {
-      const vfsEvent = events.find(e => e.type === 'surgery');
+      const vfsEvent = firstSurgery(events);
       if (!vfsEvent) return;
 
       const frequencyEvents = events
         .map(e => {
-          const freq = parseNumber(e.details?.fundamentalFrequency);
+          const freq = e.date && ['self_test', 'hospital_test'].includes(e.type) ? parseNumber(e.details?.fundamentalFrequency) : null;
           return freq !== null
             ? { x: diffInDays(e.date, vfsEvent.date), y: freq }
             : null;
@@ -193,7 +195,10 @@ const PublicDashboard = () => {
 
   // Calculate improvement statistics
   useEffect(() => {
-    if (!allEventsState.length) return;
+    if (!allEventsState.length) {
+      setStats({ avgImprovement: 0, variance: 0, doubleVariance: 0, usedUsers: 0 });
+      return;
+    }
 
     const userGroups = {};
     allEventsState.forEach(e => {
@@ -203,12 +208,12 @@ const PublicDashboard = () => {
 
     const improvements = [];
     Object.values(userGroups).forEach(events => {
-      const vfsEvent = events.find(e => e.type === 'surgery');
+      const vfsEvent = firstSurgery(events);
       if (!vfsEvent) return;
 
       const freqEvents = events
         .map(e => {
-          const freq = parseNumber(e.details?.fundamentalFrequency);
+          const freq = e.date && ['self_test', 'hospital_test'].includes(e.type) ? parseNumber(e.details?.fundamentalFrequency) : null;
           return freq !== null ? { date: e.date, freq } : null;
         })
         .filter(Boolean);
@@ -255,16 +260,32 @@ const PublicDashboard = () => {
       .sort((a, b) => new Date(a.date) - new Date(b.date));
   }, [selectedUserId, allEventsState]);
 
+  // 只在展开用户后读取一页明细；忽略旧请求，避免用户切换或翻页时串入数据。
+  useEffect(() => {
+    if (!selectedUserId) return;
+    let active = true;
+    const ids = userEvents.slice(detailPage * 20, (detailPage + 1) * 20).map(event => event.eventId);
+    setDetailState({ items: [], loading: true, error: null });
+    if (!ids.length) {
+      setDetailState({ items: [], loading: false, error: null });
+    } else {
+      getPublicEventDetails(selectedUserId, ids)
+        .then(items => { if (active) setDetailState({ items, loading: false, error: null }); })
+        .catch(error => { if (active) setDetailState({ items: [], loading: false, error }); });
+    }
+    return () => { active = false; };
+  }, [selectedUserId, userEvents, detailPage, detailRetry]);
+
   // 选中用户的资料信息
   const userProfileInfo = useMemo(() => {
     if (!selectedUserId || !userEvents.length) return null;
 
     const firstDate = userEvents[0]?.date;
     const lastDate = userEvents[userEvents.length - 1]?.date;
-    const vfsAnchor = userEvents.find((e) => e.type === 'surgery')?.date || null;
+    const vfsAnchor = firstSurgery(userEvents)?.date || null;
     const frequencyEvents = userEvents
       .map(e => {
-        const freq = parseNumber(e.details?.fundamentalFrequency);
+        const freq = e.date && ['self_test', 'hospital_test'].includes(e.type) ? parseNumber(e.details?.fundamentalFrequency) : null;
         return freq !== null ? { date: e.date, freq } : null;
       })
       .filter(Boolean);
@@ -300,6 +321,7 @@ const PublicDashboard = () => {
   const formatNumber = (v, digits = 2) =>
     Number.isFinite(v) ? Number(v).toFixed(digits) : '-';
   const formatDate = (d) => {
+    if (!d || !Number.isFinite(Date.parse(d))) return '-';
     try {
       return new Date(d).toLocaleDateString();
     } catch {
@@ -392,14 +414,14 @@ const PublicDashboard = () => {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {usersList.map((u) => (
+                {usersList.slice(0, visibleUsers).map((u) => (
                   <tr key={u.userId} className="hover:bg-gray-50">
                     <td className="px-4 py-3 font-mono text-sm text-gray-700 truncate max-w-[280px]">{u.userId}</td>
                     <td className="px-4 py-3 text-sm text-gray-700">{u.userName}</td>
                     <td className="px-4 py-3 text-right">
                       <button
                         type="button"
-                        onClick={() => setSelectedUserId(u.userId)}
+                        onClick={() => { setDetailPage(0); setDetailState({ items: [], loading: true, error: null }); setSelectedUserId(u.userId); }}
                         className="inline-flex items-center rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white shadow-sm hover:bg-indigo-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-indigo-600"
                       >
                         查看档案
@@ -409,6 +431,7 @@ const PublicDashboard = () => {
                 ))}
               </tbody>
             </table>
+            {visibleUsers < usersList.length && <button type="button" className="m-4 text-pink-600 hover:underline" onClick={() => setVisibleUsers(count => count + 50)}>显示更多用户</button>}
           </div>
         </div>
 
@@ -447,7 +470,7 @@ const PublicDashboard = () => {
         <div className="bg-white p-6 rounded-xl shadow-md border border-gray-200">
           <h2 className="text-xl font-semibold text-gray-900 mb-4">VFS 对齐的基频变化</h2>
           <p className="text-sm text-gray-500 mb-4">
-            横轴为相对日期（天），VFS 记为第 0 天；仅展示含有 VFS 且包含基频数据的用户。
+            横轴为相对日期（天），首次 VFS 手术记为第 0 天；仅展示含有 VFS 且包含基频测量的用户。
           </p>
           {lineChartData && lineChartData.datasets?.length ? (
             <Line
@@ -588,7 +611,15 @@ const PublicDashboard = () => {
                 <div>
                   <h4 className="text-base font-semibold text-gray-900 mb-3">事件详情</h4>
                   <div className="space-y-4">
-                    {userEvents.map((event, index) => (
+                    {detailState.loading && <p role="status">正在加载事件明细…</p>}
+                    {detailState.error && <ApiErrorNotice error={detailState.error} onRetry={() => setDetailRetry(count => count + 1)} />}
+                    {!detailState.loading && !detailState.error && detailState.items.length === 0 && <p>本页暂无公开明细，部分记录可能已撤回公开。</p>}
+                    {userEvents.length > 20 && <div className="flex items-center justify-between gap-4">
+                      <button type="button" disabled={detailPage === 0 || detailState.loading} onClick={() => setDetailPage(page => page - 1)} className="text-pink-600 disabled:text-gray-400">上一页</button>
+                      <span>第 {detailPage + 1} / {Math.ceil(userEvents.length / 20)} 页</span>
+                      <button type="button" disabled={(detailPage + 1) * 20 >= userEvents.length || detailState.loading} onClick={() => setDetailPage(page => page + 1)} className="text-pink-600 disabled:text-gray-400">下一页</button>
+                    </div>}
+                    {detailState.items.map((event, index) => (
                       <div key={event.eventId || index} className="bg-white border border-gray-200 rounded-lg p-4">
                         <div className="flex items-start justify-between mb-2">
                           <div>

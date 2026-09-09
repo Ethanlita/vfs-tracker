@@ -57,7 +57,7 @@ Globals:
   Api:
     Cors:
       AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
-      AllowHeaders: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+      AllowHeaders: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token,If-None-Match,Cache-Control'"
       AllowOrigin: "'*'"
       MaxAge: "'600'"
 
@@ -212,6 +212,22 @@ Resources:
           Properties:
             RestApiId: !Ref VoiceFemApi
             Path: /all-events
+            Method: GET
+            Auth:
+              Authorizer: NONE
+        PublicDashboard:
+          Type: Api
+          Properties:
+            RestApiId: !Ref VoiceFemApi
+            Path: /public/dashboard
+            Method: GET
+            Auth:
+              Authorizer: NONE
+        PublicEventDetails:
+          Type: Api
+          Properties:
+            RestApiId: !Ref VoiceFemApi
+            Path: /public/users/{userId}/events
             Method: GET
             Auth:
               Authorizer: NONE

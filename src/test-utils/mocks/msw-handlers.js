@@ -9,6 +9,7 @@ import {
   mockPrivateEvents,
   mockUsers,
   mockApiResponses,
+  dashboardFixture,
 } from '../fixtures/index.js';
 import { getFullApiEndpoint } from '../../env.js';
 
@@ -26,6 +27,20 @@ console.log(`[MSW] API URL: ${API_URL}`);
 const getAllEventsHandler = http.get(`${API_URL}/all-events`, () => {
   console.log('[MSW] Handling GET /all-events');
   return HttpResponse.json(mockPublicEvents);
+});
+
+/** 返回与生产接口一致的轻量首屏 fixture。 */
+const getPublicDashboardHandler = http.get(`${API_URL}/public/dashboard`, () =>
+  HttpResponse.json(dashboardFixture().light));
+
+/** 根据本页 ID 读取明细 fixture，保留请求顺序。 */
+const getPublicEventDetailsHandler = http.get(`${API_URL}/public/users/:userId/events`, ({ request, params }) => {
+  let ids;
+  try { ids = JSON.parse(new URL(request.url).searchParams.get('ids')); } catch { /* 请求参数由下面统一验证。 */ }
+  if (!Array.isArray(ids) || !ids.length || ids.length > 20 || new Set(ids).size !== ids.length
+    || ids.some(id => typeof id !== 'string' || !id || id.length > 256)) return HttpResponse.json({ message: 'Invalid IDs' }, { status: 400 });
+  const events = dashboardFixture().details;
+  return HttpResponse.json(ids.map(id => events.find(event => event.userId === params.userId && event.eventId === id)).filter(Boolean));
 });
 
 /**
@@ -558,6 +573,8 @@ const getAvatarUrlHandler = http.get(`${API_URL}/avatar/:userId`, ({ request, pa
 // ==================== 导出所有 Handlers ====================
 
 export const handlers = [
+  getPublicDashboardHandler,
+  getPublicEventDetailsHandler,
   // Event APIs
   getAllEventsHandler,
   getUserEventsHandler,

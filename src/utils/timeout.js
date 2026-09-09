@@ -39,6 +39,8 @@ export const TIMEOUT_CONFIG = {
   '/events': 8000,                   // addEvent (POST), getUserEvents (GET)
   '/event': 8000,                    // deleteEvent
   '/all-events': 34000,              // getAllEvents (复杂查询,需遍历大量数据)
+  '/public/dashboard': 34000,        // 首屏冷缓存需要遍历所有 Scan 分页。
+  '/public/users': 8000,             // 明细每次最多读取 20 条。
 
   // 文件相关 API (文件处理操作)
   '/upload-url': 305000,             // getUploadUrl (生成预签名URL + S3操作)

@@ -257,6 +257,21 @@ export const getAllEvents = async () => {
 };
 
 /**
+ * 获取公共首屏的轻量事件投影，不加载文本明细和分析原始结果。
+ * @returns {Promise<object[]>} 统计及曲线所需的全部公开事件。
+ */
+export const getPublicDashboard = () => simpleGet('/public/dashboard');
+
+/**
+ * 按首屏日期顺序分页读取用户明细，服务端重新检查公开状态。
+ * @param {string} userId 用户 ID。
+ * @param {string[]} eventIds 本页最多 20 个事件 ID。
+ * @returns {Promise<object[]>} 当前仍公开的事件明细。
+ */
+export const getPublicEventDetails = (userId, eventIds) =>
+  simpleGet(`/public/users/${encodeURIComponent(userId)}/events?ids=${encodeURIComponent(JSON.stringify(eventIds))}`);
+
+/**
  * [CN] 根据用户 ID 获取事件。
  * @param {string} userId - 用户的唯一标识符。
  * @returns {Promise<Array<object>>} 一个解析为该用户事件对象数组的 Promise。

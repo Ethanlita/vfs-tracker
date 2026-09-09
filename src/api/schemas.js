@@ -616,3 +616,21 @@ export function validateData(schema, data, options = {}) {
     value: result.value,
   };
 }
+
+// 公共首屏只传递计数、分组、时间对齐和基频曲线需要的字段。
+export const publicDashboardResponseSchema = Joi.array().items(Joi.object({
+  userId: Joi.string().required(), eventId: Joi.string().required(),
+  userName: Joi.string().required(), type: Joi.string().required(),
+  date: Joi.string().allow(null).required(),
+  details: Joi.object({
+    fundamentalFrequency: Joi.number().positive(), doctor: Joi.string(),
+    customDoctor: Joi.string(), surgeryMethod: Joi.string()
+  }).required()
+}));
+
+// 明细按首屏中的 ID 分页读取；审核撤回的事件不会出现在响应中。
+export const publicEventDetailsResponseSchema = Joi.array().max(20).items(Joi.object({
+  userId: Joi.string().required(), eventId: Joi.string().required(),
+  type: Joi.string().required(), date: Joi.string().allow(null).required(),
+  details: Joi.object().required()
+}));
