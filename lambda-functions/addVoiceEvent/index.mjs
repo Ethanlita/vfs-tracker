@@ -120,6 +120,24 @@ function sanitizeAttachments(raw) {
 }
 
 /**
+ * [CN] 解析 API Gateway 请求体并确保顶层数据为 JSON 对象。
+ * @param {string} body - 原始 JSON 请求体。
+ * @returns {object} 已解析的事件请求对象。
+ * @throws {SyntaxError|TypeError} 请求体缺失、格式错误或顶层不是对象。
+ */
+function parseRequestBody(body) {
+  if (typeof body !== 'string' || !body.trim()) {
+    throw new TypeError('Request body must be a non-empty JSON string');
+  }
+  const parsed = JSON.parse(body);
+  // null、数组及原始值都不能作为事件对象读取字段。
+  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new TypeError('Request body must be a JSON object');
+  }
+  return parsed;
+}
+
+/**
  * [CN] Lambda 函数的主处理程序。它处理 CORS 预检请求，验证输入，并将新事件写入 DynamoDB。
  * @param {object} event - API Gateway Lambda 事件对象。
  * @returns {Promise<object>} 一个 API Gateway 响应对象。
@@ -136,7 +154,20 @@ export const handler = async (event) => {
         }
 
         // 解析请求体
-        const requestBody = JSON.parse(event.body || '{}');
+        let requestBody;
+        try {
+            requestBody = parseRequestBody(event.body);
+        } catch {
+            // 只在请求体解析阶段映射 400，数据库等服务故障仍由外层返回 500。
+            return {
+                statusCode: 400,
+                headers: corsHeaders,
+                body: JSON.stringify({
+                    message: 'Request body must be a valid JSON object',
+                    errorCode: 'INVALID_REQUEST_BODY'
+                }),
+            };
+        }
 
         // 从ID Token中提取用户信息
         const userInfo = extractUserFromEvent(event);

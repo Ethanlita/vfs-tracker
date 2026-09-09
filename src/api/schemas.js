@@ -516,6 +516,12 @@ export const addEventResponseSchema = Joi.object({
   eventId: eventId.required(),
 }).description('POST /events 响应');
 
+/** POST /events 请求体无法解析为 JSON 对象时的 400 响应。 */
+export const invalidEventBodyResponseSchema = Joi.object({
+  message: Joi.string().required(),
+  errorCode: Joi.string().valid('INVALID_REQUEST_BODY').required(),
+}).description('POST /events 非法请求体响应');
+
 /**
  * GET /profile/{userId} 响应 Schema
  */
@@ -575,6 +581,7 @@ export const schemas = {
   getUserEventsResponse: getUserEventsResponseSchema,
   addEventRequest: addEventRequestSchema,
   addEventResponse: addEventResponseSchema,
+  invalidEventBodyResponse: invalidEventBodyResponseSchema,
   getUserProfileResponse: getUserProfileResponseSchema,
   updateUserProfileRequest: updateUserProfileRequestSchema,
   updateUserProfileResponse: updateUserProfileResponseSchema,

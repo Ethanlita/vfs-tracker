@@ -2,6 +2,12 @@
 
 This document summarizes the shared error classes in `src/utils/apiError.js` and how to work with them in both production and development flows. 本指南汇总 `src/utils/apiError.js` 中的通用错误类，并说明在生产模式与开发模式下应如何使用这些工具。
 
+## addVoiceEvent 请求体错误（Issue #38）
+
+`POST /events` 的请求体缺失、不是合法 JSON、或顶层为 `null`、数组、原始值时，返回 HTTP 400 和 `{ message, errorCode: 'INVALID_REQUEST_BODY' }`，保留 CORS 响应头，不写入 DynamoDB。错误响应契约定义在 `invalidEventBodyResponseSchema`。合法对象的必填字段校验保持原行为，数据库故障继续返回 500。
+
+运行 `npm test -- tests/unit/lambda/addVoiceEvent.test.js` 验证非法输入、合法写入、服务故障和 OPTIONS。这是 Lambda 的输入边界修复，不改变前端开发模式逻辑或认证方式；未涉及 UI，无新增视觉状态。此修改只处理 #38 的请求体分类子问题，其他错误分类仍需独立推进。
+
 ## Goals / 目标
 
 - Provide a consistent inheritance tree so that caught errors can be narrowed down quickly. 通过统一的继承树，使捕获到的错误能够快速分类。
