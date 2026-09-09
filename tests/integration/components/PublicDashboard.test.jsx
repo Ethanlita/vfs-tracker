@@ -10,13 +10,14 @@ import userEvent from '@testing-library/user-event';
 import { BrowserRouter } from 'react-router-dom';
 import PublicDashboard from '../../../src/components/PublicDashboard';
 import * as api from '../../../src/api';
+import { dashboardFixture } from '../../../src/test-utils/fixtures/index.js';
 
 // Mock API functions
 vi.mock('../../../src/api', async () => {
   const actual = await vi.importActual('../../../src/api');
   return {
     ...actual,
-    getAllEvents: vi.fn(),
+    getPublicDashboard: vi.fn(), getPublicEventDetails: vi.fn(),
     getUserPublicProfile: vi.fn(),
   };
 });
@@ -35,30 +36,9 @@ vi.mock('../../../src/components/EnhancedDataCharts', () => ({
 describe('PublicDashboard Component', () => {
   const user = userEvent.setup();
 
-  const mockEvents = [
-    {
-      userId: 'user1',
-      userName: '用户1',
-      eventId: 'event1',
-      eventType: 'voice-test',
-      timestamp: '2024-01-01T10:00:00Z',
-    },
-    {
-      userId: 'user1',
-      userName: '用户1',
-      eventId: 'event2',
-      eventType: 'surgery',
-      timestamp: '2024-01-02T10:00:00Z',
-    },
-    {
-      userId: 'user2',
-      userName: '用户2',
-      eventId: 'event3',
-      eventType: 'voice-test',
-      timestamp: '2024-01-03T10:00:00Z',
-    },
-  ];
-
+  const sample = dashboardFixture(3);
+  const mockEvents = sample.light.map((event, index) => index === 2
+    ? { ...event, userId: 'user2', userName: '用户2' } : event);
   const mockUserProfile = {
     userId: 'user1',
     userName: '用户1',
@@ -70,7 +50,7 @@ describe('PublicDashboard Component', () => {
     vi.clearAllMocks();
     
     // Mock API responses
-    api.getAllEvents.mockResolvedValue(mockEvents);
+    api.getPublicDashboard.mockResolvedValue(mockEvents); api.getPublicEventDetails.mockResolvedValue(sample.details);
     api.getUserPublicProfile.mockResolvedValue(mockUserProfile);
   });
 
@@ -96,7 +76,7 @@ describe('PublicDashboard Component', () => {
 
       await waitFor(() => {
         // 等待数据加载
-        expect(api.getAllEvents).toHaveBeenCalled();
+        expect(api.getPublicDashboard).toHaveBeenCalled();
       });
 
       // 应该显示用户总数和事件总数
@@ -114,7 +94,7 @@ describe('PublicDashboard Component', () => {
       );
 
       await waitFor(() => {
-        expect(api.getAllEvents).toHaveBeenCalled();
+        expect(api.getPublicDashboard).toHaveBeenCalled();
       });
 
       // 应该渲染Bar图表(事件分布)
@@ -130,7 +110,7 @@ describe('PublicDashboard Component', () => {
       );
 
       await waitFor(() => {
-        expect(api.getAllEvents).toHaveBeenCalled();
+        expect(api.getPublicDashboard).toHaveBeenCalled();
       });
 
       // 应该显示"暂无可绘制的基频数据"提示
@@ -152,7 +132,7 @@ describe('PublicDashboard Component', () => {
   });
 
   describe('数据加载', () => {
-    it('应该调用getAllEvents API', async () => {
+    it('应该调用getPublicDashboard API', async () => {
       render(
         <BrowserRouter>
           <PublicDashboard />
@@ -160,13 +140,13 @@ describe('PublicDashboard Component', () => {
       );
 
       await waitFor(() => {
-        expect(api.getAllEvents).toHaveBeenCalled();
+        expect(api.getPublicDashboard).toHaveBeenCalled();
       });
     });
 
     it('应该显示加载状态', () => {
       // Mock一个永不resolve的Promise来测试加载状态
-      api.getAllEvents.mockImplementation(() => new Promise(() => {}));
+      api.getPublicDashboard.mockImplementation(() => new Promise(() => {}));
 
       render(
         <BrowserRouter>
@@ -181,7 +161,7 @@ describe('PublicDashboard Component', () => {
 
     it('应该处理API错误', async () => {
       const errorMessage = 'Failed to load events';
-      api.getAllEvents.mockRejectedValue(new Error(errorMessage));
+      api.getPublicDashboard.mockRejectedValue(new Error(errorMessage));
 
       render(
         <BrowserRouter>
@@ -196,7 +176,7 @@ describe('PublicDashboard Component', () => {
     });
 
     it('空数据时应该正常渲染', async () => {
-      api.getAllEvents.mockResolvedValue([]);
+      api.getPublicDashboard.mockResolvedValue([]);
 
       render(
         <BrowserRouter>
@@ -223,7 +203,7 @@ describe('PublicDashboard Component', () => {
       );
 
       await waitFor(() => {
-        expect(api.getAllEvents).toHaveBeenCalled();
+        expect(api.getPublicDashboard).toHaveBeenCalled();
       });
 
       // 应该显示"用户列表"标题
@@ -243,7 +223,7 @@ describe('PublicDashboard Component', () => {
       );
 
       await waitFor(() => {
-        expect(api.getAllEvents).toHaveBeenCalled();
+        expect(api.getPublicDashboard).toHaveBeenCalled();
       });
 
       // 应该显示用户1和用户2
@@ -264,7 +244,7 @@ describe('PublicDashboard Component', () => {
       );
 
       await waitFor(() => {
-        expect(api.getAllEvents).toHaveBeenCalled();
+        expect(api.getPublicDashboard).toHaveBeenCalled();
       });
 
       // 应该有2个"查看档案"按钮(因为有2个用户)
@@ -280,7 +260,7 @@ describe('PublicDashboard Component', () => {
       );
 
       await waitFor(() => {
-        expect(api.getAllEvents).toHaveBeenCalled();
+        expect(api.getPublicDashboard).toHaveBeenCalled();
       });
 
       // 点击第一个"查看档案"按钮
@@ -308,7 +288,7 @@ describe('PublicDashboard Component', () => {
       );
 
       await waitFor(() => {
-        expect(api.getAllEvents).toHaveBeenCalled();
+        expect(api.getPublicDashboard).toHaveBeenCalled();
       });
 
       // 应该显示统计卡片
@@ -326,7 +306,7 @@ describe('PublicDashboard Component', () => {
       );
 
       await waitFor(() => {
-        expect(api.getAllEvents).toHaveBeenCalled();
+        expect(api.getPublicDashboard).toHaveBeenCalled();
       });
 
       // 点击"查看档案"按钮
@@ -355,7 +335,7 @@ describe('PublicDashboard Component', () => {
       );
 
       await waitFor(() => {
-        expect(api.getAllEvents).toHaveBeenCalled();
+        expect(api.getPublicDashboard).toHaveBeenCalled();
       });
 
       // 打开抽屉
@@ -381,7 +361,7 @@ describe('PublicDashboard Component', () => {
       );
 
       await waitFor(() => {
-        expect(api.getAllEvents).toHaveBeenCalled();
+        expect(api.getPublicDashboard).toHaveBeenCalled();
       });
 
       // 打开抽屉
@@ -410,7 +390,7 @@ describe('PublicDashboard Component', () => {
       );
 
       await waitFor(() => {
-        expect(api.getAllEvents).toHaveBeenCalled();
+        expect(api.getPublicDashboard).toHaveBeenCalled();
       });
 
       // 打开抽屉
@@ -445,7 +425,7 @@ describe('PublicDashboard Component', () => {
       );
 
       await waitFor(() => {
-        expect(api.getAllEvents).toHaveBeenCalled();
+        expect(api.getPublicDashboard).toHaveBeenCalled();
       });
 
       // 组件应该正常渲染,Tailwind响应式类自动处理不同视口

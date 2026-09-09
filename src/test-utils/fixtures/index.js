@@ -7,6 +7,7 @@ export * from './users/index.js';
 
 // 事件数据
 export * from './events/index.js';
+export * from './public-dashboard.js';
 
 // API 响应数据（简化版，基于已有数据）
 export const mockApiResponses = {

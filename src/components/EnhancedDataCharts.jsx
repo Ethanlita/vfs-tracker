@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Line } from 'react-chartjs-2';
+import { alignedChartData } from '../utils/publicChartData.js';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -36,7 +37,7 @@ const EnhancedDataCharts = ({ allEvents = [] }) => {
       if (event.type === 'surgery' && event.details) {
         if (event.details.doctor) doctorSet.add(event.details.doctor);
         if (event.details.customDoctor) doctorSet.add(event.details.customDoctor);
-        // 这里可以添加手术方法的提取逻辑，目前mock数据中没有这个字段
+        if (event.details.surgeryMethod) methodSet.add(event.details.surgeryMethod); // 收集已有术式供筛选。
       }
     });
 
@@ -46,120 +47,12 @@ const EnhancedDataCharts = ({ allEvents = [] }) => {
     };
   }, [allEvents]);
 
-  // 生成图表数据
-  const chartData = useMemo(() => {
-    let filteredEvents = allEvents;
-
-    // 根据图表类型过滤事件
-    if (chartType === 'training') {
-      filteredEvents = allEvents.filter(event =>
-        event.type === 'voice_training' || event.type === 'self_practice'
-      );
-    } else if (chartType === 'non-training') {
-      filteredEvents = allEvents.filter(event =>
-        event.type !== 'voice_training' && event.type !== 'self_practice'
-      );
-    } else if (chartType === 'vfs-only') {
-      filteredEvents = allEvents.filter(event => event.type === 'surgery');
-
-      // 应用VFS过滤器
-      if (vfsFilter === 'doctor' && selectedDoctor) {
-        filteredEvents = filteredEvents.filter(event =>
-          event.details?.doctor === selectedDoctor ||
-          event.details?.customDoctor === selectedDoctor
-        );
-      } else if (vfsFilter === 'method' && selectedMethod) {
-        filteredEvents = filteredEvents.filter(event =>
-          event.details?.surgeryMethod === selectedMethod
-        );
-      }
-    }
-
-    if (filteredEvents.length === 0) {
-      return {
-        labels: [],
-        datasets: [{
-          label: '无数据',
-          data: [],
-          borderColor: 'rgb(75, 192, 192)',
-          backgroundColor: 'rgba(75, 192, 192, 0.2)',
-        }]
-      };
-    }
-
-    // 按用户分组
-    const userEvents = {};
-    filteredEvents.forEach(event => {
-      if (!userEvents[event.userId]) {
-        userEvents[event.userId] = [];
-      }
-      userEvents[event.userId].push(event);
-    });
-
-    const colors = [
-      'rgb(255, 99, 132)',
-      'rgb(54, 162, 235)',
-      'rgb(255, 205, 86)',
-      'rgb(75, 192, 192)',
-      'rgb(153, 102, 255)',
-      'rgb(255, 159, 64)'
-    ];
-
-    // 计算对齐的天数
-    let maxDays = 0;
-    const userDatasets = Object.entries(userEvents).map(([userId, events], index) => {
-      // 按日期排序
-      events.sort((a, b) => new Date(a.date || a.createdAt) - new Date(b.date || b.createdAt));
-
-      let referenceDate;
-      if (chartType === 'training') {
-        // 以第一次训练为第0天
-        referenceDate = new Date(events[0].date || events[0].createdAt);
-      } else {
-        // 以第一次事件为第0天
-        referenceDate = new Date(events[0].date || events[0].createdAt);
-      }
-
-      const dataPoints = events
-        .filter(event =>
-          (event.type === 'self_test' || event.type === 'hospital_test') &&
-          event.details?.fundamentalFrequency
-        )
-        .map(event => {
-          const eventDate = new Date(event.date || event.createdAt);
-          const daysDiff = Math.floor((eventDate - referenceDate) / (1000 * 60 * 60 * 24));
-          return {
-            x: daysDiff,
-            y: event.details.fundamentalFrequency
-          };
-        });
-
-      if (dataPoints.length > 0) {
-        const maxX = Math.max(...dataPoints.map(p => p.x));
-        maxDays = Math.max(maxDays, maxX);
-      }
-
-      return {
-        label: `用户 ${userId.slice(-4)}`,
-        data: dataPoints,
-        borderColor: colors[index % colors.length],
-        backgroundColor: colors[index % colors.length].replace('rgb', 'rgba').replace(')', ', 0.2)'),
-        fill: false,
-      };
-    });
-
-    // 生成X轴标签
-    const labels = [];
-    for (let i = 0; i <= maxDays; i += Math.max(1, Math.floor(maxDays / 20))) {
-      labels.push(`第${i}天`);
-    }
-
-    return {
-      labels,
-      datasets: userDatasets.filter(dataset => dataset.data.length > 0)
-    };
-  }, [allEvents, chartType, vfsFilter, selectedDoctor, selectedMethod]);
-
+  // 先选择训练/手术队列，再保留同一用户完整测量数据。
+  const chartData = useMemo(() => alignedChartData(allEvents, {
+    mode: chartType,
+    doctor: vfsFilter === 'doctor' ? selectedDoctor : '',
+    method: vfsFilter === 'method' ? selectedMethod : ''
+  }), [allEvents, chartType, vfsFilter, selectedDoctor, selectedMethod]);
   const chartOptions = {
     responsive: true,
     maintainAspectRatio: false,
