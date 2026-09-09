@@ -199,9 +199,13 @@ describe('CustomAuthenticator 组件测试（Issue #89 邮箱补充验证）', (
   // 登录页
   // ============================================
   describe('登录页', () => {
-    it('遇到 UserNotConfirmedException 时记录待验证账号、进入验证页并自动重发验证码', async () => {
+    it('收到 CONFIRM_SIGN_UP 时记录待验证账号、进入验证页并自动重发验证码', async () => {
       const user = userEvent.setup();
-      vi.mocked(signIn).mockRejectedValueOnce(cognitoError('UserNotConfirmedException'));
+      // Amplify v6 将 Cognito 的异常转换为 nextStep，不向组件抛出该异常。
+      vi.mocked(signIn).mockResolvedValueOnce({
+        isSignedIn: false,
+        nextStep: { signInStep: 'CONFIRM_SIGN_UP' }
+      });
       render(<CustomAuthenticator />);
 
       await user.type(screen.getByPlaceholderText('用户名或邮箱'), ' alice ');
@@ -214,6 +218,29 @@ describe('CustomAuthenticator 组件测试（Issue #89 邮箱补充验证）', (
       expect(await screen.findByText(/验证码已重新发送/)).toBeInTheDocument();
       expect(screen.getByPlaceholderText('注册用户名')).toHaveValue('alice');
       expect(loadPendingSignUp()).toMatchObject({ username: 'alice' });
+    });
+
+    it('自动重发失败后保留验证页和用户名，允许手动重试并完成验证', async () => {
+      const user = userEvent.setup();
+      vi.mocked(signIn).mockResolvedValueOnce({
+        isSignedIn: false, nextStep: { signInStep: 'CONFIRM_SIGN_UP' }
+      });
+      vi.mocked(resendSignUpCode).mockRejectedValueOnce(cognitoError('LimitExceededException'));
+      render(<CustomAuthenticator />);
+      await user.type(screen.getByPlaceholderText('用户名或邮箱'), 'alice');
+      await user.type(screen.getByPlaceholderText('密码'), 'Passw0rd!');
+      await user.click(screen.getByRole('button', { name: '登录' }));
+
+      expect(await screen.findByText(/请在验证页面点击/)).toBeInTheDocument();
+      expect(screen.getByPlaceholderText('注册用户名')).toHaveValue('alice');
+      const resend = screen.getByRole('button', { name: '重新发送验证码' });
+      expect(resend).toBeEnabled();
+      await user.click(resend);
+      expect(await screen.findByText(/验证码已重新发送/)).toBeInTheDocument();
+      await user.type(screen.getByPlaceholderText('验证码'), '123456');
+      await user.click(screen.getByRole('button', { name: '验证' }));
+      expect(await screen.findByText(/邮箱验证成功/)).toBeInTheDocument();
+      expect(loadPendingSignUp()).toBeNull();
     });
 
     it('用待验证账号的邮箱登录失败时给出针对性提示', async () => {

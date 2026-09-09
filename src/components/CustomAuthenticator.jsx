@@ -218,7 +218,11 @@ const CustomAuthenticator = ({ children, hideSignUp = false }) => {
     }
   }, [resendCooldown]);
 
-  // 登录
+  /**
+   * 提交登录并按照 Amplify v6 的 nextStep 推进认证流程。
+   * @param {React.FormEvent<HTMLFormElement>} e - 登录表单提交事件
+   * @returns {Promise<void>} 完成登录或显示下一步所需的界面
+   */
   const handleSignIn = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -235,8 +239,21 @@ const CustomAuthenticator = ({ children, hideSignUp = false }) => {
       
       const { isSignedIn, nextStep } = result;
       
+      // SDK 将未验证账号异常转换为正常返回值，统一在 nextStep 分支处理。
+      if (nextStep?.signInStep === 'CONFIRM_SIGN_UP') {
+        const record = rememberPendingSignUp(username);
+        openConfirmSignUp({ username, email: record?.email || '' });
+        // 自动重发失败时保留验证页面，让用户继续使用已有验证码或手动重试。
+        try {
+          await resendSignUpCode({ username });
+          setSuccessMessage('验证码已重新发送到您的邮箱，请查收并输入验证码。');
+          setResendCooldown(120);
+        } catch (resendErr) {
+          console.error('[CustomAuthenticator] 自动重发验证码失败:', resendErr);
+          setError('您的账号尚未验证邮箱。请在验证页面点击"重新发送"按钮获取验证码。');
+        }
       // 检查是否需要修改临时密码
-      if (nextStep?.signInStep === 'CONFIRM_SIGN_IN_WITH_NEW_PASSWORD_REQUIRED') {
+      } else if (nextStep?.signInStep === 'CONFIRM_SIGN_IN_WITH_NEW_PASSWORD_REQUIRED') {
         console.log('[CustomAuthenticator] 需要修改临时密码');
         setSuccessMessage('检测到您正在使用临时密码，请设置新密码');
         setMode('forceChangePassword');
@@ -264,24 +281,7 @@ const CustomAuthenticator = ({ children, hideSignUp = false }) => {
       }
     } catch (err) {
       console.error('登录错误:', err);
-      if (err.name === 'UserNotConfirmedException') {
-        // 用户名正确但邮箱未验证：记录为待验证账号，方便下次回访直接进入验证（Issue #89）
-        const record = rememberPendingSignUp(username);
-        setLoading(false); // 先关闭登录loading
-        openConfirmSignUp({ username, email: record?.email || '' });
-        // 自动重新发送验证码
-        try {
-          setLoading(true); // 为重发验证码开启loading
-          await resendSignUpCode({ username });
-          setSuccessMessage('验证码已重新发送到您的邮箱，请查收并输入验证码。');
-          setResendCooldown(120); // 启动 120 秒冷却
-        } catch (resendErr) {
-          console.error('[CustomAuthenticator] 自动重发验证码失败:', resendErr);
-          setError('您的账号尚未验证邮箱。请在验证页面点击"重新发送"按钮获取验证码。');
-        } finally {
-          setLoading(false); // 重发操作完成
-        }
-      } else if (err.name === 'NotAuthorizedException' || err.name === 'UserNotFoundException') {
+      if (err.name === 'NotAuthorizedException' || err.name === 'UserNotFoundException') {
         // 用户池开启"防止用户存在性错误"后，用未验证账号的邮箱登录也只会返回 NotAuthorized；
         // 若本设备记录了对应的待验证账号，给出更有针对性的提示（Issue #89）
         if (looksLikeEmail(username) && matchesPendingSignUp(username)) {
