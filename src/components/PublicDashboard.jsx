@@ -23,7 +23,7 @@ import { useDocumentMeta } from '../hooks/useDocumentMeta';
  * It includes summary statistics, a user list with profile view, an event distribution bar chart,
  * and a VFS-aligned multi-user fundamental frequency line chart with statistics.
  * @zh PublicDashboard 展示所有用户的汇总数据、用户列表与档案、事件分布柱状图，
- * 以及基于 VFS 对齐的多用户基频变化折线图与统计指标。
+ * 以及基于 VFS 对齐的多用户基频变化折线图与统计指标；底部用户列表每页显示 20 人。
  * @returns {JSX.Element} The rendered public dashboard component.
  */
 ChartJS.register(
@@ -63,7 +63,7 @@ const PublicDashboard = () => {
   // 使用useAsync钩子获取所有公开事件
   const eventsAsync = useAsync(getPublicDashboard);
   const allEventsState = useMemo(() => eventsAsync.value || [], [eventsAsync.value]);
-  const [visibleUsers, setVisibleUsers] = useState(50);
+  const [userPage, setUserPage] = useState(0);
   const [detailPage, setDetailPage] = useState(0);
   const [detailRetry, setDetailRetry] = useState(0);
   const [detailState, setDetailState] = useState({ items: [], loading: false, error: null });
@@ -92,6 +92,11 @@ const PublicDashboard = () => {
       totalUsers: userMap.size
     };
   }, [allEventsState]);
+
+  // 用户列表独立分页；数据减少时限制有效页码，不影响完整统计或档案明细分页。
+  const userPageCount = Math.max(1, Math.ceil(usersList.length / 20));
+  const currentUserPage = Math.min(userPage, userPageCount - 1);
+  const pageUsers = usersList.slice(currentUserPage * 20, (currentUserPage + 1) * 20);
 
   // 选中用户的数据
   const selectedUser = useMemo(() => {
@@ -398,43 +403,6 @@ const PublicDashboard = () => {
           </div>
         </div>
 
-        {/* 用户列表 */}
-        <div className="bg-white p-6 rounded-xl shadow-md border border-gray-200">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold text-gray-900">用户列表</h2>
-            <span className="text-sm text-gray-500">仅显示 ID 和名称</span>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">用户 ID</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">名称</th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">操作</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {usersList.slice(0, visibleUsers).map((u) => (
-                  <tr key={u.userId} className="hover:bg-gray-50">
-                    <td className="px-4 py-3 font-mono text-sm text-gray-700 truncate max-w-[280px]">{u.userId}</td>
-                    <td className="px-4 py-3 text-sm text-gray-700">{u.userName}</td>
-                    <td className="px-4 py-3 text-right">
-                      <button
-                        type="button"
-                        onClick={() => { setDetailPage(0); setDetailState({ items: [], loading: true, error: null }); setSelectedUserId(u.userId); }}
-                        className="inline-flex items-center rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white shadow-sm hover:bg-indigo-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-indigo-600"
-                      >
-                        查看档案
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {visibleUsers < usersList.length && <button type="button" className="m-4 text-pink-600 hover:underline" onClick={() => setVisibleUsers(count => count + 50)}>显示更多用户</button>}
-          </div>
-        </div>
-
         {/* 增强数据图表 */}
         <div className="bg-white p-6 rounded-xl shadow-md border border-gray-200">
           <h2 className="text-xl font-semibold text-gray-900 mb-4">增强数据分析</h2>
@@ -513,6 +481,55 @@ const PublicDashboard = () => {
             <p className="text-sm text-gray-500">暂无可绘制的基频数据。</p>
           )}
         </div>
+
+        {/* 用户列表置于所有图表之后，分页按钮只切换当前显示的 20 位用户。 */}
+        <section aria-labelledby="dashboard-users-title" className="bg-white p-6 rounded-xl shadow-md border border-gray-200">
+          <div className="flex items-center justify-between mb-4">
+            <h2 id="dashboard-users-title" className="text-xl font-semibold text-gray-900">用户列表</h2>
+            <span className="text-sm text-gray-500">仅显示 ID 和名称</span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">用户 ID</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">名称</th>
+                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">操作</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {pageUsers.map((u) => (
+                  <tr key={u.userId} className="hover:bg-gray-50">
+                    <td className="px-4 py-3 font-mono text-sm text-gray-700 truncate max-w-[280px]">{u.userId}</td>
+                    <td className="px-4 py-3 text-sm text-gray-700">{u.userName}</td>
+                    <td className="px-4 py-3 text-right">
+                      <button
+                        type="button"
+                        onClick={() => { setDetailPage(0); setDetailState({ items: [], loading: true, error: null }); setSelectedUserId(u.userId); }}
+                        className="inline-flex items-center rounded-lg bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white shadow-sm hover:bg-indigo-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-indigo-600"
+                      >
+                        查看档案
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {usersList.length === 0 && <p className="py-4 text-sm text-gray-500">暂无公开用户。</p>}
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm">
+            <p className="text-gray-500">共 {totalUsers} 位用户，每页 20 位</p>
+            {userPageCount > 1 && <nav aria-label="用户列表分页" className="flex items-center gap-3">
+              <button type="button" disabled={currentUserPage === 0}
+                onClick={() => setUserPage(currentUserPage - 1)}
+                className="rounded-lg border border-gray-200 px-3 py-2 font-medium text-indigo-600 hover:bg-indigo-50 disabled:cursor-not-allowed disabled:text-gray-400 disabled:hover:bg-white">上一页</button>
+              <span aria-live="polite" className="text-gray-600">第 {currentUserPage + 1} / {userPageCount} 页</span>
+              <button type="button" disabled={currentUserPage === userPageCount - 1}
+                onClick={() => setUserPage(currentUserPage + 1)}
+                className="rounded-lg border border-gray-200 px-3 py-2 font-medium text-indigo-600 hover:bg-indigo-50 disabled:cursor-not-allowed disabled:text-gray-400 disabled:hover:bg-white">下一页</button>
+            </nav>}
+          </div>
+        </section>
 
         {/* 用户档案抽屉 */}
         {selectedUser && (
