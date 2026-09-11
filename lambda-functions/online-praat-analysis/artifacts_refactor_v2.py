@@ -7,7 +7,6 @@
 """
 from __future__ import annotations
 
-import logging
 from io import BytesIO
 from typing import Dict, List
 
@@ -15,8 +14,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.ticker import ScalarFormatter
 
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
+from structured_logging import create_structured_logger, describe_error
+
+logger = create_structured_logger('online-praat-analysis.artifacts-v2')
 
 
 def _safe_np(arr):
@@ -101,8 +101,8 @@ def create_vrp_chart_v2(glide_rows: List[Dict], vrp_bins: List[Dict], anchors: D
         buf.seek(0)
         plt.close(fig)
         return buf
-    except Exception as e:
-        logger.error(f'create_vrp_chart_v2 failed: {e}', exc_info=True)
+    except Exception as error:
+        logger.error('vrp_chart_create_failed', describe_error(error))
         return None
 
 
@@ -251,6 +251,6 @@ def create_formant_spl_expanded_chart_v2(stable_points: List[Dict], exploratory_
         buf.seek(0)
         plt.close(fig)
         return buf
-    except Exception as e:
-        logger.error(f'create_formant_spl_expanded_chart_v2 failed: {e}', exc_info=True)
+    except Exception as error:
+        logger.error('formant_spl_chart_create_failed', describe_error(error))
         return None

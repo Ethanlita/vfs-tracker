@@ -131,8 +131,13 @@ See data_structures.md for details
 1.  **Build the Docker Image**:
     Navigate to this directory (`lambda-functions/online-praat-analysis`) and run the build command:
     ```bash
-    docker build -t online-praat-analysis . 
+    docker build \
+      --build-arg PARSELMOUTH_SOURCE_REPOSITORY=https://github.com/YannickJadoul/Parselmouth.git \
+      --build-arg PARSELMOUTH_SOURCE_COMMIT=0a0594265823f5c3fdaa661a05c887cdf02ec143 \
+      -t online-praat-analysis .
     ```
+
+    构建会先安装 `requirements-test.txt` 中的隔离测试依赖并运行 `python -m pytest tests`。任一声学、处理程序或 AWS 模拟测试失败都会停止构建；最终运行阶段不安装 pytest/moto，并移除测试源码。
 
 2.  **Push to Amazon ECR**:
     Tag the image and push it to your ECR repository.
@@ -174,49 +179,24 @@ Priority:
 2. `AWS_ENDPOINT_URL`
 3. `LOCALSTACK_ENDPOINT` (only when `USE_LOCALSTACK=true`)
 
-### Install Parselmouth dev wheel (Windows/macOS/Linux)
+### 本地安装 filtered autocorrelation 版本
 
-If you need `To Pitch (filtered autocorrelation)` before an official release, install a development wheel:
-
-1. Download wheel artifacts from the Parselmouth Actions run (or use `gh run download`).
-2. Run the cross-platform installer script in this repository:
+本地运行 v2 Python 管线前，先安装 `requirements.txt`，再从仓库根目录使用与生产镜像相同的固定源码提交安装 Parselmouth：
 
 ```bash
-python scripts/install_parselmouth_dev.py --run-id 21285172527
+python -m pip install -r lambda-functions/online-praat-analysis/requirements.txt
+python scripts/install_parselmouth_dev.py
 ```
 
-The script will:
+脚本通过 pip 克隆完整子模块、从源码构建并安装，随后直接执行 filtered autocorrelation 探针。Windows 源码构建需要 Visual Studio 2022 C++ 工具链；Linux/macOS 需要 CMake 与 C/C++ 编译器。更新版本时显式传入完整提交 SHA，并同步更新生产工作流中的固定值。
 
-- Auto-select artifact name by platform (Windows/macOS/Linux)
-- Recursively find compatible `praat_parselmouth-*.whl`
-- Match against current interpreter tags
-- Install selected wheel into current environment and print `PARSELMOUTH_VERSION` and `PRAAT_VERSION`
+### CI 构建 Parselmouth filtered autocorrelation 版本
 
-Optional parameters:
+v2 默认管线直接依赖 `To Pitch (filtered autocorrelation)`，PyPI 稳定版 0.4.7 不提供该命令，因此 `requirements.txt` 不声明稳定版，也不存在稳定版回退路径。后端镜像工作流从 `PARSELMOUTH_SOURCE_COMMIT` 指定的上游提交及其固定子模块构建 ARM64 wheel；Dockerfile 会在运行完整测试前直接调用该命令，缺少能力时停止构建。该镜像工作流只能由统一后端发布工作流调用；它同时刷新模板兼容的 `latest` 标签并输出不可变 SHA 地址，统一工作流在 SAM 成功后才明确将该 SHA 地址发布到 Lambda。
 
-- `--wheel-dir <path>`: Use local wheel cache directory
-- `--artifact-name <name>`: Force artifact name (e.g., `wheels-manylinux_aarch64`)
-- `--version-fragment 0.5.0.dev0`: Limit candidate version
+共振峰兼容结构中的 `error_details` 使用“键存在即失败”的契约：成功结果只返回 `reason: SUCCESS`，失败结果才返回 `error_details`。不要用空字符串补齐成功结果，否则旧处理程序和前端会把有效分析误判为失败。
 
-### CI auto-install Parselmouth dev wheel (optional)
-
-The backend image workflow `.github/workflows/build-python-lambda.yml` supports Parselmouth dev wheel injection:
-
-- Current default is enabled in workflow env.
-- CI downloads the wheel artifact first, then overrides the package during Docker build.
-
-Current workflow defaults are defined directly in the workflow `env` block:
-
-- `PARSELMOUTH_DEV_WHEEL_ENABLED`: `true`/`false`, current `true`
-- `PARSELMOUTH_DEV_WHEEL_RUN_ID`: Actions run id that produced wheel artifacts (default example `21285172527`)
-- `PARSELMOUTH_DEV_WHEEL_REPO`: source repository (default `YannickJadoul/Parselmouth`)
-- `PARSELMOUTH_DEV_WHEEL_ARTIFACT`: artifact name (default `wheels-manylinux_aarch64`)
-- `PARSELMOUTH_DEV_WHEEL_FILENAME`: exact wheel filename (default `praat_parselmouth-0.5.0.dev0-cp313-cp313-manylinux2014_aarch64.manylinux_2_17_aarch64.whl`)
-- `PARSELMOUTH_DEV_WHEEL_SHA256`: optional integrity check value (if set, CI verifies hash)
-
-If you need to change source/version, update those env values in `.github/workflows/build-python-lambda.yml`.
-
-For current production Lambda (`linux/arm64 + python3.13`), use a compatible wheel (`cp313` + `manylinux_aarch64`).
+外部 GitHub Actions artifact 只有有限保留期，不能作为可重复构建来源。升级 Parselmouth 时必须修改 `.github/workflows/build-python-lambda.yml` 中的固定提交，重新通过 filtered autocorrelation 探针和完整 Lambda 测试，再更新本节记录。
 
 ---
 

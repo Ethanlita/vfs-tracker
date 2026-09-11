@@ -1,8 +1,7 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import { useAuthenticator } from '@aws-amplify/ui-react';
 import { SIDEBAR_ROUTES } from '../routes/nav';
-import { getUserDisplayName } from '../utils/avatar.js';
+import { generateAvatarFromName, getUserDisplayName } from '../utils/avatar.js';
 
 function NavItem({ to, label, onClick }) {
   if (!to) {
@@ -41,10 +40,12 @@ function NavItem({ to, label, onClick }) {
   );
 }
 
+/** 全尺寸功能导航：使用原生模态管理焦点，内容独立滚动。 */
 const Sidebar = ({ open, onClose, user, avatarUrl, docLink, AuthComponent }) => {
   const location = useLocation();
+  const dialogRef = useRef(null);
+  const closeButtonRef = useRef(null);
 
-  useAuthenticator(context => [context.authStatus]);
   const [installPromptEvent, setInstallPromptEvent] = useState(null);
   const [isStandalone, setIsStandalone] = useState(false);
   const [isOnline, setIsOnline] = useState(typeof navigator === 'undefined' ? true : navigator.onLine);
@@ -62,7 +63,7 @@ const Sidebar = ({ open, onClose, user, avatarUrl, docLink, AuthComponent }) => 
       }
 
       // 在线模式：显示所有功能（包括需要登录的）
-      // 未登录用户点击需要认证的功能时，ProtectedRoute会自动跳转到登录页
+      // 未登录用户点击需要认证的功能时，统一路由守卫会自动跳转到登录页
       return true;
     });
   }, [isOnline]);
@@ -82,27 +83,18 @@ const Sidebar = ({ open, onClose, user, avatarUrl, docLink, AuthComponent }) => 
   }, []);
 
   useEffect(() => {
-    if (open) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
-    }
-
+    const dialog = dialogRef.current;
+    if (!open) { dialog.close(); return; }
+    // 原生模态负责焦点约束与背景不可交互；Header 在关闭完成后统一恢复入口焦点。
+    const previousOverflow = document.body.style.overflow;
+    dialog.showModal();
+    closeButtonRef.current?.focus();
+    document.body.style.overflow = 'hidden';
     return () => {
-      document.body.style.overflow = '';
+      dialog.close();
+      document.body.style.overflow = previousOverflow;
     };
   }, [open]);
-
-  useEffect(() => {
-    if (!open) return;
-    const handleKey = (event) => {
-      if (event.key === 'Escape') {
-        onClose?.();
-      }
-    };
-    window.addEventListener('keydown', handleKey);
-    return () => window.removeEventListener('keydown', handleKey);
-  }, [open, onClose]);
 
   const lastPathRef = React.useRef(location.pathname);
 
@@ -119,6 +111,7 @@ const Sidebar = ({ open, onClose, user, avatarUrl, docLink, AuthComponent }) => 
   }, [location.pathname, open, onClose]);
 
   const displayName = user ? getUserDisplayName(user) : '未登录用户';
+  const resolvedAvatarUrl = avatarUrl || generateAvatarFromName(displayName, 64);
   const userEmail = user?.attributes?.email || '';
 
   useEffect(() => {
@@ -184,25 +177,37 @@ const Sidebar = ({ open, onClose, user, avatarUrl, docLink, AuthComponent }) => 
     }
   };
 
+  /** 在首尾控件间循环Tab，避免浏览器将焦点移到地址栏或文档主体。 */
+  const handleDialogKeyDown = event => {
+    if (event.key !== 'Tab') return;
+    const controls = [...dialogRef.current.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex="0"]')]
+      .filter(element => element.getClientRects().length > 0);
+    const first = controls[0];
+    const last = controls[controls.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault(); last?.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault(); first?.focus();
+    }
+  };
+
   return (
-    <div
-      aria-hidden={!open}
-      className={`fixed inset-0 z-[1000] transition ${open ? '' : 'pointer-events-none'}`}
+    <dialog
+      id="site-navigation"
+      ref={dialogRef}
+      aria-labelledby="site-navigation-title"
+      onCancel={event => { event.preventDefault(); onClose?.(); }}
+      onKeyDown={handleDialogKeyDown}
+      onClick={event => { if (event.target === event.currentTarget) onClose?.(); }}
+      className="fixed inset-0 m-0 h-dvh w-screen max-h-none max-w-none border-0 p-0 bg-transparent text-gray-800 backdrop:bg-black/40"
     >
-      <div
-        onClick={onClose}
-        className={`absolute inset-0 bg-black/40 transition-opacity duration-200 ${open ? 'opacity-100' : 'opacity-0'}`}
-      />
       <aside
-        role="dialog"
-        aria-modal="true"
-        className={`absolute left-0 top-0 h-full w-[85%] max-w-[320px] bg-white shadow-xl transition-transform duration-200 ease-in-out ${
-          open ? 'translate-x-0' : '-translate-x-full'
-        }`}
+        className="h-full w-[85%] max-w-[320px] bg-white shadow-xl flex flex-col"
       >
-        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-          <div className="text-base font-semibold text-gray-900">菜单</div>
+        <div className="shrink-0 flex items-center justify-between px-4 py-3 border-b border-gray-100">
+          <div id="site-navigation-title" className="text-base font-semibold text-gray-900">全部功能</div>
           <button
+            ref={closeButtonRef}
             type="button"
             aria-label="关闭菜单"
             onClick={onClose}
@@ -214,9 +219,11 @@ const Sidebar = ({ open, onClose, user, avatarUrl, docLink, AuthComponent }) => 
           </button>
         </div>
 
+        {/* 用户信息、功能和账户操作共用受限滚动区域，横屏也能到达底部。 */}
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain pb-[env(safe-area-inset-bottom)]">
         <div className="flex items-center gap-3 px-4 py-4 border-b border-gray-100">
           <img
-            src={avatarUrl}
+            src={resolvedAvatarUrl}
             alt={displayName}
             className="h-10 w-10 rounded-full object-cover border border-pink-100"
           />
@@ -230,10 +237,11 @@ const Sidebar = ({ open, onClose, user, avatarUrl, docLink, AuthComponent }) => 
           </div>
         </div>
 
-        <nav className="px-3 py-4 space-y-2 overflow-y-auto">
+        <nav aria-label="功能导航" className="px-3 py-4 space-y-2">
+          {!isOnline && <p className="px-3 text-sm text-gray-500">当前离线，仅显示离线可用入口。</p>}
           <div className="space-y-1">
             {navItems.map((item) => (
-              <NavItem key={item.to} to={item.to} label={item.label} onClick={onClose} />
+              <NavItem key={item.to} to={item.to} label={`${item.label}${item.requiresAuth && !user ? '（需登录）' : ''}`} onClick={onClose} />
             ))}
           </div>
 
@@ -244,7 +252,7 @@ const Sidebar = ({ open, onClose, user, avatarUrl, docLink, AuthComponent }) => 
           ) : null}
 
           {!isStandalone && installPromptEvent ? (
-            <div className="pt-3 border-t border-gray-100 mt-3 lg:hidden">
+            <div className="pt-3 border-t border-gray-100 mt-3">
               <button
                 type="button"
                 onClick={() => {
@@ -253,22 +261,23 @@ const Sidebar = ({ open, onClose, user, avatarUrl, docLink, AuthComponent }) => 
                 }}
                 className="w-full rounded-lg bg-pink-500 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-pink-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-pink-500"
               >
-                📲 安装到手机
+                📲 安装应用
               </button>
               <p className="mt-2 text-xs text-gray-500">
-                安装后即可在主屏幕快速打开 VFS Tracker。
+                安装后即可快速打开 VFS Tracker。
               </p>
             </div>
           ) : null}
         </nav>
 
         {AuthComponent && (
-          <div className="mt-auto border-t border-gray-100 px-4 py-4 lg:hidden">
-            <AuthComponent />
+          <div className="border-t border-gray-100 px-4 py-4">
+            <AuthComponent compact />
           </div>
         )}
+        </div>
       </aside>
-    </div>
+    </dialog>
   );
 };
 

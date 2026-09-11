@@ -90,7 +90,7 @@ describe('pendingSignUp.js 单元测试', () => {
 
       expect(loadPendingSignUp(NOW)).toBeNull();
       expect(localStorage.getItem(PENDING_SIGNUP_STORAGE_KEY)).toBeNull();
-      expect(console.warn).toHaveBeenCalled();
+      expect(console.warn).not.toHaveBeenCalled();
     });
 
     it('缺少必要字段的记录视为无效并清除', () => {

@@ -7,6 +7,7 @@ import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient, GetCommand } from "@aws-sdk/lib-dynamodb";
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import jwt from 'jsonwebtoken';
+import { createStructuredLogger, describeError, fingerprintIdentifier } from './structuredLogger.mjs';
 
 // AWS SDK Clients
 const s3Client = new S3Client({ region: process.env.AWS_REGION || 'us-east-1' });
@@ -25,15 +26,11 @@ const VOICE_TESTS_TABLE_NAME = process.env.VOICE_TESTS_TABLE_NAME;
  * @throws {Error} 如果 token 验证失败。
  */
 const verifyToken = (token) => {
-    try {
-        const cleanToken = token.replace('Bearer ', '');
-        // 在生产环境中，这里应该使用密钥进行严格的签名验证
-        const decoded = jwt.decode(cleanToken);
-        return decoded;
-    } catch (error) {
-        console.error("Token verification error:", error);
-        throw new Error('无效的token');
-    }
+    const cleanToken = token.replace('Bearer ', '');
+    // API Gateway 已验证签名；这里只读取已验证 token 的载荷。
+    const decoded = jwt.decode(cleanToken);
+    if (!decoded) throw new TypeError('无效的token');
+    return decoded;
 };
 
 /**
@@ -63,7 +60,8 @@ const createResponse = (statusCode, body, headers = {}) => ({
  * @param {object} event - API Gateway Lambda 事件对象。
  * @returns {Promise<object>} 一个 API Gateway 响应，其中包含预签名的 URL 或错误消息。
  */
-export const handler = async (event) => {
+export const handler = async (event, context = {}) => {
+    const logger = createStructuredLogger({ service: 'getFileUrl', requestId: context.awsRequestId });
     // 处理CORS预检请求
     if (event.httpMethod === 'OPTIONS') {
         return createResponse(204, '');
@@ -72,7 +70,7 @@ export const handler = async (event) => {
     try {
         // 检查服务配置
         if (!BUCKET_NAME) {
-            console.error("BUCKET_NAME environment variable is not set.");
+            logger.error('storage_configuration_missing', { configuration: 'BUCKET_NAME' });
             return createResponse(500, { error: '服务配置错误' });
         }
 
@@ -107,7 +105,7 @@ export const handler = async (event) => {
         } else if (fileKey.startsWith('voice-tests/')) {
             // 验证系统生成的嗓音测试报告
             if (!VOICE_TESTS_TABLE_NAME) {
-                console.error("VOICE_TESTS_TABLE_NAME environment variable is not set.");
+                logger.error('storage_configuration_missing', { configuration: 'VOICE_TESTS_TABLE_NAME' });
                 return createResponse(500, { error: '服务配置错误' });
             }
             const sessionId = pathParts[1];
@@ -150,16 +148,21 @@ export const handler = async (event) => {
             parsed.host = cdnHost;
             signedUrl = parsed.toString();
         } catch (err) {
-            console.error('Error modifying signed URL host:', err);
+            logger.warn('file_cdn_rewrite_failed', describeError(err));
         }
+
+        logger.info('file_url_created', {
+            userHash: fingerprintIdentifier(currentUserId),
+            storageKind: fileKey.split('/')[0],
+            expiresIn: 3600,
+        });
 
         return createResponse(200, { url: signedUrl, expiresIn: 3600 });
 
     } catch (error) {
-        console.error('获取文件URL时发生意外错误:', error);
+        logger.error('file_url_failed', describeError(error));
         return createResponse(500, {
             error: '获取文件URL失败',
-            details: error.message,
         });
     }
 };

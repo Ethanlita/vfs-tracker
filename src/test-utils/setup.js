@@ -171,9 +171,12 @@ vi.mock('aws-amplify/auth', () => {
     mockGetCurrentUser,
     mockFetchUserAttributes,
     mockUpdateUserAttributes,
+    mockUpdatePassword,
     mockSignUp,
     mockConfirmSignUp,
     mockResendSignUpCode,
+    mockSendUserAttributeVerificationCode,
+    mockConfirmUserAttribute,
     mockResetPassword,
     mockConfirmResetPassword,
     mockConfirmSignIn
@@ -185,9 +188,12 @@ vi.mock('aws-amplify/auth', () => {
     getCurrentUser: mockGetCurrentUser,
     fetchUserAttributes: mockFetchUserAttributes,
     updateUserAttributes: mockUpdateUserAttributes,
+    updatePassword: mockUpdatePassword,
     signUp: mockSignUp,
     confirmSignUp: mockConfirmSignUp,
     resendSignUpCode: mockResendSignUpCode,
+    sendUserAttributeVerificationCode: mockSendUserAttributeVerificationCode,
+    confirmUserAttribute: mockConfirmUserAttribute,
     resetPassword: mockResetPassword,
     confirmResetPassword: mockConfirmResetPassword,
     confirmSignIn: mockConfirmSignIn,
@@ -305,3 +311,9 @@ global.ResizeObserver = class ResizeObserver {
 };
 
 console.log('✅ Test environment setup completed');
+
+// jsdom尚未实现原生dialog顶层行为；这里只模拟开关，真实焦点/背景隔离由浏览器测试验证。
+if (!HTMLDialogElement.prototype.showModal) {
+  HTMLDialogElement.prototype.showModal = function showModal() { this.setAttribute('open', ''); };
+  HTMLDialogElement.prototype.close = function close() { this.removeAttribute('open'); };
+}

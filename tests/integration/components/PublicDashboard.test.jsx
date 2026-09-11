@@ -401,14 +401,9 @@ describe('PublicDashboard Component', () => {
         expect(api.getUserPublicProfile).toHaveBeenCalled();
       });
 
-      // 点击背景遮罩（通过dialog外部点击）
+      // 原生dialog的全屏容器在面板外接收遮罩点击。
       const dialog = screen.getByRole('dialog', { name: /用户公开资料/i });
-      // 获取dialog的父元素（fixed inset-0 z-50层）
-      const dialogContainer = dialog;
-      // 点击遮罩层（在dialog内部通过aria-hidden="true"标记）
-      const overlay = dialogContainer.querySelector('[aria-hidden="true"]');
-      await user.click(overlay);
-
+      await user.click(dialog.firstElementChild);
       // 抽屉应该消失
       await waitFor(() => {
         expect(screen.queryByRole('dialog', { name: /用户公开资料/i })).not.toBeInTheDocument();

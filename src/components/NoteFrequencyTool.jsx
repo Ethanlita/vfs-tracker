@@ -176,11 +176,14 @@ const NoteFrequencyTool = () => {
   const [activeMidi, setActiveMidi] = useState(69);
   const [analysis, setAnalysis] = useState(null);
   const [isOnline, setIsOnline] = useState(typeof navigator === 'undefined' ? true : navigator.onLine);
-  const [isUsingFallback, setIsUsingFallback] = useState(false);
+  const [isUsingFallback, setIsUsingFallback] = useState(true);
+  const [isLoadingInstrument, setIsLoadingInstrument] = useState(false);
 
   const audioContextRef = useRef(null);
   const instrumentRef = useRef(null);
   const unmountedRef = useRef(false);
+  const instrumentLoadRef = useRef(null);
+  const playRequestRef = useRef(0);
 
   /**
    * @en Lazily create or resume an AudioContext instance.
@@ -198,10 +201,9 @@ const NoteFrequencyTool = () => {
     if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
       audioContextRef.current = new AudioCtx();
     }
-    if (audioContextRef.current.state === 'suspended') {
-      await audioContextRef.current.resume();
-    }
-    return audioContextRef.current;
+    const ctx = audioContextRef.current;
+    if (ctx.state === 'suspended') await ctx.resume();
+    return ctx;
   }, []);
 
   /**
@@ -210,22 +212,33 @@ const NoteFrequencyTool = () => {
    * @param {number} midi - MIDI note number.
    */
   const playMidiNote = useCallback(async (midi) => {
+    const request = ++playRequestRef.current;
     try {
       const ctx = await ensureAudioContext();
-      if (!ctx) return;
+      if (!ctx || unmountedRef.current || ctx !== audioContextRef.current || request !== playRequestRef.current) return;
 
       const noteName = midiToNoteName(midi);
       const frequency = midiToFrequency(midi);
 
-      if (instrumentRef.current === null && typeof navigator !== 'undefined' && navigator.onLine) {
-        try {
-          instrumentRef.current = await Soundfont.instrument(ctx, 'acoustic_grand_piano');
+      if (instrumentRef.current === null && !instrumentLoadRef.current && navigator.onLine) {
+        // 下载共享一次流程，当前按键立即使用合成器，不排队补播旧音符。
+        const task = { ctx };
+        instrumentLoadRef.current = task;
+        setIsLoadingInstrument(true);
+        Promise.resolve().then(() => Soundfont.instrument(ctx, 'acoustic_grand_piano')).then(instrument => {
+          if (unmountedRef.current || audioContextRef.current !== ctx || instrumentLoadRef.current !== task) return;
+          instrumentRef.current = instrument;
           setIsUsingFallback(false);
-        } catch (loadError) {
-          console.warn('无法加载钢琴音色，改用合成器兜底', loadError);
+        }).catch(() => {
+          if (unmountedRef.current || audioContextRef.current !== ctx || instrumentLoadRef.current !== task) return;
+
           instrumentRef.current = undefined;
           setIsUsingFallback(true);
-        }
+        }).finally(() => {
+          if (instrumentLoadRef.current !== task) return;
+          instrumentLoadRef.current = null;
+          if (!unmountedRef.current) setIsLoadingInstrument(false);
+        });
       }
 
       if (instrumentRef.current && instrumentRef.current !== undefined) {
@@ -249,8 +262,9 @@ const NoteFrequencyTool = () => {
       oscillator.start();
       oscillator.stop(ctx.currentTime + 1.2);
       setIsUsingFallback(true);
-    } catch (error) {
-      console.error('播放音频失败:', error);
+    } catch {
+      // 错误已由页面状态或恢复路径处理，不向控制台输出用户数据。
+
     }
   }, [ensureAudioContext]);
 
@@ -317,7 +331,7 @@ const NoteFrequencyTool = () => {
       return;
     }
 
-    const { midi, label } = parsed;
+    const { midi } = parsed;
     const clampedMidi = clamp(midi, KEYBOARD_RANGE.min, KEYBOARD_RANGE.max);
     const baseFrequency = midiToFrequency(clampedMidi);
     const outOfRange = midi !== clampedMidi;
@@ -325,7 +339,9 @@ const NoteFrequencyTool = () => {
     setNoteError(outOfRange ? '该音名超出了 88 键钢琴范围，已显示最近的音。' : '');
     setNoteResult({
       midi: clampedMidi,
-      note: label,
+      // 等式、输入框和高亮都使用实际播放的琴键，原输入单独说明。
+      note: midiToNoteName(clampedMidi),
+      originalNote: parsed.display,
       frequency: baseFrequency,
       outOfRange,
     });
@@ -423,18 +439,27 @@ const NoteFrequencyTool = () => {
     setActiveMidi(defaultMidi);
   }, []);
 
-  useEffect(() => () => {
-    unmountedRef.current = true;
-    if (instrumentRef.current && instrumentRef.current.stop) {
-      try {
-        instrumentRef.current.stop();
-      } catch (error) {
-        console.warn('停止钢琴音色失败', error);
+  useEffect(() => {
+    // StrictMode会执行设置→清理→设置，每次挂载均恢复可交互状态。
+    unmountedRef.current = false;
+    return () => {
+      unmountedRef.current = true;
+      playRequestRef.current += 1;
+      instrumentLoadRef.current = null;
+      if (instrumentRef.current && instrumentRef.current.stop) {
+        try {
+          instrumentRef.current.stop();
+        } catch {
+      // 错误已由页面状态或恢复路径处理，不向控制台输出用户数据。
+
+        }
       }
-    }
-    if (audioContextRef.current) {
-      audioContextRef.current.close().catch(() => {});
-    }
+      if (audioContextRef.current) {
+        audioContextRef.current.close().catch(() => {});
+      }
+      audioContextRef.current = null;
+      instrumentRef.current = null;
+    };
   }, []);
 
   useEffect(() => {
@@ -459,7 +484,7 @@ const NoteFrequencyTool = () => {
         instrumentRef.current = null;
       }
       if (!instrumentRef.current) {
-        setIsUsingFallback(false);
+        setIsUsingFallback(true);
       }
     } else {
       setIsUsingFallback(true);
@@ -469,17 +494,17 @@ const NoteFrequencyTool = () => {
   const currentSource = analysis?.source || null;
 
   return (
-    <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8 max-w-6xl">
-      <div className="bg-white rounded-2xl shadow-sm border border-pink-100 p-6 sm:p-8 mb-8">
+    <div className="container mx-auto min-w-0 px-2 sm:px-6 lg:px-8 py-8 max-w-6xl">
+      <div className="min-w-0 bg-white rounded-2xl shadow-sm border border-pink-100 p-3 sm:p-8 mb-8 [overflow-wrap:anywhere]">
         <h1 className="text-3xl sm:text-4xl font-bold text-pink-600 mb-4">Hz-音符转换器</h1>
         <p className="text-base sm:text-lg text-gray-700 leading-relaxed">
           输入频率或音名即可获得对应的琴键，并在下方 88 键钢琴上以粉色高亮显示。
-          无需登录即可使用，在线时采用钢琴音色，离线时自动切换为合成器播放。
+          无需登录即可使用，钢琴音色准备好后用于新按键；加载期间或离线时立即使用合成器播放。
         </p>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2 mb-8">
-        <form onSubmit={handleFrequencySubmit} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 flex flex-col gap-4">
+      <div className="grid min-w-0 grid-cols-1 gap-6 lg:grid-cols-2 mb-8">
+        <form onSubmit={handleFrequencySubmit} className="min-w-0 bg-white rounded-2xl shadow-sm border border-gray-100 p-3 sm:p-6 flex flex-col gap-4 [overflow-wrap:anywhere]">
           <div>
             <h2 className="text-xl font-semibold text-gray-900 mb-2">Hz → 音名</h2>
             <p className="text-sm text-gray-600">输入频率后点击转换，系统会找到最接近的钢琴键并显示音名。</p>
@@ -490,7 +515,7 @@ const NoteFrequencyTool = () => {
               type="text"
               value={frequencyInput}
               onChange={(event) => setFrequencyInput(event.target.value)}
-              className="rounded-lg border border-gray-300 px-3 py-2 text-base focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
+              className="w-full min-w-0 max-w-full rounded-lg border border-gray-300 px-3 py-2 text-base focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
               placeholder="例如 440"
               inputMode="decimal"
               autoComplete="off"
@@ -498,7 +523,7 @@ const NoteFrequencyTool = () => {
           </label>
           <button
             type="submit"
-            className="inline-flex items-center justify-center gap-2 rounded-lg bg-pink-500 text-white px-4 py-2 font-semibold hover:bg-pink-600 transition-colors"
+            className="inline-flex w-full min-w-0 items-center justify-center gap-2 rounded-lg bg-pink-500 text-white px-3 sm:px-4 py-2 font-semibold whitespace-normal hover:bg-pink-600 transition-colors"
           >
             立即转换
           </button>
@@ -506,7 +531,7 @@ const NoteFrequencyTool = () => {
             <p className="text-sm text-red-500">{frequencyError}</p>
           ) : null}
           {frequencyResult ? (
-            <div className="rounded-lg bg-pink-50 border border-pink-100 px-4 py-3 text-sm text-pink-700">
+            <div className="min-w-0 rounded-lg bg-pink-50 border border-pink-100 px-3 sm:px-4 py-3 text-sm text-pink-700 [overflow-wrap:anywhere]">
               <div>
                 {formatFrequency(frequencyResult.inputHz)} Hz ≈ {frequencyResult.note}
                 {frequencyResult.cents ? (
@@ -520,7 +545,7 @@ const NoteFrequencyTool = () => {
           ) : null}
         </form>
 
-        <form onSubmit={handleNoteSubmit} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 flex flex-col gap-4">
+        <form onSubmit={handleNoteSubmit} className="min-w-0 bg-white rounded-2xl shadow-sm border border-gray-100 p-3 sm:p-6 flex flex-col gap-4 [overflow-wrap:anywhere]">
           <div>
             <h2 className="text-xl font-semibold text-gray-900 mb-2">音名 → Hz</h2>
             <p className="text-sm text-gray-600">支持带升降号的音名（如 C#4、Bb3），返回的频率始终落在 88 键范围内。</p>
@@ -531,14 +556,14 @@ const NoteFrequencyTool = () => {
               type="text"
               value={noteInput}
               onChange={(event) => setNoteInput(event.target.value)}
-              className="rounded-lg border border-gray-300 px-3 py-2 text-base focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
+              className="w-full min-w-0 max-w-full rounded-lg border border-gray-300 px-3 py-2 text-base focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
               placeholder="例如 A4 或 C#5"
               autoComplete="off"
             />
           </label>
           <button
             type="submit"
-            className="inline-flex items-center justify-center gap-2 rounded-lg bg-pink-500 text-white px-4 py-2 font-semibold hover:bg-pink-600 transition-colors"
+            className="inline-flex w-full min-w-0 items-center justify-center gap-2 rounded-lg bg-pink-500 text-white px-3 sm:px-4 py-2 font-semibold whitespace-normal hover:bg-pink-600 transition-colors"
           >
             立即转换
           </button>
@@ -546,19 +571,19 @@ const NoteFrequencyTool = () => {
             <p className="text-sm text-red-500">{noteError}</p>
           ) : null}
           {noteResult ? (
-            <div className="rounded-lg bg-pink-50 border border-pink-100 px-4 py-3 text-sm text-pink-700">
+            <div className="min-w-0 rounded-lg bg-pink-50 border border-pink-100 px-3 sm:px-4 py-3 text-sm text-pink-700 [overflow-wrap:anywhere]">
               <div>
                 {noteResult.note} = {formatFrequency(noteResult.frequency)} Hz
               </div>
               {noteResult.outOfRange ? (
-                <div className="mt-1 text-xs text-pink-600">提示：音名超出范围，已对齐最近的琴键。</div>
+                <div className="mt-1 text-xs text-pink-600">原输入 {noteResult.originalNote} 超出范围，以上为最近琴键的音名和频率。</div>
               ) : null}
             </div>
           ) : null}
         </form>
       </div>
 
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 mb-8">
+      <div className="min-w-0 bg-white rounded-2xl shadow-sm border border-gray-100 p-3 sm:p-6 mb-8 [overflow-wrap:anywhere]">
         <h2 className="text-xl font-semibold text-gray-900 mb-4">当前选中</h2>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <div className="rounded-lg border border-gray-100 bg-gray-50 px-4 py-3">
@@ -585,17 +610,17 @@ const NoteFrequencyTool = () => {
         ) : null}
       </div>
 
-      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+      <div className="min-w-0 bg-white rounded-2xl shadow-sm border border-gray-100 p-3 sm:p-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
           <h2 className="text-xl font-semibold text-gray-900">88 键钢琴</h2>
           <div className="flex flex-wrap items-center gap-2 text-sm text-gray-600">
             <span className="inline-flex items-center gap-1 rounded-full bg-pink-50 px-3 py-1 text-pink-600 border border-pink-100">粉色 = 当前音</span>
             <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-3 py-1 text-gray-600 border border-gray-200">
-              {isOnline ? (isUsingFallback ? '在线（使用合成器音色）' : '在线（钢琴音色）') : '离线模式'}
+              {isLoadingInstrument ? '音色加载中（当前使用合成器）' : isOnline ? (isUsingFallback ? '在线（使用合成器音色）' : '在线（钢琴音色）') : '离线模式'}
             </span>
           </div>
         </div>
-        <div className="overflow-x-auto touch-pan-x pb-4">
+        <div className="w-full min-w-0 max-w-full overflow-x-auto touch-pan-x pb-4" tabIndex="0" role="region" aria-label="88 键钢琴横向滚动区">
           <div
             className="relative h-48 min-w-full"
             style={{ width: `${whiteKeyCount * WHITE_KEY_WIDTH}px` }}

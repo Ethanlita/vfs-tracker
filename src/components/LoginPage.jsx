@@ -1,5 +1,9 @@
-import React, { useEffect, useState } from 'react';
-import { Authenticator } from '@aws-amplify/ui-react';
+import { LOCAL_TOOL_PATHS } from '../routes/nav.js';
+import { safeReturnUrl, profileSetupUrl } from '../routes/authReturn.js';
+import React, { useEffect, useState, useRef } from 'react';
+import { Authenticator, translations } from '@aws-amplify/ui-react';
+import '@aws-amplify/ui-react/styles.css';
+import { I18n } from 'aws-amplify/utils';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { Amplify } from 'aws-amplify';
@@ -7,18 +11,22 @@ import { Home } from 'lucide-react';
 import CustomAuthenticator from './CustomAuthenticator';
 import { useDocumentMeta } from '../hooks/useDocumentMeta';
 
+// Amplify UI 只在登录路由使用；翻译与样式随登录页面块一起加载。
+I18n.putVocabularies(translations);
+I18n.setLanguage('zh');
+
 /**
  * 独立的登录页面组件
- * 
+ *
  * 提供全页面的登录/注册体验，支持登录后重定向回原页面。
  * 与弹窗登录并存，作为未来替换弹窗登录的基础设施。
- * 
+ *
  * 特性：
  * - 支持 returnUrl 参数，登录后返回原页面
  * - 支持 message 参数，显示自定义提示信息
  * - 已登录用户自动跳转
  * - 响应式设计，美观的品牌一致性UI
- * 
+ *
  * @returns {JSX.Element} 登录页面
  */
 const LoginPage = () => {
@@ -30,11 +38,11 @@ const LoginPage = () => {
 
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, isAuthenticated, handleAuthSuccess, authInitialized } = useAuth();
-  
+  const { user, isAuthenticated, handleAuthSuccess, authInitialized, profileLoading, needsProfileSetup } = useAuth();
+
   // 获取 returnUrl，默认为 /mypage
   const searchParams = new URLSearchParams(location.search);
-  const returnUrl = searchParams.get('returnUrl') || '/mypage';
+  const returnUrl = safeReturnUrl(searchParams.get('returnUrl'));
   const message = searchParams.get('message');
 
   const [configReady, setConfigReady] = useState(false);
@@ -46,7 +54,7 @@ const LoginPage = () => {
       const pollInterval = 50; // 每 50ms 检查一次
       const maxWait = 2000; // 最多等待 2 秒
       let waited = 0;
-      
+
       while (waited < maxWait) {
         try {
           const config = Amplify.getConfig();
@@ -54,16 +62,17 @@ const LoginPage = () => {
             setConfigReady(true);
             return;
           }
-        } catch (err) {
-          console.error('[LoginPage] 配置检查失败:', err);
+        } catch {
+      // 错误已由页面状态或恢复路径处理，不向控制台输出用户数据。
+
         }
-        
+
         await new Promise(resolve => setTimeout(resolve, pollInterval));
         waited += pollInterval;
       }
-      
+
       // 超时后仍然标记为 ready，让组件继续渲染（可能是离线模式）
-      console.warn('[LoginPage] Amplify 配置未在预期时间内加载完成');
+
       setConfigReady(true);
     };
     checkConfig();
@@ -71,12 +80,12 @@ const LoginPage = () => {
 
   // 处理登录成功后的跳转
   useEffect(() => {
-    if (isAuthenticated && user && authInitialized) {
-      console.log(`[LoginPage] 用户已登录，跳转至: ${returnUrl}`);
+    if (isAuthenticated && user && authInitialized && !profileLoading) {
+
       // 用户已认证，跳转到目标页面
-      navigate(returnUrl, { replace: true });
+      navigate(needsProfileSetup && navigator.onLine !== false && !LOCAL_TOOL_PATHS.includes(returnUrl.split(/[?#]/)[0]) ? profileSetupUrl(returnUrl) : returnUrl, { replace: true });
     }
-  }, [isAuthenticated, user, authInitialized, navigate, returnUrl]);
+  }, [isAuthenticated, user, authInitialized, navigate, returnUrl, profileLoading, needsProfileSetup]);
 
   if (!configReady) {
     return (
@@ -95,20 +104,20 @@ const LoginPage = () => {
         {/* Logo 和标题区域 */}
         <div className="text-center">
           <div className="flex justify-center mb-6">
-            <img 
-              src="/icons/icon_origin.png" 
-              alt="VFS Tracker Logo" 
+            <img
+              src="/icons/icon-192x192.png"
+              alt="VFS Tracker Logo"
               className="w-24 h-24 object-cover rounded-full drop-shadow-lg"
             />
           </div>
-          
+
           <h1 className="text-4xl font-bold tracking-tight bg-gradient-to-r from-pink-700 to-pink-500 bg-clip-text text-transparent mb-2">
             VFS Tracker
           </h1>
           <h2 className="text-xl font-semibold text-gray-600 mb-4">
             嗓音数据测试和跟踪工具
           </h2>
-          
+
           {message ? (
             <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
               <p className="text-sm text-blue-800">{message}</p>
@@ -119,24 +128,18 @@ const LoginPage = () => {
             </p>
           )}
         </div>
-        
+
         {/* 登录表单区域 */}
         <div className="bg-white py-8 px-6 shadow-xl rounded-2xl border border-gray-100">
           {!useLegacyAuth ? (
             <>
-              <CustomAuthenticator 
+              <CustomAuthenticator
                 hideSignUp={false}
                 loginMechanisms={['username', 'email']}
               >
                 {({ user }) => {
-                  // 登录成功后立即跳转（兼容 Amplify Authenticator API）
-                  if (user) {
-                    console.log('[LoginPage] 登录成功，即将跳转至:', returnUrl);
-                    // 确保 AuthContext 更新状态
-                    handleAuthSuccess(user);
-                    // 立即跳转
-                    navigate(returnUrl, { replace: true });
-                  }
+                  // 自定义认证器在完成事件中调用 children；它不是渲染插槽。
+                  if (user) handleAuthSuccess(user);
                   return null;
                 }}
               </CustomAuthenticator>
@@ -156,13 +159,7 @@ const LoginPage = () => {
           ) : (
             <>
               <Authenticator hideSignUp={false} loginMechanisms={['username', 'email']}>
-                {({ user }) => {
-                  if (user) {
-                    handleAuthSuccess(user);
-                    navigate(returnUrl, { replace: true });
-                  }
-                  return null;
-                }}
+                {({ user }) => <AuthSuccessBridge user={user} onSuccess={handleAuthSuccess} />}
               </Authenticator>
 
               <div className="mt-4 text-center">
@@ -197,3 +194,16 @@ const LoginPage = () => {
 };
 
 export default LoginPage;
+
+/** 仅在认证用户变化时通知上下文，渲染阶段不执行请求或导航。 */
+function AuthSuccessBridge({ user, onSuccess }) {
+  const notified = useRef(null);
+  useEffect(() => {
+    if (!user) return;
+    const identity = user.userId || user.username;
+    if (notified.current === identity) return;
+    notified.current = identity;
+    onSuccess(user);
+  }, [user, onSuccess]);
+  return null;
+}

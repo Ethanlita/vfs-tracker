@@ -27,8 +27,8 @@ const EventList = ({ events }) => {
       setDownloadingKey(fileKey);
       const url = await resolveAttachmentUrl(fileKey, { download: true });
       window.open(url, '_blank');
-    } catch (error) {
-      console.error('Error getting download URL from S3:', error);
+    } catch {
+
       alert('无法获取文件的下载链接。');
     } finally {
       setDownloadingKey(k => (k === fileKey ? null : k));

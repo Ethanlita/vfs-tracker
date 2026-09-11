@@ -1,3 +1,4 @@
+import { parseEventDate, isInRecentDays } from '../utils/calendarDate.js';
 import React, { useState, useEffect, useMemo } from 'react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -23,14 +24,15 @@ const CheckCircle = ({ className, ...props }) => (
 
 // --- Helper Functions ---
 
-// 从事件数据中提取声音参数数据
+/**
+ * 按选定指标提取有限数值，保留零值并按事件日期排序。
+ * @param {Array<object>} events - 已按契约读取的事件。
+ * @param {string} metric - 当前指标键。
+ * @param {object} filters - 医生和手术方式筛选。
+ * @returns {Array<object>} 图表与统计共用的数据点。
+ */
 const extractVoiceDataFromEvents = (events, metric, filters = {}) => {
-  console.log('🔍 extractVoiceDataFromEvents: 开始处理', {
-    totalEvents: events.length,
-    metric,
-    filters,
-    eventsPreview: events.slice(0, 2)
-  });
+
 
   const data = [];
 
@@ -38,24 +40,14 @@ const extractVoiceDataFromEvents = (events, metric, filters = {}) => {
   let eventsWithVoiceData = events.filter(event => {
     const hasVoiceType = event.type === 'self_test' || event.type === 'hospital_test';
     const hasDetails = event.details;
-    const hasFrequency = event.details?.fundamentalFrequency !== undefined;
+    // 各指标独立存在，不能以基频作为共同前提。
 
-    console.log('🔍 事件筛选检查', {
-      eventId: event.eventId,
-      type: event.type,
-      hasVoiceType,
-      hasDetails: !!hasDetails,
-      hasFrequency,
-      details: event.details
-    });
 
-    return hasVoiceType && hasDetails && hasFrequency;
+
+    return hasVoiceType && hasDetails;
   });
 
-  console.log('🎯 筛选出的声音数据事件', {
-    count: eventsWithVoiceData.length,
-    events: eventsWithVoiceData
-  });
+
 
   // 应用过滤器
   if (filters.doctor && filters.doctor !== 'all') {
@@ -73,7 +65,7 @@ const extractVoiceDataFromEvents = (events, metric, filters = {}) => {
   eventsWithVoiceData.forEach(event => {
     const date = event.date || event.createdAt;
     if (!date) {
-      console.warn('⚠️ 事件缺少日期', event);
+
       return;
     }
 
@@ -95,29 +87,24 @@ const extractVoiceDataFromEvents = (events, metric, filters = {}) => {
         value = event.details.fundamentalFrequency;
     }
 
-    if (value !== undefined && value !== null) {
+    if (Number.isFinite(value)) {
       const dataPoint = {
-        date: new Date(date).toLocaleDateString('zh-CN'),
-        value: parseFloat(value),
-        rawDate: new Date(date),
+        date: parseEventDate(date).toLocaleDateString('zh-CN'),
+        value,
+        rawDate: parseEventDate(date),
         eventType: event.type,
         doctor: event.details.doctor || '未指定',
         surgeryMethod: event.details.surgeryMethod || '未指定'
       };
 
-      console.log('📊 添加数据点', { metric, value, dataPoint });
+
       data.push(dataPoint);
-    } else {
-      console.warn('⚠️ 指标值缺失', { metric, eventId: event.eventId, details: event.details });
     }
   });
 
   // 按日期排序
   const sortedData = data.sort((a, b) => a.rawDate - b.rawDate);
-  console.log('✅ extractVoiceDataFromEvents 完成', {
-    finalCount: sortedData.length,
-    data: sortedData
-  });
+
 
   return sortedData;
 };
@@ -162,14 +149,14 @@ const CustomTooltip = ({ active, payload, label }) => {
 
 const ChartCard = ({ title, children }) => (
     <div
-        className="relative w-full h-full bg-gradient-to-br from-white/60 via-gray-50/20 to-purple-50/10 rounded-3xl shadow-inner-lg backdrop-blur-sm overflow-hidden"
+        className="relative w-full min-w-0 h-full bg-gradient-to-br from-white/60 via-gray-50/20 to-purple-50/10 rounded-3xl shadow-inner-lg backdrop-blur-sm"
         style={{ border: 'none' }}
     >
       {/* 顶部装饰性渐变 */}
       <div className="absolute top-0 left-0 right-0 h-32 bg-gradient-to-b from-pink-50/30 via-transparent to-transparent pointer-events-none"></div>
 
       {/* 主要内容区域 */}
-      <div className="relative w-full h-full px-4 sm:px-12 pt-0 pb-4">
+      <div className="relative w-full min-w-0 h-full px-0 sm:px-12 pt-0 pb-4">
         {title ? <h3 className="font-bold text-gray-800 relative z-10 text-2xl sm:text-3xl mb-8">{title}</h3> : null}
         {children}
       </div>
@@ -208,67 +195,37 @@ const VoiceFrequencyChart = ({ events = [], compact = false }) => {
   const metrics = [
     { key: 'f0', label: '基频 (F0)', unit: 'Hz' },
     { key: 'jitter', label: 'Jitter', unit: '%' },
-    { key: 'shimmer', label: 'Shimmer', unit: 'dB' },
+    { key: 'shimmer', label: 'Shimmer', unit: '%' },
     { key: 'hnr', label: '谐噪比 (HNR)', unit: 'dB' }
   ];
 
   const timeRanges = [
-    { key: '1w', label: '1周' },
-    { key: '1m', label: '1月' },
-    { key: '3m', label: '3月' },
+    { key: '1w', label: '7天' },
+    { key: '1m', label: '30天' },
+    { key: '3m', label: '90天' },
     { key: 'all', label: '全部' }
   ];
 
   // 从传入的events提取图表数据
   const chartData = useMemo(() => {
-    console.log('🎯 VoiceFrequencyChart: 处理事件数据', {
-      totalEvents: events.length,
-      selectedMetric,
-      filters,
-      events: events
-    });
+
     const data = extractVoiceDataFromEvents(events, selectedMetric, filters);
-    console.log('📊 VoiceFrequencyChart: 提取的图表数据', {
-      extractedCount: data.length,
-      data: data
-    });
+
     return data;
   }, [events, selectedMetric, filters]);
 
   const filteredData = useMemo(() => {
     if (!chartData.length) return [];
     const now = new Date();
-    return chartData.filter(item => {
-      const itemDate = new Date(item.rawDate);
-      switch (activeRange) {
-        case "1w": {
-          const oneWeekAgo = new Date(now);
-          oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-          return itemDate > oneWeekAgo;
-        }
-        case "1m": {
-          const oneMonthAgo = new Date(now);
-          oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
-          return itemDate > oneMonthAgo;
-        }
-        case "3m": {
-          const threeMonthsAgo = new Date(now);
-          threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
-          return itemDate > threeMonthsAgo;
-        }
-        case "all":
-          return true;
-        default:
-          return true;
-      }
-    });
+    const days = { '1w': 7, '1m': 30, '3m': 90 }[activeRange];
+    return days ? chartData.filter(item => isInRecentDays(item.rawDate, days, now)) : chartData;
   }, [chartData, activeRange]);
 
   const currentMetric = metrics.find(m => m.key === selectedMetric);
   const latestValue = filteredData.length > 0 ? filteredData[filteredData.length - 1].value : 'N/A';
   const averageValue = filteredData.length > 0 ? (filteredData.reduce((acc, item) => acc + item.value, 0) / filteredData.length).toFixed(2) : 'N/A';
 
-  const buttonClasses = "px-3 py-1 text-xs sm:text-sm sm:px-4 sm:py-1.5 font-semibold rounded-full transition-all duration-300 ease-in-out border border-transparent text-gray-600";
+  const buttonClasses = "min-w-0 px-2 py-1 text-xs sm:text-sm sm:px-4 sm:py-1.5 font-semibold rounded-full whitespace-normal leading-tight transition-all duration-300 ease-in-out border border-transparent text-gray-600";
   const activeClasses = "bg-pink-500 text-white shadow-md";
   const inactiveClasses = "hover:bg-gray-200 hover:text-gray-800";
 
@@ -289,9 +246,9 @@ const VoiceFrequencyChart = ({ events = [], compact = false }) => {
 
   return (
       <ChartCard title="">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 space-y-4 md:space-y-0">
+        <div className="flex min-w-0 flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
           {/* Metric Selection */}
-          <div className="flex flex-wrap items-center gap-1 bg-gray-100 p-1.5 rounded-full">
+          <div className="flex w-full min-w-0 flex-wrap items-center gap-1 bg-gray-100 p-1.5 rounded-2xl md:w-auto">
             {metrics.map(metric => (
                 <button
                     key={metric.key}
@@ -304,7 +261,7 @@ const VoiceFrequencyChart = ({ events = [], compact = false }) => {
           </div>
 
           {/* Time Range Selection */}
-          <div className="flex items-center gap-1 bg-gray-100 p-1.5 rounded-full">
+          <div className="flex w-full min-w-0 flex-wrap items-center gap-1 bg-gray-100 p-1.5 rounded-2xl md:w-auto">
             {timeRanges.map(range => (
                 <button
                     key={range.key}
@@ -320,8 +277,8 @@ const VoiceFrequencyChart = ({ events = [], compact = false }) => {
         {/* 过滤器状态显示 */}
         {(filters.doctor !== 'all' || filters.surgeryMethod !== 'all') && (
           <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-4 text-sm">
+            <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
+              <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm [overflow-wrap:anywhere]">
                 <span className="font-medium text-blue-900">当前过滤:</span>
                 {filters.doctor !== 'all' && (
                   <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded">
@@ -345,7 +302,7 @@ const VoiceFrequencyChart = ({ events = [], compact = false }) => {
         )}
 
         {/* 图表容器 */}
-        <div className="relative" style={{ width: '100%', height: chartHeight }}>
+        <div className="relative min-w-0" style={{ width: '100%', height: chartHeight }}>
           <AnimatePresence>
             {filteredData.length === 0 ? (
                 <motion.div
@@ -374,32 +331,33 @@ const VoiceFrequencyChart = ({ events = [], compact = false }) => {
               <XAxis dataKey="date" tick={{ fontSize: tickFontSize }} stroke="#6b7280" />
               <YAxis tick={{ fontSize: tickFontSize }} stroke="#6b7280" unit={currentMetric?.unit} domain={['dataMin - 1', 'dataMax + 1']} />
               <Tooltip content={<CustomTooltip />} />
-              <Area type="monotone" dataKey="value" stroke="#ec4899" strokeWidth={2} fillOpacity={1} fill="url(#colorValue)" />
+              {/* 显示采样点，只有一条记录时也能看到数据。 */}
+              <Area dot={{ r: 3 }} type="monotone" dataKey="value" stroke="#ec4899" strokeWidth={2} fillOpacity={1} fill="url(#colorValue)" />
             </AreaChart>
           </ResponsiveContainer>
         </div>
 
-        <div className="mt-8 flex justify-between items-center pt-6">
-          <div className="flex items-start space-x-8">
+        <div className="mt-8 flex min-w-0 flex-wrap items-center gap-4 pt-6">
+          <div className="flex min-w-0 flex-wrap items-start gap-x-8 gap-y-4 [overflow-wrap:anywhere]">
             {/* Latest Value */}
-            <div>
+            <div className="min-w-0">
               <div className="flex items-center gap-2">
                 <span className="text-xl">✨</span>
                 <p className="text-sm font-medium text-gray-500">最新值</p>
               </div>
-              <p className="mt-1 text-xl font-bold text-gray-800">
+              <p className="mt-1 text-xl font-bold text-gray-800 break-words">
                 {latestValue}
                 <span className="ml-1.5 text-sm font-normal text-gray-500">{currentMetric?.unit}</span>
               </p>
             </div>
 
             {/* Average Value */}
-            <div>
+            <div className="min-w-0">
               <div className="flex items-center gap-2">
                 <span className="text-xl">📊</span>
                 <p className="text-sm font-medium text-gray-500">平均值</p>
               </div>
-              <p className="mt-1 text-xl font-bold text-gray-800">
+              <p className="mt-1 text-xl font-bold text-gray-800 break-words">
                 {averageValue}
                 <span className="ml-1.5 text-sm font-normal text-gray-500">{currentMetric?.unit}</span>
               </p>
@@ -411,12 +369,12 @@ const VoiceFrequencyChart = ({ events = [], compact = false }) => {
         <div className="flex flex-col sm:flex-row gap-4 mt-4">
           {/* 医生过滤 */}
           {doctorOptions.length > 0 && (
-            <div className="flex items-center space-x-2">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
               <label className="text-sm font-medium text-gray-700">医生:</label>
               <select
                 value={filters.doctor}
                 onChange={(e) => handleFilterChange('doctor', e.target.value)}
-                className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500 text-sm"
+                className="min-w-0 max-w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500 text-sm"
               >
                 <option value="all">全部</option>
                 {doctorOptions.map(doctor => (
@@ -428,12 +386,12 @@ const VoiceFrequencyChart = ({ events = [], compact = false }) => {
 
           {/* 手术方法过滤 */}
           {surgeryMethodOptions.length > 0 && (
-            <div className="flex items-center space-x-2">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
               <label className="text-sm font-medium text-gray-700">手术方法:</label>
               <select
                 value={filters.surgeryMethod}
                 onChange={(e) => handleFilterChange('surgeryMethod', e.target.value)}
-                className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500 text-sm"
+                className="min-w-0 max-w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-pink-500 text-sm"
               >
                 <option value="all">全部</option>
                 {surgeryMethodOptions.map(method => (
@@ -446,7 +404,7 @@ const VoiceFrequencyChart = ({ events = [], compact = false }) => {
           {/* 洞察按钮 */}
           <button
             onClick={() => setShowInsights(!showInsights)}
-            className="flex items-center px-3 py-2 bg-pink-100 text-pink-700 rounded-lg hover:bg-pink-200 transition-colors text-sm font-medium"
+            className="flex min-w-0 flex-wrap items-center px-3 py-2 bg-pink-100 text-pink-700 rounded-lg hover:bg-pink-200 transition-colors text-sm font-medium"
           >
             <Lightbulb className="w-4 h-4 mr-2" />
             {showInsights ? '隐藏洞察' : '显示洞察'}

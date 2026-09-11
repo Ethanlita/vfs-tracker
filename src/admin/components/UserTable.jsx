@@ -73,8 +73,8 @@ function UserAvatar({ user }) {
         const url = await getAvatarUrl(clients.s3, avatarKey);
         setAvatarUrl(url);
         setLoadError(false);
-      } catch (err) {
-        console.error('加载头像失败:', err);
+      } catch {
+
         setAvatarUrl(null);
         setLoadError(true);
       }
@@ -91,8 +91,8 @@ function UserAvatar({ user }) {
 
   const bgColor = useMemo(() => {
     const colors = [
-      'bg-red-600', 'bg-orange-600', 'bg-yellow-600', 
-      'bg-green-600', 'bg-teal-600', 'bg-blue-600', 
+      'bg-red-600', 'bg-orange-600', 'bg-yellow-600',
+      'bg-green-600', 'bg-teal-600', 'bg-blue-600',
       'bg-indigo-600', 'bg-purple-600', 'bg-pink-600'
     ];
     const hash = (user.userId || '').split('').reduce((a, b) => a + b.charCodeAt(0), 0);
@@ -102,8 +102,8 @@ function UserAvatar({ user }) {
   // 如果有有效的头像 URL 且未加载失败
   if (avatarUrl && !loadError) {
     return (
-      <img 
-        src={avatarUrl} 
+      <img
+        src={avatarUrl}
         alt={getDisplayName(user)}
         className="w-10 h-10 rounded-full object-cover border border-gray-600"
         onError={() => setLoadError(true)}
@@ -145,7 +145,7 @@ export default function UserTable({ users, onUserClick }) {
     return (
       <div className="bg-gray-800 rounded-xl border border-gray-700 p-12 text-center">
         <svg className="w-12 h-12 text-gray-600 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
             d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
         </svg>
         <p className="text-gray-400">暂无用户数据</p>
@@ -169,8 +169,8 @@ export default function UserTable({ users, onUserClick }) {
           </thead>
           <tbody className="divide-y divide-gray-700">
             {users.map((user) => (
-              <tr 
-                key={user.userId} 
+              <tr
+                key={user.userId}
                 className="hover:bg-gray-700/30 transition-colors cursor-pointer"
                 onClick={() => onUserClick?.(user)}
               >
@@ -196,7 +196,7 @@ export default function UserTable({ users, onUserClick }) {
                 {/* User ID */}
                 <td className="px-6 py-4">
                   <code className="text-xs bg-gray-700/50 px-2 py-1 rounded text-gray-300">
-                    {user.userId?.length > 20 
+                    {user.userId?.length > 20
                       ? `${user.userId.slice(0, 8)}...${user.userId.slice(-8)}`
                       : user.userId}
                   </code>

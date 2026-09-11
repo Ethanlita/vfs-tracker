@@ -1,284 +1,230 @@
 /**
- * 用户资料设置 Lambda函数
- * POST /user/profile-setup
+ * @file 用户首次资料设置 Lambda。
+ * @description 创建或更新当前 Cognito 用户的资料，并通过 baseVersion 阻止离线草稿静默覆盖较新的服务端资料。
  */
-
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, PutCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import { createStructuredLogger, describeError, fingerprintIdentifier } from './structuredLogger.mjs';
 
-// 初始化DynamoDB客户端
-const client = new DynamoDBClient({});
-const dynamodb = DynamoDBDocumentClient.from(client);
-
-// 环境变量
+const dynamodb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const USERS_TABLE = process.env.USERS_TABLE || 'VoiceFemUsers';
-
-// CORS头部
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Amz-Date, X-Api-Key',
 };
 
-/**
- * 从JWT token中提取用户信息 - 专门处理ID Token
- */
-function extractUserFromEvent(event) {
-  try {
-    console.log('🔍 开始提取用户信息，优先处理ID Token');
-    console.log('🔍 事件详情:', {
-      hasRequestContext: !!event.requestContext,
-      hasAuthorizer: !!event.requestContext?.authorizer,
-      authorizerKeys: event.requestContext?.authorizer ? Object.keys(event.requestContext.authorizer) : [],
-      hasHeaders: !!event.headers,
-      headerKeys: event.headers ? Object.keys(event.headers) : []
-    });
+/** 创建 API Gateway 代理响应。 */
+function createResponse(statusCode, body) {
+  return { statusCode, headers: corsHeaders, body: JSON.stringify(body) };
+}
 
-    // 尝试多种方式获取用户信息
-    let claims = null;
-
-    // 方法1：从API Gateway Cognito授权器 (如果设置了)
-    if (event.requestContext?.authorizer?.claims) {
-      claims = event.requestContext.authorizer.claims;
-      console.log('✅ 使用API Gateway授权器提供的claims');
-    }
-    // 方法1.5：检查authorizer的其他可能位置
-    else if (event.requestContext?.authorizer && typeof event.requestContext.authorizer === 'object') {
-      // 有时claims直接在authorizer对象中
-      const authorizer = event.requestContext.authorizer;
-      if (authorizer.sub || authorizer.email) {
-        claims = authorizer;
-        console.log('✅ 使用API Gateway授权器对象作为claims');
-      }
-    }
-
-    // 方法2：手动解析Authorization头中的ID Token
-    if (!claims) {
-      const authHeader = event.headers?.Authorization || event.headers?.authorization;
-      if (authHeader && authHeader.startsWith('Bearer ')) {
-        try {
-          const token = authHeader.substring(7);
-          const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64').toString());
-
-          // 验证这是ID Token
-          if (payload.token_use === 'id') {
-            claims = payload;
-            console.log('✅ 成功解析ID Token，token_use:', payload.token_use);
-          } else {
-            console.warn('⚠️ 收到的不是ID Token，token_use:', payload.token_use);
-            throw new Error(`Expected ID token, but received: ${payload.token_use}`);
-          }
-        } catch (parseError) {
-          console.error('❌ JWT Token解析失败:', parseError);
-          throw new Error(`ID Token parsing failed: ${parseError.message}`);
-        }
-      }
-    }
-
-    if (!claims) {
-      console.error('❌ 未找到认证claims，事件详情:', {
-        hasAuthorizer: !!event.requestContext?.authorizer,
-        authorizerContent: event.requestContext?.authorizer,
-        hasAuthHeader: !!(event.headers?.Authorization || event.headers?.authorization),
-        headers: Object.keys(event.headers || {}),
-        authHeaderPreview: (event.headers?.Authorization || event.headers?.authorization)?.substring(0, 30) + '...'
-      });
-      throw new Error('Invalid authentication token');
-    }
-
-    // 从ID Token中提取用户信息
-    const userInfo = {
-      userId: claims.sub,
-      email: claims.email,
-      username: claims.username || claims['cognito:username'],
-      nickname: claims.nickname || claims.name || claims['cognito:username'] || claims.email?.split('@')[0] || 'Unknown'
-    };
-
-    console.log('✅ 成功提取用户信息:', {
-      userId: userInfo.userId,
-      email: userInfo.email,
-      username: userInfo.username,
-      tokenType: claims.token_use || 'unknown'
-    });
-
-    return userInfo;
-
-  } catch (error) {
-    console.error('❌ 从事件中提取用户信息失败:', error);
-    throw new Error(`Invalid authentication token`);
-  }
+/** 判断值是否为普通 JSON 对象。 */
+function isObject(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
 /**
- * 创建标准HTTP响应
+ * 从 API Gateway Cognito claims 或 Bearer ID token 中提取当前用户。
+ * @param {object} event API Gateway 请求事件。
+ * @returns {{userId:string,email:string|undefined,nickname:string}} 当前用户资料。
+ * @throws {TypeError} 身份不存在或 token 不是 ID token。
  */
-function createResponse(statusCode, body) {
+function extractUserFromEvent(event) {
+  let claims = event.requestContext?.authorizer?.claims;
+  if (!claims && isObject(event.requestContext?.authorizer) && event.requestContext.authorizer.sub) {
+    claims = event.requestContext.authorizer;
+  }
+  if (!claims) {
+    const authorization = event.headers?.Authorization || event.headers?.authorization;
+    if (authorization?.startsWith('Bearer ')) {
+      const token = authorization.slice(7);
+      const part = token.split('.')[1];
+      if (!part) throw new TypeError('Invalid ID token');
+      claims = JSON.parse(Buffer.from(part, 'base64url').toString());
+      if (claims.token_use !== 'id') throw new TypeError('Expected ID token');
+    }
+  }
+  if (!claims?.sub) throw new TypeError('Invalid authentication token');
   return {
-    statusCode,
-    headers: corsHeaders,
-    body: JSON.stringify(body),
+    userId: claims.sub,
+    email: claims.email,
+    nickname: claims.nickname || claims.name || claims['cognito:username'] || claims.email?.split('@')[0] || 'Unknown',
   };
 }
 
 /**
- * 主处理函数
+ * 严格校验资料设置协议，拒绝旧客户端缺少并发版本的写入。
+ * @param {string|undefined} rawBody API Gateway 原始请求体。
+ * @returns {{profile:object,baseVersion:{exists:boolean,updatedAt:string|null},isSkip:boolean}} 已规范化请求。
+ * @throws {TypeError} JSON、字段或类型不符合协议。
  */
-export const handler = async (event) => {
-  console.log('Event:', JSON.stringify(event, null, 2));
-
-  try {
-    // 处理OPTIONS预检请求
-    if (event.httpMethod === 'OPTIONS') {
-      return createResponse(200, { message: 'OK' });
+function parseRequest(rawBody) {
+  let body;
+  try { body = JSON.parse(rawBody); } catch { throw new TypeError('Request body must be valid JSON'); }
+  if (!isObject(body) || Object.keys(body).some(key => !['profile', 'baseVersion'].includes(key))) {
+    throw new TypeError('Request body contains unsupported fields');
+  }
+  const { profile, baseVersion } = body;
+  if (!isObject(profile) || !isObject(baseVersion) || typeof baseVersion.exists !== 'boolean' ||
+      !Object.hasOwn(baseVersion, 'updatedAt') || (baseVersion.updatedAt !== null && typeof baseVersion.updatedAt !== 'string') ||
+      Object.keys(baseVersion).some(key => !['exists', 'updatedAt'].includes(key))) {
+    throw new TypeError('baseVersion is required');
+  }
+  if (baseVersion.exists === false && baseVersion.updatedAt !== null) throw new TypeError('A missing profile cannot have updatedAt');
+  if (baseVersion.updatedAt !== null && (!Number.isFinite(Date.parse(baseVersion.updatedAt)) || !baseVersion.updatedAt.includes('T'))) {
+    throw new TypeError('baseVersion.updatedAt must be an ISO timestamp');
+  }
+  const keys = Object.keys(profile);
+  const isSkip = keys.length === 1 && profile.setupSkipped === true;
+  if (!isSkip) {
+    const expected = ['name', 'bio', 'isNamePublic', 'socials', 'areSocialsPublic'];
+    if (keys.length !== expected.length || keys.some(key => !expected.includes(key)) ||
+        typeof profile.name !== 'string' || !profile.name.trim() || typeof profile.bio !== 'string' ||
+        typeof profile.isNamePublic !== 'boolean' || typeof profile.areSocialsPublic !== 'boolean' ||
+        !Array.isArray(profile.socials) || profile.socials.some(social => !isObject(social) ||
+          Object.keys(social).some(key => !['platform', 'handle'].includes(key)) ||
+          typeof social.platform !== 'string' || !social.platform.trim() ||
+          typeof social.handle !== 'string' || !social.handle.trim())) {
+      throw new TypeError('Profile setup fields are invalid');
     }
+  }
+  return {
+    profile: isSkip ? { setupSkipped: true } : {
+      name: profile.name.trim(), bio: profile.bio, isNamePublic: profile.isNamePublic,
+      socials: profile.socials.map(social => ({ platform: social.platform.trim(), handle: social.handle.trim() })),
+      areSocialsPublic: profile.areSocialsPublic,
+    },
+    baseVersion,
+    isSkip,
+  };
+}
 
+/** 判断读取到的资料是否仍与客户端保存草稿时的版本一致。 */
+function versionMatches(item, baseVersion) {
+  if (Boolean(item) !== baseVersion.exists) return false;
+  return !item || (item.updatedAt || null) === baseVersion.updatedAt;
+}
+
+/** 构造针对现有资料的条件表达式，写入时再次检查版本以关闭读写竞态。 */
+function versionCondition(baseVersion) {
+  return baseVersion.updatedAt === null
+    ? {
+        expression: 'attribute_exists(#userId) AND (attribute_not_exists(#updatedAt) OR attribute_type(#updatedAt, :nullType))',
+        values: { ':nullType': 'NULL' },
+      }
+    : { expression: 'attribute_exists(#userId) AND #updatedAt = :expectedUpdatedAt', values: { ':expectedUpdatedAt': baseVersion.updatedAt } };
+}
+
+/**
+ * 处理资料设置请求。
+ * @param {object} event API Gateway 请求事件。
+ * @returns {Promise<object>} API Gateway 代理响应。
+ */
+export async function handler(event, context = {}) {
+  const logger = createStructuredLogger({ service: 'vfsTrackerUserProfileSetup', requestId: context.awsRequestId });
+  if (event.httpMethod === 'OPTIONS') return createResponse(200, { message: 'OK' });
+  try {
     const authenticatedUser = extractUserFromEvent(event);
-    const requestBody = JSON.parse(event.body);
-
-    console.log('📋 请求体内容:', JSON.stringify(requestBody, null, 2));
-    console.log('📋 请求体中的profile字段:', requestBody.profile);
+    const { profile, baseVersion, isSkip } = parseRequest(event.body);
+    const existing = await dynamodb.send(new GetCommand({
+      TableName: USERS_TABLE,
+      Key: { userId: authenticatedUser.userId },
+      ConsistentRead: true,
+    }));
+    if (!versionMatches(existing.Item, baseVersion)) {
+      logger.warn('profile_setup_conflict', { userHash: fingerprintIdentifier(authenticatedUser.userId), phase: 'read' });
+      return createResponse(409, { message: 'User profile changed after this draft was saved', errorCode: 'PROFILE_SETUP_CONFLICT' });
+    }
 
     const now = new Date().toISOString();
-
-    // 确保有profile数据，如果没有则使用默认值
-    const profileData = requestBody.profile || {};
-    console.log('📋 处理后的profileData:', profileData);
-
-    // 过滤掉nickname字段，使用Cognito的nickname
-    const { nickname, ...cleanProfileData } = profileData;
-    if (nickname) {
-      console.log('Warning: nickname field ignored, using Cognito nickname');
-    }
-
-    const profile = {
-      nickname: authenticatedUser.nickname, // 添加Cognito的nickname到profile中
-      name: cleanProfileData.name || '',
-      bio: cleanProfileData.bio || '',
-      isNamePublic: cleanProfileData.isNamePublic !== undefined ? cleanProfileData.isNamePublic : false,
-      socials: cleanProfileData.socials || [],
-      areSocialsPublic: cleanProfileData.areSocialsPublic !== undefined ? cleanProfileData.areSocialsPublic : false,
-      setupSkipped: cleanProfileData.setupSkipped === true // 保存用户跳过设置的标记，避免循环跳转向导
-    };
-
-    console.log('📋 最终的profile对象:', JSON.stringify(profile, null, 2));
-
-    // 首先检查用户是否已存在
-    const getCommand = new GetCommand({
-      TableName: USERS_TABLE,
-      Key: { userId: authenticatedUser.userId }
-    });
-
-    const existingUser = await dynamodb.send(getCommand);
-    const isNewUser = !existingUser.Item;
-    // 只有当 payload 仅包含 setupSkipped 字段时才走轻量 UpdateCommand 路径
-    // 如果同时传了其他字段（如 name），则走完整 PutCommand 路径以正确保存所有字段
-    const isSkipOnly = cleanProfileData.setupSkipped === true && Object.keys(cleanProfileData).length === 1;
-
-    console.log('🔍 用户状态检查:', {
-      isNewUser,
-      isSkipOnly,
-      hasExistingUser: !!existingUser.Item,
-      existingUserProfile: existingUser.Item?.profile
-    });
-
     let responseUser;
     let statusCode;
-
-    if (isSkipOnly && !isNewUser) {
-      // 跳过场景 + 用户已存在：仅更新 setupSkipped 标记，不覆盖已有资料
-      console.log('⏭️ 用户跳过设置（已存在），仅更新 setupSkipped 标记');
-
-      // 防御性处理：如果已有记录缺少 profile map（数据损坏/迁移），先确保 profile 存在
-      const hasProfile = !!existingUser.Item.profile;
-      const updateExpression = hasProfile
-        ? 'SET profile.setupSkipped = :skipped, updatedAt = :now'
-        : 'SET profile = :newProfile, updatedAt = :now';
-      // 无 profile map 时补充 nickname（数据模型基础字段，getUserProfile 始终从 Cognito 注入）
-      const expressionValues = hasProfile
-        ? { ':skipped': true, ':now': now }
-        : { ':newProfile': { nickname: authenticatedUser.nickname, setupSkipped: true }, ':now': now };
-
-      const updateCommand = new UpdateCommand({
-        TableName: USERS_TABLE,
-        Key: { userId: authenticatedUser.userId },
-        UpdateExpression: updateExpression,
-        ExpressionAttributeValues: expressionValues,
-        // 防止并发/最终一致性场景下 UpdateCommand 意外创建不完整的新记录
-        ConditionExpression: 'attribute_exists(userId)',
-        ReturnValues: 'ALL_NEW'
-      });
-
-      try {
-        const updateResult = await dynamodb.send(updateCommand);
-        responseUser = updateResult.Attributes;
-        statusCode = 200;
-        console.log('✅ setupSkipped 标记已更新，用户资料未被覆盖');
-      } catch (condErr) {
-        if (condErr.name === 'ConditionalCheckFailedException') {
-          // GetCommand 认为用户存在但 UpdateCommand 时已不存在（极端并发），回退到 PutCommand 新建
-          console.warn('⚠️ UpdateCommand 条件检查失败，用户可能已被删除，回退到 PutCommand 创建');
-          // skip-only 场景下只创建最小化 profile，避免写入大量空默认值
-          const minimalProfile = authenticatedUser.nickname
+    try {
+      if (!existing.Item) {
+        const createdProfile = isSkip
+          ? { nickname: authenticatedUser.nickname, setupSkipped: true }
+          : { nickname: authenticatedUser.nickname, ...profile, setupSkipped: false };
+        responseUser = {
+          userId: authenticatedUser.userId,
+          email: authenticatedUser.email,
+          profile: createdProfile,
+          createdAt: now,
+          updatedAt: now,
+        };
+        await dynamodb.send(new PutCommand({
+          TableName: USERS_TABLE,
+          Item: responseUser,
+          ConditionExpression: 'attribute_not_exists(#userId)',
+          ExpressionAttributeNames: { '#userId': 'userId' },
+        }));
+        statusCode = 201;
+      } else if (!existing.Item.profile) {
+        // 损坏的旧记录没有 profile map；保留所有顶层字段并受 updatedAt 条件保护。
+        const condition = versionCondition(baseVersion);
+        responseUser = {
+          ...existing.Item,
+          email: existing.Item.email || authenticatedUser.email,
+          profile: isSkip
             ? { nickname: authenticatedUser.nickname, setupSkipped: true }
-            : { setupSkipped: true };
-          const fallbackData = {
-            userId: authenticatedUser.userId,
-            email: authenticatedUser.email,
-            profile: minimalProfile,
-            createdAt: now,
-            updatedAt: now
-          };
-          const fallbackPut = new PutCommand({ TableName: USERS_TABLE, Item: fallbackData });
-          await dynamodb.send(fallbackPut);
-          responseUser = { ...fallbackData };
-          statusCode = 201;
-        } else {
-          throw condErr;
-        }
-      }
-    } else {
-      // 完整设置场景 或 新用户跳过场景：使用 PutCommand 写入完整记录
-      const userData = {
-        userId: authenticatedUser.userId,
-        email: authenticatedUser.email,
-        profile: profile,
-        updatedAt: now
-      };
-
-      if (isNewUser) {
-        userData.createdAt = now;
+            : { nickname: authenticatedUser.nickname, ...profile, setupSkipped: false },
+          updatedAt: now,
+        };
+        await dynamodb.send(new PutCommand({
+          TableName: USERS_TABLE,
+          Item: responseUser,
+          ConditionExpression: condition.expression,
+          ExpressionAttributeNames: { '#userId': 'userId', '#updatedAt': 'updatedAt' },
+          ExpressionAttributeValues: condition.values,
+        }));
+        statusCode = 200;
       } else {
-        userData.createdAt = existingUser.Item.createdAt;
+        const condition = versionCondition(baseVersion);
+        const names = { '#userId': 'userId', '#updatedAt': 'updatedAt', '#profile': 'profile', '#setupSkipped': 'setupSkipped' };
+        const values = { ...condition.values, ':now': now, ':skipped': isSkip };
+        const assignments = ['#profile.#setupSkipped = :skipped', '#updatedAt = :now'];
+        if (!isSkip) {
+          for (const [index, field] of ['name', 'bio', 'isNamePublic', 'socials', 'areSocialsPublic'].entries()) {
+            names[`#field${index}`] = field;
+            values[`:value${index}`] = profile[field];
+            assignments.unshift(`#profile.#field${index} = :value${index}`);
+          }
+        }
+        const updated = await dynamodb.send(new UpdateCommand({
+          TableName: USERS_TABLE,
+          Key: { userId: authenticatedUser.userId },
+          UpdateExpression: `SET ${assignments.join(', ')}`,
+          ConditionExpression: condition.expression,
+          ExpressionAttributeNames: names,
+          ExpressionAttributeValues: values,
+          ReturnValues: 'ALL_NEW',
+        }));
+        responseUser = updated.Attributes;
+        statusCode = 200;
       }
-
-      console.log('💾 准备写入的用户数据:', JSON.stringify(userData, null, 2));
-
-      const putCommand = new PutCommand({
-        TableName: USERS_TABLE,
-        Item: userData
-      });
-
-      await dynamodb.send(putCommand);
-      responseUser = { ...userData };
-      statusCode = isNewUser ? 201 : 200;
-      console.log('✅ 数据已成功写入DynamoDB');
+    } catch (error) {
+      if (error?.name === 'ConditionalCheckFailedException') {
+        logger.warn('profile_setup_conflict', { userHash: fingerprintIdentifier(authenticatedUser.userId), phase: 'write' });
+        return createResponse(409, { message: 'User profile changed while applying this draft', errorCode: 'PROFILE_SETUP_CONFLICT' });
+      }
+      throw error;
     }
 
-    const response = createResponse(statusCode, {
+    logger.info('profile_setup_completed', {
+      userHash: fingerprintIdentifier(authenticatedUser.userId),
+      isNewUser: !existing.Item,
+      setupSkipped: isSkip,
+    });
+    return createResponse(statusCode, {
       message: 'User profile setup completed successfully',
       user: responseUser,
-      isNewUser: isNewUser
+      isNewUser: !existing.Item,
     });
-
-    console.log('📤 返回响应:', JSON.stringify(response, null, 2));
-
-    return response;
-
   } catch (error) {
-    console.error('Error setting up user profile:', error);
-    return createResponse(500, {
-      message: 'Error setting up user profile',
-      error: error.message
-    });
+    if (error instanceof TypeError || error instanceof SyntaxError) {
+      return createResponse(400, { message: error.message, errorCode: 'INVALID_PROFILE_SETUP_REQUEST' });
+    }
+    logger.error('profile_setup_failed', describeError(error));
+    return createResponse(500, { message: 'Error setting up user profile' });
   }
-};
+}

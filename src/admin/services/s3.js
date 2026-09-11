@@ -3,8 +3,8 @@
  * 封装管理员页面所需的 S3 操作
  */
 
-import { 
-  GetObjectCommand, 
+import {
+  GetObjectCommand,
   ListObjectsV2Command,
   HeadObjectCommand,
 } from '@aws-sdk/client-s3';
@@ -73,7 +73,7 @@ export async function listObjects(client, prefix, maxKeys = 1000) {
   });
 
   const result = await client.send(command);
-  
+
   return (result.Contents || []).map(item => ({
     key: item.Key,
     size: item.Size,
@@ -86,19 +86,20 @@ export async function listObjects(client, prefix, maxKeys = 1000) {
  * @param {S3Client} client
  * @param {string} prefix
  * @returns {Promise<Array>}
+ * @throws {TypeError} S3 客户端不可用时抛出，避免把配置错误伪装成空列表。
  */
 export async function listAllObjects(client, prefix) {
-  console.log('[S3] listAllObjects 开始', { prefix, hasClient: !!client });
-  
+
+
   if (!client) {
-    console.error('[S3] listAllObjects: 客户端未初始化');
-    return [];
+
+    throw new TypeError('S3 client is required');
   }
-  
+
   const allObjects = [];
   let continuationToken = null;
 
-  try {
+  {
     do {
       const command = new ListObjectsV2Command({
         Bucket: BUCKET_NAME,
@@ -106,13 +107,10 @@ export async function listAllObjects(client, prefix) {
         ContinuationToken: continuationToken,
       });
 
-      console.log('[S3] 发送 ListObjectsV2Command', { bucket: BUCKET_NAME, prefix });
+
       const result = await client.send(command);
-      console.log('[S3] ListObjectsV2 返回', { 
-        contentsCount: result.Contents?.length || 0,
-        isTruncated: result.IsTruncated 
-      });
-      
+
+
       allObjects.push(...(result.Contents || []));
       continuationToken = result.NextContinuationToken;
     } while (continuationToken);
@@ -122,9 +120,6 @@ export async function listAllObjects(client, prefix) {
       size: item.Size,
       lastModified: item.LastModified,
     }));
-  } catch (err) {
-    console.error('[S3] listAllObjects 失败:', err);
-    throw err;
   }
 }
 
@@ -142,8 +137,8 @@ export async function getObjectAsBlob(client, key) {
 
   const response = await client.send(command);
   const bytes = await response.Body.transformToByteArray();
-  
-  return new Blob([bytes], { 
+
+  return new Blob([bytes], {
     type: response.ContentType || 'application/octet-stream',
   });
 }
@@ -154,47 +149,42 @@ export async function getObjectAsBlob(client, key) {
  * @param {S3Client} client
  * @param {string} sessionId - 会话 ID
  * @returns {Promise<Array<{key: string, name: string, size: number, lastModified: Date}>>}
+ * @throws {TypeError} 参数缺失或 S3 列表请求失败时抛出，由界面区分失败与真实空结果。
  */
 export async function getTestSessionFiles(client, sessionId) {
   if (!sessionId) {
-    console.warn('[S3] getTestSessionFiles: sessionId 为空');
-    return [];
+
+    throw new TypeError('Session ID is required');
   }
 
   if (!client) {
-    console.error('[S3] getTestSessionFiles: S3 客户端未初始化');
-    return [];
+
+    throw new TypeError('S3 client is required');
   }
 
-  try {
-    // 直接列出 S3 中该 session 的所有文件
-    const prefix = `voice-tests/${sessionId}/`;
-    console.log('[S3] 正在列出文件，前缀:', prefix);
-    
-    const objects = await listAllObjects(client, prefix);
-    console.log('[S3] 找到对象数量:', objects.length, '列表:', objects.map(o => o.key));
-    
-    // 过滤出音频文件（wav, mp3, webm）
-    const audioFiles = objects.filter(f => {
-      const key = f.key.toLowerCase();
-      // 音频文件通常在 raw/ 目录下
-      return (key.includes('/raw/') || !key.includes('/artifacts/')) && 
-             (key.endsWith('.wav') || key.endsWith('.mp3') || key.endsWith('.webm')) &&
-             !key.endsWith('/');
-    });
+  // 直接列出 S3 中该 session 的所有文件；请求错误继续抛给调用方展示。
+  const prefix = `voice-tests/${sessionId}/`;
 
-    console.log('[S3] 过滤后音频文件数量:', audioFiles.length);
+  const objects = await listAllObjects(client, prefix);
 
-    return audioFiles.map(f => ({
-      key: f.key,
-      name: f.key.split('/').pop() || f.key,
-      size: f.size,
-      lastModified: f.lastModified,
-    }));
-  } catch (err) {
-    console.error(`[S3] 获取测试文件失败 (${sessionId}):`, err);
-    return [];
-  }
+
+  // 过滤出音频文件（wav, mp3, webm）。
+  const audioFiles = objects.filter(f => {
+    const key = f.key.toLowerCase();
+    // 音频文件通常在 raw/ 目录下。
+    return (key.includes('/raw/') || !key.includes('/artifacts/')) &&
+           (key.endsWith('.wav') || key.endsWith('.mp3') || key.endsWith('.webm')) &&
+           !key.endsWith('/');
+  });
+
+
+
+  return audioFiles.map(f => ({
+    key: f.key,
+    name: f.key.split('/').pop() || f.key,
+    size: f.size,
+    lastModified: f.lastModified,
+  }));
 }
 
 /**
@@ -205,7 +195,7 @@ export async function getTestSessionFiles(client, sessionId) {
  */
 export async function getAvatarUrl(client, avatarKey) {
   if (!avatarKey) return null;
-  
+
   try {
     return await getPresignedUrl(client, avatarKey, 86400); // 24小时有效
   } catch {
@@ -230,7 +220,7 @@ export async function getAttachmentUrls(client, attachments) {
         const signedUrl = await getPresignedUrl(client, attachment.fileUrl);
         return { ...attachment, signedUrl };
       } catch (err) {
-        console.error(`获取附件 URL 失败: ${attachment.fileUrl}`, err);
+
         return { ...attachment, signedUrl: null, error: err.message };
       }
     })
@@ -244,10 +234,10 @@ export async function getAttachmentUrls(client, attachments) {
  */
 export function formatFileSize(bytes) {
   if (bytes === 0) return '0 B';
-  
+
   const units = ['B', 'KB', 'MB', 'GB'];
   const k = 1024;
   const i = Math.floor(Math.log(bytes) / Math.log(k));
-  
+
   return `${(bytes / Math.pow(k, i)).toFixed(1)} ${units[i]}`;
 }

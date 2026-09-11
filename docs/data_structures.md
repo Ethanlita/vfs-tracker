@@ -190,7 +190,7 @@ Returns a list of approved `Event` objects. The `attachments` field is **exclude
 
 ### GET /events/{userId} (Private)
 
-Returns a list of all `Event` objects for the authenticated user. The `attachments` field is **included** if present.
+Returns `{ events, complete: true }` for the authenticated user. `events` contains every DynamoDB Query page in descending creation-time order, and the `attachments` field is **included** if present. A later-page failure fails the whole request instead of returning a partial list.
 
 ### POST /events
 
@@ -316,6 +316,7 @@ Creates a new `Event` for the authenticated user. The request body can include a
 2. Check if user exists: Get item by `userId` (通过响应中的 `exists` 字段判断)
 3. Update user profile: Update item by `userId`
 4. Skip profile setup: UpdateCommand only sets `profile.setupSkipped = true` (不覆盖已有资料)
+5. Apply offline profile setup: strongly consistent Get by `userId`, followed by a conditional Put/Update that requires the same record existence and `updatedAt` value; conflicts return 409 without a partial write
 
 ---
 

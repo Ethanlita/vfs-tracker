@@ -1,7 +1,7 @@
 /**
  * RubberBand WASM 音高变换处理器
  * 使用 RubberBand Library 的 WebAssembly 版本进行高质量的音高变换
- * 
+ *
  * @module utils/rubberbandProcessor
  */
 
@@ -29,7 +29,7 @@ let initPromise = null;
 /**
  * 初始化 RubberBand WASM 引擎
  * 采用单例模式，确保只初始化一次
- * 
+ *
  * @returns {Promise<RubberBandInterface>} RubberBand API 实例
  */
 export async function initRubberBand() {
@@ -45,40 +45,38 @@ export async function initRubberBand() {
   }
 
   // 开始初始化
-  console.log('[RubberBand] 开始初始化 WASM 引擎...');
-  
+
+
   initPromise = (async () => {
     try {
-      const startTime = performance.now();
-      
       // 方法1: 尝试使用动态 import + ?url 获取 URL，然后 fetch
       try {
-        console.log('[RubberBand] 尝试方法1: 使用 ?url 导入...');
+
         const wasmUrl = (await import('rubberband-wasm/dist/rubberband.wasm?url')).default;
-        console.log('[RubberBand] WASM URL:', wasmUrl);
-        
+
+
         const response = await fetch(wasmUrl);
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
-        
+
         const wasmBytes = await response.arrayBuffer();
-        console.log('[RubberBand] WASM 字节数:', wasmBytes.byteLength);
-        
+
+
         const wasmModule = await WebAssembly.compile(wasmBytes);
-        console.log('[RubberBand] WASM 模块编译成功');
-        
+
+
         rbApi = await RubberBandInterface.initialize(wasmModule);
-        console.log('[RubberBand] RubberBand API 初始化成功');
-      } catch (method1Error) {
-        console.warn('[RubberBand] 方法1 失败，尝试方法2:', method1Error.message);
-        
+
+      } catch {
+
+
         // 方法2: 尝试直接使用 ?init (可能返回已初始化的实例)
         const wasmModule = await import('rubberband-wasm/dist/rubberband.wasm?init');
-        console.log('[RubberBand] ?init 导入结果:', wasmModule);
-        console.log('[RubberBand] wasmModule.default 类型:', typeof wasmModule.default);
-        console.log('[RubberBand] wasmModule.default:', wasmModule.default);
-        
+
+
+
+
         // 检查 default 是什么类型
         if (wasmModule.default instanceof WebAssembly.Module) {
           rbApi = await RubberBandInterface.initialize(wasmModule.default);
@@ -88,19 +86,14 @@ export async function initRubberBand() {
           throw new Error(`未知的 WASM 类型: ${typeof wasmModule.default}`);
         }
       }
-      
+
       isInitialized = true;
-      const loadTime = (performance.now() - startTime).toFixed(2);
-      console.log(`[RubberBand] ✅ WASM 引擎初始化成功，耗时: ${loadTime}ms`);
-      
+
+
       return rbApi;
     } catch (error) {
-      console.error('[RubberBand] ❌ WASM 引擎初始化失败:', error);
-      console.error('[RubberBand] 错误详情:', {
-        message: error.message,
-        stack: error.stack,
-        name: error.name
-      });
+
+
       initPromise = null;
       throw new Error(`RubberBand 初始化失败: ${error.message}`);
     }
@@ -112,7 +105,7 @@ export async function initRubberBand() {
 
 /**
  * 使用 RubberBand 算法进行音高变换
- * 
+ *
  * 工作流程:
  * 1. 初始化 RubberBand 引擎（如未初始化）
  * 2. 创建 RubberBand stretcher 实例
@@ -122,7 +115,7 @@ export async function initRubberBand() {
  *    - Process 阶段：执行音高变换
  * 5. 提取处理后的音频数据
  * 6. 返回新的 AudioBuffer
- * 
+ *
  * @param {AudioBuffer} audioBuffer - 输入的音频数据
  * @param {number} pitchShiftHz - 音高偏移量（Hz），正值升高，负值降低
  * @param {Function} [onProgress] - 可选的进度回调函数 (progress: 0-1)
@@ -130,51 +123,39 @@ export async function initRubberBand() {
  * @throws {Error} 如果处理失败
  */
 export async function processWithRubberBand(audioBuffer, pitchShiftHz, onProgress) {
-  const startTime = performance.now();
-  
   try {
     // 确保 RubberBand 已初始化
     const api = await initRubberBand();
-    
+
     const sampleRate = audioBuffer.sampleRate;
     const numChannels = audioBuffer.numberOfChannels;
     const inputLength = audioBuffer.length;
-    
-    console.log('[RubberBand] 开始处理音频:', {
-      sampleRate,
-      numChannels,
-      inputLength,
-      pitchShiftHz,
-      duration: `${(inputLength / sampleRate).toFixed(2)}s`,
-    });
+
+
 
     // 估算输入音频的平均基频（假设人声范围 80-300Hz）
     const estimatedF0 = 150; // Hz（人声中间值）
-    
+
     // 计算音高比例：新频率 = 原频率 + pitchShiftHz
     // pitchScale = (f0 + shift) / f0
     const pitchScale = (estimatedF0 + pitchShiftHz) / estimatedF0;
-    
-    console.log('[RubberBand] 音高缩放比例:', {
-      estimatedF0,
-      pitchShiftHz,
-      pitchScale: pitchScale.toFixed(4),
-    });
+
+
 
     // 创建 RubberBand stretcher（使用实时模式，质量平衡）
     // 参数: sampleRate, channels, options, initialTimeRatio, initialPitchScale
     // options: 0 = RubberBandStretcher::OptionProcessRealTime
     const rbState = api.rubberband_new(sampleRate, numChannels, 0, 1.0, pitchScale);
-    
+
     // 设置音高缩放（虽然在 new 时已设置，但再次确保）
     api.rubberband_set_pitch_scale(rbState, pitchScale);
-    
+
     // 设置时间比例为 1.0（不改变时长）
     api.rubberband_set_time_ratio(rbState, 1.0);
-    
+
     // 获取建议的处理块大小
     const samplesRequired = api.rubberband_get_samples_required(rbState);
-    console.log('[RubberBand] 建议的处理块大小:', samplesRequired);
+
 
     // 准备输入/输出缓冲区
     const channelBuffers = [];
@@ -192,7 +173,7 @@ export async function processWithRubberBand(audioBuffer, pitchShiftHz, onProgres
     // 分配 WASM 内存
     const channelArrayPtr = api.malloc(numChannels * 4); // 指针数组
     const channelDataPtrs = [];
-    
+
     for (let ch = 0; ch < numChannels; ch++) {
       const bufferPtr = api.malloc(samplesRequired * 4); // Float32
       channelDataPtrs.push(bufferPtr);
@@ -204,10 +185,10 @@ export async function processWithRubberBand(audioBuffer, pitchShiftHz, onProgres
 
     // ============ Study 阶段 ============
     // 第一遍：分析音频特征
-    console.log('[RubberBand] [1/3] Study 阶段开始...');
+
     let readPos = 0;
     let lastProgressReport = Date.now();
-    
+
     while (readPos < inputLength) {
       // 报告进度（最多每 250ms 报告一次）
       if (onProgress && Date.now() - lastProgressReport > 250) {
@@ -227,15 +208,15 @@ export async function processWithRubberBand(audioBuffer, pitchShiftHz, onProgres
 
       // 调用 study 函数
       api.rubberband_study(rbState, channelArrayPtr, remaining, isFinal ? 1 : 0);
-      
+
       readPos += remaining;
     }
-    
-    console.log('[RubberBand] Study 阶段完成');
+
+
 
     // ============ Process 阶段 ============
     // 第二遍：实际处理音频
-    console.log('[RubberBand] [2/3] Process 阶段开始...');
+
     readPos = 0;
     let writePos = 0;
     lastProgressReport = Date.now();
@@ -245,7 +226,7 @@ export async function processWithRubberBand(audioBuffer, pitchShiftHz, onProgres
       while (true) {
         const available = api.rubberband_available(rbState);
         if (available < 1) break;
-        
+
         // 在非最终阶段，等待累积足够的数据
         if (!final && available < samplesRequired) break;
 
@@ -255,7 +236,7 @@ export async function processWithRubberBand(audioBuffer, pitchShiftHz, onProgres
         // 读取处理后的数据并写入输出缓冲区
         for (let ch = 0; ch < numChannels; ch++) {
           const processedData = api.memReadF32(channelDataPtrs[ch], retrieved);
-          
+
           // 确保不会越界
           const copyLength = Math.min(retrieved, outputLength - writePos);
           if (copyLength > 0) {
@@ -287,21 +268,21 @@ export async function processWithRubberBand(audioBuffer, pitchShiftHz, onProgres
 
       // 处理数据
       api.rubberband_process(rbState, channelArrayPtr, remaining, isFinal ? 1 : 0);
-      
+
       // 提取处理后的数据
       retrieveData(false);
-      
+
       readPos += remaining;
     }
 
     // 提取剩余的数据
     retrieveData(true);
-    
-    console.log('[RubberBand] Process 阶段完成, 输出长度:', writePos);
+
+
 
     // ============ 清理阶段 ============
-    console.log('[RubberBand] [3/3] 清理资源...');
-    
+
+
     // 释放 WASM 内存
     for (const ptr of channelDataPtrs) {
       api.free(ptr);
@@ -324,8 +305,7 @@ export async function processWithRubberBand(audioBuffer, pitchShiftHz, onProgres
         outputAudioBuffer.copyToChannel(outputBuffers[ch].subarray(0, writePos), ch);
       }
 
-      const processingTime = (performance.now() - startTime).toFixed(2);
-      console.log(`[RubberBand] ✅ 处理完成，耗时: ${processingTime}ms`);
+
 
       if (onProgress) {
         onProgress(1.0);
@@ -338,14 +318,14 @@ export async function processWithRubberBand(audioBuffer, pitchShiftHz, onProgres
     }
 
   } catch (error) {
-    console.error('[RubberBand] ❌ 处理失败:', error);
+
     throw new Error(`RubberBand 处理失败: ${error.message}`);
   }
 }
 
 /**
  * 检查 RubberBand 是否已初始化
- * 
+ *
  * @returns {boolean} 是否已初始化
  */
 export function isRubberBandReady() {

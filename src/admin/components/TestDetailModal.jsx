@@ -71,7 +71,7 @@ function StatusBadge({ status }) {
 /**
  * 音频播放器组件
  */
-function AudioPlayer({ src, label }) {
+function AudioPlayer({ src, label, onRetry }) {
   const audioRef = useRef(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -84,8 +84,7 @@ function AudioPlayer({ src, label }) {
     if (isPlaying) {
       audioRef.current.pause();
     } else {
-      audioRef.current.play().catch(err => {
-        console.error('播放失败:', err);
+      audioRef.current.play().catch(() => {
         setError('播放失败');
       });
     }
@@ -120,8 +119,11 @@ function AudioPlayer({ src, label }) {
 
   if (error) {
     return (
-      <div className="bg-red-900/30 border border-red-700/50 rounded-lg p-3 text-sm text-red-400">
-        {error}
+      <div className="bg-red-900/30 border border-red-700/50 rounded-lg p-3 text-sm text-red-300" role="alert">
+        <p>{label}：{error}</p>
+        <button type="button" onClick={onRetry} className="mt-2 font-medium underline hover:text-red-200">
+          重新获取播放链接
+        </button>
       </div>
     );
   }
@@ -131,12 +133,12 @@ function AudioPlayer({ src, label }) {
       <div className="flex items-center gap-3 mb-2">
         <span className="text-sm text-gray-400">{label}</span>
       </div>
-      
+
       <div className="flex items-center gap-3">
         {/* 播放/暂停按钮 */}
         <button
           onClick={handlePlayPause}
-          className="w-10 h-10 flex items-center justify-center bg-purple-600 rounded-full 
+          className="w-10 h-10 flex items-center justify-center bg-purple-600 rounded-full
                      hover:bg-purple-500 transition-colors text-white"
         >
           {isPlaying ? (
@@ -153,15 +155,15 @@ function AudioPlayer({ src, label }) {
 
         {/* 进度条 */}
         <div className="flex-1">
-          <div 
+          <div
             className="h-2 bg-gray-600 rounded-full cursor-pointer group"
             onClick={handleSeek}
           >
-            <div 
+            <div
               className="h-full bg-purple-500 rounded-full relative"
               style={{ width: `${duration ? (currentTime / duration) * 100 : 0}%` }}
             >
-              <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full 
+              <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full
                               opacity-0 group-hover:opacity-100 transition-opacity" />
             </div>
           </div>
@@ -195,6 +197,10 @@ export default function TestDetailModal({ test, open, onClose }) {
   const [loadingUser, setLoadingUser] = useState(false);
   const [audioFiles, setAudioFiles] = useState([]);
   const [loadingFiles, setLoadingFiles] = useState(false);
+  const [audioError, setAudioError] = useState(null);
+  const [audioLinkError, setAudioLinkError] = useState(false);
+  const [audioLoadRevision, setAudioLoadRevision] = useState(0);
+  const audioRequestRef = useRef(0);
 
   // 加载用户信息
   useEffect(() => {
@@ -208,8 +214,9 @@ export default function TestDetailModal({ test, open, onClose }) {
         setLoadingUser(true);
         const userData = await getUser(clients.dynamoDB, test.userId);
         setUser(userData);
-      } catch (err) {
-        console.error('加载用户信息失败:', err);
+      } catch {
+      // 错误已由页面状态或恢复路径处理，不向控制台输出用户数据。
+
       } finally {
         setLoadingUser(false);
       }
@@ -222,51 +229,78 @@ export default function TestDetailModal({ test, open, onClose }) {
 
   // 加载音频文件
   useEffect(() => {
+    const requestId = ++audioRequestRef.current;
+
+    /** 仅让当前详情的最新请求更新音频区，避免关闭或切换记录后的迟到响应污染界面。 */
     async function loadAudioFiles() {
-      console.log('[TestDetailModal] loadAudioFiles 开始', { 
-        sessionId: test?.sessionId, 
-        hasClients: !!clients,
-        hasS3: !!clients?.s3 
-      });
-      
+
+
       if (!test?.sessionId || !clients?.s3) {
-        console.warn('[TestDetailModal] 缺少 sessionId 或 S3 客户端');
-        setAudioFiles([]);
+
+        if (requestId === audioRequestRef.current) {
+          setAudioFiles([]);
+          setLoadingFiles(false);
+          setAudioLinkError(false);
+          setAudioError('音频服务尚未就绪，请稍后重试。');
+        }
         return;
       }
 
       try {
         setLoadingFiles(true);
+        setAudioFiles([]);
+        setAudioError(null);
+        setAudioLinkError(false);
         // 根据 sessionId 获取该次测试会话的音频文件
         const files = await getTestSessionFiles(clients.s3, test.sessionId);
-        console.log('[TestDetailModal] 获取到文件:', files);
-        
+
+
         // 为每个文件获取预签名 URL
         const filesWithUrls = await Promise.all(
           files.map(async (file) => {
             try {
               const url = await getPresignedUrl(clients.s3, file.key);
-              console.log('[TestDetailModal] 获取预签名 URL 成功:', file.key);
+
               return { ...file, url };
-            } catch (err) {
-              console.error(`获取文件 URL 失败: ${file.key}`, err);
-              return { ...file, url: null };
+            } catch {
+
+              return { ...file, url: null, urlError: true };
             }
           })
         );
 
-        setAudioFiles(filesWithUrls);
-      } catch (err) {
-        console.error('加载音频文件失败:', err);
+        if (requestId === audioRequestRef.current) {
+          setAudioFiles(filesWithUrls);
+          setAudioLinkError(filesWithUrls.some(file => file.urlError));
+        }
+      } catch {
+
+        if (requestId === audioRequestRef.current) {
+          setAudioFiles([]);
+          setAudioLinkError(false);
+          // 面向管理员只给出可执行提示，避免泄露认证信息或签名地址。
+          setAudioError('音频文件读取失败，请检查网络或服务状态后重试。');
+        }
       } finally {
-        setLoadingFiles(false);
+        if (requestId === audioRequestRef.current) {
+          setLoadingFiles(false);
+        }
       }
     }
 
     if (open && test) {
       loadAudioFiles();
     }
-  }, [test?.sessionId, open, clients]);
+
+    return () => {
+      if (requestId === audioRequestRef.current) {
+        audioRequestRef.current += 1;
+      }
+    };
+  }, [test, open, clients, audioLoadRevision]);
+
+  /** 重新执行同一条音频读取路径，并让当前错误状态在请求开始时清除。 */
+  const retryAudioFiles = () => setAudioLoadRevision(value => value + 1);
 
   // 处理 Escape 键关闭
   useEffect(() => {
@@ -296,14 +330,14 @@ export default function TestDetailModal({ test, open, onClose }) {
   return (
     <>
       {/* 背景遮罩 */}
-      <div 
+      <div
         className="fixed inset-0 bg-black/60 z-40"
         onClick={onClose}
       />
 
       {/* 模态框 */}
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div 
+        <div
           className="bg-gray-900 border border-gray-700 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden"
           onClick={(e) => e.stopPropagation()}
         >
@@ -371,9 +405,9 @@ export default function TestDetailModal({ test, open, onClose }) {
                 <InfoRow label="创建时间" value={formatDateTime(test.createdAt)} />
                 <InfoRow label="完成时间" value={formatDateTime(test.completedAt)} />
                 {test.error && (
-                  <InfoRow 
-                    label="错误信息" 
-                    value={<span className="text-red-400">{test.error}</span>} 
+                  <InfoRow
+                    label="错误信息"
+                    value={<span className="text-red-400">{test.error}</span>}
                   />
                 )}
               </dl>
@@ -530,10 +564,21 @@ export default function TestDetailModal({ test, open, onClose }) {
               <h3 className="text-sm font-medium text-gray-400 uppercase tracking-wider mb-3">
                 音频文件 ({audioFiles.length})
               </h3>
-              
+
               {loadingFiles ? (
                 <div className="bg-gray-800 rounded-lg p-4 text-center">
                   <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-purple-400 mx-auto" />
+                </div>
+              ) : audioError ? (
+                <div className="bg-red-900/30 border border-red-700/50 rounded-lg p-4 text-red-300" role="alert">
+                  <p>{audioError}</p>
+                  <button
+                    type="button"
+                    onClick={retryAudioFiles}
+                    className="mt-3 font-medium underline hover:text-red-200"
+                  >
+                    重试读取音频文件
+                  </button>
                 </div>
               ) : audioFiles.length === 0 ? (
                 <div className="bg-gray-800 rounded-lg p-4 text-center text-gray-500">
@@ -541,12 +586,25 @@ export default function TestDetailModal({ test, open, onClose }) {
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {audioFiles.filter(f => f.url).map((file) => (
-                    <AudioPlayer 
+                  {audioLinkError && (
+                    <div className="bg-red-900/30 border border-red-700/50 rounded-lg p-4 text-red-300" role="alert">
+                      <p>部分音频的播放链接获取失败。</p>
+                      <button type="button" onClick={retryAudioFiles} className="mt-2 font-medium underline hover:text-red-200">
+                        重试获取播放链接
+                      </button>
+                    </div>
+                  )}
+                  {audioFiles.map((file) => file.url ? (
+                    <AudioPlayer
                       key={file.key}
                       src={file.url}
                       label={file.name}
+                      onRetry={retryAudioFiles}
                     />
+                  ) : (
+                    <div key={file.key} className="bg-gray-800 rounded-lg p-4 text-sm text-gray-400">
+                      {file.name}：播放链接暂不可用
+                    </div>
                   ))}
                 </div>
               )}
@@ -555,7 +613,7 @@ export default function TestDetailModal({ test, open, onClose }) {
             {/* 原始数据（调试用） */}
             <section>
               <details className="group">
-                <summary className="text-sm font-medium text-gray-500 uppercase tracking-wider cursor-pointer 
+                <summary className="text-sm font-medium text-gray-500 uppercase tracking-wider cursor-pointer
                                     hover:text-gray-400 transition-colors">
                   原始数据 (JSON)
                 </summary>

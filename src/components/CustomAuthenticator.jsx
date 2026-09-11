@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useId, useRef } from 'react';
 import { signIn, signUp, confirmSignUp, resetPassword, confirmResetPassword, resendSignUpCode, confirmSignIn } from 'aws-amplify/auth';
 import { Mail, Lock, User, AlertCircle, Loader2, Eye, EyeOff } from 'lucide-react';
 import { savePendingSignUp, loadPendingSignUp, clearPendingSignUp, looksLikeEmail } from '../utils/pendingSignUp.js';
@@ -14,42 +14,53 @@ import { savePendingSignUp, loadPendingSignUp, clearPendingSignUp, looksLikeEmai
  * @param {string} props.value - 当前值
  * @param {string} props.autoComplete - 自动完成属性
  * @param {Function} props.onChange - 变化处理函数
- * @param {boolean} props.showPassword - 是否显示密码（密码框专用）
- * @param {Function} props.onTogglePassword - 切换密码显示（密码框专用）
+ * @param {string} [props.describedBy] - 当前表单错误提示的 ID
  * @param {string} [props.inputMode] - 移动端虚拟键盘类型提示（如 numeric，用于验证码输入）
  */
-const Input = ({ icon, type = 'text', name, placeholder, required = true, value, autoComplete, onChange, showPassword, onTogglePassword, inputMode }) => {
+const Input = ({ icon, type = 'text', name, placeholder, required = true, value, autoComplete, onChange, inputMode, describedBy }) => {
   const InputIcon = icon;
+  const id = useId();
+  // 每个密码框独立显示，切换表单时重新隐藏密码。
+  const [showPassword, setShowPassword] = useState(false);
+  const label = placeholder.split('（')[0];
 
   return (
-    <div className="relative">
-      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+    <div className="min-w-0 space-y-1">
+      <label htmlFor={id} className="block text-sm font-medium text-gray-700 [overflow-wrap:anywhere]">{placeholder}</label>
+      <div className="relative">
+      <div aria-hidden="true" className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
         <InputIcon className="h-5 w-5 text-gray-400" />
       </div>
       <input
+        id={id}
+        aria-describedby={describedBy}
         type={type === 'password' && showPassword ? 'text' : type}
         name={name}
         value={value}
         onChange={onChange}
-        className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent"
+        className={`block min-w-0 w-full pl-10 ${type === 'password' ? 'pr-12' : 'pr-3'} py-2 min-h-11 border border-gray-300 rounded-lg focus:ring-2 focus:ring-pink-500 focus:border-transparent`}
         placeholder={placeholder}
         required={required}
         autoComplete={autoComplete}
         inputMode={inputMode}
       />
-      {type === 'password' && onTogglePassword && (
+      {type === 'password' && (
         <button
           type="button"
-          onClick={onTogglePassword}
-          className="absolute inset-y-0 right-0 pr-3 flex items-center"
+          onClick={() => setShowPassword(visible => !visible)}
+          aria-label={`${showPassword ? '隐藏' : '显示'}${label}`}
+          aria-pressed={showPassword}
+          aria-controls={id}
+          className="absolute inset-y-0 right-0 w-11 flex items-center justify-center rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-pink-600"
         >
           {showPassword ? (
-            <EyeOff className="h-5 w-5 text-gray-400" />
+            <EyeOff aria-hidden="true" className="h-5 w-5 text-gray-400" />
           ) : (
-            <Eye className="h-5 w-5 text-gray-400" />
+            <Eye aria-hidden="true" className="h-5 w-5 text-gray-400" />
           )}
         </button>
       )}
+      </div>
     </div>
   );
 };
@@ -88,12 +99,16 @@ const Button = ({ type = 'submit', onClick, children, variant = 'primary', disab
  */
 const IDENTIFIER_HINT = '未完成邮箱验证的账号只能用注册时填写的用户名来验证，验证完成前邮箱还不能作为登录名，请改为输入用户名。';
 
+/** Cognito 必填属性的中文名称；未预置的扩展属性仍可按服务端字段填写。 */
+const ATTRIBUTE_LABELS = { nickname: '昵称', email: '邮箱', name: '姓名', given_name: '名字', family_name: '姓氏', middle_name: '中间名', phone_number: '电话号码（包含国家区号）', birthdate: '出生日期（YYYY-MM-DD）', gender: '性别', address: '地址', locale: '语言区域', zoneinfo: '时区', preferred_username: '首选用户名', profile: '个人资料网址', picture: '头像网址', website: '个人网站', updated_at: '资料更新时间' };
+const attributeLabel = attribute => ATTRIBUTE_LABELS[attribute] || `必填资料（${attribute}）`;
+
 /**
  * 自定义认证组件
- * 
+ *
  * 提供完全自定义的登录、注册、邮箱验证和密码重置功能
  * 使用 Amplify Auth SDK 直接调用 API
- * 
+ *
  * API 兼容 Amplify Authenticator:
  * - 支持 children 函数模式: <CustomAuthenticator>{({ user }) => ...}</CustomAuthenticator>
  * - 支持 hideSignUp prop 隐藏注册功能
@@ -102,7 +117,7 @@ const IDENTIFIER_HINT = '未完成邮箱验证的账号只能用注册时填写�
  * - 注册成功后把待验证账号写入 localStorage，用户回访登录页时提示"继续验证"并预填用户名
  * - 验证页与重发验证码在检测到填的是邮箱时直接提示改用用户名，不再向 Cognito 发起注定失败的请求
  * - 验证成功后立即回到登录页并保留用户名，避免重复提交
- * 
+ *
  * @param {Object} props
  * @param {Function} [props.children] - 认证成功后的渲染函数，接收 { user } 参数（兼容 Amplify）
  * @param {boolean} [props.hideSignUp=false] - 是否隐藏注册链接
@@ -113,14 +128,25 @@ const CustomAuthenticator = ({ children, hideSignUp = false }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  
+  const errorId = useId();
+
   // 重新发送验证码的冷却计时器
   const [resendCooldown, setResendCooldown] = useState(0);
+  const [resetCooldown, setResetCooldown] = useState(0);
+  const resetRequestPending = useRef(false);
+  const [missingAttributes, setMissingAttributes] = useState([]);
+  const [requiredAttributeValues, setRequiredAttributeValues] = useState({});
+
+  // 密码重置与注册验证使用独立冷却，避免不同邮件流程互相阻塞。
+  useEffect(() => {
+    if (resetCooldown <= 0) return;
+    const timer = setTimeout(() => setResetCooldown(value => value - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [resetCooldown]);
 
   // 本设备上"已注册但尚未完成邮箱验证"的账号记录（Issue #89）
   const [pendingSignUp, setPendingSignUp] = useState(() => loadPendingSignUp());
-  
+
   // 表单数据
   const [formData, setFormData] = useState({
     username: '',
@@ -236,9 +262,9 @@ const CustomAuthenticator = ({ children, hideSignUp = false }) => {
         username,
         password: formData.password
       });
-      
+
       const { isSignedIn, nextStep } = result;
-      
+
       // SDK 将未验证账号异常转换为正常返回值，统一在 nextStep 分支处理。
       if (nextStep?.signInStep === 'CONFIRM_SIGN_UP') {
         const record = rememberPendingSignUp(username);
@@ -248,17 +274,24 @@ const CustomAuthenticator = ({ children, hideSignUp = false }) => {
           await resendSignUpCode({ username });
           setSuccessMessage('验证码已重新发送到您的邮箱，请查收并输入验证码。');
           setResendCooldown(120);
-        } catch (resendErr) {
-          console.error('[CustomAuthenticator] 自动重发验证码失败:', resendErr);
+        } catch {
+
           setError('您的账号尚未验证邮箱。请在验证页面点击"重新发送"按钮获取验证码。');
         }
       // 检查是否需要修改临时密码
       } else if (nextStep?.signInStep === 'CONFIRM_SIGN_IN_WITH_NEW_PASSWORD_REQUIRED') {
-        console.log('[CustomAuthenticator] 需要修改临时密码');
+
         setSuccessMessage('检测到您正在使用临时密码，请设置新密码');
         setMode('forceChangePassword');
+        setMissingAttributes(nextStep.missingAttributes || []);
+        setRequiredAttributeValues({});
         // 清空密码字段，准备输入新密码
         setFormData(prev => ({ ...prev, password: '', confirmPassword: '' }));
+      } else if (nextStep?.signInStep === 'RESET_PASSWORD') {
+        // 服务端要求重置时保留用户名，由用户明确点击发送，避免自动重复发信。
+        setFormData(prev => ({ ...prev, username, password: '', confirmPassword: '', code: '' }));
+        setSuccessMessage('您的账号需要重置密码。请发送验证码以设置新密码。');
+        setMode('forgotPassword');
       } else if (isSignedIn) {
         // 能登录说明该账号已完成验证，清除本设备上对应的待验证记录
         if (matchesPendingSignUp(username)) {
@@ -268,19 +301,21 @@ const CustomAuthenticator = ({ children, hideSignUp = false }) => {
         try {
           const { getCurrentUser } = await import('aws-amplify/auth');
           const user = await getCurrentUser();
-          console.log('[CustomAuthenticator] 登录成功，用户:', user);
-          
+
+
           // 如果提供了 children 函数，调用它（Amplify 标准模式）
           if (typeof children === 'function') {
             children({ user });
           }
-        } catch (userErr) {
-          console.error('[CustomAuthenticator] 获取用户信息失败:', userErr);
+        } catch {
+
           setError('登录成功，但无法获取用户信息。请刷新页面或重新登录。');
         }
+      } else {
+        setError('此账号需要额外的登录验证，目前此页面暂不支持。请联系管理员协助完成验证。');
       }
     } catch (err) {
-      console.error('登录错误:', err);
+
       if (err.name === 'NotAuthorizedException' || err.name === 'UserNotFoundException') {
         // 用户池开启"防止用户存在性错误"后，用未验证账号的邮箱登录也只会返回 NotAuthorized；
         // 若本设备记录了对应的待验证账号，给出更有针对性的提示（Issue #89）
@@ -300,20 +335,20 @@ const CustomAuthenticator = ({ children, hideSignUp = false }) => {
   // 注册
   const handleSignUp = async (e) => {
     e.preventDefault();
-    
+
     if (formData.password !== formData.confirmPassword) {
       setError('两次输入的密码不一致');
       return;
     }
-    
+
     setLoading(true);
     setError('');
-    
+
     try {
       // 去掉首尾空格，避免移动端输入法自动补上的空格写进 Cognito
       const username = formData.username.trim();
       const email = formData.email.trim();
-      const { isSignUpComplete, userId, nextStep } = await signUp({
+      const { isSignUpComplete, nextStep } = await signUp({
         username,
         password: formData.password,
         options: {
@@ -323,9 +358,9 @@ const CustomAuthenticator = ({ children, hideSignUp = false }) => {
           }
         }
       });
-      
-      console.log('注册结果:', { isSignUpComplete, userId, nextStep });
-      
+
+
+
       if (nextStep.signUpStep === 'CONFIRM_SIGN_UP') {
         // 记录待验证账号：用户若中途离开，下次回到登录页可直接"继续验证"（Issue #89）
         rememberPendingSignUp(username, email);
@@ -337,7 +372,7 @@ const CustomAuthenticator = ({ children, hideSignUp = false }) => {
         resetForm();
       }
     } catch (err) {
-      console.error('注册错误:', err);
+
       if (err.name === 'UsernameExistsException') {
         // 用户名已存在，可能是未验证的账号
         setError('该用户名已被注册。如果您已注册但未验证邮箱，请点击上方"去验证邮箱"链接完成验证。');
@@ -382,7 +417,7 @@ const CustomAuthenticator = ({ children, hideSignUp = false }) => {
       });
       finishConfirmation(username, '🎉 邮箱验证成功！请使用您的账号登录。');
     } catch (err) {
-      console.error('验证错误:', err);
+
       if (err.name === 'CodeMismatchException') {
         setError('验证码错误。请确认输入的是最新一封邮件中的验证码，多次重发时以最后收到的为准。');
       } else if (err.name === 'ExpiredCodeException') {
@@ -440,7 +475,7 @@ const CustomAuthenticator = ({ children, hideSignUp = false }) => {
       // 启动 120 秒冷却计时器
       setResendCooldown(120);
     } catch (err) {
-      console.error('重新发送验证码错误:', err);
+
       if (err.name === 'UserNotFoundException') {
         setError('未找到该用户名对应的账号。请确认输入的是注册用户名；超过 7 天未验证的账号会被自动清理，需要重新注册。');
       } else if (err.name === 'LimitExceededException') {
@@ -453,59 +488,68 @@ const CustomAuthenticator = ({ children, hideSignUp = false }) => {
     }
   };
 
-  // 忘记密码
-  const handleForgotPassword = async (e) => {
-    e.preventDefault();
+  /**
+   * 发送或重发密码重置验证码，保留密码草稿并同步锁定重复请求。
+   * @returns {Promise<void>} 成功进入确认步骤，失败保留当前步骤供重试。
+   */
+  const sendResetCode = async () => {
+    if (resetRequestPending.current || resetCooldown > 0) return;
+    resetRequestPending.current = true;
     setLoading(true);
     setError('');
-    
+    setSuccessMessage('');
+    const username = formData.username.trim();
     try {
-      await resetPassword({ username: formData.username });
-      setSuccessMessage('重置密码的验证码已发送到您的邮箱');
+      await resetPassword({ username });
+      setFormData(prev => ({ ...prev, username, code: '' }));
+      setSuccessMessage('重置密码的验证码已发送到您的邮箱，请使用最新验证码。');
+      setResetCooldown(60);
       setMode('confirmReset');
     } catch (err) {
-      console.error('重置密码错误:', err);
       setError(err.message || '发送验证码失败，请稍后重试');
     } finally {
+      resetRequestPending.current = false;
       setLoading(false);
     }
+  };
+
+  // 忘记密码与确认页重发共用同一发送路径。
+  const handleForgotPassword = async (e) => {
+    e.preventDefault();
+    await sendResetCode();
   };
 
   // 确认重置密码
   const handleConfirmReset = async (e) => {
     e.preventDefault();
-    
+    setSuccessMessage('');
+
     if (formData.password !== formData.confirmPassword) {
       setError('两次输入的密码不一致');
       return;
     }
-    
+
     setLoading(true);
     setError('');
-    
+
     try {
       await confirmResetPassword({
         username: formData.username,
         confirmationCode: formData.code,
         newPassword: formData.password
       });
-      
-      setLoading(false); // 重置成功，关闭加载状态
-      setSuccessMessage('✅ 密码重置成功！即将跳转到登录页面...');
-      
-      // 2秒后跳转到登录页面
-      setTimeout(() => {
-        setMode('signIn');
-        resetForm();
-      }, 2000);
-      
-      return; // 提前返回，不执行 finally 块
+
+      // 立即回到登录并保留账号，不让延迟跳转覆盖用户后续操作。
+      setFormData(prev => ({ ...prev, username: prev.username.trim(), password: '', confirmPassword: '', code: '' }));
+      setSuccessMessage('密码重置成功，请使用新密码登录。');
+      setMode('signIn');
     } catch (err) {
-      console.error('确认重置错误:', err);
+
       if (err.name === 'CodeMismatchException') {
         setError('验证码错误');
       } else if (err.name === 'ExpiredCodeException') {
         setError('验证码已过期，请重新获取');
+        setResetCooldown(0);
       } else {
         setError(err.message || '密码重置失败，请稍后重试');
       }
@@ -514,51 +558,74 @@ const CustomAuthenticator = ({ children, hideSignUp = false }) => {
     }
   };
 
-  // 强制修改临时密码
+  /** 提交临时密码及服务端要求补齐的属性，仅在 SDK 确认认证完成后登录。 */
   const handleForceChangePassword = async (e) => {
     e.preventDefault();
-    
+
     if (formData.password !== formData.confirmPassword) {
       setError('两次输入的密码不一致');
       return;
     }
-    
+
     if (!formData.password || formData.password.length < 8) {
       setError('密码至少需要8个字符');
       return;
     }
-    
+
+    const emptyAttribute = missingAttributes.find(attribute => !requiredAttributeValues[attribute]?.trim());
+    if (emptyAttribute) {
+      setError(`请填写${attributeLabel(emptyAttribute)}`);
+      return;
+    }
+
     setLoading(true);
     setError('');
-    
+
     try {
       // 使用 confirmSignIn 完成临时密码修改
-      await confirmSignIn({
-        challengeResponse: formData.password
+      const result = await confirmSignIn({
+        challengeResponse: formData.password,
+        ...(missingAttributes.length ? { options: { userAttributes: Object.fromEntries(missingAttributes.map(attribute => [attribute, requiredAttributeValues[attribute].trim()])) } } : {})
       });
-      
+
+      if (!result.isSignedIn) {
+        if (result.nextStep?.signInStep === 'CONFIRM_SIGN_IN_WITH_NEW_PASSWORD_REQUIRED') {
+          setMissingAttributes(result.nextStep.missingAttributes || []);
+          setError('请补齐所需资料后再次提交。');
+        } else if (result.nextStep?.signInStep === 'RESET_PASSWORD') {
+          setMode('forgotPassword');
+          setSuccessMessage('您的账号需要重置密码，请发送验证码。');
+          setFormData(prev => ({ ...prev, password: '', confirmPassword: '', code: '' }));
+        } else {
+          setError('此账号还需要额外验证，目前此页面暂不支持。请联系管理员，或返回登录重试。');
+        }
+        return;
+      }
+
       // 修改成功，获取用户信息并完成登录
       try {
         const { getCurrentUser } = await import('aws-amplify/auth');
         const user = await getCurrentUser();
-        console.log('[CustomAuthenticator] 临时密码修改成功，登录完成:', user);
-        
+
+
         setSuccessMessage('密码修改成功！正在登录...');
-        
+
         // 调用 children 函数完成登录流程
         if (typeof children === 'function') {
           children({ user });
         }
-      } catch (userErr) {
-        console.error('[CustomAuthenticator] 密码修改成功，但获取用户信息失败:', userErr);
+      } catch {
+
         setError('密码已修改成功，但登录信息获取失败。请刷新页面或重新登录。');
       }
     } catch (err) {
-      console.error('修改临时密码错误:', err);
+
       if (err.name === 'InvalidPasswordException') {
         setError('密码强度不足：至少8个字符，包含大小写字母、数字和特殊字符');
       } else if (err.name === 'LimitExceededException') {
         setError('尝试次数过多，请稍后再试');
+      } else if (err.name === 'NotAuthorizedException' || err.name === 'SignInException') {
+        setError('本次登录验证已失效，请返回登录后重试。');
       } else {
         setError(err.message || '密码修改失败，请稍后重试');
       }
@@ -620,14 +687,14 @@ const CustomAuthenticator = ({ children, hideSignUp = false }) => {
         </div>
 
         {error && (
-          <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-red-800 text-sm">
+          <div id={errorId} role="alert" className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-red-800 text-sm [overflow-wrap:anywhere]">
             <AlertCircle className="h-5 w-5 flex-shrink-0" />
             <span>{error}</span>
           </div>
         )}
 
         {successMessage && (
-          <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg text-green-800 text-sm">
+          <div role="status" className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg text-green-800 text-sm [overflow-wrap:anywhere]">
             <AlertCircle className="h-5 w-5 flex-shrink-0" />
             <span>{successMessage}</span>
           </div>
@@ -635,8 +702,9 @@ const CustomAuthenticator = ({ children, hideSignUp = false }) => {
 
         {renderPendingSignUpNotice()}
 
-        <form onSubmit={handleSignIn} className="space-y-4">
+        <form key={mode} aria-describedby={error ? errorId : undefined} onSubmit={handleSignIn} className="space-y-4">
           <Input
+            describedBy={error ? errorId : undefined}
             icon={User}
             name="username"
             placeholder="用户名或邮箱"
@@ -645,17 +713,16 @@ const CustomAuthenticator = ({ children, hideSignUp = false }) => {
             autoComplete="username"
           />
           <Input
+            describedBy={error ? errorId : undefined}
             icon={Lock}
             type="password"
             name="password"
             placeholder="密码"
             value={formData.password}
             onChange={handleChange}
-            showPassword={showPassword}
-            onTogglePassword={() => setShowPassword(!showPassword)}
             autoComplete="current-password"
           />
-          
+
           <div className="text-right">
             <button
               type="button"
@@ -705,7 +772,7 @@ const CustomAuthenticator = ({ children, hideSignUp = false }) => {
         </div>
 
         {error && (
-          <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-red-800 text-sm">
+          <div id={errorId} role="alert" className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-red-800 text-sm [overflow-wrap:anywhere]">
             <AlertCircle className="h-5 w-5 flex-shrink-0 mt-0.5" />
             <span>{error}</span>
           </div>
@@ -713,8 +780,9 @@ const CustomAuthenticator = ({ children, hideSignUp = false }) => {
 
         {renderPendingSignUpNotice()}
 
-        <form onSubmit={handleSignUp} className="space-y-4">
+        <form key={mode} aria-describedby={error ? errorId : undefined} onSubmit={handleSignUp} className="space-y-4">
           <Input
+            describedBy={error ? errorId : undefined}
             icon={User}
             name="username"
             placeholder="用户名"
@@ -723,6 +791,7 @@ const CustomAuthenticator = ({ children, hideSignUp = false }) => {
             autoComplete="username"
           />
           <Input
+            describedBy={error ? errorId : undefined}
             icon={Mail}
             type="email"
             name="email"
@@ -732,6 +801,7 @@ const CustomAuthenticator = ({ children, hideSignUp = false }) => {
             autoComplete="email"
           />
           <Input
+            describedBy={error ? errorId : undefined}
             icon={User}
             name="nickname"
             placeholder="昵称（可选）"
@@ -740,25 +810,23 @@ const CustomAuthenticator = ({ children, hideSignUp = false }) => {
             onChange={handleChange}
           />
           <Input
+            describedBy={error ? errorId : undefined}
             icon={Lock}
             type="password"
             name="password"
             placeholder="密码（至少8位，包含大小写字母、数字和特殊字符）"
             value={formData.password}
             onChange={handleChange}
-            showPassword={showPassword}
-            onTogglePassword={() => setShowPassword(!showPassword)}
             autoComplete="new-password"
           />
           <Input
+            describedBy={error ? errorId : undefined}
             icon={Lock}
             type="password"
             name="confirmPassword"
             placeholder="确认密码"
             value={formData.confirmPassword}
             onChange={handleChange}
-            showPassword={showPassword}
-            onTogglePassword={() => setShowPassword(!showPassword)}
             autoComplete="new-password"
           />
 
@@ -783,22 +851,23 @@ const CustomAuthenticator = ({ children, hideSignUp = false }) => {
         </div>
 
         {error && (
-          <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-red-800 text-sm">
+          <div id={errorId} role="alert" className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-red-800 text-sm [overflow-wrap:anywhere]">
             <AlertCircle className="h-5 w-5 flex-shrink-0 mt-0.5" />
             <span>{error}</span>
           </div>
         )}
 
         {successMessage && (
-          <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg text-green-800 text-sm">
+          <div role="status" className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg text-green-800 text-sm [overflow-wrap:anywhere]">
             <AlertCircle className="h-5 w-5 flex-shrink-0" />
             <span>{successMessage}</span>
           </div>
         )}
 
-        <form onSubmit={handleConfirmSignUp} className="space-y-4">
+        <form key={mode} aria-describedby={error ? errorId : undefined} onSubmit={handleConfirmSignUp} className="space-y-4">
           <div className="space-y-1">
             <Input
+            describedBy={error ? errorId : undefined}
               icon={User}
               name="username"
               placeholder="注册用户名"
@@ -814,6 +883,7 @@ const CustomAuthenticator = ({ children, hideSignUp = false }) => {
             )}
           </div>
           <Input
+            describedBy={error ? errorId : undefined}
             icon={Mail}
             name="code"
             placeholder="验证码"
@@ -824,8 +894,8 @@ const CustomAuthenticator = ({ children, hideSignUp = false }) => {
           />
 
           <Button type="submit" loading={loading}>验证</Button>
-          
-          <div className="flex items-center justify-between text-sm">
+
+          <div className="flex flex-wrap gap-3 items-center justify-between text-sm">
             <button
               type="button"
               onClick={handleResendSignUpCode}
@@ -859,21 +929,22 @@ const CustomAuthenticator = ({ children, hideSignUp = false }) => {
         </div>
 
         {error && (
-          <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-red-800 text-sm">
+          <div id={errorId} role="alert" className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-red-800 text-sm [overflow-wrap:anywhere]">
             <AlertCircle className="h-5 w-5 flex-shrink-0" />
             <span>{error}</span>
           </div>
         )}
 
         {successMessage && (
-          <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg text-green-800 text-sm">
+          <div role="status" className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg text-green-800 text-sm [overflow-wrap:anywhere]">
             <AlertCircle className="h-5 w-5 flex-shrink-0" />
             <span>{successMessage}</span>
           </div>
         )}
 
-        <form onSubmit={handleForgotPassword} className="space-y-4">
+        <form key={mode} aria-describedby={error ? errorId : undefined} onSubmit={handleForgotPassword} className="space-y-4">
           <Input
+            describedBy={error ? errorId : undefined}
             icon={User}
             name="username"
             placeholder="用户名"
@@ -882,8 +953,8 @@ const CustomAuthenticator = ({ children, hideSignUp = false }) => {
             autoComplete="username"
           />
 
-          <Button type="submit" loading={loading}>发送验证码</Button>
-          
+          <Button type="submit" loading={loading} disabled={resetCooldown > 0}>{resetCooldown > 0 ? `发送验证码（${resetCooldown}s）` : '发送验证码'}</Button>
+
           <button
             type="button"
             onClick={() => { setMode('signIn'); resetForm(); }}
@@ -908,21 +979,22 @@ const CustomAuthenticator = ({ children, hideSignUp = false }) => {
         </div>
 
         {error && (
-          <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-red-800 text-sm">
+          <div id={errorId} role="alert" className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-red-800 text-sm [overflow-wrap:anywhere]">
             <AlertCircle className="h-5 w-5 flex-shrink-0" />
             <span>{error}</span>
           </div>
         )}
 
         {successMessage && (
-          <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg text-green-800 text-sm">
+          <div role="status" className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg text-green-800 text-sm [overflow-wrap:anywhere]">
             <AlertCircle className="h-5 w-5 flex-shrink-0" />
             <span>{successMessage}</span>
           </div>
         )}
 
-        <form onSubmit={handleConfirmReset} className="space-y-4">
+        <form key={mode} aria-describedby={error ? errorId : undefined} onSubmit={handleConfirmReset} className="space-y-4">
           <Input
+            describedBy={error ? errorId : undefined}
             icon={User}
             name="username"
             placeholder="用户名"
@@ -931,6 +1003,7 @@ const CustomAuthenticator = ({ children, hideSignUp = false }) => {
             autoComplete="username"
           />
           <Input
+            describedBy={error ? errorId : undefined}
             icon={Mail}
             name="code"
             placeholder="验证码"
@@ -939,30 +1012,32 @@ const CustomAuthenticator = ({ children, hideSignUp = false }) => {
             autoComplete="one-time-code"
           />
           <Input
+            describedBy={error ? errorId : undefined}
             icon={Lock}
             type="password"
             name="password"
             placeholder="新密码"
             value={formData.password}
             onChange={handleChange}
-            showPassword={showPassword}
-            onTogglePassword={() => setShowPassword(!showPassword)}
             autoComplete="new-password"
           />
           <Input
+            describedBy={error ? errorId : undefined}
             icon={Lock}
             type="password"
             name="confirmPassword"
             placeholder="确认新密码"
             value={formData.confirmPassword}
             onChange={handleChange}
-            showPassword={showPassword}
-            onTogglePassword={() => setShowPassword(!showPassword)}
             autoComplete="new-password"
           />
 
           <Button type="submit" loading={loading}>重置密码</Button>
-          
+          <button type="button" onClick={sendResetCode} disabled={loading || resetCooldown > 0}
+            className="w-full text-sm text-pink-600 hover:text-pink-500 disabled:text-gray-500">
+            {resetCooldown > 0 ? `重新发送验证码（${resetCooldown}s）` : '重新发送验证码'}
+          </button>
+
           <button
             type="button"
             onClick={() => { setMode('signIn'); resetForm(); }}
@@ -987,14 +1062,14 @@ const CustomAuthenticator = ({ children, hideSignUp = false }) => {
         </div>
 
         {error && (
-          <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-red-800 text-sm">
+          <div id={errorId} role="alert" className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-red-800 text-sm [overflow-wrap:anywhere]">
             <AlertCircle className="h-5 w-5 flex-shrink-0 mt-0.5" />
             <span>{error}</span>
           </div>
         )}
 
         {successMessage && (
-          <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg text-green-800 text-sm">
+          <div role="status" className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg text-green-800 text-sm [overflow-wrap:anywhere]">
             <AlertCircle className="h-5 w-5 flex-shrink-0" />
             <span>{successMessage}</span>
           </div>
@@ -1011,31 +1086,41 @@ const CustomAuthenticator = ({ children, hideSignUp = false }) => {
           </ul>
         </div>
 
-        <form onSubmit={handleForceChangePassword} className="space-y-4">
+        <form key={mode} aria-describedby={error ? errorId : undefined} onSubmit={handleForceChangePassword} className="space-y-4">
+          {missingAttributes.map(attribute => (
+            <Input key={attribute} icon={attribute === 'email' ? Mail : User}
+              name={attribute} placeholder={attributeLabel(attribute)}
+              type={attribute === 'email' ? 'email' : 'text'}
+              autoComplete={attribute === 'email' ? 'email' : attribute === 'nickname' ? 'nickname' : undefined}
+              describedBy={error ? errorId : undefined} value={requiredAttributeValues[attribute] || ''}
+              onChange={event => { setRequiredAttributeValues(prev => ({ ...prev, [attribute]: event.target.value })); setError(''); }} />
+          ))}
           <Input
+            describedBy={error ? errorId : undefined}
             icon={Lock}
             type="password"
             name="password"
             placeholder="新密码"
             value={formData.password}
             onChange={handleChange}
-            showPassword={showPassword}
-            onTogglePassword={() => setShowPassword(!showPassword)}
             autoComplete="new-password"
           />
           <Input
+            describedBy={error ? errorId : undefined}
             icon={Lock}
             type="password"
             name="confirmPassword"
             placeholder="确认新密码"
             value={formData.confirmPassword}
             onChange={handleChange}
-            showPassword={showPassword}
-            onTogglePassword={() => setShowPassword(!showPassword)}
             autoComplete="new-password"
           />
 
           <Button type="submit" loading={loading}>设置新密码并登录</Button>
+          <button type="button" disabled={loading} className="w-full text-sm text-gray-600 hover:text-gray-800 disabled:opacity-50"
+            onClick={() => { setMode('signIn'); setFormData(prev => ({ ...prev, password: '', confirmPassword: '', code: '' })); setError(''); setSuccessMessage(''); setRequiredAttributeValues({}); setMissingAttributes([]); }}>
+            返回登录
+          </button>
         </form>
       </div>
     );

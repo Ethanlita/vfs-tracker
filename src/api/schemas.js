@@ -18,6 +18,9 @@ export const isoDateString = Joi.string()
   .isoDate()
   .description('ISO 8601 格式的日期时间字符串');
 
+/** 手动事件使用YYYY-MM-DD日历日期，自动记录可携带精确ISO时间戳。 */
+export const eventDateString = isoDateString.strict().description('事件日历日期YYYY-MM-DD或精确ISO时间戳；保留原精度');
+
 /**
  * 用户 ID（Cognito sub）
  */
@@ -103,6 +106,27 @@ export const userSchema = Joi.object({
   createdAt: isoDateString.required(),
   updatedAt: isoDateString.required(),
 }).description('用户对象');
+
+/**
+ * 用户资料查询响应允许首次登录的不存在记录与尚未完成的资料。
+ * 完整资料仍由 userSchema 覆盖；这里用于运行时缓存边界，保证账号和对象结构可信。
+ */
+const incompleteProfileSchema = profileSchema
+  .fork(['name', 'nickname'], field => field.optional().allow(''))
+  .fork(['isNamePublic', 'areSocialsPublic'], field => field.optional())
+  .append({ setupSkipped: Joi.boolean().optional() });
+
+export const profileQueryResponseSchema = Joi.object({
+  exists: Joi.boolean().default(true),
+  userId: userId.required(),
+  email: Joi.string().email().optional(),
+  profile: incompleteProfileSchema.optional(),
+  createdAt: isoDateString.optional(),
+  updatedAt: isoDateString.optional(),
+}).custom((value, helpers) => {
+  if (value.exists !== false && !value.profile) return helpers.error('object.with');
+  return value;
+}).description('GET /user/{userId} 的资料查询与离线缓存响应');
 
 // ==================== Event Schemas ====================
 
@@ -380,7 +404,7 @@ const eventBaseSchema = Joi.object({
   userId: userId.required(),
   eventId: eventId.required(),
   type: eventTypeEnum.required(),
-  date: isoDateString.required(),
+  date: eventDateString.required(),
   status: eventStatusEnum.required(),
   createdAt: isoDateString.required(),
   updatedAt: isoDateString.required(),
@@ -411,7 +435,7 @@ export const eventSchemaPublic = Joi.object({
   userId: Joi.string().required().description('用户 ID（可能是 Cognito 格式或纯 UUID）'),
   eventId: eventId.required(),
   type: eventTypeEnum.required(),
-  date: isoDateString.required(),
+  date: eventDateString.required(),
   createdAt: isoDateString.required(),
   userName: Joi.string().required().description('公开的用户名或"（非公开）"'),
   
@@ -495,6 +519,7 @@ export const getAllEventsResponseSchema = Joi.array()
  */
 export const getUserEventsResponseSchema = Joi.object({
   events: Joi.array().items(eventSchemaPrivate).required(),
+  complete: Joi.boolean().valid(true).required().description('确认响应已消费全部 DynamoDB 查询页'),
   debug: Joi.object().optional().unknown(true),
 }).description('GET /events/{userId} 响应');
 
@@ -502,11 +527,20 @@ export const getUserEventsResponseSchema = Joi.object({
  * POST /events 请求 Schema
  */
 export const addEventRequestSchema = Joi.object({
+  clientRequestId: Joi.string().pattern(/^[A-Za-z0-9_-]{1,128}$/).optional(),
   type: eventTypeEnum.required(),
   date: isoDateString.required(),
   details: Joi.object().required(),
   attachments: Joi.array().items(attachmentSchema).optional(),
 }).description('POST /events 请求体');
+
+/** 离线新增记录的持久化结构；queueId 标识记录而非测量数值。 */
+export const pendingEventSchema = Joi.object({
+  ownerUserId: Joi.string().trim().min(1).required(),
+  queueId: Joi.string().guid({ version: 'uuidv4' }).required(),
+  when: Joi.number().integer().min(0).required(),
+  eventData: addEventRequestSchema.required(),
+}).description('本地离线事件记录');
 
 /**
  * POST /events 响应 Schema
@@ -515,6 +549,12 @@ export const addEventResponseSchema = Joi.object({
   message: Joi.string().required(),
   eventId: eventId.required(),
 }).description('POST /events 响应');
+
+/** 创建事件的请求标识非法（400）或相同标识内容冲突（409）。 */
+export const eventIdempotencyErrorSchema = Joi.object({
+  message: Joi.string().required(),
+  errorCode: Joi.string().valid('INVALID_CLIENT_REQUEST_ID', 'IDEMPOTENCY_CONFLICT').required(),
+}).description('POST /events 幂等错误响应');
 
 /** POST /events 请求体无法解析为 JSON 对象时的 400 响应。 */
 export const invalidEventBodyResponseSchema = Joi.object({
@@ -531,17 +571,65 @@ export const getUserProfileResponseSchema = userSchema
 /**
  * PUT /profile/{userId} 请求 Schema
  */
+export const profilePatchSchema = profileSchema
+  .fork(['name', 'nickname', 'isNamePublic', 'areSocialsPublic'], field => field.optional())
+  .strict()
+  .or('name', 'bio', 'avatarUrl', 'avatarKey', 'isNamePublic', 'areSocialsPublic', 'socials')
+  .description('仅更新请求中提供的资料字段；未提供字段保持不变');
+
 export const updateUserProfileRequestSchema = Joi.object({
-  profile: profileSchema.required(),
+  profilePatch: profilePatchSchema.required(),
 }).description('PUT /profile/{userId} 请求体');
 
 /**
- * PUT /profile/{userId} 响应 Schema
+ * PUT /user/{userId} 响应 Schema
  */
 export const updateUserProfileResponseSchema = Joi.object({
   message: Joi.string().required(),
-  profile: profileSchema.required(),
-}).description('PUT /profile/{userId} 响应');
+  user: profileQueryResponseSchema.required(),
+}).description('PUT /user/{userId} 响应');
+
+/** 首次资料设置的服务端版本，用于阻止离线草稿覆盖更新后的资料。 */
+export const profileSetupBaseVersionSchema = Joi.object({
+  exists: Joi.boolean().required(),
+  updatedAt: isoDateString.allow(null).required(),
+}).custom((value, helpers) => {
+  // 不存在的服务端记录没有更新时间；拒绝自相矛盾的版本，避免前后端条件写入语义分叉。
+  if (value.exists === false && value.updatedAt !== null) return helpers.error('any.invalid');
+  return value;
+}).strict().description('保存草稿时看到的服务端资料版本');
+
+/** 完整资料设置或明确跳过，两种请求保持互斥。 */
+export const profileSetupPayloadSchema = Joi.alternatives().try(
+  Joi.object({ setupSkipped: Joi.boolean().valid(true).required() }).length(1).strict(),
+  Joi.object({
+    name: Joi.string().trim().min(1).required(),
+    bio: Joi.string().allow('').required(),
+    isNamePublic: Joi.boolean().required(),
+    socials: Joi.array().items(socialAccountSchema).required(),
+    areSocialsPublic: Joi.boolean().required(),
+  }).strict(),
+).description('资料向导提交内容');
+
+export const setupUserProfileRequestSchema = Joi.object({
+  profile: profileSetupPayloadSchema.required(),
+  baseVersion: profileSetupBaseVersionSchema.required(),
+}).strict().description('POST /user/profile-setup 请求体');
+
+/** 本地资料草稿按账号保存；旧版草稿允许缺少版本，但只能人工确认后同步。 */
+export const pendingProfileSetupSchema = Joi.object({
+  version: Joi.number().integer().valid(2).required(),
+  draftId: Joi.string().guid({ version: 'uuidv4' }).required(),
+  ownerUserId: Joi.string().trim().min(1).required(),
+  payload: Joi.object({ profile: profileSetupPayloadSchema.required() }).strict().required(),
+  baseVersion: profileSetupBaseVersionSchema.allow(null).required(),
+  kind: Joi.string().valid('complete', 'skip').required(),
+  savedAt: Joi.number().integer().min(0).required(),
+  returnUrl: Joi.string().pattern(/^\/(?!\/)/).required(),
+}).custom((value, helpers) => {
+  const expectedKind = value.payload.profile.setupSkipped === true ? 'skip' : 'complete';
+  return value.kind === expectedKind ? value : helpers.error('any.invalid');
+}).strict().description('按账号隔离的离线资料设置草稿');
 
 // ==================== 导出所有 Schemas ====================
 
@@ -558,6 +646,7 @@ export const schemas = {
   // 用户相关
   user: userSchema,
   profile: profileSchema,
+  profileQueryResponse: profileQueryResponseSchema,
   socialAccount: socialAccountSchema,
   
   // 事件相关
@@ -585,6 +674,8 @@ export const schemas = {
   getUserProfileResponse: getUserProfileResponseSchema,
   updateUserProfileRequest: updateUserProfileRequestSchema,
   updateUserProfileResponse: updateUserProfileResponseSchema,
+  setupUserProfileRequest: setupUserProfileRequestSchema,
+  pendingProfileSetup: pendingProfileSetupSchema,
 };
 
 /**
@@ -627,6 +718,16 @@ export const publicDashboardResponseSchema = Joi.array().items(Joi.object({
     customDoctor: Joi.string(), surgeryMethod: Joi.string()
   }).required()
 }));
+
+/** 嗓音测试用户端只接收启用稿件的公开字段。 */
+export const readingPassageSchema = Joi.object({
+  passageId: Joi.string().trim().min(1).max(128).required(),
+  title: Joi.string().trim().min(1).max(120).required(),
+  author: Joi.string().trim().min(1).max(120).required(),
+  content: Joi.string().trim().min(1).max(10000).required(),
+}).strict();
+
+export const readingPassagesResponseSchema = Joi.array().min(1).items(readingPassageSchema).required();
 
 // 明细按首屏中的 ID 分页读取；审核撤回的事件不会出现在响应中。
 export const publicEventDetailsResponseSchema = Joi.array().max(20).items(Joi.object({

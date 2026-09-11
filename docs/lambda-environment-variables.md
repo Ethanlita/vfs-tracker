@@ -4,6 +4,8 @@
 
 本指南详细列出了 VFS Tracker 项目中所有 Lambda 函数所需的环境变量。正确的配置是确保后端服务正常运行的关键。
 
+所有 Node.js Lambda 共享 `LOG_LEVEL`，可取 `DEBUG`、`INFO`、`WARN` 或 `ERROR`；SAM 开发与生产模板默认设置为 `INFO`。AI 与医院报告处理函数使用单行 JSON 结构化日志，敏感字段边界见[后端结构化日志与敏感数据边界](backend-structured-logging.md)。
+
 ---
 
 ## 1. 核心服务 (Core Services)
@@ -20,7 +22,7 @@
 - **环境变量**:
   - `EVENTS_TABLE`: 嗓音事件 DynamoDB 表的名称。 (例如: `VoiceFemEvents`)
   - `USERS_TABLE`: (仅 `getAllPublicEvents` 需要) 用户资料 DynamoDB 表的名称，用于获取用户名。
-  - `ATTACHMENTS_BUCKET`: (仅 `autoApproveEvent` 和 `deleteEvent` 需要) 存储附件的 S3 存储桶名称。
+  - `ATTACHMENTS_BUCKET`: (仅 `autoApproveEvent` 和 `deleteEvent` 需要) 存储附件的 S3 存储桶名称；生产 SAM 模板从 `ExistingS3BucketName` 统一注入。
   - `GEMINI_API_KEY`: (仅 `autoApproveEvent` 需要) 用于多模态验证。
 
 ### c. 文件管理 (预签名 URL)

@@ -1,9 +1,11 @@
 name: Deploy to GitHub Pages
 
 on:
-  push:
-    branches:
-      - master
+  # 前端必须等待同一提交的后端工作流成功，避免新协议先于 Lambda 上线。
+  workflow_run:
+    workflows: ['Deploy Backend']
+    types: [completed]
+    branches: [master]
 
 # 设置GITHUB_TOKEN权限
 permissions:
@@ -18,10 +20,22 @@ concurrency:
 
 jobs:
   build:
+    if: github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
+    env:
+      VITE_GOOGLE_GEMINI_API: ${{ secrets.GOOGLE_GEMINI_API }}
+      VITE_COGNITO_USER_POOL_ID: ${{ secrets.COGNITO_USER_POOL_ID }}
+      VITE_COGNITO_USER_POOL_WEB_CLIENT_ID: ${{ secrets.COGNITO_USER_POOL_WEB_CLIENT_ID }}
+      VITE_AWS_REGION: ${{ secrets.AWS_REGION }}
+      VITE_API_ENDPOINT: ${{ secrets.API_ENDPOINT }}
+      VITE_API_STAGE: ${{ secrets.API_STAGE }}
+      VITE_S3_BUCKET: ${{ secrets.S3_BUCKET }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
+        with:
+          # workflow_run 默认可能检出较新的 master，必须固定到已验证的提交。
+          ref: ${{ github.event.workflow_run.head_sha }}
 
       - name: Set up Node.js
         uses: actions/setup-node@v6
@@ -32,23 +46,26 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # 发布前先验证静态规则、完整单元测试和当前浏览器路径。
+      - name: Lint source and tests
+        run: npm run lint
+
+      - name: Run unit tests
+        run: npm run test:unit
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run current-route browser tests
+        run: npx playwright test --project=chromium --workers=1 --reporter=list
+
+      # 开发服务器不会注册 Service Worker，PWA 必须使用生产构建单独验收。
+      - name: Run production PWA offline tests
+        run: npm run test:e2e:pwa
 
 
       - name: Build project
         run: npm run build
-        env:
-          VITE_GOOGLE_GEMINI_API: ${{ secrets.GOOGLE_GEMINI_API }}
-          # AWS Cognito 配置
-          VITE_COGNITO_USER_POOL_ID: ${{secrets.COGNITO_USER_POOL_ID}}
-          VITE_COGNITO_USER_POOL_WEB_CLIENT_ID: ${{secrets.COGNITO_USER_POOL_WEB_CLIENT_ID}}
-          VITE_AWS_REGION: ${{secrets.AWS_REGION}}
-
-          # API Gateway 配置
-          VITE_API_ENDPOINT: ${{secrets.API_ENDPOINT}}
-          VITE_API_STAGE: ${{secrets.API_STAGE}}
-
-          # S3 存储配置
-          VITE_S3_BUCKET: ${{secrets.S3_BUCKET}}
 
 
       - name: Setup Pages
@@ -77,6 +94,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
 
       - name: Set up Node.js
         uses: actions/setup-node@v6
@@ -105,7 +124,15 @@ jobs:
           ESA_ROUTINE_CODE: infra/esa-routine/cn-spa-fallback.js
           ESA_ROUTINE_ENV: production
 
+      - name: Configure ESA compression
+        run: node scripts/configure-esa-compression.mjs
+        env:
+          ESA_SITE_ID: '929690936461856'
+
       - name: Purge ESA entry cache
         run: node scripts/purge-esa-cache.mjs
         env:
           ESA_SITE_ID: '929690936461856'
+
+      - name: Verify ESA compression
+        run: node scripts/verify-esa-compression.mjs

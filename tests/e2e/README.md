@@ -1,388 +1,60 @@
-# Phase 5 E2E 测试套件
+# Playwright 端到端测试
 
-## 概述
+端到端测试分为开发模式浏览器流程与生产 PWA 流程。两者不能互相替代：开发服务器用于快速验证当前组件和路由，生产预览才会注册 Service Worker。
 
-Phase 5 实现了完整的端到端 (E2E) 测试套件，使用 Playwright 测试框架覆盖应用的核心用户流程。
+## 开发模式套件
 
-## 测试套件
-
-### 1. 事件管理测试 (`events.spec.js`)
-
-**测试范围**:
-- ✅ 事件 CRUD 操作（创建、读取、更新、删除）
-- ✅ 附件上传和下载
-- ✅ 事件列表查看
-- ✅ 事件详情展示
-- ✅ 边界情况处理
-
-**测试用例**: 10+
-**优先级**: P1
-
-### 2. 声音测试流程 (`voice-test.spec.js`)
-
-**测试范围**:
-- ✅ 完整的声音测试流程
-- ✅ 麦克风权限请求
-- ✅ 录音功能
-- ✅ 测试结果展示
-- ✅ 基频和音域参数
-- ✅ 可视化图表
-- ✅ 错误处理（权限拒绝、录音过短）
-
-**测试用例**: 12+
-**优先级**: P1
-
-### 3. 快速基频测试 (`quick-pitch.spec.js`)
-
-**测试范围**:
-- ✅ 快速测试流程
-- ✅ 简化结果显示
-- ✅ 与完整测试的性能对比
-- ✅ 重新测试功能
-
-**测试用例**: 8+
-**优先级**: P2
-
-### 4. 公共仪表板 (`public-dashboard.spec.js`)
-
-**测试范围**:
-- ✅ 无需登录访问
-- ✅ 数据统计展示
-- ✅ 可视化图表
-- ✅ 响应式设计（桌面/移动）
-- ✅ 数据隐私验证
-- ✅ 性能测试
-
-**测试用例**: 12+
-**优先级**: P2
-
-### 5. 音符-频率转换 (`note-frequency.spec.js`)
-
-**测试范围**:
-- ✅ 音符到频率转换
-- ✅ 频率到音符转换
-- ✅ 八度选择
-- ✅ 参考表展示
-- ✅ 输入验证
-- ✅ 复制功能
-
-**测试用例**: 10+
-**优先级**: P2
-
-### 6. 音阶练习 (`scale-practice.spec.js`)
-
-**测试范围**:
-- ✅ 音阶类型选择
-- ✅ 起始音选择
-- ✅ 跟随播放
-- ✅ 录音和音准反馈
-- ✅ 练习结果展示
-- ✅ 进度跟踪
-- ✅ 速度调节
-- ✅ 历史记录
-
-**测试用例**: 15+
-**优先级**: P2
-
-## 测试运行
-
-### 基本命令
+运行 Chromium：
 
 ```powershell
-# 运行所有 E2E 测试
-npx playwright test
-
-# 运行特定测试文件
-npx playwright test tests/e2e/events.spec.js
-
-# 运行特定测试套件
-npx playwright test --grep "事件管理"
-
-# 使用特定浏览器
-npx playwright test --project=chromium
-npx playwright test --project=firefox
-npx playwright test --project=webkit
-
-# 调试模式
-npx playwright test --debug
-
-# UI 模式（交互式）
-npx playwright test --ui
-
-# 显示浏览器窗口
-npx playwright test --headed
+npm run test:e2e -- --project=chromium --workers=1
 ```
 
-### 并行和性能
+运行配置中的全部桌面与手机浏览器：
 
 ```powershell
-# 控制并行 worker 数量
-npx playwright test --workers=2
-
-# 禁用并行（顺序执行）
-npx playwright test --workers=1
-
-# 只运行失败的测试
-npx playwright test --last-failed
-
-# 重试失败的测试
-npx playwright test --retries=2
+npm run test:e2e
 ```
 
-### 报告和调试
+`playwright.config.js` 自动启动 `npm run dev:playwright`。公开接口响应在测试中通过 Playwright 路由隔离，不读取或修改真实用户数据。当前套件覆盖：
+
+- 登录/注册表单、受保护路由和完整 `returnUrl`；
+- 首页及桌面、手机共用功能侧栏；
+- 公开仪表板的空态、失败重试、统计、图表、按需明细和 20 人分页；
+- Hz/音名双向转换、输入错误、88 键钢琴和 320px 布局；
+- 快速基频与音阶练习的访客入口和麦克风权限拒绝恢复；
+- 注册后邮箱确认恢复，以及音阶可视位置计算。
+
+套件不使用条件性 `test.skip()` 来隐藏缺少控件、旧路由或未实现流程。真实登录、云端事件写入、S3 上传及物理麦克风音质属于契约测试和人工验收范围，不能由隔离 E2E 冒充通过。
+
+2026-09-11 的验证结果：Chromium 26/26、Firefox 26/26、iPhone 12 WebKit 26/26；桌面 WebKit 原全套 24/26 通过，修复关闭侧栏后的回焦点并放宽开发冷编译等待后，失败的认证/主页专项 6/6 通过。WebKit 的 Vite 开发模式冷编译约 9–13 秒/页，首个认证代码块约 38 秒，该时间不作为生产性能指标。
+
+## 生产 PWA 套件
 
 ```powershell
-# 生成 HTML 报告
-npx playwright test --reporter=html
-
-# 打开报告
-npx playwright show-report
-
-# 显示追踪
-npx playwright show-trace trace.zip
-
-# 生成代码
-npx playwright codegen http://localhost:3000
+npm run test:e2e:pwa
 ```
 
-## 测试配置
+`playwright.production.config.js` 会构建应用并在 `127.0.0.1:4174` 启动独立预览。桌面 Chromium 与 Pixel 5 视口分别等待 Service Worker 接管，然后断网直达并刷新：首页、文档目录、Markdown 正文、Hz 工具、VFS 效果预览、快速基频测试和音阶练习。测试还检查整页横向溢出和生产构建中的双向 Hz 转换。
 
-### Playwright 配置 (`playwright.config.js`)
+开发服务器不注册 Service Worker，因此不能用于宣称 PWA 安装、更新或离线冷启动通过。
 
-```javascript
-{
-  testDir: './tests/e2e',           // 测试目录
-  timeout: 30000,                   // 测试超时 30 秒
-  retries: process.env.CI ? 2 : 0,  // CI 环境重试 2 次
-  workers: process.env.CI ? 1 : undefined,
-  baseURL: 'http://localhost:3000',
-  
-  projects: [
-    'chromium',      // Chrome
-    'firefox',       // Firefox
-    'webkit',        // Safari
-    'Mobile Chrome', // 移动端 Chrome
-    'Mobile Safari'  // 移动端 Safari
-  ],
-  
-  webServer: {
-    command: 'npm run dev',
-    url: 'http://localhost:3000',
-    reuseExistingServer: !process.env.CI
-  }
-}
-```
+## 路由一致性
 
-## 测试最佳实践
+`tests/unit/infra/spa-route-manifest.test.js` 同时验证：
 
-### 1. 等待策略
+1. React、Cloudflare Worker 与 ESA Routine 的静态路由清单一致；
+2. 两套边缘入口都识别 `/admin/*`；
+3. `tests/e2e` 中所有字面量 `page.goto()` 地址都对应当前应用路由。
 
-```javascript
-// ✅ 好的做法：显式等待
-await page.waitForLoadState('networkidle');
-await expect(element).toBeVisible({ timeout: 10000 });
+新增页面时需要同步 `src/App.jsx`、两套边缘路由清单及相关 E2E。引用已删除的 `/events`、`/public-dashboard` 或结果子页面会在单元测试阶段失败。
 
-// ❌ 避免：固定延迟
-await page.waitForTimeout(5000); // 尽量少用
-```
+`.github/workflows/deploy.yml` 在上传 GitHub Pages 产物前依次执行 ESLint、完整单元测试、Chromium 开发模式 E2E 和生产 PWA 离线 E2E。任何一层失败都会阻止该次前端发布。
 
-### 2. 选择器优先级
+## 失败产物
 
-```javascript
-// 1. 优先使用 data-testid
-page.locator('[data-testid="user-menu"]')
-
-// 2. 使用 ARIA 角色
-page.locator('button[role="button"]')
-
-// 3. 使用文本（带正则，支持多语言）
-page.locator('text=/登录|Login/i')
-
-// 4. 最后才用 CSS 类
-page.locator('.user-menu') // 尽量避免
-```
-
-### 3. 条件判断
-
-```javascript
-// ✅ 好的做法：安全检查
-if (await button.count() > 0) {
-  await button.click();
-} else {
-  test.skip();
-}
-
-// ✅ 使用 catch 处理
-const isVisible = await element.isVisible().catch(() => false);
-```
-
-### 4. 测试独立性
-
-```javascript
-// ✅ 每个测试应该独立
-test.beforeEach(async ({ page }) => {
-  await page.goto('/');
-  // 重置状态
-});
-
-// ❌ 避免测试间依赖
-test('test1', async () => { /* ... */ });
-test('test2', async () => { 
-  // ❌ 依赖 test1 的状态
-});
-```
-
-## 测试数据
-
-### 测试夹具
-
-测试夹具文件位于 `tests/fixtures/`:
-- `test-audio.txt` - 用于附件上传测试的示例文件
-- 更多夹具根据需要添加
-
-### Mock 数据
-
-某些测试可能需要 mock:
-- API 响应
-- 认证状态
-- 浏览器权限
-
-## 常见问题
-
-### Q1: 测试需要登录怎么办？
-
-**A**: 目前测试中标记了 `TODO: 登录逻辑`，需要实现：
-
-```javascript
-// 辅助函数
-async function loginAsTestUser(page) {
-  await page.goto('/');
-  const loginButton = page.locator('text=/登录/i').first();
-  await loginButton.click();
-  
-  // 填写测试账号
-  await page.fill('input[type="email"]', process.env.TEST_USER_EMAIL);
-  await page.fill('input[type="password"]', process.env.TEST_USER_PASSWORD);
-  await page.click('button[type="submit"]');
-  
-  // 等待登录完成
-  await page.waitForURL(/dashboard|home/i);
-}
-```
-
-### Q2: 麦克风权限如何处理？
-
-**A**: 使用 Playwright 的权限授予：
-
-```javascript
-test('测试录音', async ({ page, context }) => {
-  await context.grantPermissions(['microphone']);
-  // 现在可以使用麦克风
-});
-```
-
-### Q3: 如何跳过某些测试？
-
-**A**: 使用 `test.skip()`:
-
-```javascript
-test('暂时跳过的测试', async ({ page }) => {
-  test.skip(); // 跳过这个测试
-});
-
-// 或条件跳过
-if (someCondition) {
-  test.skip();
-}
-```
-
-### Q4: 测试失败如何调试？
-
-**A**: 多种调试方法：
+失败截图、视频与 trace 写入 `test-results/`，HTML 报告写入 `playwright-report/`。这些目录已被 Git 忽略。调试单项测试可使用：
 
 ```powershell
-# 1. 显示浏览器
-npx playwright test --headed
-
-# 2. 调试模式
-npx playwright test --debug
-
-# 3. 查看追踪
-npx playwright show-trace trace.zip
-
-# 4. 查看截图
-# 失败时自动保存在 test-results/
+npx playwright test tests/e2e/note-frequency.spec.js --project=chromium --headed
 ```
-
-### Q5: 如何测试响应式设计？
-
-**A**: 设置视口大小：
-
-```javascript
-// 桌面
-await page.setViewportSize({ width: 1920, height: 1080 });
-
-// 移动
-await page.setViewportSize({ width: 375, height: 667 });
-
-// 或使用设备模拟
-test.use({ ...devices['iPhone 12'] });
-```
-
-## CI/CD 集成
-
-### GitHub Actions 示例
-
-```yaml
-- name: 运行 E2E 测试
-  run: |
-    npx playwright install --with-deps
-    npx playwright test
-  
-- name: 上传测试报告
-  if: always()
-  uses: actions/upload-artifact@v3
-  with:
-    name: playwright-report
-    path: playwright-report/
-```
-
-## 测试覆盖目标
-
-| 功能模块 | 测试用例数 | 当前状态 | 目标覆盖率 |
-|---------|----------|---------|-----------|
-| 事件管理 | 10+ | ✅ 完成 | 80%+ |
-| 声音测试 | 12+ | ✅ 完成 | 80%+ |
-| 快速基频 | 8+ | ✅ 完成 | 75%+ |
-| 公共仪表板 | 12+ | ✅ 完成 | 75%+ |
-| 音符转换 | 10+ | ✅ 完成 | 70%+ |
-| 音阶练习 | 15+ | ✅ 完成 | 70%+ |
-
-**总计**: 67+ 测试用例
-
-## 下一步
-
-### Phase 5.1 - 测试实现
-- [ ] 实现测试账号登录逻辑
-- [ ] 创建更多测试夹具
-- [ ] 完善错误场景测试
-- [ ] 添加性能基准测试
-
-### Phase 5.2 - 测试增强
-- [ ] 视觉回归测试
-- [ ] 可访问性测试
-- [ ] 网络条件模拟
-- [ ] 负载测试
-
-### Phase 5.3 - CI 集成
-- [ ] GitHub Actions 配置
-- [ ] 测试报告自动发布
-- [ ] PR 门禁检查
-- [ ] 定时回归测试
-
-## 资源
-
-- [Playwright 官方文档](https://playwright.dev/)
-- [测试最佳实践](https://playwright.dev/docs/best-practices)
-- [Playwright Inspector](https://playwright.dev/docs/debug)
-- [Trace Viewer](https://playwright.dev/docs/trace-viewer)

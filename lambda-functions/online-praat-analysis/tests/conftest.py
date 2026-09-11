@@ -3,72 +3,48 @@ import numpy as np
 import soundfile as sf
 
 def generate_realistic_vowel(path, f0, duration=2, sr=44100, jitter=0.005, shimmer=0.05, formants=None):
+    """生成确定性的声源—滤波器元音测试音频。
+
+    周期脉冲列提供覆盖目标共振峰的谐波激励；每个声门周期分别施加
+    jitter 与 shimmer，再由二阶全极点滤波器塑造声道共振峰。这样测试中
+    声明的 F1/F2 会真实存在于频谱中，并且所有环境都走相同生成路径。
+
+    :param path: 输出 WAV 文件路径。
+    :param f0: 基频，单位 Hz。
+    :param duration: 音频时长，单位秒。
+    :param sr: 采样率，单位 Hz。
+    :param jitter: 相邻周期长度的相对标准差。
+    :param shimmer: 相邻周期幅度的相对标准差。
+    :param formants: ``(频率, 带宽)`` 元组列表；省略时使用默认元音参数。
+    :return: 写入完成的文件路径。
     """
-    Generates a more realistic synthetic vowel using the Klatt synthesizer model,
-    which provides more control and produces a more natural sound.
-    """
-    try:
-        from pysptk.synthesis import Klatt
-    except ImportError:
-        # Fallback to simple generator if pysptk is not installed
-        return generate_simple_vowel(path, f0, duration, sr, jitter, shimmer, formants)
+    from scipy.signal import lfilter
 
-    # Klatt synthesizer setup
-    frame_length = 1024
-    hop_length = 80
-    n_frames = int(duration * sr / hop_length)
+    sample_count = int(sr * duration)
+    excitation = np.zeros(sample_count, dtype=float)
+    random = np.random.default_rng(20260912)
+    sample_position = 0.0
 
-    # Synthesizer instance
-    synthesizer = Klatt(frame_length, hop_length)
+    # [CN] 每个脉冲代表一次声门闭合；周期和幅度扰动直接对应 jitter/shimmer。
+    while round(sample_position) < sample_count:
+        sample_index = round(sample_position)
+        amplitude = max(0.05, 1.0 + float(random.normal(0.0, shimmer)))
+        excitation[sample_index] = amplitude
+        period_scale = max(0.2, 1.0 + float(random.normal(0.0, jitter)))
+        sample_position += sr / f0 * period_scale
 
-    # Parameters over time
-    f0_contour = np.full(n_frames, f0)
-    if jitter > 0:
-        f0_contour += np.random.randn(n_frames) * (f0 * jitter * 5)
-
-    # Default formants if none provided
     if formants is None:
-        formants = [(500, 80), (1500, 120), (2500, 150)] # F1, F2, F3 with bandwidths
+        formants = [(500, 80), (1500, 120), (2500, 150)]
 
-    formant_freqs = np.zeros((n_frames, 10))
-    formant_bws = np.full((n_frames, 10), 100.0) # Default bandwidth
+    wav = excitation
+    for frequency, bandwidth in formants:
+        radius = np.exp(-np.pi * bandwidth / sr)
+        theta = 2 * np.pi * frequency / sr
+        wav = lfilter([1], [1, -2 * radius * np.cos(theta), radius**2], wav)
 
-    for i, (freq, bw) in enumerate(formants):
-        if i < 10:
-            formant_freqs[:, i] = freq
-            formant_bws[:, i] = bw
-
-    # Generate waveform
-    wav = synthesizer.synthesis(f0=f0_contour, formant_freqs=formant_freqs, formant_bws=formant_bws)
-
-    # Normalize and write to file
-    wav = wav / np.max(np.abs(wav)) * 0.9
-    sf.write(path, wav, sr, 'PCM_16')
-    return path
-
-def generate_simple_vowel(path, f0, duration, sr, jitter, shimmer, formants):
-    """Original simple generator as a fallback."""
-    t = np.linspace(0., duration, int(sr * duration), endpoint=False)
-    phase = 2 * np.pi * f0 * t
-    if jitter > 0:
-        phase_jitter = np.cumsum(np.random.randn(len(t)) * jitter * 10)
-        phase += phase_jitter
-    wav = np.sin(phase)
-    if shimmer > 0:
-        wav *= (1 + (np.random.randn(len(t)) * shimmer))
-    wav += 0.5 * np.sin(2 * np.pi * (f0*2) * t)
-    wav += 0.25 * np.sin(2 * np.pi * (f0*3) * t)
-    if formants:
-        from scipy.signal import lfilter
-        signal = wav
-        for freq, bw in formants:
-            r = np.exp(-np.pi * bw / sr)
-            theta = 2 * np.pi * freq / sr
-            a = [1, -2 * r * np.cos(theta), r**2]
-            b = [1]
-            signal = lfilter(b, a, signal)
-        wav = signal
-    wav = wav / np.max(np.abs(wav)) * 0.9
+    peak = np.max(np.abs(wav))
+    if peak > 0:
+        wav = wav / peak * 0.9
     sf.write(path, wav, sr, 'PCM_16')
     return path
 

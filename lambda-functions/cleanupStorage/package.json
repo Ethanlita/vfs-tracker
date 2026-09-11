@@ -1,0 +1,11 @@
+{
+  "name": "cleanup-storage",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.940.0",
+    "@aws-sdk/client-s3": "^3.940.0",
+    "@aws-sdk/lib-dynamodb": "^3.940.0"
+  }
+}

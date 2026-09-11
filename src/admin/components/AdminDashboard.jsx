@@ -3,7 +3,7 @@
  * 显示系统概览统计
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useAWSClients } from '../contexts/AWSClientContext';
 import { getStats, EVENT_TYPES } from '../services/dynamodb';
@@ -52,26 +52,31 @@ export default function AdminDashboard() {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const loadingRef = useRef(false);
+
+  /** 原地读取最新统计；失败重试复用当前内存会话，不刷新整个应用。 */
+  const loadDashboardStats = useCallback(async () => {
+    if (!clients?.dynamoDB || loadingRef.current) return;
+
+    loadingRef.current = true;
+    try {
+      setLoading(true);
+      setError(null);
+      const data = await getStats(clients.dynamoDB);
+      setStats(data);
+    } catch (err) {
+
+      setError(err.message);
+    } finally {
+      loadingRef.current = false;
+      setLoading(false);
+    }
+  }, [clients?.dynamoDB]);
 
   // 加载统计数据
   useEffect(() => {
-    async function loadStats() {
-      if (!clients) return;
-
-      try {
-        setLoading(true);
-        const data = await getStats(clients.dynamoDB);
-        setStats(data);
-      } catch (err) {
-        console.error('加载统计数据失败:', err);
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    loadStats();
-  }, [clients]);
+    loadDashboardStats();
+  }, [loadDashboardStats]);
 
   // 加载中状态
   if (loading) {
@@ -88,11 +93,11 @@ export default function AdminDashboard() {
   // 错误状态
   if (error) {
     return (
-      <div className="bg-red-900/30 border border-red-700 rounded-xl p-6">
+      <div role="alert" className="bg-red-900/30 border border-red-700 rounded-xl p-6">
         <h3 className="text-red-400 font-medium mb-2">加载失败</h3>
         <p className="text-red-300/80 text-sm">{error}</p>
-        <button 
-          onClick={() => window.location.reload()}
+        <button
+          onClick={loadDashboardStats}
           className="mt-4 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
         >
           重试
@@ -116,7 +121,7 @@ export default function AdminDashboard() {
           value={stats?.users.total || 0}
           icon={
             <svg className="w-6 h-6 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                 d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
             </svg>
           }
@@ -130,7 +135,7 @@ export default function AdminDashboard() {
           subtitle={`${stats?.events.pending || 0} 待审核`}
           icon={
             <svg className="w-6 h-6 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                 d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
             </svg>
           }
@@ -144,7 +149,7 @@ export default function AdminDashboard() {
           subtitle={`${stats?.tests.done || 0} 已完成`}
           icon={
             <svg className="w-6 h-6 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                 d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
             </svg>
           }
@@ -158,7 +163,7 @@ export default function AdminDashboard() {
           subtitle="需要关注"
           icon={
             <svg className="w-6 h-6 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                 d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           }
@@ -179,13 +184,13 @@ export default function AdminDashboard() {
                 <span className="text-green-400">{stats?.events.approved || 0}</span>
               </div>
               <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
-                <div 
+                <div
                   className="h-full bg-green-500 rounded-full transition-all"
                   style={{ width: `${stats?.events.total ? (stats.events.approved / stats.events.total) * 100 : 0}%` }}
                 />
               </div>
             </div>
-            
+
             {/* 待审核 */}
             <div>
               <div className="flex justify-between text-sm mb-1">
@@ -193,7 +198,7 @@ export default function AdminDashboard() {
                 <span className="text-yellow-400">{stats?.events.pending || 0}</span>
               </div>
               <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
-                <div 
+                <div
                   className="h-full bg-yellow-500 rounded-full transition-all"
                   style={{ width: `${stats?.events.total ? (stats.events.pending / stats.events.total) * 100 : 0}%` }}
                 />
@@ -207,7 +212,7 @@ export default function AdminDashboard() {
                 <span className="text-red-400">{stats?.events.rejected || 0}</span>
               </div>
               <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
-                <div 
+                <div
                   className="h-full bg-red-500 rounded-full transition-all"
                   style={{ width: `${stats?.events.total ? (stats.events.rejected / stats.events.total) * 100 : 0}%` }}
                 />
@@ -225,7 +230,7 @@ export default function AdminDashboard() {
                 <span className="text-gray-400">{EVENT_TYPES[type] || type}</span>
                 <div className="flex items-center gap-3">
                   <div className="w-24 h-2 bg-gray-700 rounded-full overflow-hidden">
-                    <div 
+                    <div
                       className="h-full bg-purple-500 rounded-full"
                       style={{ width: `${stats.events.total ? (count / stats.events.total) * 100 : 0}%` }}
                     />
@@ -270,18 +275,18 @@ export default function AdminDashboard() {
             className="inline-flex items-center gap-2 px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                 d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
             </svg>
             审核待处理事件
           </Link>
-          
+
           <Link
             to="/admin/tests?status=failed"
             className="inline-flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                 d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
             </svg>
             查看失败的测试

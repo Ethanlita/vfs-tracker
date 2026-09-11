@@ -1,3 +1,4 @@
+import { parseEventDate } from './utils/calendarDate.js';
 /**
  * @file [CN] api.js 提供了与后端服务进行通信的所有函数。它封装了 AWS Amplify 的 API 调用，处理真实的 API 请求。
  */
@@ -5,12 +6,7 @@ import { get, post, put, del } from 'aws-amplify/api';
 import { fetchAuthSession } from 'aws-amplify/auth';
 import { ApiError, AuthenticationError, ServiceError, UploadError } from './utils/apiError.js';
 import { withAutoTimeout, isTimeoutError } from './utils/timeout.js';
-
-/**
- * [CN] 用于缓存用户个人资料的本地存储键。
- * @type {string}
- */
-export const PROFILE_CACHE_KEY = 'lastGoodUserProfile:v1';
+import { assertProfileSetupRequest } from './utils/profileSetupProtocol.js';
 
 /**
  * [CN] 发送一个公共的 GET 请求 (带超时控制)。
@@ -19,13 +15,13 @@ export const PROFILE_CACHE_KEY = 'lastGoodUserProfile:v1';
  * @throws {ApiError} 如果请求失败或超时，则抛出 ApiError。
  */
 async function simpleGet(path) {
-  console.debug('[simpleGet] making public request to:', path);
+
   try {
     const op = get({ apiName: 'api', path });
     // 使用自动超时配置
     return await withAutoTimeout(op, { method: 'GET', path });
   } catch (error) {
-    console.error(`[simpleGet] 请求失败: ${path}`, error);
+
     // 如果是超时错误,直接抛出 (已经是 ApiError)
     if (isTimeoutError(error)) {
       throw error;
@@ -42,13 +38,15 @@ async function simpleGet(path) {
 /**
  * [CN] 发送一个经过身份验证的 GET 请求 (带超时控制)。
  * @param {string} path - 请求的 API 路径。
+ * @param {{signal?: AbortSignal, returnEnvelope?: boolean}} [options] - 取消信号及是否保留响应包装对象。
  * @returns {Promise<any>} 一个解析为 API 响应数据的 Promise。
  * @throws {AuthenticationError} 如果用户未通过身份验证，则抛出 AuthenticationError。
  * @throws {ApiError} 如果请求失败或超时，则抛出 ApiError。
  */
-async function authenticatedGet(path) {
-  console.debug('[authenticatedGet] making authenticated request to:', path);
+async function authenticatedGet(path, { signal, returnEnvelope = false } = {}) {
+
   const session = await fetchAuthSession();
+  signal?.throwIfAborted();
   const idToken = session.tokens?.idToken;
   if (!idToken) {
     throw new AuthenticationError('未检测到身份凭证，请登录后重试。', {
@@ -56,6 +54,7 @@ async function authenticatedGet(path) {
       requestPath: path
     });
   }
+  let cancelRequest;
   try {
     const op = get({
       apiName: 'api',
@@ -67,9 +66,13 @@ async function authenticatedGet(path) {
         }
       }
     });
+    // 某些 Amplify 适配器不暴露 cancel；中止能力缺失时仍须保留原始请求错误。
+    cancelRequest = typeof op.cancel === 'function' ? () => op.cancel() : undefined;
+    if (cancelRequest) signal?.addEventListener('abort', cancelRequest, { once: true });
     // 使用自动超时配置
     const result = await withAutoTimeout(op, { method: 'GET', path });
-    console.log('✅ API调用成功，使用了ID token');
+
+    if (returnEnvelope) return result;
     if (result.data) {
       return result.data;
     } else if (result.events) {
@@ -77,9 +80,10 @@ async function authenticatedGet(path) {
     }
     return result;
   } catch (error) {
-    console.error('❌ 使用ID token API调用失败:', error);
+
     // 如果是超时错误,直接抛出
     if (isTimeoutError(error)) {
+      cancelRequest?.();
       throw error;
     }
     throw ApiError.from(error, {
@@ -87,6 +91,8 @@ async function authenticatedGet(path) {
       requestPath: path,
       statusCode: error?.$metadata?.httpStatusCode ?? error?.statusCode ?? error?.status
     });
+  } finally {
+    if (cancelRequest) signal?.removeEventListener('abort', cancelRequest);
   }
 }
 
@@ -94,23 +100,40 @@ async function authenticatedGet(path) {
  * [CN] 发送一个经过身份验证的 POST 请求 (带超时控制)。
  * @param {string} path - 请求的 API 路径。
  * @param {object} bodyData - 要在请求正文中发送的数据。
+ * @param {string} [expectedUserId] - 若指定，发送前核对凭证所属账号。
  * @returns {Promise<any>} 一个解析为 API 响应 JSON 的 Promise。
  * @throws {AuthenticationError} 如果用户未通过身份验证。
  * @throws {ApiError} 如果请求失败或超时。
  */
-async function authenticatedPost(path, bodyData) {
-  console.log('[authenticatedPost] making authenticated request to:', path);
+async function authenticatedPost(path, bodyData, expectedUserId) {
+
   const session = await fetchAuthSession();
   const idTokenRaw = session.tokens?.idToken;
   const idToken = typeof idTokenRaw === 'string' ? idTokenRaw : idTokenRaw?.toString?.();
   if (!idToken) {
-    console.error('[authenticatedPost] No ID token in session.tokens');
+
     throw new AuthenticationError('未检测到身份凭证，请登录后重试。', {
       requestMethod: 'POST',
       requestPath: path
     });
   }
-  console.debug('[authenticatedPost] ID Token preview (first 20 chars):', idToken.slice(0, 20));
+  if (expectedUserId) {
+    // 使用即将发送的同一份凭证核对归属，避免等待会话读取期间切换账号造成串号。
+    let subject = idTokenRaw?.payload?.sub;
+    if (!subject) {
+      try {
+        const encoded = idToken.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+        subject = JSON.parse(atob(encoded.padEnd(Math.ceil(encoded.length / 4) * 4, '='))).sub;
+      } catch {
+        // 无法确认账号时拒绝发送，不猜测当前登录身份。
+      }
+    }
+    if (subject !== expectedUserId) {
+      throw new AuthenticationError('登录账号已变化，请切回保存记录时的账号后重试。', {
+        requestMethod: 'POST', requestPath: path
+      });
+    }
+  }
   try {
     const op = post({
       apiName: 'api',
@@ -126,7 +149,7 @@ async function authenticatedPost(path, bodyData) {
     // 使用自动超时配置
     return await withAutoTimeout(op, { method: 'POST', path });
   } catch (error) {
-    console.error(`[authenticatedPost] 请求失败: ${path}`, error);
+
     // 如果是超时错误,直接抛出
     if (isTimeoutError(error)) {
       throw error;
@@ -149,7 +172,7 @@ async function authenticatedPost(path, bodyData) {
  * @throws {ApiError} 如果请求失败或超时。
  */
 async function authenticatedPut(path, bodyData) {
-  console.log('[authenticatedPut] making authenticated request to:', path);
+
   const session = await fetchAuthSession();
   const idTokenRaw = session.tokens?.idToken;
   const idToken = typeof idTokenRaw === 'string' ? idTokenRaw : idTokenRaw?.toString?.();
@@ -174,7 +197,7 @@ async function authenticatedPut(path, bodyData) {
     // 使用自动超时配置
     return await withAutoTimeout(op, { method: 'PUT', path });
   } catch (error) {
-    console.error(`[authenticatedPut] 请求失败: ${path}`, error);
+
     // 如果是超时错误,直接抛出
     if (isTimeoutError(error)) {
       throw error;
@@ -196,7 +219,7 @@ async function authenticatedPut(path, bodyData) {
  * @throws {ApiError} 如果请求失败或超时。
  */
 async function authenticatedDelete(path) {
-  console.log('[authenticatedDelete] making authenticated request to:', path);
+
   const session = await fetchAuthSession();
   const idTokenRaw = session.tokens?.idToken;
   const idToken = typeof idTokenRaw === 'string' ? idTokenRaw : idTokenRaw?.toString?.();
@@ -220,7 +243,7 @@ async function authenticatedDelete(path) {
     // 使用自动超时配置
     return await withAutoTimeout(op, { method: 'DELETE', path });
   } catch (error) {
-    console.error(`[authenticatedDelete] 请求失败: ${path}`, error);
+
     // 如果是超时错误,直接抛出
     if (isTimeoutError(error)) {
       throw error;
@@ -238,14 +261,17 @@ async function authenticatedDelete(path) {
 /**
  * [CN] 添加一个新事件。
  * @param {object} eventData - 事件数据。
+ * @param {{expectedUserId?: string, clientRequestId?: string}} [options] - 记录归属检查及稳定的幂等标识。
  * @returns {Promise<object>} 一个解析为 API 响应的 Promise，其中包含已创建的事件项目。
  */
-export const addEvent = async (eventData) => {
+export const addEvent = async (eventData, { expectedUserId, clientRequestId } = {}) => {
   const requestBody = { type: eventData.type, date: eventData.date, details: eventData.details };
+  // 离线重试共用已持久化的标识，不能在每次请求时重新生成。
+  if (clientRequestId !== undefined) requestBody.clientRequestId = clientRequestId;
   if (Array.isArray(eventData.attachments) && eventData.attachments.length) {
     requestBody.attachments = eventData.attachments;
   }
-  return authenticatedPost('/events', requestBody);
+  return authenticatedPost('/events', requestBody, expectedUserId);
 };
 
 /**
@@ -263,6 +289,12 @@ export const getAllEvents = async () => {
 export const getPublicDashboard = () => simpleGet('/public/dashboard');
 
 /**
+ * 读取当前启用的朗读稿件库。
+ * @returns {Promise<Array<{passageId: string, title: string, author: string, content: string}>>}
+ */
+export const getReadingPassages = () => simpleGet('/reading-passages');
+
+/**
  * 按首屏日期顺序分页读取用户明细，服务端重新检查公开状态。
  * @param {string} userId 用户 ID。
  * @param {string[]} eventIds 本页最多 20 个事件 ID。
@@ -274,10 +306,21 @@ export const getPublicEventDetails = (userId, eventIds) =>
 /**
  * [CN] 根据用户 ID 获取事件。
  * @param {string} userId - 用户的唯一标识符。
- * @returns {Promise<Array<object>>} 一个解析为该用户事件对象数组的 Promise。
+ * @returns {Promise<Array<object>>} 一个解析为该用户完整事件数组的 Promise。
+ * @throws {ServiceError} 后端没有确认已读取全部分页时拒绝把部分记录用于统计。
  */
 export const getEventsByUserId = async (userId) => {
-  return authenticatedGet(`/events/${userId}`);
+  const path = `/events/${userId}`;
+  const response = await authenticatedGet(path, { returnEnvelope: true });
+  if (!response || response.complete !== true || !Array.isArray(response.events)) {
+    throw new ServiceError('事件历史响应不完整，请稍后重试。', {
+      requestMethod: 'GET',
+      requestPath: path,
+      serviceName: 'Voice Events',
+      details: { complete: response?.complete === true },
+    });
+  }
+  return response.events;
 };
 
 /**
@@ -286,7 +329,7 @@ export const getEventsByUserId = async (userId) => {
  * @returns {Promise<object>} 一个解析为确认消息的 Promise。
  */
 export const deleteEvent = async (eventId) => {
-  console.log(`[deleteEvent] deleting event with ID: ${eventId}`);
+
   return authenticatedDelete(`/event/${eventId}`);
 };
 
@@ -331,7 +374,7 @@ const calculateConsistencyScore = (events) => {
   if (trainingEvents.length < 2) return 50;
 
   // 计算训练频率的一致性
-  const dates = trainingEvents.map(e => new Date(e.createdAt || e.date)).sort((a, b) => a - b);
+  const dates = trainingEvents.map(e => parseEventDate(e.createdAt || e.date)).sort((a, b) => a - b);
   const intervals = [];
 
   for (let i = 1; i < dates.length; i++) {
@@ -368,19 +411,19 @@ export const getEncouragingMessage = async (userData, options = {}) => {
       return "开始记录你的声音数据，让我为你加油吧！";
     }
 
-    console.log('🤖 api.js: getEncouragingMessage 接收到的事件数量:', userData.events.length);
+
 
     // 构建丰富的数据摘要
     // 注意：传入的 userData.events 已经在调用方按时间排序并限制为最近30条
     const totalEvents = userData.events.length;
     const recentTrainingCount = userData.events.filter(e =>
       e.type === 'training' &&
-      new Date(e.createdAt || e.date) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+      parseEventDate(e.createdAt || e.date) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
     ).length;
     const consistencyScore = calculateConsistencyScore(userData.events);
 
     const eventsSummary = userData.events.map(e => {
-      const date = new Date(e.date || e.createdAt).toLocaleDateString('zh-CN');
+      const date = parseEventDate(e.date || e.createdAt).toLocaleDateString('zh-CN');
       const details = e.details ? JSON.stringify(e.details) : '无';
       return `- 日期: ${date}, 事件类型: ${e.type}, 详情: ${details}`;
     }).join('\n');
@@ -412,7 +455,7 @@ ${userProgressSummary}
     const result = await callGeminiProxy(prompt);
     return result.response;  // 返回响应内容（无论是否限速，后端都会返回有意义的消息）
   } catch (error) {
-    console.error("获取AI消息失败:", error);
+
     if (throwOnError) {
       throw error;
     }
@@ -476,17 +519,22 @@ export const getUserPublicProfile = async (userId) => {
  * @returns {Promise<object>} 一个解析为包含更新后用户信息的 API 响应的 Promise。
  */
 export const updateUserProfile = async (userId, profileData) => {
-  const requestBody = { profile: profileData.profile };
+  // 显式补丁字段确保旧后端拒绝新协议，不能把部分资料误当成完整替换。
+  const requestBody = { profilePatch: profileData.profile };
   return authenticatedPut(`/user/${userId}`, requestBody);
 };
 
 /**
  * [CN] 为新用户设置个人资料。
  * @param {object} profileData - 包含新用户个人资料数据的对象。
+ * @param {{exists:boolean,updatedAt:string|null}} baseVersion - 用户填写或保存草稿时看到的服务端版本。
  * @returns {Promise<object>} 一个解析为包含新用户信息和 `isNewUser` 标志的 API 响应的 Promise。
+ * @throws {TypeError} 请求不符合资料设置协议时在发送前拒绝。
  */
-export const setupUserProfile = async (profileData) => {
-  const requestBody = { profile: profileData.profile || { name: '', isNamePublic: false, socials: [], areSocialsPublic: false } };
+export const setupUserProfile = async (profileData, baseVersion) => {
+  const requestBody = { profile: profileData.profile, baseVersion };
+  // 离线恢复后的首次请求不能依赖额外代码块；使用与草稿读写共享的轻量协议校验。
+  assertProfileSetupRequest(requestBody);
   return authenticatedPost('/user/profile-setup', requestBody);
 };
 
@@ -565,11 +613,12 @@ export const requestVoiceTestAnalyze = async (sessionId, calibration, forms) => 
 /**
  * [CN] 获取嗓音测试的结果。
  * @param {string} sessionId - 测试会话的 ID。
+ * @param {{signal?: AbortSignal}} [options] - 查询取消信号，离线或卸载时使用。
  * @returns {Promise<object>} 一个解析为测试结果对象的 Promise。
  */
-export const getVoiceTestResults = async (sessionId) => {
+export const getVoiceTestResults = async (sessionId, options) => {
   const path = `/results/${sessionId}`;
-  return authenticatedGet(path);
+  return authenticatedGet(path, options);
 };
 
 /**

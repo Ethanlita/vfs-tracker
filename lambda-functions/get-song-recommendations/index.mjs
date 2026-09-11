@@ -10,6 +10,11 @@
 
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import {
+    createStructuredLogger,
+    describeError,
+    fingerprintIdentifier,
+} from './structuredLogger.mjs';
+import {
     getRateLimitConfig,
     getUserRateLimitData,
     cleanExpiredHistory,
@@ -45,15 +50,12 @@ const createResponse = (statusCode, body) => {
  * @param {object} event - API Gateway Lambda 事件对象。它应包含一个带有“lowestNote”和“highestNote”字段的 JSON 正文。
  * @returns {Promise<object>} 一个 API Gateway 响应，其中包含一个歌曲推荐列表或错误消息。
  */
-export const handler = async (event) => {
-    console.log("🚀 --- Lambda Invocation Start: get-song-recommendations --- 🚀");
-    // Log essential request context
-    console.log("📝 EVENT CONTEXT:", JSON.stringify({
-        httpMethod: event.httpMethod,
-        path: event.path,
-        sourceIp: event.requestContext?.identity?.sourceIp,
-        cognitoIdentityId: event.requestContext?.identity?.cognitoIdentityId,
-    }, null, 2));
+export const handler = async (event, context = {}) => {
+    const logger = createStructuredLogger({
+        service: 'get-song-recommendations',
+        requestId: context.awsRequestId || event.requestContext?.requestId,
+    });
+    logger.info('invocation_started', { method: event.httpMethod, route: event.path });
 
     // Handle CORS preflight requests
     if (event.httpMethod === 'OPTIONS') {
@@ -63,7 +65,7 @@ export const handler = async (event) => {
     // 1. Get API Key from environment variables
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
-        console.error('❌ FATAL: GEMINI_API_KEY is not set in environment variables.');
+        logger.error('configuration_missing', { variable: 'GEMINI_API_KEY' });
         return createResponse(500, { success: false, error: 'Server configuration error.' });
     }
 
@@ -74,21 +76,25 @@ export const handler = async (event) => {
         lowestNote = body.lowestNote;
         highestNote = body.highestNote;
         if (!lowestNote || typeof lowestNote !== 'string' || !highestNote || typeof highestNote !== 'string') {
-            console.error("❌ Validation Error: Invalid 'lowestNote' or 'highestNote' in request body.", { body });
+            logger.warn('request_validation_failed', {
+                fields: ['lowestNote', 'highestNote'],
+                lowestNoteType: typeof lowestNote,
+                highestNoteType: typeof highestNote,
+            });
             return createResponse(400, { success: false, error: "Invalid input. 'lowestNote' and 'highestNote' must be non-empty strings." });
         }
     } catch (error) {
-        console.error('❌ Failed to parse request body:', error);
+        logger.warn('request_json_invalid', describeError(error));
         return createResponse(400, { success: false, error: 'Invalid JSON in request body.' });
     }
 
     // 3. Extract user ID from the event (from Cognito authorizer)
     const userId = extractUserIdFromEvent(event);
     if (!userId) {
-        console.error('❌ Failed to extract user ID from event');
+        logger.warn('identity_missing');
         return createResponse(401, { success: false, error: 'Unable to identify user.' });
     }
-    console.log(`📋 User ID: ${userId}`);
+    const userHash = fingerprintIdentifier(userId);
 
     // 4. Check rate limit and pre-charge quota before the AI request.
     // 仅当后续请求失败时回退本次扣减。
@@ -102,8 +108,11 @@ export const handler = async (event) => {
         const { songWindowHours, songMaxRequests } = rateLimitConfig;
         const { isAdmin, aiRateLimit } = userRateLimitData;
 
-        console.log(`⚙️ Rate limit config: ${songMaxRequests} requests per ${songWindowHours} hours`);
-        console.log(`👤 User isAdmin: ${isAdmin}`);
+        logger.debug('rate_limit_configuration_loaded', {
+            windowHours: songWindowHours,
+            maxRequests: songMaxRequests,
+            isAdmin,
+        });
 
         // 管理员跳过限速检查
         if (!isAdmin) {
@@ -111,7 +120,11 @@ export const handler = async (event) => {
             const cleanedHistory = cleanExpiredHistory(aiRateLimit.songHistory || [], songWindowHours);
             const rateLimitResult = checkRateLimit(cleanedHistory, songMaxRequests);
 
-            console.log(`📊 Rate limit check: ${rateLimitResult.count}/${songMaxRequests} requests used`);
+            logger.info('rate_limit_checked', {
+                userHash,
+                requestCount: rateLimitResult.count,
+                maxRequests: songMaxRequests,
+            });
 
             if (rateLimitResult.isLimited) {
                 // 用户超限，返回上次的推荐结果
@@ -122,7 +135,7 @@ export const handler = async (event) => {
                     nextAvailableTime
                 );
 
-                console.log(`⚠️ Rate limit exceeded for user: ${userId}. Next available at: ${nextAvailableTime}`);
+                logger.warn('rate_limit_exceeded', { userHash, nextAvailableAt: nextAvailableTime });
 
                 // 返回 success: true 以便前端能正常处理
                 return createResponse(200, {
@@ -148,13 +161,13 @@ export const handler = async (event) => {
                 history: reservedHistory,
                 previousRecommendations: aiRateLimit.lastSongRecommendations || null
             };
-            console.log(`📝 Pre-charged song quota for user: ${userId} at ${reservationTimestamp}`);
+            logger.info('quota_reserved', { userHash, reservedAt: reservationTimestamp });
         } else {
-            console.log('👑 Admin user - skipping rate limit check');
+            logger.info('rate_limit_admin_bypass', { userHash });
         }
     } catch (rateLimitError) {
         // 限速/预扣失败时不继续调用 AI，避免配额状态不一致。
-        console.error('❌ Rate limit check or pre-charge failed:', rateLimitError);
+        logger.error('rate_limit_service_failed', { userHash, ...describeError(rateLimitError) });
         return createResponse(503, { success: false, error: 'Rate limit service unavailable.' });
     }
 
@@ -191,9 +204,9 @@ Recommend 5 songs in Chinese, 3 in Japanese and 2 in English every time. Also, e
                 rolledBackHistory,
                 latestUserRateLimitData.aiRateLimit?.lastSongRecommendations || quotaReservation.previousRecommendations || null
             );
-            console.log(`↩️ Rolled back song quota for user: ${userId} at ${quotaReservation.timestamp}`);
+            logger.info('quota_reservation_rolled_back', { userHash, reservedAt: quotaReservation.timestamp });
         } catch (rollbackError) {
-            console.error('⚠️ Failed to rollback song quota:', rollbackError);
+            logger.error('quota_rollback_failed', { userHash, ...describeError(rollbackError) });
         }
     };
 
@@ -203,16 +216,14 @@ Recommend 5 songs in Chinese, 3 in Japanese and 2 in English every time. Also, e
         const genAI = new GoogleGenerativeAI(apiKey);
         const model = genAI.getGenerativeModel({ model: modelName });
 
-        console.log("➡️ --- Calling Gemini API --- ➡️");
-        console.log("REQUEST TO GEMINI (Prompt):", final_prompt);
+        logger.info('ai_request_started', { userHash, model: modelName, inputCharacters: final_prompt.length });
 
         // 7. Call the Gemini API
         const result = await model.generateContent(final_prompt);
         const response = result.response;
         const rawText = response.text();
 
-        console.log("⬅️ --- Gemini API Response Received --- ⬅️");
-        console.log("RAW RESPONSE FROM GEMINI:", rawText);
+        logger.info('ai_response_received', { userHash, model: modelName, outputCharacters: rawText.length });
 
         // 8. Clean and parse the response to ensure it's valid JSON
         let recommendations;
@@ -222,8 +233,11 @@ Recommend 5 songs in Chinese, 3 in Japanese and 2 in English every time. Also, e
             const cleanText = jsonMatch ? jsonMatch[1] : rawText;
             recommendations = JSON.parse(cleanText);
         } catch (parseError) {
-            console.error("❌ Failed to parse Gemini response as JSON:", parseError);
-            console.error("Problematic raw text:", rawText);
+            logger.error('ai_response_invalid', {
+                userHash,
+                outputCharacters: rawText.length,
+                ...describeError(parseError),
+            });
             await rollbackSongQuotaReservation();
             return createResponse(502, { success: false, error: "Received an invalid format from the AI service." });
         }
@@ -233,25 +247,21 @@ Recommend 5 songs in Chinese, 3 in Japanese and 2 in English every time. Also, e
             if (quotaReservation) {
                 await updateSongRateLimitData(userId, quotaReservation.history, recommendations);
             }
-            console.log('📝 Rate limit data updated successfully');
+            logger.info('quota_result_persisted', { userHash });
         } catch (updateError) {
             // 更新失败不应影响响应返回
-            console.error('⚠️ Failed to update rate limit data:', updateError);
+            logger.error('quota_result_persist_failed', { userHash, ...describeError(updateError) });
         }
 
         // 10. Return the successful response
-        console.log('✅ Successfully parsed recommendations.');
+        logger.info('recommendations_completed', { userHash, recommendationCount: recommendations.length });
         return createResponse(200, { success: true, recommendations });
 
     } catch (error) {
         // AI 请求失败时回退本次预扣的配额。
         await rollbackSongQuotaReservation();
 
-        console.error("❌ --- Gemini API Call Failed --- ❌");
-        console.error("ERROR DETAILS:", JSON.stringify({
-            message: error.message,
-            stack: error.stack,
-        }, null, 2));
+        logger.error('ai_request_failed', { userHash, ...describeError(error) });
         return createResponse(502, { success: false, error: 'Failed to call Gemini API.' });
     }
 };

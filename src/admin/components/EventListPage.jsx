@@ -1,3 +1,4 @@
+import { parseEventDate } from '../../utils/calendarDate.js';
 /**
  * @file 事件列表页面
  * 管理员事件列表页面，支持状态过滤、搜索和批量操作
@@ -46,7 +47,7 @@ function SearchBar({ value, onChange, onSearch, placeholder }) {
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={handleKeyDown}
         placeholder={placeholder}
-        className="w-full px-4 py-2 pl-10 pr-20 bg-gray-800 border border-gray-700 rounded-lg 
+        className="w-full px-4 py-2 pl-10 pr-20 bg-gray-800 border border-gray-700 rounded-lg
                    text-white placeholder-gray-500 focus:outline-none focus:border-purple-500
                    transition-colors"
       />
@@ -56,7 +57,7 @@ function SearchBar({ value, onChange, onSearch, placeholder }) {
         stroke="currentColor"
         viewBox="0 0 24 24"
       >
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
           d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
       </svg>
       <button
@@ -75,17 +76,17 @@ function SearchBar({ value, onChange, onSearch, placeholder }) {
  */
 function FilterButton({ active, onClick, children, color = 'gray' }) {
   const colorClasses = {
-    gray: active 
-      ? 'bg-gray-600 text-white border-gray-500' 
+    gray: active
+      ? 'bg-gray-600 text-white border-gray-500'
       : 'bg-gray-800 text-gray-400 border-gray-700 hover:border-gray-600',
-    yellow: active 
-      ? 'bg-yellow-600/30 text-yellow-400 border-yellow-500' 
+    yellow: active
+      ? 'bg-yellow-600/30 text-yellow-400 border-yellow-500'
       : 'bg-gray-800 text-gray-400 border-gray-700 hover:border-yellow-600/50',
-    green: active 
-      ? 'bg-green-600/30 text-green-400 border-green-500' 
+    green: active
+      ? 'bg-green-600/30 text-green-400 border-green-500'
       : 'bg-gray-800 text-gray-400 border-gray-700 hover:border-green-600/50',
-    red: active 
-      ? 'bg-red-600/30 text-red-400 border-red-500' 
+    red: active
+      ? 'bg-red-600/30 text-red-400 border-red-500'
       : 'bg-gray-800 text-gray-400 border-gray-700 hover:border-red-600/50',
   };
 
@@ -105,25 +106,24 @@ function FilterButton({ active, onClick, children, color = 'gray' }) {
 export default function EventListPage() {
   const { clients } = useAWSClients();
   const [searchParams, setSearchParams] = useSearchParams();
-  
-  // 从 URL 获取初始过滤器状态
-  const initialStatus = searchParams.get('status') || 'all';
-  const initialType = searchParams.get('type') || 'all';
-  const initialQuery = searchParams.get('q') || '';
-  
+
+  // URL 是已应用筛选的唯一状态来源，浏览器前进/后退会直接驱动查询。
+  const statusFilter = searchParams.get('status') || 'all';
+  const typeFilter = searchParams.get('type') || 'all';
+  const activeQuery = searchParams.get('q') || '';
+
   // 状态
   const [events, setEvents] = useState([]);
   const [userCache, setUserCache] = useState({}); // userId -> user 映射（缓存）
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [statusFilter, setStatusFilter] = useState(initialStatus);
-  const [typeFilter, setTypeFilter] = useState(initialType);
-  const [searchQuery, setSearchQuery] = useState(initialQuery);
-  const [activeQuery, setActiveQuery] = useState(initialQuery); // 实际用于搜索的查询
+  const [searchQuery, setSearchQuery] = useState(activeQuery); // 尚未提交的搜索草稿
   const [lastKey, setLastKey] = useState(null);
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
-  
+  const [loadMoreError, setLoadMoreError] = useState(null);
+  const requestGenerationRef = React.useRef(0);
+
   // 模态框状态
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
@@ -145,15 +145,15 @@ export default function EventListPage() {
   const fetchUserInfo = useCallback(async (userId) => {
     if (!clients || !userId) return null;
     if (userCache[userId]) return userCache[userId];
-    
+
     try {
       const user = await getUser(clients.dynamoDB, userId);
       if (user) {
         setUserCache(prev => ({ ...prev, [userId]: user }));
       }
       return user;
-    } catch (err) {
-      console.error('获取用户信息失败:', err);
+    } catch {
+
       return null;
     }
   }, [clients, userCache]);
@@ -163,12 +163,12 @@ export default function EventListPage() {
    */
   const loadUsersForEvents = useCallback(async (eventList) => {
     if (!clients) return;
-    
+
     const userIds = [...new Set(eventList.map(e => e.userId).filter(Boolean))];
     const uncachedIds = userIds.filter(id => !userCache[id]);
-    
+
     if (uncachedIds.length === 0) return;
-    
+
     // 并行获取用户信息
     await Promise.all(uncachedIds.map(fetchUserInfo));
   }, [clients, userCache, fetchUserInfo]);
@@ -182,12 +182,19 @@ export default function EventListPage() {
    */
   const loadEvents = useCallback(async (append = false) => {
     if (!clients) return;
+    const requestGeneration = append
+      ? requestGenerationRef.current
+      : ++requestGenerationRef.current;
 
     try {
       if (append) {
         setLoadingMore(true);
+        setLoadMoreError(null);
       } else {
         setLoading(true);
+        setError(null);
+        setLoadingMore(false);
+        setLoadMoreError(null);
         setEvents([]);
         setLastKey(null);
       }
@@ -203,10 +210,13 @@ export default function EventListPage() {
 
       // 按日期排序（最新在前）
       const sortedItems = result.items.sort((a, b) => {
-        const dateA = new Date(a.date || a.createdAt || 0);
-        const dateB = new Date(b.date || b.createdAt || 0);
+        const dateA = parseEventDate(a.date || a.createdAt || 0);
+        const dateB = parseEventDate(b.date || b.createdAt || 0);
         return dateB - dateA;
       });
+
+      // 查询条件已变化时，旧响应不能写入新列表或分页状态。
+      if (requestGeneration !== requestGenerationRef.current) return;
 
       if (append) {
         setEvents(prev => [...prev, ...sortedItems]);
@@ -217,16 +227,34 @@ export default function EventListPage() {
       // 加载用户信息
       await loadUsersForEvents(sortedItems);
 
+      if (requestGeneration !== requestGenerationRef.current) return;
+
       setLastKey(result.lastEvaluatedKey);
       setHasMore(!!result.lastEvaluatedKey);
     } catch (err) {
-      console.error('加载事件列表失败:', err);
-      setError(err.message);
+      if (requestGeneration !== requestGenerationRef.current) return;
+
+      if (append) setLoadMoreError(err.message);
+      else setError(err.message);
     } finally {
-      setLoading(false);
-      setLoadingMore(false);
+      if (requestGeneration === requestGenerationRef.current) {
+        setLoading(false);
+        setLoadingMore(false);
+      }
     }
   }, [clients, statusFilter, typeFilter, activeQuery, loadUsersForEvents]);
+
+  /** 在筛选或搜索变更的同一事件中使旧分页请求失效。 */
+  const invalidateListRequests = () => {
+    requestGenerationRef.current += 1;
+    setLoadingMore(false);
+    setLoadMoreError(null);
+  };
+
+  // 历史导航改变已提交搜索时，同步输入框；只改状态/类型时保留当前草稿。
+  useEffect(() => {
+    setSearchQuery(activeQuery);
+  }, [activeQuery]);
 
   // 当过滤器变化时重新加载
   useEffect(() => {
@@ -237,7 +265,7 @@ export default function EventListPage() {
    * 处理状态过滤器变化
    */
   const handleStatusChange = (status) => {
-    setStatusFilter(status);
+    invalidateListRequests();
     updateSearchParams(status, typeFilter, activeQuery);
   };
 
@@ -245,7 +273,7 @@ export default function EventListPage() {
    * 处理类型过滤器变化
    */
   const handleTypeChange = (type) => {
-    setTypeFilter(type);
+    invalidateListRequests();
     updateSearchParams(statusFilter, type, activeQuery);
   };
 
@@ -253,7 +281,7 @@ export default function EventListPage() {
    * 执行搜索
    */
   const handleSearch = () => {
-    setActiveQuery(searchQuery);
+    invalidateListRequests();
     updateSearchParams(statusFilter, typeFilter, searchQuery);
   };
 
@@ -269,9 +297,9 @@ export default function EventListPage() {
    * 处理事件更新（状态变更后刷新列表）
    */
   const handleEventUpdate = (updatedEvent) => {
-    setEvents(prev => prev.map(e => 
-      e.eventId === updatedEvent.eventId && e.userId === updatedEvent.userId 
-        ? updatedEvent 
+    setEvents(prev => prev.map(e =>
+      e.eventId === updatedEvent.eventId && e.userId === updatedEvent.userId
+        ? updatedEvent
         : e
     ));
     setSelectedEvent(updatedEvent);
@@ -306,12 +334,12 @@ export default function EventListPage() {
   }
 
   // 错误状态
-  if (error) {
+  if (error && events.length === 0) {
     return (
       <div className="bg-red-900/30 border border-red-700 rounded-xl p-6">
         <h3 className="text-red-400 font-medium mb-2">加载失败</h3>
         <p className="text-red-300/80 text-sm">{error}</p>
-        <button 
+        <button
           onClick={() => loadEvents(false)}
           className="mt-4 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
         >
@@ -351,7 +379,7 @@ export default function EventListPage() {
         <select
           value={typeFilter}
           onChange={(e) => handleTypeChange(e.target.value)}
-          className="px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white 
+          className="px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white
                      focus:outline-none focus:border-purple-500 transition-colors"
         >
           {TYPE_OPTIONS.map((option) => (
@@ -365,16 +393,16 @@ export default function EventListPage() {
         <button
           onClick={() => loadEvents(false)}
           disabled={loading}
-          className="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 
+          className="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600
                      transition-colors disabled:opacity-50 flex items-center gap-2"
         >
-          <svg 
-            className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} 
-            fill="none" 
-            stroke="currentColor" 
+          <svg
+            className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`}
+            fill="none"
+            stroke="currentColor"
             viewBox="0 0 24 24"
           >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
               d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
           </svg>
           刷新
@@ -384,11 +412,11 @@ export default function EventListPage() {
         {activeQuery && (
           <button
             onClick={() => {
+              invalidateListRequests();
               setSearchQuery('');
-              setActiveQuery('');
               updateSearchParams(statusFilter, typeFilter, '');
             }}
-            className="px-4 py-2 bg-red-900/50 text-red-400 rounded-lg hover:bg-red-900 
+            className="px-4 py-2 bg-red-900/50 text-red-400 rounded-lg hover:bg-red-900
                        transition-colors flex items-center gap-2"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -417,7 +445,7 @@ export default function EventListPage() {
       </div>
 
       {/* 事件表格 */}
-      <EventTable 
+      <EventTable
         events={events}
         users={userCache}
         onEventClick={handleEventClick}
@@ -427,10 +455,15 @@ export default function EventListPage() {
       {/* 加载更多按钮 */}
       {hasMore && (
         <div className="text-center py-4">
+          {loadMoreError && (
+            <div role="alert" className="mb-3 text-sm text-red-300">
+              加载更多失败：{loadMoreError}
+            </div>
+          )}
           <button
             onClick={handleLoadMore}
             disabled={loadingMore}
-            className="px-6 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 
+            className="px-6 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600
                        transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {loadingMore ? (
@@ -439,7 +472,7 @@ export default function EventListPage() {
                 加载中...
               </span>
             ) : (
-              '加载更多'
+              loadMoreError ? '重试加载更多' : '加载更多'
             )}
           </button>
         </div>

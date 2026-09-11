@@ -16,6 +16,15 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import App from '../../../src/App';
 
+const activatePwaUpdateSafely = vi.hoisted(() => vi.fn(async activate => {
+  await activate();
+  return { activated: true, labels: [] };
+}));
+vi.mock('../../../src/utils/pwaUpdateCoordinator.js', () => ({
+  activatePwaUpdateSafely,
+  setPwaUpdateBlocker: vi.fn(),
+}));
+
 // Mock Amplify Authenticator
 const mockAuthStatus = vi.fn();
 
@@ -27,8 +36,7 @@ vi.mock('@aws-amplify/ui-react', async () => {
       const context = {
         authStatus: mockAuthStatus()
       };
-      // ProductionProtectedRoute 使用: useAuthenticator(context => [context.authStatus])
-      // 这会解构第一个元素: const { authStatus } = useAuthenticator(...)
+      // 侧栏等 Amplify UI 消费方仍可读取认证状态。
       if (selector) {
         const selected = selector(context);
         // 如果 selector 返回数组，返回包含 authStatus 的对象
@@ -72,6 +80,7 @@ describe('App Component', () => {
   const setupDefaultAuth = () => {
     mockUseAuth.mockReturnValue({
       isAuthenticated: false,
+      authStatus: 'unauthenticated',
       needsProfileSetup: false,
       profileLoading: false,
       authInitialized: true
@@ -85,6 +94,7 @@ describe('App Component', () => {
     mockAuthStatus.mockReturnValue(authStatus);
     mockUseAuth.mockReturnValue({
       isAuthenticated: authStatus === 'authenticated',
+      authStatus,
       needsProfileSetup: false,
       profileLoading: false,
       authInitialized: true
@@ -297,6 +307,7 @@ describe('App Component', () => {
       mockAuthStatus.mockReturnValue('authenticated');
       mockUseAuth.mockReturnValue({
         isAuthenticated: true,
+        authStatus: 'authenticated',
         needsProfileSetup: true,
         profileLoading: false,
         authInitialized: true
@@ -321,6 +332,7 @@ describe('App Component', () => {
       mockAuthStatus.mockReturnValue('authenticated');
       mockUseAuth.mockReturnValue({
         isAuthenticated: true,
+        authStatus: 'authenticated',
         needsProfileSetup: true,
         profileLoading: true, // 正在加载
         authInitialized: true
@@ -343,6 +355,12 @@ describe('App Component', () => {
   });
 
   describe('Service Worker 更新横幅', () => {
+    beforeEach(() => {
+      activatePwaUpdateSafely.mockImplementation(async activate => {
+        await activate();
+        return { activated: true, labels: [] };
+      });
+    });
     it('收到更新事件时应该显示横幅', async () => {
       setupDefaultAuth();
       
@@ -361,13 +379,9 @@ describe('App Component', () => {
       });
     });
 
-    it('点击立即刷新按钮应该重新加载页面', async () => {
+    it('点击立即刷新按钮应该通过协调器激活更新', async () => {
       setupDefaultAuth();
-      const mockReload = vi.fn();
-      Object.defineProperty(window, 'location', {
-        value: { reload: mockReload },
-        writable: true
-      });
+      const updateSW = vi.fn();
       
       render(
         <MemoryRouter initialEntries={['/']}>
@@ -376,7 +390,7 @@ describe('App Component', () => {
       );
 
       // 触发更新事件
-      window.dispatchEvent(new Event('sw:update-available'));
+      window.dispatchEvent(new CustomEvent('sw:update-available', { detail: { updateSW } }));
 
       await waitFor(() => {
         expect(screen.getByText('检测到应用有新版本可用。')).toBeInTheDocument();
@@ -386,7 +400,39 @@ describe('App Component', () => {
       const reloadButton = screen.getByRole('button', { name: '立即刷新' });
       await user.click(reloadButton);
 
-      expect(mockReload).toHaveBeenCalled();
+      await waitFor(() => expect(updateSW).toHaveBeenCalledWith(true));
+      expect(activatePwaUpdateSafely).toHaveBeenCalledTimes(1);
+    });
+
+    it('其他标签页有未完成工作时保留更新并显示原因', async () => {
+      setupDefaultAuth();
+      const updateSW = vi.fn();
+      activatePwaUpdateSafely.mockResolvedValueOnce({
+        activated: false,
+        labels: ['新增事件表单'],
+        reason: 'blocked',
+      });
+      render(<MemoryRouter initialEntries={['/']}><App /></MemoryRouter>);
+      window.dispatchEvent(new CustomEvent('sw:update-available', { detail: { updateSW } }));
+
+      await user.click(await screen.findByRole('button', { name: '立即刷新' }));
+      expect(await screen.findByRole('alert')).toHaveTextContent('新增事件表单尚未完成');
+      expect(updateSW).not.toHaveBeenCalled();
+      expect(screen.getByRole('button', { name: '立即刷新' })).toBeEnabled();
+    });
+
+    it('更新启动失败时显示错误并允许重试', async () => {
+      setupDefaultAuth();
+      const updateSW = vi.fn();
+      activatePwaUpdateSafely.mockRejectedValueOnce(new Error('service worker communication failed'));
+      render(<MemoryRouter initialEntries={['/']}><App /></MemoryRouter>);
+      window.dispatchEvent(new CustomEvent('sw:update-available', { detail: { updateSW } }));
+
+      await user.click(await screen.findByRole('button', { name: '立即刷新' }));
+
+      expect(await screen.findByRole('alert')).toHaveTextContent('更新暂时无法启动，请检查网络后重试。');
+      expect(screen.getByRole('button', { name: '立即刷新' })).toBeEnabled();
+      expect(screen.getByRole('button', { name: '稍后提醒' })).toBeEnabled();
     });
 
     it('点击稍后提醒应该隐藏横幅', async () => {
@@ -416,7 +462,7 @@ describe('App Component', () => {
   });
 
   describe('未知路由', () => {
-    it('应该将未知路径重定向到首页', async () => {
+    it('应该显示404页面并提供返回入口', async () => {
       setupDefaultAuth();
       
       render(
@@ -425,10 +471,11 @@ describe('App Component', () => {
         </MemoryRouter>
       );
 
-      // 验证重定向到真实的 Home 组件 - 使用更精确的查询
+      // 未知地址保留原路径并显示明确的恢复入口。
       await waitFor(() => {
-        expect(screen.getByRole('heading', { level: 1, name: /欢迎来到VFS Tracker/i })).toBeInTheDocument();
+        expect(screen.getByRole('heading', { level: 1, name: '404' })).toBeInTheDocument();
       });
+      expect(screen.getByRole('link', { name: '返回首页' })).toHaveAttribute('href', '/');
     });
   });
 
@@ -442,6 +489,7 @@ describe('App Component', () => {
       mockAuthStatus.mockReturnValue('authenticated');
       mockUseAuth.mockReturnValue({
         isAuthenticated: true,
+        authStatus: 'authenticated',
         needsProfileSetup: true,
         profileLoading: false,
         authInitialized: true

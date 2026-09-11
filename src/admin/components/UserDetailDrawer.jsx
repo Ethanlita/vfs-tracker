@@ -3,7 +3,7 @@
  * 侧边滑出的用户详情面板
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useAWSClients } from '../contexts/AWSClientContext';
 import { queryByUserId, TABLES, EVENT_TYPES, updateUserAdminStatus } from '../services/dynamodb';
 import { getPresignedUrl } from '../services/s3';
@@ -65,76 +65,70 @@ function StatusBadge({ status }) {
  */
 export default function UserDetailDrawer({ user, open, onClose, onUserUpdate }) {
   const { clients } = useAWSClients();
-  const [events, setEvents] = useState([]);
-  const [loadingEvents, setLoadingEvents] = useState(false);
-  const [avatarUrl, setAvatarUrl] = useState(null);
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [updatingAdmin, setUpdatingAdmin] = useState(false);
+  const [eventResult, setEventResult] = useState(null);
+  const [eventRevision, setEventRevision] = useState(0);
+  const [avatarResult, setAvatarResult] = useState(null);
+  const [adminResults, setAdminResults] = useState({});
+  const pendingAdmins = useRef(new Set());
+  const mounted = useRef(false);
+  const userId = user?.userId;
+  const avatarKey = user?.profile?.avatarKey;
+  const adminResult = adminResults[userId];
+  const isAdmin = adminResult?.value ?? Boolean(user?.isAdmin);
+  const updatingAdmin = Boolean(adminResult?.pending);
+  const adminError = adminResult?.error;
+  const currentEvents = eventResult?.userId === userId ? eventResult : null;
+  const events = currentEvents?.items || [];
+  const loadingEvents = !currentEvents || currentEvents.status === 'loading';
+  const eventsError = currentEvents?.error;
+  const avatarUrl = avatarResult && avatarResult.userId === userId && avatarResult?.key === avatarKey ? avatarResult.url : null;
 
-  // 当用户变化时初始化 isAdmin 状态
   useEffect(() => {
-    if (user) {
-      setIsAdmin(user.isAdmin || false);
-    }
-  }, [user]);
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
 
-  // 处理管理员状态切换
+  /** 将保存锁、确认值及错误绑定到目标用户，允许其他用户独立操作。 */
   const handleAdminToggle = async () => {
-    if (!clients || !user || updatingAdmin) return;
-    
+    if (!clients || !userId || pendingAdmins.current.has(userId)) return;
+    const targetId = userId;
     const newValue = !isAdmin;
-    setUpdatingAdmin(true);
-    
+    pendingAdmins.current.add(targetId);
+    setAdminResults(prev => ({ ...prev, [targetId]: { value: isAdmin, pending: true, error: null } }));
     try {
-      await updateUserAdminStatus(clients.dynamoDB, user.userId, newValue);
-      setIsAdmin(newValue);
-      // 通知父组件更新用户列表
-      if (onUserUpdate) {
-        onUserUpdate({ ...user, isAdmin: newValue });
-      }
-    } catch (err) {
-      console.error('更新管理员状态失败:', err);
-      // 恢复原状态
-      setIsAdmin(!newValue);
+      await updateUserAdminStatus(clients.dynamoDB, targetId, newValue);
+      if (!mounted.current) return;
+      setAdminResults(prev => ({ ...prev, [targetId]: { value: newValue, pending: false, error: null } }));
+      // 仅回传已确认的字段，父组件按 ID 合并，不重新选择用户。
+      onUserUpdate?.({ userId: targetId, isAdmin: newValue });
+    } catch {
+      if (mounted.current) setAdminResults(prev => ({ ...prev, [targetId]: { value: isAdmin, pending: false, error: '管理员权限保存失败，请重试。' } }));
     } finally {
-      setUpdatingAdmin(false);
+      pendingAdmins.current.delete(targetId);
     }
   };
 
-  // 当用户变化时加载其事件和头像
+  // 请求结果、加载和错误都属于本次打开的用户；关闭或切换后忽略旧响应。
   useEffect(() => {
-    async function loadUserData() {
-      if (!user || !clients) {
-        setEvents([]);
-        setAvatarUrl(null);
-        return;
-      }
+    if (!open || !userId || !clients?.dynamoDB) return;
+    let active = true;
+    setEventResult({ userId, status: 'loading', items: [], error: null });
+    queryByUserId(clients.dynamoDB, TABLES.EVENTS, userId, { limit: 10 })
+      .then(items => { if (active) setEventResult({ userId, status: 'success', items, error: null }); })
+      .catch(() => { if (active) setEventResult({ userId, status: 'error', items: [], error: '最近事件加载失败，请重试。' }); });
+    return () => { active = false; };
+  }, [open, userId, clients?.dynamoDB, eventRevision]);
 
-      try {
-        setLoadingEvents(true);
-        
-        // 并行加载事件和头像
-        const [userEvents, avatar] = await Promise.all([
-          queryByUserId(clients.dynamoDB, TABLES.EVENTS, user.userId, { limit: 10 }),
-          // 获取头像预签名 URL
-          user.profile?.avatarKey 
-            ? getPresignedUrl(clients.s3, user.profile.avatarKey).catch(() => null)
-            : Promise.resolve(null),
-        ]);
-        
-        setEvents(userEvents);
-        setAvatarUrl(avatar);
-      } catch (err) {
-        console.error('加载用户数据失败:', err);
-      } finally {
-        setLoadingEvents(false);
-      }
-    }
-
-    if (open && user) {
-      loadUserData();
-    }
-  }, [user, open, clients]);
+  // 头像独立加载并核对用户及对象 key，不阻塞事件列表，也不显示旧用户图片。
+  useEffect(() => {
+    if (!open || !userId || !avatarKey || !clients?.s3) return;
+    let active = true;
+    setAvatarResult(null);
+    getPresignedUrl(clients.s3, avatarKey)
+      .then(url => { if (active) setAvatarResult({ userId, key: avatarKey, url }); })
+      .catch(() => { if (active) setAvatarResult(null); });
+    return () => { active = false; };
+  }, [open, userId, avatarKey, clients?.s3]);
 
   // 处理 Escape 键关闭
   useEffect(() => {
@@ -251,6 +245,9 @@ export default function UserDetailDrawer({ user, open, onClose, onUserUpdate }) 
                       </div>
                     </div>
                     <button
+                      role="switch"
+                      aria-label="管理员权限"
+                      aria-checked={isAdmin}
                       onClick={handleAdminToggle}
                       disabled={updatingAdmin}
                       className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors
@@ -267,6 +264,11 @@ export default function UserDetailDrawer({ user, open, onClose, onUserUpdate }) 
                   </div>
                 </div>
               </section>
+
+              {adminError && <div role="alert" className="rounded-lg bg-red-950 p-3 text-red-300">
+                <p>{adminError}</p>
+                <button onClick={handleAdminToggle} disabled={updatingAdmin} className="mt-2 underline">重试保存权限</button>
+              </div>}
 
               {/* 个人资料 */}
               <section>
@@ -307,11 +309,16 @@ export default function UserDetailDrawer({ user, open, onClose, onUserUpdate }) 
               {/* 用户事件 */}
               <section>
                 <h3 className="text-sm font-medium text-gray-400 uppercase tracking-wider mb-3">
-                  最近事件 ({events.length})
+                  最近事件{currentEvents?.status === 'success' ? ' (' + events.length + ')' : ''}
                 </h3>
                 
-                {loadingEvents ? (
-                  <div className="bg-gray-800 rounded-lg p-4 text-center">
+                {eventsError ? (
+                  <div role="alert" className="bg-red-950 rounded-lg p-4 text-red-300">
+                    <p>{eventsError}</p>
+                    <button onClick={() => setEventRevision(value => value + 1)} className="mt-2 underline">重试最近事件</button>
+                  </div>
+                ) : loadingEvents ? (
+                  <div role="status" aria-label="正在加载最近事件" className="bg-gray-800 rounded-lg p-4 text-center">
                     <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-purple-400 mx-auto" />
                   </div>
                 ) : events.length === 0 ? (

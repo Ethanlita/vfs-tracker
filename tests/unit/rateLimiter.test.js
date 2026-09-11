@@ -27,6 +27,7 @@ vi.mock('@aws-sdk/util-dynamodb', () => ({
 import {
   cleanExpiredHistory,
   checkRateLimit,
+  validateRateLimitConfig,
   calculateNextAvailableTime,
   formatNextAvailableTime,
   extractUserIdFromEvent
@@ -87,6 +88,10 @@ describe('rateLimiter 真实函数测试', () => {
   });
 
   describe('checkRateLimit', () => {
+    it.each([-5, 0, 1.5, 101, NaN, Infinity])('空历史也拒绝非法最大次数 %s', maxRequests => {
+      expect(() => checkRateLimit([], maxRequests)).toThrow('Invalid maxRequests');
+    });
+
     it('应该允许请求当未达到限制', () => {
       const history = ['2025-01-01T10:00:00Z', '2025-01-01T11:00:00Z']; // 2 个请求
       const result = checkRateLimit(history, 10);
@@ -120,6 +125,23 @@ describe('rateLimiter 真实函数测试', () => {
       const result = checkRateLimit(history, 10);
       
       expect(result.oldestTimestamp).toBe('2025-01-01T08:00:00Z');
+    });
+  });
+
+  describe('validateRateLimitConfig', () => {
+    const valid = { adviceWindowHours: 24, adviceMaxRequests: 10, songWindowHours: 72, songMaxRequests: 5 };
+
+    it('标准化合法整数文本', () => {
+      expect(validateRateLimitConfig(Object.fromEntries(Object.entries(valid).map(([key, value]) => [key, String(value)]))))
+        .toEqual(valid);
+    });
+
+    it.each([
+      ['adviceWindowHours', 0], ['adviceWindowHours', 169], ['adviceWindowHours', 1.5],
+      ['adviceMaxRequests', -1], ['adviceMaxRequests', 101], ['songWindowHours', NaN],
+      ['songMaxRequests', Infinity],
+    ])('拒绝非法服务端配置 %s=%s', (field, value) => {
+      expect(() => validateRateLimitConfig({ ...valid, [field]: value })).toThrow(`Invalid ${field}`);
     });
   });
 

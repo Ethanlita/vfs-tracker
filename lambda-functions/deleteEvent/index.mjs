@@ -2,15 +2,16 @@
  * @file [CN] index.mjs 是一个 AWS Lambda 函数，用于删除指定的嗓音事件及其在 S3 上的关联附件。
  */
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { DynamoDBDocumentClient, DeleteCommand } from "@aws-sdk/lib-dynamodb";
+import { DynamoDBDocumentClient, DeleteCommand, GetCommand } from "@aws-sdk/lib-dynamodb";
 import { S3Client, DeleteObjectCommand } from "@aws-sdk/client-s3";
+import { createStructuredLogger, describeError, fingerprintIdentifier } from './structuredLogger.mjs';
 
 const client = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(client);
 const s3Client = new S3Client({});
 
 const tableName = process.env.EVENTS_TABLE || "VoiceFemEvents";
-const bucketName = process.env.ATTACHMENTS_BUCKET_NAME;
+const bucketName = process.env.ATTACHMENTS_BUCKET;
 
 const corsHeaders = {
   'Content-Type': 'application/json',
@@ -28,17 +29,58 @@ const corsHeaders = {
 function getAuthenticatedUserId(event) {
   const claims = event.requestContext?.authorizer?.claims;
   if (!claims || !claims.sub) {
-    throw new Error('Unauthorized: Cannot find user ID from token.');
+    throw new TypeError('Unauthorized: Cannot find user ID from token.');
   }
   return claims.sub;
 }
 
 /**
- * [CN] Lambda 函数的主处理程序。它负责删除 DynamoDB 中的事件记录，并同时删除 S3 中所有关联的附件文件。
+ * [CN] 从附件记录中提取当前桶内的 S3 对象键。
+ * @param {string} fileUrl - 纯对象键、当前桶的 S3 URI 或 HTTPS 地址。
+ * @param {string} configuredBucket - 当前附件桶名称。
+ * @returns {string|null} 可删除的对象键；无有效地址时返回 null。
+ */
+export function attachmentKeyFromFileUrl(fileUrl, configuredBucket) {
+  if (typeof fileUrl !== 'string' || !fileUrl.trim()) return null;
+  const value = fileUrl.trim();
+  const s3Prefix = `s3://${configuredBucket}/`;
+  if (value.startsWith(s3Prefix)) return value.slice(s3Prefix.length) || null;
+  if (value.startsWith('s3://')) return null;
+  if (value.startsWith('http://') || value.startsWith('https://')) {
+    try {
+      return decodeURIComponent(new URL(value).pathname.replace(/^\/+/, '')) || null;
+    } catch {
+      return null;
+    }
+  }
+  return value.replace(/^\/+/, '') || null;
+}
+
+/**
+ * [CN] 在删除数据库记录前删除全部有效附件；任一 S3 请求失败时抛错，使用户可以重试。
+ * @param {object} storedEvent - DynamoDB 中读取到的事件。
+ * @returns {Promise<number>} 已向 S3 提交删除的附件数量。
+ */
+async function deleteAttachments(storedEvent) {
+  const attachments = Array.isArray(storedEvent?.attachments) ? storedEvent.attachments : [];
+  if (attachments.length === 0) return 0;
+  if (!bucketName) throw new Error('ATTACHMENTS_BUCKET environment variable is required to delete event attachments.');
+
+  const commands = attachments
+    .map(attachment => attachmentKeyFromFileUrl(attachment?.fileUrl, bucketName))
+    .filter(Boolean)
+    .map(Key => s3Client.send(new DeleteObjectCommand({ Bucket: bucketName, Key })));
+  await Promise.all(commands);
+  return commands.length;
+}
+
+/**
+ * [CN] Lambda 函数的主处理程序。它先读取事件并删除关联 S3 文件，全部成功后再删除 DynamoDB 记录。
  * @param {object} event - API Gateway Lambda 事件对象，在路径参数中包含 `eventId`。
  * @returns {Promise<object>} 一个 API Gateway 响应对象。
  */
-export const handler = async (event) => {
+export const handler = async (event, context = {}) => {
+  const logger = createStructuredLogger({ service: 'deleteEvent', requestId: context.awsRequestId });
   if (event.httpMethod === 'OPTIONS') {
     return {
       statusCode: 200,
@@ -59,7 +101,26 @@ export const handler = async (event) => {
       };
     }
 
-    console.log(`Attempting to delete event ${eventId} for user ${authenticatedUserId}`);
+    const identifiers = {
+      userHash: fingerprintIdentifier(authenticatedUserId),
+      eventHash: fingerprintIdentifier(eventId),
+    };
+    logger.info('event_delete_started', identifiers);
+
+    const { Item: storedEvent } = await docClient.send(new GetCommand({
+      TableName: tableName,
+      Key: { userId: authenticatedUserId, eventId },
+      ConsistentRead: true,
+    }));
+    if (!storedEvent) {
+      return {
+        statusCode: 404,
+        headers: corsHeaders,
+        body: JSON.stringify({ message: "Event not found or you do not have permission to delete it." }),
+      };
+    }
+
+    const deletedAttachmentCount = await deleteAttachments(storedEvent);
 
     const deleteDbEntryCommand = new DeleteCommand({
       TableName: tableName,
@@ -68,72 +129,18 @@ export const handler = async (event) => {
         eventId: eventId,
       },
       ConditionExpression: "attribute_exists(eventId)",
-      ReturnValues: "ALL_OLD", // 返回被删除的项
     });
-
-    const { Attributes: deletedEvent } = await docClient.send(deleteDbEntryCommand);
-
-    // 如果事件有附件，则从 S3 删除它们
-    if (bucketName && deletedEvent && Array.isArray(deletedEvent.attachments) && deletedEvent.attachments.length > 0) {
-      console.log(`Event ${eventId} has ${deletedEvent.attachments.length} attachments. Deleting from S3 bucket: ${bucketName}`);
-
-      const deletePromises = deletedEvent.attachments.map(att => {
-        if (!att.fileUrl) {
-          console.warn('Attachment object is missing fileUrl, skipping:', att);
-          return null;
-        }
-        try {
-          let key;
-          const s3Prefix = `s3://${bucketName}/`;
-
-          // 处理三种可能的格式：S3 URI、HTTPS URL 或仅 key 本身
-          if (att.fileUrl.startsWith(s3Prefix)) {
-            key = att.fileUrl.substring(s3Prefix.length);
-          } else if (att.fileUrl.startsWith('http')) {
-            const url = new URL(att.fileUrl);
-            key = decodeURIComponent(url.pathname.substring(1)); 
-          } else {
-            // 假设它就是 key
-            key = att.fileUrl;
-          }
-          
-          if (!key) {
-            console.warn('Could not determine S3 key from fileUrl, skipping:', att.fileUrl);
-            return null;
-          }
-
-          console.log(`Queueing deletion for S3 object with key: ${key}`);
-          const deleteS3Command = new DeleteObjectCommand({
-            Bucket: bucketName,
-            Key: key,
-          });
-
-          // 返回 promise，单独记录错误而不使整个批次失败
-          return s3Client.send(deleteS3Command).catch(err => {
-            console.error(`Failed to delete S3 object ${key}:`, err);
-          });
-        } catch (e) {
-          console.error('Error processing attachment for deletion:', att.fileUrl, e);
-          return null;
-        }
-      }).filter(Boolean);
-
-      if (deletePromises.length > 0) {
-        await Promise.all(deletePromises);
-        console.log(`Successfully processed S3 deletion for ${deletePromises.length} attachments.`);
-      }
-    } else if (!bucketName) {
-      console.warn("ATTACHMENTS_BUCKET_NAME environment variable not set. Skipping attachment deletion.");
-    }
+    await docClient.send(deleteDbEntryCommand);
+    logger.info('event_delete_completed', { ...identifiers, deletedAttachmentCount });
 
     return {
       statusCode: 200,
       headers: corsHeaders,
-      body: JSON.stringify({ message: "Event deleted successfully" }),
+      body: JSON.stringify({ message: "Event deleted successfully", deletedAttachmentCount }),
     };
 
   } catch (error) {
-    console.error("Error deleting event:", error);
+    logger.error('event_delete_failed', describeError(error));
 
     if (error.name === 'ConditionalCheckFailedException') {
       return {
@@ -143,18 +150,18 @@ export const handler = async (event) => {
       };
     }
 
-    if (error.message.startsWith('Unauthorized')) {
+    if (error instanceof TypeError) {
         return {
             statusCode: 401,
             headers: corsHeaders,
-            body: JSON.stringify({ message: error.message }),
+            body: JSON.stringify({ message: 'Unauthorized: Cannot find user ID from token.' }),
         };
     }
 
     return {
       statusCode: 500,
       headers: corsHeaders,
-      body: JSON.stringify({ message: "Error deleting event", error: error.message }),
+      body: JSON.stringify({ message: "Error deleting event" }),
     };
   }
 };

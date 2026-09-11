@@ -84,7 +84,8 @@ describe('SecureFileUpload Component', () => {
     // Mock FileReader
     global.FileReader = class {
       readAsDataURL(blob) {
-        this.onload({ target: { result: 'data:image/png;base64,mock-image-data' } });
+        this.result = 'data:image/png;base64,mock-image-data';
+        this.onload({ target: this });
       }
     };
 
@@ -116,6 +117,54 @@ describe('SecureFileUpload Component', () => {
     }
   });
 
+
+  it.each(['avatar','attachment'])('键盘可到达 %s 文件入口并激活原生输入',async fileType=>{
+    const {container}=render(<SecureFileUpload fileType={fileType} onFileUpdate={mockOnFileUpdate}/>);
+    const input=container.querySelector('input[type="file"]'),click=vi.spyOn(input,'click');
+    await user.tab();expect(screen.getByRole('button',{name:fileType==='avatar'?'更换头像':'选择文件'})).toHaveFocus();
+    await user.keyboard('{Enter}');expect(click).toHaveBeenCalledTimes(1);
+  });
+  it('上传失败后复用原文件重试，也允许再次选择同一个文件',async()=>{
+    api.getUploadUrl.mockRejectedValueOnce(new Error('network failed'));
+    const {container}=render(<SecureFileUpload fileType="attachment" onFileUpdate={mockOnFileUpdate}/>);
+    const input=container.querySelector('input[type="file"]'),file=createMockFile();
+    await user.upload(input,file);await screen.findByRole('button',{name:/重试/});
+    await user.click(screen.getByRole('button',{name:/重试/}));await waitFor(()=>expect(mockOnFileUpdate).toHaveBeenCalledTimes(1));
+    expect(global.fetch).toHaveBeenCalledWith(expect.any(String),expect.objectContaining({body:file}));
+    await user.upload(input,file);await waitFor(()=>expect(mockOnFileUpdate).toHaveBeenCalledTimes(2));
+  });
+
+  it.each(['address','put','url'])('整个上传过程保持忙碌直到 %s 阶段结束',async stage=>{
+    let release;const pending=new Promise(resolve=>{release=resolve});
+    if(stage==='address')api.getUploadUrl.mockReturnValueOnce(pending);
+    if(stage==='put')global.fetch.mockReturnValueOnce(pending);
+    if(stage==='url')api.getFileUrl.mockReturnValueOnce(pending);
+    const status=vi.fn(),{container}=render(<SecureFileUpload fileType="attachment" onFileUpdate={mockOnFileUpdate} onStatusChange={status}/>);
+    await user.upload(container.querySelector('input[type=file]'),createMockFile());
+    expect(status).toHaveBeenLastCalledWith('uploading');expect(mockOnFileUpdate).not.toHaveBeenCalled();
+    release(stage==='put'?{ok:true}:'https://example.test/file');await waitFor(()=>expect(status).toHaveBeenLastCalledWith('idle'));expect(mockOnFileUpdate).toHaveBeenCalledTimes(1);
+  });
+  it('失败后显式放弃附件清除错误并解除提交阻塞',async()=>{
+    api.getUploadUrl.mockRejectedValueOnce(new Error('failed'));const status=vi.fn(),{container}=render(<SecureFileUpload fileType="attachment" onFileUpdate={mockOnFileUpdate} onStatusChange={status}/>);
+    await user.upload(container.querySelector('input[type=file]'),createMockFile());await waitFor(()=>expect(status).toHaveBeenLastCalledWith('error'));
+    await user.click(screen.getByRole('button',{name:'放弃此附件'}));expect(status).toHaveBeenLastCalledWith('idle');expect(screen.queryByRole('alert')).not.toBeInTheDocument();expect(mockOnFileUpdate).not.toHaveBeenCalled();
+  });
+
+  it.each(['attachment','avatar'])('%s上传后链接失败只重试链接，不重复PUT',async fileType=>{
+    const getUrl=fileType==='avatar'?api.getAvatarUrl:api.getFileUrl;
+    getUrl.mockRejectedValueOnce(new Error('link failed'));
+    const {container}=render(<SecureFileUpload fileType={fileType} onFileUpdate={mockOnFileUpdate}/>);
+    await user.upload(container.querySelector('input[type=file]'),createMockFile());
+    expect(await screen.findByRole('alert')).toHaveTextContent('文件已上传');
+    expect(mockOnFileUpdate).not.toHaveBeenCalled();await user.click(screen.getByRole('button',{name:/重试/}));
+    await waitFor(()=>expect(mockOnFileUpdate).toHaveBeenCalledTimes(1));expect(global.fetch).toHaveBeenCalledTimes(1);expect(api.getUploadUrl).toHaveBeenCalledTimes(1);expect(getUrl).toHaveBeenCalledTimes(2);
+  });
+  it.each(['',null,'attachments/raw-key.png'])('上传后的无效链接 %s 不加入事件，恢复只请求链接',async url=>{
+    api.getFileUrl.mockResolvedValueOnce(url);
+    const {container}=render(<SecureFileUpload fileType="attachment" onFileUpdate={mockOnFileUpdate}/>);
+    await user.upload(container.querySelector('input[type=file]'),createMockFile());await screen.findByRole('alert');expect(mockOnFileUpdate).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button',{name:/重试/}));await waitFor(()=>expect(mockOnFileUpdate).toHaveBeenCalledTimes(1));expect(global.fetch).toHaveBeenCalledTimes(1);
+  });
   describe('基础渲染', () => {
     it('应该在头像模式下渲染头像上传界面', () => {
       render(
@@ -475,7 +524,7 @@ describe('SecureFileUpload Component', () => {
       await user.upload(input, file);
 
       await waitFor(() => {
-        expect(screen.getByText(/文件上传失败/i)).toBeInTheDocument();
+        expect(screen.getByText(/文件已上传，但访问地址获取失败/i)).toBeInTheDocument();
       });
     });
 
@@ -506,24 +555,20 @@ describe('SecureFileUpload Component', () => {
   });
 
   describe('图片预览功能', () => {
-    it('应该为图片文件显示预览', async () => {
-      const { container } = render(
-        <SecureFileUpload
-          fileType="avatar"
-          onFileUpdate={mockOnFileUpdate}
-        />
-      );
 
-      const file = createMockFile('avatar.png', 'image/png', 1024);
-      const input = container.querySelector('input[type="file"]');
-      
-      await user.upload(input, file);
-
-      // FileReader mock 会立即触发 onload
-      await waitFor(() => {
-        const avatarImg = screen.getByAltText('头像');
-        expect(avatarImg.src).toContain('mock-image-data');
-      });
+    it('保存完成前显示旧头像，父级失败后保留旧图且重试不重复上传',async()=>{
+      let rejectSave;mockOnFileUpdate.mockImplementationOnce(()=>new Promise((resolve,reject)=>{rejectSave=reject})).mockResolvedValueOnce(undefined);
+      const {container,rerender}=render(<SecureFileUpload fileType="avatar" currentFileUrl="https://example.test/old.png" onFileUpdate={mockOnFileUpdate}/>);
+      await user.upload(container.querySelector('input[type=file]'),createMockFile());await waitFor(()=>expect(mockOnFileUpdate).toHaveBeenCalledTimes(1));
+      expect(container.querySelector('input[type=file]')).toBeDisabled();expect(screen.getByAltText('头像')).toHaveAttribute('src','https://example.test/old.png');
+      rejectSave(new Error('保存失败'));await screen.findByRole('alert');expect(screen.getByAltText('头像')).toHaveAttribute('src','https://example.test/old.png');
+      await user.click(screen.getByRole('button',{name:/重试/}));await waitFor(()=>expect(mockOnFileUpdate).toHaveBeenCalledTimes(2));expect(global.fetch).toHaveBeenCalledTimes(1);
+      rerender(<SecureFileUpload fileType="avatar" currentFileUrl="https://example.test/new.png" onFileUpdate={mockOnFileUpdate}/>);expect(screen.getByAltText('头像')).toHaveAttribute('src','https://example.test/new.png');
+    });
+    it('无法解码的头像不会上传或调用资料保存',async()=>{
+      global.Image=class{set src(value){queueMicrotask(()=>this.onerror())}};
+      const {container}=render(<SecureFileUpload fileType="avatar" onFileUpdate={mockOnFileUpdate}/>);
+      await user.upload(container.querySelector('input[type=file]'),createMockFile());expect(await screen.findByRole('alert')).toHaveTextContent('有效的图片');expect(api.getUploadUrl).not.toHaveBeenCalled();expect(mockOnFileUpdate).not.toHaveBeenCalled();
     });
 
     it('头像加载失败时应该显示备用头像', () => {

@@ -132,13 +132,14 @@
 
 Routine 运行时也已经验证：ESA EdgeRoutine 使用模块入口格式 `export default { fetch(request) {} }`。Cloudflare Worker 风格的 `addEventListener('fetch', ...)` 虽然可以上传和部署，但在线上会返回 `599 Error: Load user script error`。
 
-当前仓库中的 `infra/esa-routine/cn-spa-fallback.js` 已改为 ESA 模块入口，并显式从 `origin-probe.vfs-tracker.cn` 读取上游内容。静态资源会被放行到上游，同时由 Routine 补充长期缓存头；SPA 深链返回上游首页 HTML，并用 `x-esa-spa-route` 或 `x-esa-spa-fallback` 标记。
+当前仓库中的 `infra/esa-routine/cn-spa-fallback.js` 已改为 ESA 模块入口，并显式从 `origin-probe.vfs-tracker.cn` 读取上游内容。静态资源会被放行到上游，同时由 Routine 补充长期缓存头；SPA 深链返回上游首页 HTML，并用 `x-esa-spa-route` 或 `x-esa-spa-fallback` 标记。重建上游请求时只显式复制 method 与 headers，避免把其他运行域的 `AbortSignal` 或运行时内部字段当作 `RequestInit` 传递；Node 24、测试拦截器和 ESA 因此共用同一条请求构造路径。
 
 最终切换结果：
 
 - `vfs-tracker.cn` 与 `www.vfs-tracker.cn` 已切换为 `vfstrackercn` Routine 关联记录
 - `页面回源规则` 保持关闭，避免旧的 OriginRule `DnsRecord` 逻辑重新介入
 - `cn-hashed-assets-long-cache` 与 `cn-html-short-cache` 已由脚本创建；Routine 自身也会在响应头上明确写入对应缓存策略
+- GitHub Pages 发布后由 `scripts/configure-esa-compression.mjs` 幂等创建或更新 `cn-main-static-compression`，只匹配 `.cn` 两个网页主机并启用 Gzip、Brotli 与 Zstd；API 和存储域名不进入这条规则
 - `https://vfs-tracker.cn/` 返回 200，带 `x-esa-spa-route: true`
 - `https://vfs-tracker.cn/scale-practice` 返回 200，带 `x-esa-spa-route: true`
 - `https://vfs-tracker.cn/assets/index-*.js` 返回 200，`content-type` 为 JavaScript，且没有 `x-esa-spa-route`
@@ -264,6 +265,8 @@ GitHub Pages 是静态文件托管，直接访问非首页路径时会返回 404
 - .app 主站会退化为 fallback 逻辑
 - .cn 主站会退化为 ESA Routine 的 404 fallback 逻辑
 
+`tests/unit/infra/spa-route-manifest.test.js` 会从 `src/App.jsx` 提取静态绝对路由，并要求 Cloudflare 与 ESA 清单完全一致；管理后台由两端共同声明的 `/admin` 动态前缀覆盖。
+
 ## 当前架构的优点与限制
 
 ### 优点
@@ -271,6 +274,7 @@ GitHub Pages 是静态文件托管，直接访问非首页路径时会返回 404
 - 配置仍然保持单源：.cn 站点不需要单独维护一套前端部署产物
 - 主站解耦：.cn 已不再通过 .app 的 Cloudflare Worker 才能获得 SPA fallback
 - 自动化发布：GitHub Pages 发布后会继续部署 ESA Routine 并刷新 ESA 缓存
+- 压缩配置随发布自动核对，避免控制台规则漂移后让 Routine 返回的 JS/CSS 退回未压缩传输
 - API 与存储拆分清晰：.cn 下的 api 和 storage 已经各自指向独立上游，不与主站混在同一个源站里
 - 应用逻辑透明：前端只依赖当前 hostname，后端只依赖请求头，不需要额外的环境分叉
 
@@ -285,4 +289,5 @@ GitHub Pages 是静态文件托管，直接访问非首页路径时会返回 404
 
 - 把 ESA 站点配置视为当前线上架构的一部分，不要再把 .cn 仅描述成“一个泛指的中国 CDN”
 - 如果新增或调整 .cn 记录、回源、缓存和 HTTPS 配置，应同步更新本文档
+- 发布后应分别以 `Accept-Encoding: gzip`、`br`、`zstd` 和不带压缩能力的请求核对 `Content-Encoding`、`Vary` 与正文可读性；浏览器实际传输体积应明显小于解码体积
 - 如果未来要让 .cn 成为真正独立、可优化的大陆前端入口，应优先评估是否把主站源站从 vfs-tracker.app 解耦

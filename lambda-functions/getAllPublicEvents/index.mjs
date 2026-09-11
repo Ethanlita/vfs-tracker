@@ -2,6 +2,7 @@
 import { createHash } from 'node:crypto';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, ScanCommand, BatchGetCommand } from '@aws-sdk/lib-dynamodb';
+import { createStructuredLogger, describeError } from './structuredLogger.mjs';
 
 const docClient = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const eventsTable = process.env.EVENTS_TABLE || 'VoiceFemEvents';
@@ -42,7 +43,8 @@ function project(item, light) {
  * @returns {Function} API Gateway 处理器。
  */
 export function createHandler({ db = docClient, now = Date.now,
-  sleep = ms => new Promise(resolve => setTimeout(resolve, ms)) } = {}) {
+  sleep = ms => new Promise(resolve => setTimeout(resolve, ms)),
+  createLogger = requestId => createStructuredLogger({ service: 'getAllPublicEvents', requestId }) } = {}) {
   let cache;
   let inFlight;
 
@@ -53,7 +55,7 @@ export function createHandler({ db = docClient, now = Date.now,
    * @param {string} projection 投影表达式。
    * @returns {Promise<object[]>} 所有已处理键中存在的记录。
    */
-  async function batchRead(table, keys, projection) {
+  async function batchRead(table, keys, projection, logger) {
     const items = [];
     for (let offset = 0; offset < keys.length; offset += 100) {
       let request = { [table]: { Keys: keys.slice(offset, offset + 100),
@@ -63,7 +65,8 @@ export function createHandler({ db = docClient, now = Date.now,
         items.push(...(result.Responses?.[table] || []));
         request = result.UnprocessedKeys;
         if (!request?.[table]?.Keys?.length) break;
-        console.info('PublicBatchRetry', { table, attempt: attempt + 1, remaining: request[table].Keys.length });
+        logger.warn('public_batch_retry', { tableKind: table === eventsTable ? 'events' : 'users',
+          attempt: attempt + 1, remainingCount: request[table].Keys.length });
         if (attempt >= 4) throw new Error('Public data read retries exhausted');
         // 有界指数退避加抖动，避免限流时集中重试。
         await sleep(50 * 2 ** attempt + Math.floor(Math.random() * 50));
@@ -77,7 +80,7 @@ export function createHandler({ db = docClient, now = Date.now,
    * @param {boolean} light 是否仅扫描首屏字段。
    * @returns {Promise<object[]>} 完整、按日期降序排列的公开事件。
    */
-  async function scanEvents(light) {
+  async function scanEvents(light, logger) {
     const items = [];
     let cursor;
     const started = now();
@@ -100,7 +103,7 @@ export function createHandler({ db = docClient, now = Date.now,
       cursor = result.LastEvaluatedKey;
     } while (cursor && Object.keys(cursor).length);
     const ids = [...new Set(items.map(item => item.userId))];
-    const users = await batchRead(usersTable, ids.map(userId => ({ userId })), 'userId, profile');
+    const users = await batchRead(usersTable, ids.map(userId => ({ userId })), 'userId, profile', logger);
     const names = new Map(users.map(user => [user.userId, user.profile?.isNamePublic
       ? (user.profile.name || '（未设置）') : '（非公开）']));
     const events = items.map(item => ({ ...(light ? project(item, true) : item),
@@ -108,8 +111,9 @@ export function createHandler({ db = docClient, now = Date.now,
       .sort((a, b) => (Date.parse(b.date) || 0) - (Date.parse(a.date) || 0)
         || a.eventId.localeCompare(b.eventId));
     // 仅记录聚合读成本与响应大小，不输出姓名、ID 或事件正文。
-    console.info('PublicEventsRead', { light, pages, scanned, returned: events.length, users: ids.length,
-      readCapacity, bytes: Buffer.byteLength(JSON.stringify(events)), ms: now() - started });
+    logger.info('public_events_read', { light, pageCount: pages, scannedCount: scanned,
+      returnedCount: events.length, userCount: ids.length, readCapacity,
+      responseSize: Buffer.byteLength(JSON.stringify(events)), durationMs: now() - started });
     return events;
   }
 
@@ -118,7 +122,8 @@ export function createHandler({ db = docClient, now = Date.now,
    * @param {object} event API Gateway 请求。
    * @returns {Promise<object>} 带 CORS 和明确缓存策略的响应。
    */
-  return async function handler(event) {
+  return async function handler(event, context = {}) {
+    const logger = createLogger(context.awsRequestId);
     const respond = (statusCode, body, extra = {}) => ({ statusCode, headers: { ...headers, ...extra },
       body: statusCode === 304 ? '' : JSON.stringify(body) });
     if (event.httpMethod === 'OPTIONS') return respond(200, { message: 'OK' });
@@ -132,7 +137,7 @@ export function createHandler({ db = docClient, now = Date.now,
           || ids.some(id => typeof id !== 'string' || !id || id.length > 256) || new Set(ids).size !== ids.length) {
           return respond(400, { message: 'Provide 1 to 20 unique event IDs' });
         }
-        const items = await batchRead(eventsTable, ids.map(eventId => ({ userId, eventId })));
+        const items = await batchRead(eventsTable, ids.map(eventId => ({ userId, eventId })), undefined, logger);
         const byId = new Map(items.filter(item => item.status === 'approved').map(item => [item.eventId, project(item, false)]));
         return respond(200, ids.filter(id => byId.has(id)).map(id => byId.get(id)));
       }
@@ -142,7 +147,7 @@ export function createHandler({ db = docClient, now = Date.now,
           if (!inFlight) {
             // 从开始读库时计时，缓存寿命不会因读库耗时或 HTTP 缓存而叠加。
             const started = now();
-            inFlight = scanEvents(true).then(items => {
+            inFlight = scanEvents(true, logger).then(items => {
               const body = JSON.stringify(items);
               cache = { items, expires: started + ttl, etag: `"${createHash('sha256').update(body).digest('hex')}"` };
             }).finally(() => { inFlight = undefined; });
@@ -152,10 +157,10 @@ export function createHandler({ db = docClient, now = Date.now,
         const cacheHeaders = { 'Cache-Control': `public, max-age=${Math.max(0, Math.floor((cache.expires - now()) / 1000))}, must-revalidate`, ETag: cache.etag };
         return respond(requestHeaders['if-none-match'] === cache.etag ? 304 : 200, cache.items, cacheHeaders);
       }
-      if (route.endsWith('/all-events')) return respond(200, await scanEvents(false));
+      if (route.endsWith('/all-events')) return respond(200, await scanEvents(false, logger));
       return respond(404, { message: 'Not found' });
     } catch (error) {
-      console.error('Error fetching public events:', error);
+      logger.error('public_events_read_failed', describeError(error));
       return respond(503, { message: 'Public data is temporarily unavailable' });
     }
   };

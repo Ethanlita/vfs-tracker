@@ -112,7 +112,8 @@ describe('EventForm 组件测试', () => {
     renderEventForm();
 
     const dateInput = screen.getByLabelText(/事件日期/);
-    const today = new Date().toISOString().split('T')[0];
+    const now = new Date();
+    const today = [now.getFullYear(), String(now.getMonth() + 1).padStart(2, '0'), String(now.getDate()).padStart(2, '0')].join('-');
     expect(dateInput).toHaveValue(today);
   });
 
@@ -292,7 +293,7 @@ describe('EventForm 组件测试', () => {
     });
   });
 
-  it('应该显示医院检测特有的Gemini AI提示', async () => {
+  it('应该在上传医院报告前说明第三方处理、授权访问和删除范围', async () => {
     const user = userEvent.setup();
     renderEventForm();
 
@@ -300,8 +301,13 @@ describe('EventForm 组件测试', () => {
     await user.selectOptions(typeSelect, 'hospital_test');
 
     await waitFor(() => {
-      expect(screen.getByText(/Gemini AI/)).toBeInTheDocument();
-      expect(screen.getByText(/自动审核您上传的报告内容/)).toBeInTheDocument();
+      expect(screen.getByText(/报告副本会发送给 Google Gemini API/)).toBeInTheDocument();
+      expect(screen.getByText(/具有相应 AWS 权限的授权管理员或运维人员/)).toBeInTheDocument();
+      expect(screen.getByText(/删除事件时会先删除关联原文件/)).toBeInTheDocument();
+      expect(screen.getByText(/48 小时后自动删除/)).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: '数据保护指南' })).toHaveAttribute('href', '/docs?doc=数据保护指南.md');
+      expect(screen.getByRole('link', { name: '使用协议' })).toHaveAttribute('href', '/docs?doc=使用协议.md');
+      expect(screen.queryByText(/不会有人看到/)).not.toBeInTheDocument();
     });
   });
 

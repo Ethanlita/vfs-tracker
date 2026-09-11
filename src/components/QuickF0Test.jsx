@@ -7,6 +7,8 @@ import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'rec
 import { ensureAppError, PermissionError, StorageError, ValidationError } from '../utils/apiError.js';
 import { ApiErrorNotice } from './ApiErrorNotice.jsx';
 import { useDocumentMeta } from '../hooks/useDocumentMeta';
+import { enqueuePendingEvent } from '../utils/pendingEvents.js';
+import { usePwaUpdateBlocker } from '../hooks/usePwaUpdateBlocker.js';
 
 /**
  * @en Convert frequency in Hz to the nearest equal-tempered note name.
@@ -42,8 +44,6 @@ const CustomTooltip = ({ active, payload }) => {
   return null;
 };
 
-const OFFLINE_QUEUE_KEY = 'pendingEvents:v1';
-
 const QuickF0Test = () => {
   // 设置页面 meta 标签
   useDocumentMeta({
@@ -58,17 +58,27 @@ const QuickF0Test = () => {
   const [error, setError] = useState(null);
   const [successMessage, setSuccessMessage] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const saveStateRef = useRef('idle');
+  const navigationTimerRef = useRef(null);
+  const mountedRef = useRef(true);
   const [currentF0, setCurrentF0] = useState(0);
   const [f0History, setF0History] = useState([]);
   const [averageF0, setAverageF0] = useState(null);
+
+  // 测量、结果确认和保存阶段都依赖当前页面内存中的采样结果。
+  usePwaUpdateBlocker(status !== 'idle' || averageF0 !== null || isSaving, '快速基频测试');
 
   const audioContextRef = useRef(null);
   const analyserNodeRef = useRef(null);
   const mediaStreamRef = useRef(null);
   const animationFrameRef = useRef(null);
+  const audioGenerationRef = useRef(0);
 
+  /** 使待授权请求失效，并释放当前测量持有的全部音频资源。 */
   const cleanupAudio = useCallback(() => {
-    if (animationFrameRef.current) {
+    audioGenerationRef.current += 1;
+    if (animationFrameRef.current !== null) {
       cancelAnimationFrame(animationFrameRef.current);
       animationFrameRef.current = null;
     }
@@ -77,12 +87,15 @@ const QuickF0Test = () => {
       mediaStreamRef.current = null;
     }
     if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
-      audioContextRef.current.close().catch(e => console.error('[QuickF0Test] 关闭 AudioContext 失败:', e));
-      audioContextRef.current = null;
+      audioContextRef.current.close().catch(() => undefined);
     }
+    audioContextRef.current = null;
+    analyserNodeRef.current = null;
   }, []);
 
-  const pitchLoop = useCallback((detector) => {
+  const pitchLoop = useCallback((detector, generation) => {
+    // 已取消的一轮不能读取或覆盖新一轮的分析器。
+    if (generation !== audioGenerationRef.current || !mountedRef.current) return;
     const input = new Float32Array(detector.inputLength);
     analyserNodeRef.current.getFloatTimeDomainData(input);
     const [pitch, clarity] = detector.findPitch(input, audioContextRef.current.sampleRate);
@@ -95,10 +108,18 @@ const QuickF0Test = () => {
       setCurrentF0(0);
     }
 
-    animationFrameRef.current = requestAnimationFrame(() => pitchLoop(detector));
+    animationFrameRef.current = requestAnimationFrame(() => pitchLoop(detector, generation));
   }, []);
 
+  /** 启动独立测量；迟到的授权结果只能释放自身资源，不能接管新测量。 */
   const handleStart = useCallback(async () => {
+    cleanupAudio();
+    const generation = audioGenerationRef.current;
+    // 新一轮测量有独立的保存状态，不受上轮成功后的延迟跳转影响。
+    clearTimeout(navigationTimerRef.current);
+    navigationTimerRef.current = null;
+    saveStateRef.current = 'idle';
+    setSaved(false);
     setStatus('recording');
     setError(null);
     setSuccessMessage('');
@@ -108,6 +129,10 @@ const QuickF0Test = () => {
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      if (generation !== audioGenerationRef.current || !mountedRef.current) {
+        stream.getTracks().forEach(track => track.stop());
+        return;
+      }
       mediaStreamRef.current = stream;
       const context = new (window.AudioContext || window.webkitAudioContext)();
       audioContextRef.current = context;
@@ -117,9 +142,10 @@ const QuickF0Test = () => {
       source.connect(analyser);
       analyserNodeRef.current = analyser;
       const detector = PitchDetector.forFloat32Array(analyser.fftSize);
-      pitchLoop(detector);
+      pitchLoop(detector, generation);
     } catch (err) {
-      console.error('无法获取麦克风权限或启动音频分析:', err);
+      if (generation !== audioGenerationRef.current || !mountedRef.current) return;
+
       setError(new PermissionError('无法启动测试，请确认已授予麦克风权限。', { cause: err }));
       setStatus('idle');
       cleanupAudio();
@@ -129,21 +155,29 @@ const QuickF0Test = () => {
   const handleStop = useCallback(() => {
     cleanupAudio();
     setStatus('finished');
-    const validF0s = f0History.map(h => h.f0).filter(f0 => f0 > 0);
+    const validF0s = f0History.map(h => h.f0).filter(f0 => Number.isFinite(f0) && f0 > 0);
     if (validF0s.length > 0) {
       const sum = validF0s.reduce((a, b) => a + b, 0);
       setAverageF0(sum / validF0s.length);
     } else {
-      setAverageF0(0);
+      // 静音或低置信度不构成一次有效测量，不能伪造为0Hz事件。
+      setAverageF0(null);
+      setError(new ValidationError('未检测到有效基频，请在安静环境中持续发声后重新测试。'));
     }
   }, [f0History, cleanupAudio]);
 
+  /**
+   * 保存当前测量；同步引用阻止重复进入，失败允许重试，成功保持锁定直到重新测试。
+   * @returns {Promise<void>} 完成一次在线保存或离线入队。
+   */
   const handleSave = async () => {
-    if (averageF0 === null || !user?.userId) {
+    if (saveStateRef.current !== 'idle') return;
+    if (!Number.isFinite(averageF0) || averageF0 <= 0 || !user?.userId) {
       setError(new ValidationError('无法保存，因为没有有效的测试结果或用户信息。'));
       return;
     }
     setIsSaving(true);
+    saveStateRef.current = 'saving';
     setError(null);
     setSuccessMessage('');
 
@@ -165,54 +199,64 @@ const QuickF0Test = () => {
       const isOnline = typeof navigator === 'undefined' ? true : navigator.onLine;
 
       if (isOnline) {
-        await addEvent(eventData);
+        await addEvent(eventData, { expectedUserId: user.userId });
+        if (!mountedRef.current) return;
+        saveStateRef.current = 'saved';
+        setSaved(true);
         setSuccessMessage('事件已成功保存！2秒后将返回“我的”页面。');
-        setTimeout(() => navigate('/mypage'), 2000);
+        navigationTimerRef.current = setTimeout(() => navigate('/mypage'), 2000);
       } else {
         try {
           if (typeof localStorage === 'undefined') {
             throw new Error('当前环境不支持离线存储');
           }
-          const existing = JSON.parse(localStorage.getItem(OFFLINE_QUEUE_KEY) || '[]');
-          existing.push({ when: Date.now(), eventData });
-          localStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(existing));
-          if (typeof window !== 'undefined') {
-            window.dispatchEvent(new Event('pending-events-updated'));
-          }
-          setSuccessMessage('已离线保存，网络恢复后可在“我的页面”同步。2秒后将返回。');
-          setTimeout(() => navigate('/mypage'), 2000);
+          // 追加和同步清理共用跨标签页锁，不能覆盖同期新增的记录。
+          await enqueuePendingEvent(eventData, user.userId);
+          if (!mountedRef.current) return;
+          saveStateRef.current = 'saved';
+          setSaved(true);
+          // 离线时保留测量页，避免跳入依赖身份恢复的个人页面。
+          setSuccessMessage('已离线保存到当前账号，联网并登录该账号后可在“我的页面”同步。');
         } catch (storageError) {
           setError(new StorageError('离线保存失败，请检查浏览器存储权限或稍后再试。', { cause: storageError }));
         }
       }
     } catch (err) {
-      console.error("保存事件失败:", err);
+
       setError(ensureAppError(err, {
         message: '保存事件时发生未知错误。',
         requestMethod: 'POST',
         requestPath: '/events'
       }));
     } finally {
-      setIsSaving(false);
+      if (saveStateRef.current === 'saving') saveStateRef.current = 'idle';
+      if (mountedRef.current) setIsSaving(false);
     }
   };
-  
+
   useEffect(() => {
-    return () => cleanupAudio();
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      clearTimeout(navigationTimerRef.current);
+      cleanupAudio();
+    };
   }, [cleanupAudio]);
 
   const chartHistory = f0History.slice(-200);
+  const hasValidResult = Number.isFinite(averageF0) && averageF0 > 0;
 
   return (
     <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-6 max-w-4xl">
-      <div className="relative mb-8 text-center">
+      {/* 窄屏按正常文档流排列返回按钮和标题，避免绝对定位互相遮挡。 */}
+      <div className="mb-8 flex flex-col gap-4 text-center sm:flex-row sm:items-center">
         <button
-          onClick={() => navigate('/mypage')}
-          className="absolute left-0 top-1/2 -translate-y-1/2 bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded-lg font-semibold transition-colors duration-300"
+          onClick={() => navigate(user?.userId && navigator.onLine ? '/mypage' : '/')}
+          className="self-start shrink-0 bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded-lg font-semibold transition-colors duration-300"
         >
           &larr; 返回
         </button>
-        <h1 className="text-4xl font-bold text-teal-600">快速基频测试</h1>
+        <h1 className="text-3xl sm:text-4xl font-bold text-teal-600 sm:flex-1">快速基频测试</h1>
       </div>
 
       <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-8 mb-8 flex flex-col items-center">
@@ -225,7 +269,7 @@ const QuickF0Test = () => {
             {frequencyToNoteName(currentF0)}
           </p>
         </div>
-        
+
         <div className="w-full h-48 rounded-lg flex items-center justify-center text-gray-500">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={chartHistory} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
@@ -244,7 +288,7 @@ const QuickF0Test = () => {
         </div>
       </div>
 
-      {status === 'finished' && (
+      {status === 'finished' && hasValidResult && (
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-8 text-center">
           <h3 className="text-xl font-semibold text-blue-800">测试完成</h3>
           <p className="text-4xl font-bold text-blue-600 my-2">
@@ -264,14 +308,8 @@ const QuickF0Test = () => {
           {error && (
             <ApiErrorNotice
               error={error}
-              onRetry={() => {
-                if (status === 'finished' && !isSaving) {
-                  handleSave();
-                } else {
-                  setError(null);
-                }
-              }}
-              retryLabel={status === 'finished' ? '重试保存' : undefined}
+              onRetry={status === 'finished' && hasValidResult && user?.userId && !isSaving ? handleSave : undefined}
+              retryLabel={status === 'finished' && hasValidResult ? '重试保存' : undefined}
             />
           )}
         </div>
@@ -294,12 +332,17 @@ const QuickF0Test = () => {
         </button>
         <button
           onClick={handleSave}
-          disabled={status !== 'finished' || isSaving}
+          disabled={status !== 'finished' || !hasValidResult || !user?.userId || isSaving || saved}
           className="w-40 bg-gradient-to-r from-blue-500 to-indigo-600 text-white px-6 py-3 rounded-lg font-semibold shadow-lg hover:from-blue-600 hover:to-indigo-700 transition-all duration-300 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {isSaving ? '保存中...' : '保存结果'}
+          {isSaving ? '保存中...' : saved ? '已保存' : '保存结果'}
         </button>
       </div>
+      {!user?.userId && (
+        <p className="mt-4 text-center text-sm text-gray-600" role="status">
+          可直接进行本地测试。当前未登录，结果仅保留在本页；保存到账号需联网登录后重新测试。
+        </p>
+      )}
     </div>
   );
 };

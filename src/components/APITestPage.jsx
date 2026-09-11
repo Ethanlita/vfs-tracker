@@ -67,7 +67,10 @@ const APITestPage = () => {
       name: 'setupUserProfile',
       label: '3. 新用户资料完善API（私有）',
       description: '为新用户创建或完善资料信息',
-      action: () => runTest('setupUserProfile', () => setupUserProfile({ profile: profileData }))
+      action: () => runTest('setupUserProfile', () => setupUserProfile(
+        { profile: profileData },
+        { exists: false, updatedAt: null }
+      ))
     },
     {
       name: 'updateUserProfile',

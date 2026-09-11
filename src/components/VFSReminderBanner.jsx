@@ -53,7 +53,7 @@ const VFSReminderBanner = ({ events, userId }) => {
 
     // 显示横幅
     setIsVisible(true);
-  }, [events, userId]); // 只依赖真正会变化的值
+  }, [events, STORAGE_KEY]); // 账号存储键变化时重新读取该账号的提醒状态
 
   const handleClose = () => {
     // 记录关闭时间

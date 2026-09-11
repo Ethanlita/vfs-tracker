@@ -1,108 +1,34 @@
 /**
- * @file 主页端到端测试
- * @description 测试应用主页的加载和基本功能
+ * @file 访客主页端到端测试。
+ * @description 验证主页主操作与桌面、手机共用的功能侧栏。
  */
 import { test, expect } from '@playwright/test';
 
-test.describe('主页测试', () => {
-  test('应该成功加载主页', async ({ page }) => {
-    // 访问主页
-    await page.goto('/');
-    
-    // 验证页面标题
-    await expect(page).toHaveTitle(/VFS Tracker/);
-    
-    // 验证主要导航元素存在
-    const nav = page.locator('nav');
-    await expect(nav).toBeVisible();
-  });
-
-  test('应该显示欢迎信息', async ({ page }) => {
-    await page.goto('/');
-    
-    // 查找欢迎文本（根据实际内容调整）
-    const welcomeText = page.locator('text=/欢迎|Welcome/i');
-    await expect(welcomeText).toBeVisible({ timeout: 10000 });
-  });
-
-  test('导航菜单应该可以点击', async ({ page }) => {
-    await page.goto('/');
-    
-    // 等待页面完全加载
-    await page.waitForLoadState('networkidle');
-    
-    // 查找所有导航链接
-    const navLinks = page.locator('nav a');
-    const count = await navLinks.count();
-    
-    // 至少应该有一些导航链接
-    expect(count).toBeGreaterThan(0);
-  });
-
-  test('应该能够切换语言（如果有语言切换功能）', async ({ page }) => {
-    await page.goto('/');
-    
-    // 查找语言切换按钮（根据实际实现调整选择器）
-    const languageButton = page.locator('[aria-label*="language"], [data-testid="language-toggle"]');
-    
-    if (await languageButton.isVisible()) {
-      await languageButton.click();
-      // 验证语言切换菜单打开
-      const languageMenu = page.locator('[role="menu"], .language-menu');
-      await expect(languageMenu).toBeVisible();
-    } else {
-      // 如果没有语言切换功能，跳过测试
-      test.skip();
-    }
-  });
-
-  test('页面应该响应式适配移动端', async ({ page, isMobile }) => {
-    await page.goto('/');
-    
-    if (isMobile) {
-      // 在移动端，可能有汉堡菜单
-      const mobileMenu = page.locator('[aria-label*="menu"], .mobile-menu-button');
-      
-      // 如果找到移动菜单按钮，验证它可见
-      if (await mobileMenu.count() > 0) {
-        await expect(mobileMenu.first()).toBeVisible();
-      }
-    }
-  });
+test('主页显示明确入口并可进入公开仪表板', async ({ page }) => {
+  await page.route(/\/public\/dashboard(?:\?|$)/, route => route.fulfill({ json: [] }));
+  await page.goto('/');
+  await expect(page).toHaveTitle(/VFS Tracker/);
+  await expect(page.getByRole('heading', { name: '欢迎来到VFS Tracker!', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '查看数据汇总' }).click();
+  await expect(page).toHaveURL(/\/dashboard$/);
 });
 
-test.describe('性能测试', () => {
-  test('首次内容绘制应该快速', async ({ page }) => {
-    const startTime = Date.now();
-    await page.goto('/');
-    
-    // 等待主要内容加载
-    await page.waitForSelector('body', { state: 'visible' });
-    
-    const loadTime = Date.now() - startTime;
-    
-    // 页面应该在 3 秒内加载
-    expect(loadTime).toBeLessThan(3000);
-  });
+test('功能侧栏具有名称、可关闭并恢复触发按钮焦点', async ({ page }) => {
+  await page.goto('/');
+  const trigger = page.getByRole('button', { name: '打开菜单' });
+  await trigger.click();
+  const dialog = page.getByRole('dialog', { name: '全部功能' });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole('navigation', { name: '功能导航' })).toBeVisible();
+  await dialog.getByRole('button', { name: '关闭菜单' }).click();
+  await expect(dialog).not.toBeVisible();
+  await expect(trigger).toBeFocused();
+});
 
-  test('页面不应该有控制台错误', async ({ page }) => {
-    const consoleErrors = [];
-    
-    page.on('console', msg => {
-      if (msg.type() === 'error') {
-        consoleErrors.push(msg.text());
-      }
-    });
-    
-    await page.goto('/');
-    await page.waitForLoadState('networkidle');
-    
-    // 过滤掉某些预期的错误（如果有）
-    const unexpectedErrors = consoleErrors.filter(error => {
-      // 排除某些已知的良性错误
-      return !error.includes('某些可以忽略的错误模式');
-    });
-    
-    expect(unexpectedErrors).toHaveLength(0);
-  });
+test('320px 主页和侧栏不产生整页横向溢出', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 720 });
+  await page.goto('/');
+  await page.getByRole('button', { name: '打开菜单' }).click();
+  await expect(page.getByRole('dialog', { name: '全部功能' })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });

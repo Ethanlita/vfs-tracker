@@ -2,7 +2,6 @@
 [CN] 该文件包含用于在线 Praat 分析服务的所有核心语音处理和声学分析逻辑。
 它利用 parselmouth、librosa 和 numpy 等库来计算各种声学指标。
 """
-import logging
 import numpy as np
 import parselmouth
 from parselmouth.praat import call
@@ -18,8 +17,9 @@ try:
 except ImportError:
     scisignal = None
 
-logger = logging.getLogger()
-logger.setLevel(logging.INFO)
+from structured_logging import create_structured_logger, describe_error
+
+logger = create_structured_logger('online-praat-analysis.metrics')
 
 # --- New Robust Analysis Helper Functions (based on user guidance) ---
 
@@ -158,7 +158,7 @@ def analyze_note_file_robust(path: str, f0min: int = 75, f0max: int = 1200) -> D
         max_formant_freq, window_length = pick_params(f0_median)   # <== 用你的函数
         is_high_pitch = f0_median >= 280.0  # 仅用于 debug/explain
 
-        logger.info(f"[robust] F0_median={f0_median:.1f} Hz, max_formant={max_formant_freq}, win_len={window_length}")
+        logger.debug('adaptive_formant_parameters_selected', {'highPitchRange': is_high_pitch})
 
         # 能量门限切分（近似“有声区”），随后还会用HNR再筛
         voiced_intervals = librosa.effects.split(y, top_db=40, frame_length=2048, hop_length=512)
@@ -317,12 +317,12 @@ def analyze_note_file_robust(path: str, f0min: int = 75, f0max: int = 1200) -> D
 
         return result
 
-    except Exception as e:
-        logger.error(f"Robust analysis failed for {path}: {e}", exc_info=True)
+    except Exception as error:
+        logger.error('robust_note_analysis_failed', describe_error(error))
         return {
             'F1': 0, 'F2': 0, 'F3': 0, 'B1': 0, 'B2': 0, 'B3': 0,
             'f0_mean': 0, 'spl_dbA_est': 0,
-            'error_details': 'Analysis failed', 'reason': str(e),
+            'error_details': 'Analysis failed', 'reason': 'ANALYSIS_ERROR',
             'best_segment_time': None, 'is_high_pitch': False
         }
 
@@ -350,8 +350,8 @@ def analyze_sustained_vowel(local_paths: list, f0_min: int = 75, f0_max: int = 8
             if voiced_duration > max_voiced_duration:
                 max_voiced_duration = voiced_duration
                 best_file = file_path
-        except Exception as e:
-            logger.warning(f"Could not calculate voiced duration for {file_path}: {e}")
+        except Exception as error:
+            logger.warning('voiced_duration_failed', describe_error(error))
             continue
 
     if not best_file:
@@ -401,9 +401,9 @@ def analyze_sustained_vowel(local_paths: list, f0_min: int = 75, f0_max: int = 8
             'debug_info': debug_info
         }
 
-    except Exception as e:
-        logger.error(f"Full analysis failed for the chosen sustained vowel file {best_file}. Error: {e}", exc_info=True)
-        return {'metrics': {'error': 'Analysis failed for the chosen file.', 'reason': str(e)}}
+    except Exception as error:
+        logger.error('sustained_vowel_analysis_failed', describe_error(error))
+        return {'metrics': {'error': 'Analysis failed for the chosen file.'}}
 
 def analyze_speech_flow(file_path, f0min=75, f0max=600):
     """
@@ -414,7 +414,7 @@ def analyze_speech_flow(file_path, f0min=75, f0max=600):
     :param f0max: 最高基频搜索范围。
     :return: 包含分析指标的字典，如果失败则返回 None。
     """
-    logger.info(f"Analyzing speech flow at {file_path} with F0 range {f0min}-{f0max} Hz")
+    logger.debug('speech_flow_analysis_started')
     try:
         sound = parselmouth.Sound(file_path)
         pitch = sound.to_pitch(pitch_floor=f0min, pitch_ceiling=f0max)
@@ -433,8 +433,8 @@ def analyze_speech_flow(file_path, f0min=75, f0max=600):
         pause_count = len(non_silent) - 1 if len(non_silent) > 0 else 0
         metrics = {'duration_s': round(float(duration_s), 2), 'voiced_ratio': round(float(voiced_ratio), 2), 'pause_count': int(pause_count), 'f0_mean': round(f0_mean, 2), 'f0_sd': round(f0_sd, 2), 'f0_stats': f0_stats}
         return metrics
-    except Exception as e:
-        logger.error(f"Could not analyze speech flow file {file_path}. Error: {e}")
+    except Exception as error:
+        logger.error('speech_flow_analysis_failed', describe_error(error))
         return None
 
 def _load_mono(path):
@@ -487,8 +487,8 @@ def extract_pitch_spl_series(path, f0min=75, f0max=1200):
             spl = _rms_spl(seg)
             frames.append(PitchSplFrame(time=float(t), f0=float(f0), spl=float(spl)))
         return frames
-    except Exception as e:
-        logger.error(f'extract_pitch_spl_series failed for {path}: {e}')
+    except Exception as error:
+        logger.error('pitch_spl_series_failed', describe_error(error))
         return []
 
 def analyze_glide_files(local_paths):
@@ -550,7 +550,7 @@ def get_lpc_spectrum(file_path: str, max_formant: int = 5500, analysis_time: Opt
     :param is_high_pitch: (可选) 是否为高音调声音的提示。
     :return: 包含 'frequencies' 和 'spl_values' 的字典，如果失败则返回 None。
     """
-    logger.info(f"Getting LPC spectrum for {file_path}")
+    logger.debug('lpc_spectrum_started')
     try:
         y, sr = librosa.load(file_path, sr=None, mono=True)
         if y is None or y.size == 0:
@@ -572,7 +572,7 @@ def get_lpc_spectrum(file_path: str, max_formant: int = 5500, analysis_time: Opt
             seg = y[start:end]
 
         if seg.size < int(0.05 * sr):
-            logger.warning(f"Segment too short for LPC analysis: {seg.size} samples")
+            logger.warning('lpc_segment_too_short', {'sampleCount': int(seg.size)})
             return None
 
         pre_emph = 0.97
@@ -585,7 +585,7 @@ def get_lpc_spectrum(file_path: str, max_formant: int = 5500, analysis_time: Opt
 
         a = librosa.lpc(seg, order=order)
         if scisignal is None:
-            logger.error("scipy.signal not found, cannot generate LPC spectrum.")
+            logger.error('lpc_dependency_missing', {'dependency': 'scipy.signal'})
             return None
         w, h = scisignal.freqz(b=[1.0], a=a, worN=4096, fs=sr)
 
@@ -598,6 +598,6 @@ def get_lpc_spectrum(file_path: str, max_formant: int = 5500, analysis_time: Opt
             "frequencies": w[mask].astype(float).tolist(),
             "spl_values": spl_db[mask].astype(float).tolist()
         }
-    except Exception as e:
-        logger.error(f"Could not get LPC spectrum for {file_path}. Error: {e}", exc_info=True)
+    except Exception as error:
+        logger.error('lpc_spectrum_failed', describe_error(error))
         return None

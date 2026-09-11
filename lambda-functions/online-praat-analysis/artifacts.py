@@ -1,4 +1,3 @@
-import logging
 from io import BytesIO
 import matplotlib.pyplot as plt
 from matplotlib.ticker import ScalarFormatter
@@ -21,13 +20,13 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 import os
 import matplotlib.font_manager as fm
+from structured_logging import create_structured_logger, describe_error, fingerprint_identifier
 
 # Table row background colors (subtle pastels)
 LIGHT_PINK = colors.HexColor("#fdf2f8")
 LIGHT_GRAY = colors.HexColor("#f9fafb")
 
-logger = logging.getLogger()
-logger.setLevel(logging.INFO)
+logger = create_structured_logger('online-praat-analysis.artifacts')
 
 def _resolve_artifacts_s3_endpoint() -> str | None:
     """Resolve optional S3 endpoint for artifacts module.
@@ -81,38 +80,28 @@ try:
         fm.fontManager.addfont(font_path)
         _CJK_FONT_REGISTERED = True
         _FONT = _CJK_FONT_NAME
-        logger.info(
-            f"Successfully registered CJK font '{_CJK_FONT_NAME}' from path: {font_path}"
-        )
+        logger.info('cjk_font_registered')
     else:
         _FONT = _FALLBACK_FONT_NAME
-        logger.warning(
-            f"Font file not found at expected paths. Using fallback font '{_FONT}'. CJK characters may not render."
-        )
+        logger.warning('cjk_font_missing')
 
     # 注册英文 Roboto 字体以改善字距
     if os.path.exists(en_font_path):
         pdfmetrics.registerFont(TTFont(_EN_FONT_NAME, en_font_path))
         fm.fontManager.addfont(en_font_path)
         _EN_FONT_REGISTERED = True
-        logger.info(
-            f"Successfully registered English font '{_EN_FONT_NAME}' from path: {en_font_path}"
-        )
+        logger.info('english_font_registered')
     else:
-        logger.warning(
-            f"Roboto font not found at {en_font_path}; using default sans-serif for English text."
-        )
+        logger.warning('english_font_missing')
 
     # Matplotlib 全局字体配置: 先英文 Roboto 再中文 NotoSansSC
     plt.rcParams['font.family'] = 'sans-serif'
     plt.rcParams['font.sans-serif'] = [_EN_FONT_NAME, _CJK_FONT_NAME, 'sans-serif']
     plt.rcParams['axes.unicode_minus'] = False  # 正确显示负号
 
-except Exception as e:
+except Exception as error:
     _FONT = _FALLBACK_FONT_NAME
-    logger.error(
-        f"Failed to register fonts. Error: {e}. Using fallback font '{_FONT}'."
-    )
+    logger.error('font_registration_failed', describe_error(error))
 
 # 统一的 Matplotlib 字体属性（若可用）
 
@@ -136,7 +125,7 @@ def create_placeholder_chart(title: str, message: str):
     """Creates a placeholder chart with a title and a message.
     明确指定字体，避免中文不显示。
     """
-    logger.info(f"Creating placeholder chart: {title}")
+    logger.debug('placeholder_chart_create_started')
     try:
         fig, ax = plt.subplots(figsize=(10, 6))
         # 标题与主体文字使用 rcParams 字体 (Roboto + NotoSansSC)
@@ -161,8 +150,8 @@ def create_placeholder_chart(title: str, message: str):
         buf.seek(0)
         plt.close(fig)
         return buf
-    except Exception as e:
-        logger.error(f"Could not create placeholder chart for {title}. Error: {e}")
+    except Exception as error:
+        logger.error('placeholder_chart_create_failed', describe_error(error))
         return None
 
 
@@ -179,7 +168,7 @@ def create_time_series_chart(file_path, f0min=75, f0max=600):
         BytesIO: A BytesIO object containing the PNG image of the chart.
                  Returns None if chart generation fails.
     """
-    logger.info(f"Creating time series chart for {file_path}")
+    logger.debug('time_series_chart_create_started')
     try:
         # Load audio data
         y, sr = librosa.load(file_path, sr=None)
@@ -220,11 +209,11 @@ def create_time_series_chart(file_path, f0min=75, f0max=600):
         buf.seek(0)
         plt.close(fig)
         
-        logger.info(f"Successfully created time series chart for {file_path}")
+        logger.debug('time_series_chart_created')
         return buf
 
-    except Exception as e:
-        logger.error(f"Could not create time series chart for {file_path}. Error: {e}")
+    except Exception as error:
+        logger.error('time_series_chart_create_failed', describe_error(error))
         return create_placeholder_chart('Time Series Waveform & F0', 'Chart generation failed.')
 
 
@@ -233,7 +222,7 @@ def create_vrp_chart(data):
     参数 data 需包含键: bins(list[{f0_center_hz,spl_min,spl_max,spl_mean}])。
     若数据不足则返回占位图。
     """
-    logger.info("Creating VRP chart (enhanced)")
+    logger.debug('vrp_chart_create_started')
     try:
         bins = data.get('bins') if isinstance(data, dict) else None
         if not bins:
@@ -261,14 +250,14 @@ def create_vrp_chart(data):
         buf.seek(0)
         plt.close(fig)
         return buf
-    except Exception as e:
-        logger.error(f'create_vrp_chart failed, fallback placeholder: {e}')
+    except Exception as error:
+        logger.error('vrp_chart_create_failed', describe_error(error))
         return create_placeholder_chart('Voice Range Profile', 'VRP Data Unavailable')
 
 
 def create_formant_chart(formant_low, formant_high):
     """Creates an F1-F2 vowel space chart, handling partial data."""
-    logger.info("Creating F1-F2 Vowel Space chart")
+    logger.debug('formant_chart_create_started')
     try:
         fig, ax = plt.subplots(figsize=(8, 6))
 
@@ -298,14 +287,14 @@ def create_formant_chart(formant_low, formant_high):
         buf.seek(0)
         plt.close(fig)
         return buf
-    except Exception as e:
-        logger.error(f"Could not create formant chart. Error: {e}")
+    except Exception as error:
+        logger.error('formant_chart_create_failed', describe_error(error))
         return create_placeholder_chart('F1-F2 Vowel Space', 'Formant data incomplete.')
 
 
 def create_formant_spl_chart(spectrum_low, spectrum_high, spectrum_sustained=None):
     """Creates a Formant-SPL (LPC Spectrum) chart."""
-    logger.info("Creating Formant-SPL Spectrum chart")
+    logger.debug('formant_spl_chart_create_started')
     try:
         fig, ax = plt.subplots(figsize=(10, 6))
 
@@ -340,8 +329,8 @@ def create_formant_spl_chart(spectrum_low, spectrum_high, spectrum_sustained=Non
         buf.seek(0)
         plt.close(fig)
         return buf
-    except Exception as e:
-        logger.error(f"Could not create formant-SPL chart. Error: {e}")
+    except Exception as error:
+        logger.error('formant_spl_chart_create_failed', describe_error(error))
         return create_placeholder_chart('Formant-SPL Spectrum (LPC)', 'Spectrum data unavailable.')
 
 
@@ -411,9 +400,9 @@ def create_diagnostic_charts(debug_info: dict, title: str):
         buf.seek(0)
         plt.close(fig)
         return buf
-    except Exception as e:
-        logger.error(f"Could not create diagnostic chart for {title}: {e}", exc_info=True)
-        return create_placeholder_chart(f"Diagnostics: {title}", f"Chart generation failed:\n{e}")
+    except Exception as error:
+        logger.error('diagnostic_chart_create_failed', describe_error(error))
+        return create_placeholder_chart(f"Diagnostics: {title}", "Chart generation failed.")
 
 
 def create_pdf_report(session_id, metrics, chart_urls, debug_info=None, userInfo=None):
@@ -430,7 +419,7 @@ def create_pdf_report(session_id, metrics, chart_urls, debug_info=None, userInfo
     Returns:
         BytesIO: A BytesIO object containing the PDF.
     """
-    logger.info(f"Creating PDF report for session {session_id}")
+    logger.info('pdf_report_create_started', {'sessionHash': fingerprint_identifier(session_id)})
     if userInfo is None:
         userInfo = {}
     if debug_info is None:
@@ -721,8 +710,8 @@ def create_pdf_report(session_id, metrics, chart_urls, debug_info=None, userInfo
                 try:
                     obj = s3.get_object(Bucket=bkt, Key=obj_key)
                     img_buf = BytesIO(obj['Body'].read())
-                except Exception as e:
-                    logger.error(f"Failed embedding chart {key_name}: {e}")
+                except Exception as error:
+                    logger.error('chart_embed_failed', describe_error(error))
             if img_buf is None:
                 img_buf = create_placeholder_chart(title.split(' / ')[0], 'Chart unavailable. / 图表不可用')
             img = RLImage(img_buf)
@@ -847,8 +836,8 @@ def create_pdf_report(session_id, metrics, chart_urls, debug_info=None, userInfo
             )
             formant_section.append(Spacer(1, 6))
             story.append(KeepTogether(formant_section))
-        except Exception as e:
-            logger.error(f"Failed to render formant analysis section: {e}", exc_info=True)
+        except Exception as error:
+            logger.error('formant_section_render_failed', describe_error(error))
             story.append(Paragraph("<b>Formant Analysis / 共振峰分析</b>", h2_style))
             story.append(Paragraph("An unexpected error occurred while generating the formant table and charts.", text_style))
 
@@ -874,9 +863,12 @@ def create_pdf_report(session_id, metrics, chart_urls, debug_info=None, userInfo
         # 构建 PDF
         doc.build(story, onFirstPage=on_page, onLaterPages=on_page)
         buf.seek(0)
-        logger.info(f"Successfully created PDF report with embedded charts for session {session_id}")
+        logger.info('pdf_report_created', {'sessionHash': fingerprint_identifier(session_id)})
         return buf
 
-    except Exception as e:
-        logger.error(f"Could not create PDF report for {session_id}. Error: {e}", exc_info=True)
+    except Exception as error:
+        logger.error('pdf_report_create_failed', {
+            'sessionHash': fingerprint_identifier(session_id),
+            **describe_error(error),
+        })
         return None

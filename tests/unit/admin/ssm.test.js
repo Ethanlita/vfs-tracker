@@ -6,6 +6,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   SSM_PATHS,
+  normalizeRateLimitConfig,
   getRateLimitConfig,
   updateRateLimitParam,
   updateRateLimitConfig
@@ -97,6 +98,11 @@ describe('SSM Service 单元测试', () => {
         songMaxRequests: 10,
       });
     });
+
+    it.each(['-5', '0', '1.5', '101', 'NaN', 'Infinity'])('拒绝 SSM 中非法的最大请求次数 %s', async value => {
+      mockSend.mockResolvedValueOnce({ Parameters: [{ Name: SSM_PATHS.ADVICE_MAX_REQUESTS, Value: value }] });
+      await expect(getRateLimitConfig(mockClient)).rejects.toMatchObject({ name: 'RateLimitConfigError' });
+    });
   });
 
   describe('updateRateLimitParam', () => {
@@ -128,6 +134,49 @@ describe('SSM Service 单元测试', () => {
   });
 
   describe('updateRateLimitConfig', () => {
+    it('等待全部写入并报告逐字段成功与失败', async () => {
+      let finishLate;
+      mockSend
+        .mockResolvedValueOnce({})
+        .mockRejectedValueOnce(new Error('单项失败'))
+        .mockImplementationOnce(() => new Promise(resolve => { finishLate = resolve; }));
+      const pending = updateRateLimitConfig(mockClient, {
+        adviceWindowHours: 48,
+        adviceMaxRequests: 20,
+        songWindowHours: 12,
+      });
+      let settled = false;
+      pending.finally(() => { settled = true; }).catch(() => {});
+      await Promise.resolve();
+      expect(settled).toBe(false);
+      finishLate({});
+      await expect(pending).rejects.toMatchObject({
+        name: 'RateLimitUpdateError',
+        results: {
+          adviceWindowHours: { status: 'fulfilled', value: 48 },
+          adviceMaxRequests: { status: 'rejected', value: 20 },
+          songWindowHours: { status: 'fulfilled', value: 12 },
+        },
+      });
+      expect(mockSend).toHaveBeenCalledTimes(3);
+    });
+
+    it('在创建任何 PutParameter 前拒绝非法配置', async () => {
+      await expect(updateRateLimitConfig(mockClient, {
+        adviceWindowHours: 24,
+        adviceMaxRequests: -5,
+        songWindowHours: 24,
+        songMaxRequests: 10,
+      })).rejects.toMatchObject({ name: 'RateLimitConfigError' });
+      expect(mockSend).not.toHaveBeenCalled();
+    });
+
+    it('标准化合法字符串而不截断小数', () => {
+      expect(normalizeRateLimitConfig({ adviceWindowHours: '168', adviceMaxRequests: '100', songWindowHours: '1', songMaxRequests: '1' }))
+        .toEqual({ adviceWindowHours: 168, adviceMaxRequests: 100, songWindowHours: 1, songMaxRequests: 1 });
+      expect(() => normalizeRateLimitConfig({ adviceWindowHours: '1.5', adviceMaxRequests: '10', songWindowHours: '24', songMaxRequests: '10' }))
+        .toThrow('必须是整数');
+    });
     it('应该批量更新所有配置', async () => {
       mockSend.mockResolvedValue({});
 

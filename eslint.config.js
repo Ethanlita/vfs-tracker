@@ -10,6 +10,12 @@ export default defineConfig([
     'coverage',
     'playwright-report',
     'test-results',
+    'output/**',
+    '.review-pr-*/**',
+    '.playwright-cli/**',
+    '**/.pytest_cache/**',
+    // 本地 uv 隔离环境包含第三方 JavaScript；不应作为项目源码参与 ESLint。
+    '**/.uv-cache/**',
     '.venv/**',
     'public/WorldJS.js',
   ]),
@@ -77,7 +83,15 @@ export default defineConfig([
   {
     files: ['src/**/*.{js,jsx}'],
     rules: {
+      // 应用运行时代码不得直接输出用户数据；测试工具在后续覆盖中单独放行。
+      'no-console': 'error',
       'react-refresh/only-export-components': 'off',
+    },
+  },
+  {
+    files: ['src/test-utils/**/*.{js,jsx}'],
+    rules: {
+      'no-console': 'off',
     },
   },
 ])

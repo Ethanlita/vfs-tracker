@@ -9,6 +9,11 @@ import { GoogleGenAI as GoogleGenAI_Modal, createUserContent, createPartFromUri 
 import { unmarshall } from "@aws-sdk/util-dynamodb";
 import { promises as fs } from 'fs';
 import path from 'path';
+import {
+  createStructuredLogger,
+  describeError,
+  fingerprintIdentifier,
+} from './structuredLogger.mjs';
 
 // Initialize clients
 const dynamoClient = new DynamoDBClient({});
@@ -23,10 +28,15 @@ const tableName = process.env.EVENTS_TABLE || "VoiceFemEvents";
  * @param {string} userId - 用户 ID。
  * @param {string} eventId - 事件 ID。
  * @param {string} newStatus - 要设置的新状态 (例如, 'approved')。
+ * @param {object} logger - 当前 Lambda 调用的结构化日志器。
  * @returns {Promise<void>}
  */
-const updateEventStatus = async (userId, eventId, newStatus) => {
-  console.log(`🚀 Updating event ${eventId} for user ${userId} to status: ${newStatus}`);
+const updateEventStatus = async (userId, eventId, newStatus, logger) => {
+  const identifiers = {
+    userHash: fingerprintIdentifier(userId),
+    eventHash: fingerprintIdentifier(eventId),
+  };
+  logger.info('event_status_update_started', { ...identifiers, newStatus });
   const command = new UpdateCommand({
     TableName: tableName,
     Key: { userId, eventId },
@@ -36,9 +46,9 @@ const updateEventStatus = async (userId, eventId, newStatus) => {
   });
   try {
     await docClient.send(command);
-    console.log("✅ Successfully updated event status.");
+    logger.info('event_status_updated', { ...identifiers, newStatus });
   } catch (error) {
-    console.error("❌ Error updating event status:", error);
+    logger.error('event_status_update_failed', { ...identifiers, ...describeError(error) });
     throw error;
   }
 };
@@ -53,14 +63,15 @@ const SYSTEM_INSTRUCTION = `You are an intelligent medical report analysis assis
  * [CN] 将所有附件从 S3 下载，写入 Lambda 的临时存储，然后上传到 Gemini File API 以进行多模态分析。
  * @param {string} bucketName - S3 存储桶名称。
  * @param {Array<object>} attachments - 来自事件的附件对象数组。
+ * @param {object} logger - 当前 Lambda 调用的结构化日志器。
  * @returns {Promise<Array<object>>} 一个解析为包含 Gemini 文件部分以用于 API 调用的 Promise。
  */
-async function uploadAllAttachmentsMultiModal(bucketName, attachments) {
+async function uploadAllAttachmentsMultiModal(bucketName, attachments, logger) {
   if (!Array.isArray(attachments) || attachments.length === 0) return [];
   const parts = [];
-  for (const att of attachments) {
+  for (const [attachmentIndex, att] of attachments.entries()) {
     if (!att?.fileUrl || !att?.fileType) {
-      console.warn('⚠️ Attachment missing fileUrl or fileType, skipping:', att);
+      logger.warn('attachment_invalid', { attachmentIndex });
       continue;
     }
 
@@ -76,7 +87,11 @@ async function uploadAllAttachmentsMultiModal(bucketName, attachments) {
       await fs.writeFile(tempFilePath, fileBuffer);
 
       // 3. Upload to Gemini using File API with the file path
-      console.log(`⬆️ Uploading ${tempFilePath} to Gemini File API...`);
+      logger.info('attachment_ai_upload_started', {
+        attachmentIndex,
+        mimeType: att.fileType,
+        sizeBytes: fileBuffer.length,
+      });
       const uploadRes = await genAI_modal.files.upload({
         file: tempFilePath,
         config: {
@@ -85,23 +100,21 @@ async function uploadAllAttachmentsMultiModal(bucketName, attachments) {
         },
       });
       
-      console.log('📄 Gemini File API raw response:', JSON.stringify(uploadRes, null, 2));
-
       // CORRECTED & ENHANCED: Check the file state is ACTIVE and access properties directly from the response object.
       if (uploadRes?.uri && uploadRes.state === 'ACTIVE') {
         parts.push(createPartFromUri(uploadRes.uri, uploadRes.mimeType));
-        console.log(`✅ Successfully uploaded ${att.fileName}. URI: ${uploadRes.uri}`);
+        logger.info('attachment_ai_upload_completed', { attachmentIndex, mimeType: uploadRes.mimeType });
       } else {
-        console.warn('⚠️ Gemini upload did not result in an ACTIVE file with a URI.', { response: uploadRes });
+        logger.warn('attachment_ai_upload_inactive', { attachmentIndex, state: uploadRes?.state });
       }
     } catch (e) {
-      console.error(`❌ Full error during multi-modal upload for: ${att.fileUrl}`, JSON.stringify(e, Object.getOwnPropertyNames(e), 2));
+      logger.error('attachment_ai_upload_failed', { attachmentIndex, ...describeError(e) });
     } finally {
       // 4. Clean up the temporary file
       try {
         await fs.unlink(tempFilePath);
       } catch (unlinkErr) {
-        console.warn(`⚠️ Failed to clean up temporary file: ${tempFilePath}`, unlinkErr);
+        logger.warn('temporary_attachment_cleanup_failed', { attachmentIndex, ...describeError(unlinkErr) });
       }
     }
   }
@@ -112,18 +125,23 @@ async function uploadAllAttachmentsMultiModal(bucketName, attachments) {
  * [CN] 使用 Gemini API 验证用户提交的数据是否与附件内容匹配。
  * @param {object} userDetails - 来自事件的用户提交的详细信息。
  * @param {Array<object>} attachmentsParts - 来自 `uploadAllAttachmentsMultiModal` 的 Gemini 文件部分数组。
+ * @param {object} logger - 当前 Lambda 调用的结构化日志器。
  * @returns {Promise<boolean>} 一个解析为 `true`（如果验证成功匹配）或 `false` 的 Promise。
  */
-async function verifyMultiModal(userDetails, attachmentsParts) {
+async function verifyMultiModal(userDetails, attachmentsParts, logger) {
   if (!attachmentsParts || attachmentsParts.length === 0) {
-    console.log('No attachments were successfully uploaded for multi-modal verification. Verification fails.');
+    logger.warn('verification_skipped_no_attachments');
     return false;
   }
 
   try {
-    console.log('🤖 Calling Gemini with multi-modal data...');
     const model = 'gemini-2.5-flash';
     const userContent = `User-submitted data:\n${JSON.stringify(userDetails, null, 2)}`;
+    logger.info('verification_ai_request_started', {
+      model,
+      attachmentCount: attachmentsParts.length,
+      inputCharacters: userContent.length,
+    });
     
     const response = await genAI_modal.models.generateContent({
       model,
@@ -133,19 +151,20 @@ async function verifyMultiModal(userDetails, attachmentsParts) {
       },
     });
 
-    console.log('🤖 Gemini multi-modal response-to-json:', JSON.stringify(response));
     // 1. 转换为 JS 对象
     const obj = JSON.parse(JSON.stringify(response));
     // 2. 提取出 "NO_MATCH"
     const resultText = obj.candidates[0].content.parts[0].text;
 
     if (resultText === 'MATCH') {
+      logger.info('verification_ai_result', { matched: true });
       return true;
     }
     // Any other response (NO_MATCH, or unexpected) is considered a failure.
+    logger.info('verification_ai_result', { matched: false });
     return false; 
   } catch (e) {
-    console.error('❌ Multi-modal verification API call failed:', e.message);
+    logger.error('verification_ai_request_failed', describeError(e));
     return false; // Any API error is a verification failure.
   }
 }
@@ -153,48 +172,62 @@ async function verifyMultiModal(userDetails, attachmentsParts) {
 /**
  * [CN] Lambda 函数的主处理程序。由 DynamoDB 流触发，处理新插入的事件记录。
  * @param {object} event - DynamoDB 流事件。
+ * @param {object} context - AWS Lambda 调用上下文。
  * @returns {Promise<{status: string}>} 一个表示处理完成的状态对象。
  */
-export const handler = async (event) => {
-  console.log(`📬 Received ${event.Records.length} records from DynamoDB stream.`);
+export const handler = async (event, context = {}) => {
+  const logger = createStructuredLogger({
+    service: 'auto-approve-event',
+    requestId: context.awsRequestId,
+  });
+  const records = Array.isArray(event.Records) ? event.Records : [];
+  logger.info('stream_batch_started', { recordCount: records.length });
 
-  for (const record of event.Records) {
+  for (const record of records) {
     if (record.eventName !== 'INSERT') {
-      console.log(`⏩ Skipping non-INSERT event: ${record.eventName}`);
+      logger.debug('stream_record_skipped', { eventName: record.eventName });
       continue;
     }
 
     const newEvent = unmarshall(record.dynamodb.NewImage);
-    console.log("📄 Processing new event:", JSON.stringify(newEvent, null, 2));
+    const identifiers = {
+      userHash: fingerprintIdentifier(newEvent.userId),
+      eventHash: fingerprintIdentifier(newEvent.eventId),
+    };
+    logger.info('stream_record_started', {
+      ...identifiers,
+      eventType: newEvent.type,
+      attachmentCount: Array.isArray(newEvent.attachments) ? newEvent.attachments.length : 0,
+    });
 
     try {
       if (newEvent.type !== 'hospital_test') {
-        console.log(`👍 Event type is '${newEvent.type}', auto-approving.`);
-        await updateEventStatus(newEvent.userId, newEvent.eventId, 'approved');
+        logger.info('event_auto_approval_selected', { ...identifiers, eventType: newEvent.type });
+        await updateEventStatus(newEvent.userId, newEvent.eventId, 'approved', logger);
         continue;
       }
 
-      console.log("🏥 Event is a hospital_test, starting verification.");
+      logger.info('hospital_event_verification_started', identifiers);
       const bucketName = process.env.ATTACHMENTS_BUCKET;
       if (!bucketName) {
-        console.error('❌ ATTACHMENTS_BUCKET env var is not set. Cannot process attachments.');
+        logger.error('configuration_missing', { variable: 'ATTACHMENTS_BUCKET', ...identifiers });
         continue;
       }
 
       // Attempt multi-modal verification. Any failure in the process will result in `isVerified` being false.
-      const parts = await uploadAllAttachmentsMultiModal(bucketName, newEvent.attachments);
-      const isVerified = await verifyMultiModal(newEvent.details, parts);
+      const parts = await uploadAllAttachmentsMultiModal(bucketName, newEvent.attachments, logger);
+      const isVerified = await verifyMultiModal(newEvent.details, parts, logger);
 
       // Final Decision
       if (isVerified) {
-        console.log('✅ Verification SUCCEEDED. Approving event.');
-        await updateEventStatus(newEvent.userId, newEvent.eventId, 'approved');
+        logger.info('hospital_event_verification_completed', { ...identifiers, matched: true });
+        await updateEventStatus(newEvent.userId, newEvent.eventId, 'approved', logger);
       } else {
-        console.log('❌ Verification FAILED. Event will remain pending.');
+        logger.warn('hospital_event_verification_completed', { ...identifiers, matched: false });
       }
 
     } catch (error) {
-      console.error(`🚨 An unhandled error occurred while processing event ${newEvent.eventId}:`, error);
+      logger.error('stream_record_failed', { ...identifiers, ...describeError(error) });
     }
   }
 

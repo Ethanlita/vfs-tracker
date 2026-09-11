@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAsync } from '../utils/useAsync.js';
-import { ApiError } from '../utils/apiError.js';
+import { readDocumentation } from '../utils/documentation';
 import { formatApiError } from '../utils/formatApiError.js';
 import { ApiErrorNotice } from './ApiErrorNotice.jsx';
 
@@ -29,11 +29,7 @@ const PostsDropdown = ({
   const closeTimeoutRef = useRef(null);
 
   const postsAsync = useAsync(async () => {
-    const res = await fetch('/posts.json');
-    if (!res.ok) {
-      throw await ApiError.fromResponse(res, { requestMethod: 'GET', requestPath: '/posts.json' });
-    }
-    return await res.json();
+    return readDocumentation('/posts.json', 'json');
   }, []);
 
   const posts = postsAsync.value || [];

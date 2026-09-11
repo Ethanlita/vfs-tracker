@@ -56,6 +56,27 @@ describe('API Schemas 单元测试', () => {
     });
   });
 
+  describe('updateUserProfileResponseSchema', () => {
+    it('应该验证后端实际返回的 message 与 user', () => {
+      const result = validateData(schemas.updateUserProfileResponse, {
+        message: 'Profile updated successfully',
+        user: completeProfileUser,
+      });
+
+      expect(result.valid).toBe(true);
+      expect(result.value.user.exists).toBe(true);
+    });
+
+    it('应该拒绝旧的 profile-only 响应形状', () => {
+      const result = validateData(schemas.updateUserProfileResponse, {
+        message: 'Profile updated successfully',
+        profile: completeProfileUser.profile,
+      });
+
+      expect(result.valid).toBe(false);
+    });
+  });
+
   // ==================== Profile Schema Tests ====================
   
   describe('profileSchema', () => {
@@ -181,6 +202,7 @@ describe('API Schemas 单元测试', () => {
     it('应该验证用户事件响应', () => {
       const response = {
         events: mockPrivateEvents,
+        complete: true,
         debug: {
           lambdaExecuted: true,
           timestamp: '2025-10-08T10:00:00.000Z',
@@ -195,10 +217,16 @@ describe('API Schemas 单元测试', () => {
     it('应该接受没有 debug 字段的响应', () => {
       const response = {
         events: mockPrivateEvents,
+        complete: true,
       };
       
       const result = validateData(schemas.getUserEventsResponse, response);
       expect(result.valid).toBe(true);
+    });
+
+    it('应该拒绝没有完整读取标记的用户事件响应', () => {
+      const result = validateData(schemas.getUserEventsResponse, { events: mockPrivateEvents });
+      expect(result.valid).toBe(false);
     });
   });
 
@@ -245,6 +273,25 @@ describe('API Schemas 单元测试', () => {
       const result = validateData(schemas.addEventRequest, invalidRequest);
       expect(result.valid).toBe(false);
       expect(result.errors.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('setupUserProfileRequestSchema', () => {
+    const completeProfile = { name: '向导用户', bio: '', isNamePublic: false, socials: [], areSocialsPublic: false };
+
+    it.each([
+      { profile: completeProfile, baseVersion: { exists: false, updatedAt: null } },
+      { profile: { setupSkipped: true }, baseVersion: { exists: true, updatedAt: '2026-01-01T00:00:00.000Z' } },
+    ])('接受完整设置和单独跳过协议', request => {
+      expect(schemas.setupUserProfileRequest.validate(request).error).toBeUndefined();
+    });
+
+    it.each([
+      { profile: completeProfile },
+      { profile: { setupSkipped: true, name: '混合路径' }, baseVersion: { exists: false, updatedAt: null } },
+      { profile: completeProfile, baseVersion: { exists: false, updatedAt: '2026-01-01T00:00:00.000Z' } },
+    ])('拒绝缺版本、混合路径和不可能版本：%j', request => {
+      expect(schemas.setupUserProfileRequest.validate(request).error).toBeDefined();
     });
   });
 

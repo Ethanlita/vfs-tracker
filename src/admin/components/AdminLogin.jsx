@@ -9,17 +9,24 @@
 
 import { useState } from 'react';
 import { useAWSClients } from '../contexts/AWSClientContext';
-import { validatePIN, clearEncryptedCredentials } from '../utils/secureCredentialStorage';
+import { validatePIN } from '../utils/secureCredentialStorage';
 
 /**
  * 管理员登录页面
  * 提供 IAM 凭证输入表单，支持 PIN 加密本地保存凭证
  */
 export default function AdminLogin() {
-  const { login, unlockWithPIN, isLoading, hasSavedCredentials } = useAWSClients();
-  
-  // 登录模式：'unlock' (PIN 解锁) 或 'login' (输入凭证)
-  const [mode, setMode] = useState(hasSavedCredentials ? 'unlock' : 'login');
+  const {
+    login,
+    unlockWithPIN,
+    isLoading,
+    hasSavedCredentials,
+    forgetSavedCredentials,
+  } = useAWSClients();
+
+  // 用户主动切换后保持凭证输入模式；其余情况直接跟随真实保存状态。
+  const [useDifferentCredentials, setUseDifferentCredentials] = useState(false);
+  const mode = hasSavedCredentials && !useDifferentCredentials ? 'unlock' : 'login';
   
   // 凭证表单状态
   const [accessKeyId, setAccessKeyId] = useState('');
@@ -100,8 +107,8 @@ export default function AdminLogin() {
    * 切换到输入凭证模式（清除已保存的凭证）
    */
   const handleSwitchToLogin = () => {
-    clearEncryptedCredentials();
-    setMode('login');
+    forgetSavedCredentials();
+    setUseDifferentCredentials(true);
     setUnlockPin('');
     setError(null);
   };

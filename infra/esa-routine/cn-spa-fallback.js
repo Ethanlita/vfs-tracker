@@ -85,6 +85,21 @@ function shouldUseLongCache(url) {
 }
 
 /**
+ * 构造指向 GitHub Pages 源站的静态内容请求。
+ * 只复制静态站点需要的标准字段，避免把其他运行域的 AbortSignal 等内部状态
+ * 直接作为 RequestInit 传入 ESA、Node 或测试拦截器。
+ * @param {URL} upstreamUrl - 目标源站 URL。
+ * @param {Request} request - ESA 收到的原始请求。
+ * @returns {Request} 可安全交给当前运行域 fetch 的请求。
+ */
+function createUpstreamRequest(upstreamUrl, request) {
+  return new Request(upstreamUrl.toString(), {
+    method: request.method,
+    headers: request.headers,
+  });
+}
+
+/**
  * 读取上游内容，并为哈希静态资源补齐长期缓存头。
  * @param {Request} upstreamRequest - 指向上游的请求。
  * @param {URL} originalUrl - 浏览器请求 URL。
@@ -113,7 +128,6 @@ async function fetchUpstream(upstreamRequest, originalUrl) {
  * @returns {Promise<Response>} 首页 HTML 响应。
  */
 async function createIndexResponse(request, markerHeader) {
-  const url = new URL(request.url);
   const indexUrl = new URL('/', `https://${UPSTREAM_HOST}`);
   const indexRequest = new Request(indexUrl.toString(), {
     method: 'GET',
@@ -141,7 +155,7 @@ async function handleRequest(request) {
   const url = new URL(request.url);
   const isCnSite = SPA_HOSTS.has(url.hostname);
   const upstreamUrl = new URL(`${url.pathname}${url.search}`, `https://${UPSTREAM_HOST}`);
-  const upstreamRequest = new Request(upstreamUrl.toString(), request);
+  const upstreamRequest = createUpstreamRequest(upstreamUrl, request);
 
   if (!isCnSite) {
     return fetch(request);

@@ -24,6 +24,7 @@ dist-ssr
 *.sln
 *.sw?
 package-lock.json
+!lambda-functions/*/package-lock.json
 
 # Environment variables
 .env
@@ -49,9 +50,12 @@ infra/backup/
 playwright-report/
 test-results/
 tests/e2e/__screenshots__/
+.playwright-cli/
+.review-pr-*/
 
 # Python
 __pycache__/
+.pytest_cache/
 *.pyc
 *.pyo
 
@@ -65,3 +69,4 @@ scripts/__pycache__/
 
 # Generated files
 public/posts.json
+output/

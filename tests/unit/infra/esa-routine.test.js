@@ -30,6 +30,21 @@ describe('ESA cn-spa-fallback routine', () => {
     await expect(response.text()).resolves.toBe('asset');
   });
 
+  it('重建当前运行域请求并保留 HEAD 方法，不复制原请求 signal', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 200 }));
+    const handle = loadRoutine(fetchMock);
+    const request = new Request('https://vfs-tracker.cn/assets/app.js', {
+      method: 'HEAD',
+    });
+
+    await handle(request);
+
+    const upstreamRequest = fetchMock.mock.calls[0][0];
+    expect(upstreamRequest.method).toBe('HEAD');
+    expect(upstreamRequest.url).toBe('https://origin-probe.vfs-tracker.cn/assets/app.js');
+    expect(upstreamRequest.signal).not.toBe(request.signal);
+  });
+
   it('returns index.html for known SPA routes', async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response('<html></html>', {

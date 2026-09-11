@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import EventForm from './EventForm';
 import { useDocumentMeta } from '../hooks/useDocumentMeta';
@@ -18,13 +18,15 @@ const AddEvent = () => {
 
   const [showSuccessMessage, setShowSuccessMessage] = useState(false);
 
-  const handleEventAdded = () => {
-    setShowSuccessMessage(true);
-    setTimeout(() => {
-      setShowSuccessMessage(false);
-      navigate('/mypage');
-    }, 2000);
-  };
+  // 导航计时器属于当前页面，用户主动离开时取消。
+  useEffect(() => {
+    if (!showSuccessMessage) return;
+    const timer = setTimeout(() => navigate('/mypage'), 2000);
+    return () => clearTimeout(timer);
+  }, [showSuccessMessage, navigate]);
+
+  /** 当前表单保存成功后显示提示，由页面生命周期管理后续导航。 */
+  const handleEventAdded = () => setShowSuccessMessage(true);
 
   const handleBack = () => {
     navigate('/mypage');

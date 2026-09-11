@@ -1,3 +1,4 @@
+import { feelingContent } from '../utils/eventSummary';
 /**
  * 感受日志详情组件
  * 展示用户的感受记录
@@ -15,7 +16,7 @@ const FeelingLogDetails = ({ event }) => {
 
   // 获取感受内容（兼容不同字段名）
   const getContent = () => {
-    return details.content || details.feeling || '-';
+    return feelingContent(details) || '-';
   };
 
   // 获取备注

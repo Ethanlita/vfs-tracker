@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { resolveAttachmentUrl } from '../utils/attachments.js';
+import React from 'react';
+import ReportFile from './ReportFile.jsx';
 
 const MetricCard = ({ title, value, unit }) => (
   <div className="bg-gray-100 p-4 rounded-lg text-center shadow-sm">
@@ -21,65 +21,15 @@ const Section = ({ title, children }) => (
 );
 
 const TestResultsDisplay = ({ results }) => {
-  const [resolvedUrls, setResolvedUrls] = useState({ charts: {}, reportPdf: '' });
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    const resolveUrls = async () => {
-      if (!results || !results.metrics) {
-        setIsLoading(false);
-        return;
-      }
-
-      setIsLoading(true);
-      try {
-        const { charts, reportPdf } = results;
-        
-        const resolvedCharts = {};
-        const chartPromises = Object.entries(charts || {}).map(async ([key, url]) => {
-          const resolvedUrl = await resolveAttachmentUrl(url);
-          return [key, resolvedUrl || url];
-        });
-        
-        const resolvedChartEntries = await Promise.all(chartPromises);
-        for (const [key, resolvedUrl] of resolvedChartEntries) {
-          resolvedCharts[key] = resolvedUrl;
-        }
-
-        const resolvedPdfUrl = reportPdf ? (await resolveAttachmentUrl(reportPdf) || reportPdf) : '';
-
-        setResolvedUrls({ charts: resolvedCharts, reportPdf: resolvedPdfUrl });
-      } catch (error) {
-        console.error("Error resolving attachment URLs:", error);
-        setResolvedUrls({ charts: results.charts || {}, reportPdf: results.reportPdf || '' });
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    resolveUrls();
-  }, [results]);
-
-  if (!results || !results.metrics) {
-    return <p>无法加载结果。</p>;
-  }
-
+  // 指标立即可读；每个文件自行加载，不阻塞整份报告。
+  if (!results?.metrics) return <p>无法加载结果。</p>;
   const { metrics } = results;
-
-  if (isLoading) {
-    return (
-      <div className="text-center space-y-4">
-        <p>正在加载分析报告中的图表和文件...</p>
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-500 mx-auto" />
-      </div>
-    );
-  }
 
   const sustained = metrics.sustained || {};
   const spontaneous = metrics.spontaneous || {}; // 新增：获取自发语音数据
   const vrp = metrics.vrp || {};
   const questionnaires = metrics.questionnaires || {};
-  const isPdfReady = !!resolvedUrls.reportPdf;
+
 
   return (
     <div className="w-full max-w-4xl mx-auto space-y-6">
@@ -105,12 +55,12 @@ const TestResultsDisplay = ({ results }) => {
           <div className="space-y-2 text-gray-800">
             {sustained.formants_low && (
               <div>
-                <strong>最低音:</strong> F1: {sustained.formants_low.F1?.toFixed(0)} Hz, F2: {sustained.formants_low.F2?.toFixed(0)} Hz, F3: {sustained.formants_low.F3?.toFixed(0)} Hz, SPL: {sustained.formants_low.spl_dbA_est?.toFixed(1)} dB
+                <strong>低音量发声:</strong> F1: {sustained.formants_low.F1?.toFixed(0)} Hz, F2: {sustained.formants_low.F2?.toFixed(0)} Hz, F3: {sustained.formants_low.F3?.toFixed(0)} Hz, SPL: {sustained.formants_low.spl_dbA_est?.toFixed(1)} dB
               </div>
             )}
             {sustained.formants_high && (
               <div>
-                <strong>最高音:</strong> F1: {sustained.formants_high.F1?.toFixed(0)} Hz, F2: {sustained.formants_high.F2?.toFixed(0)} Hz, F3: {sustained.formants_high.F3?.toFixed(0)} Hz, SPL: {sustained.formants_high.spl_dbA_est?.toFixed(1)} dB
+                <strong>高音量发声:</strong> F1: {sustained.formants_high.F1?.toFixed(0)} Hz, F2: {sustained.formants_high.F2?.toFixed(0)} Hz, F3: {sustained.formants_high.F3?.toFixed(0)} Hz, SPL: {sustained.formants_high.spl_dbA_est?.toFixed(1)} dB
               </div>
             )}
           </div>
@@ -127,35 +77,17 @@ const TestResultsDisplay = ({ results }) => {
         </Section>
       )}
 
-      {Object.keys(resolvedUrls.charts).length > 0 && (
+      {Object.keys(results.charts || {}).length > 0 && (
         <Section title="图表预览">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {Object.entries(resolvedUrls.charts).map(([key, url]) => (
-              <div key={key} className="border rounded-lg p-2 shadow-sm">
-                <img src={url} alt={`图表: ${key}`} className="w-full h-auto rounded" />
-                <p className="text-center text-sm mt-2 text-gray-600">{key}</p>
-              </div>
+            {Object.entries(results.charts).map(([name, fileKey]) => (
+              <ReportFile key={name + ':' + fileKey} fileKey={fileKey} label={'图表: ' + name} image />
             ))}
           </div>
         </Section>
       )}
+      {results.reportPdf ? <ReportFile key={results.reportPdf} fileKey={results.reportPdf} label="完整PDF报告" /> : <p>暂无PDF报告。</p>}
 
-      <div className="text-center mt-8">
-        <a
-          href={isPdfReady ? resolvedUrls.reportPdf : undefined}
-          target="_blank"
-          rel="noopener noreferrer"
-          className={`inline-block px-8 py-3 rounded-lg font-semibold shadow-lg transition-all duration-300 transform hover:scale-105 ${
-            isPdfReady 
-              ? 'bg-green-600 text-white hover:bg-green-700' 
-              : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-          }`}
-          aria-disabled={!isPdfReady}
-          onClick={(e) => !isPdfReady && e.preventDefault()}
-        >
-          下载完整PDF报告
-        </a>
-      </div>
     </div>
   );
 };

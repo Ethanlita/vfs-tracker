@@ -249,50 +249,23 @@ describe('EventList 组件', () => {
 
 ---
 
-### 5. E2E 测试 (End-to-End Tests) - 当前状态
+### 5. E2E 测试 (End-to-End Tests)
 
-**位置**：`tests/e2e/`
+开发模式测试位于 `tests/e2e/`，由 `playwright.config.js` 启动 Vite。公开 API 使用隔离响应，验证当前 UI、路由、错误恢复和桌面/手机布局，不写入真实用户数据：
 
-**当前状态**：⚠️ **所有 E2E 测试当前被跳过**
-
-**测试文件**：
-- `auth.spec.js` - 认证流程端到端测试
-- `home.spec.js` - 首页端到端测试
-
-**为什么被跳过**：
-1. **环境依赖**：E2E 测试需要完整的 AWS 环境配置（Cognito, API Gateway, DynamoDB, S3）
-2. **项目阶段**：当前处于 Phase 3.1（测试补充）阶段，重点是单元测试、集成测试和契约测试
-3. **基础设施**：E2E 测试需要专门的测试环境和 CI/CD 配置
-
-**计划**：
-- **Phase 4**：E2E 测试基础设施搭建
-  - 配置专用测试环境
-  - 建立 CI/CD E2E 测试流程
-  - 实现测试数据清理机制
-  - 添加视觉回归测试
-
-**如何运行**（需要配置）：
 ```bash
-# 当前会跳过所有测试
-npm run test:e2e
-
-# 未来配置完成后
-# 1. 配置 .env.e2e 文件
-# 2. 启动测试环境
-# 3. 运行 E2E 测试
+npm run test:e2e -- --project=chromium --workers=1
 ```
 
-**注意事项**：
-- E2E 测试不包含在代码覆盖率统计中
-- 使用 Playwright 作为 E2E 测试框架
-- 配置文件：`playwright.config.js`
-**Playwright 真实环境运行指引**
-1. 复制 .env.contract (或 .env.contract.example) 为 .env.local，并确保 AWS/Cognito/S3 变量完整。
-2. 运行 
-pm run test:e2e 时，Playwright 会自动调用 
-pm run dev:playwright，dotenv-cli 会用 .env.contract/.env.local 注入环境变量，让 Vite dev server 直接连接真实后端。
-3. 若想单独手动验证界面，可执行 
-pm run dev:playwright 并访问 http://localhost:3000。
+生产 PWA 测试位于 `tests/e2e-production/`，由 `playwright.production.config.js` 先构建再启动预览。该套件等待 Service Worker 接管后断网，验证公开页面、Markdown 正文和本地工具可以直接导航并刷新：
+
+```bash
+npm run test:e2e:pwa
+```
+
+开发服务器不注册 Service Worker，不能用于 PWA 离线验收。标准 E2E 不通过条件性跳过隐藏控件缺失，也不读取测试账号；真实 Cognito 登录、云端写入、S3 上传和物理麦克风音质按契约测试及人工验收执行。完整覆盖范围见 [Playwright 测试说明](../tests/e2e/README.md)。
+
+发布到 `master` 时，后端工作流先执行 Lambda/基础设施测试和 API 集成测试；Python Lambda 镜像构建阶段还会运行目录内完整 `pytest`。只有该工作流成功，前端工作流才会检出完全相同的提交并执行上述浏览器与 PWA 门禁。具体顺序见 [基础设施说明](../infra/README.md#自动发布顺序与门禁)。
 
 ---
 

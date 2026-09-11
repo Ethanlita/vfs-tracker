@@ -1,3 +1,4 @@
+import { parseEventDate } from '../../utils/calendarDate.js';
 /**
  * @file 事件表格组件
  * 显示事件列表的表格，支持快速操作
@@ -6,6 +7,7 @@
 import { useState } from 'react';
 import { useAWSClients } from '../contexts/AWSClientContext';
 import { updateEventStatus, EVENT_TYPES, EVENT_STATUS } from '../services/dynamodb';
+import { eventListSummary } from '../../components/events/utils/eventSummary.js';
 
 /**
  * 格式化日期
@@ -13,7 +15,7 @@ import { updateEventStatus, EVENT_TYPES, EVENT_STATUS } from '../services/dynamo
 function formatDate(dateStr) {
   if (!dateStr) return '-';
   try {
-    const date = new Date(dateStr);
+    const date = parseEventDate(dateStr);
     return date.toLocaleDateString('zh-CN', {
       year: 'numeric',
       month: '2-digit',
@@ -29,24 +31,24 @@ function formatDate(dateStr) {
  */
 function StatusBadge({ status }) {
   const statusConfig = {
-    pending: { 
-      bg: 'bg-yellow-900/50', 
-      text: 'text-yellow-400', 
-      border: 'border-yellow-700/50', 
+    pending: {
+      bg: 'bg-yellow-900/50',
+      text: 'text-yellow-400',
+      border: 'border-yellow-700/50',
       label: '待审核',
       dot: 'bg-yellow-400',
     },
-    approved: { 
-      bg: 'bg-green-900/50', 
-      text: 'text-green-400', 
-      border: 'border-green-700/50', 
+    approved: {
+      bg: 'bg-green-900/50',
+      text: 'text-green-400',
+      border: 'border-green-700/50',
       label: '已通过',
       dot: 'bg-green-400',
     },
-    rejected: { 
-      bg: 'bg-red-900/50', 
-      text: 'text-red-400', 
-      border: 'border-red-700/50', 
+    rejected: {
+      bg: 'bg-red-900/50',
+      text: 'text-red-400',
+      border: 'border-red-700/50',
       label: '已拒绝',
       dot: 'bg-red-400',
     },
@@ -96,7 +98,7 @@ function QuickActions({ event, onUpdate, disabled }) {
       );
       onUpdate?.(updated);
     } catch (err) {
-      console.error('更新状态失败:', err);
+
       setError(err.message);
       // 3秒后自动清除错误提示
       setTimeout(() => setError(null), 3000);
@@ -121,7 +123,7 @@ function QuickActions({ event, onUpdate, disabled }) {
             handleStatusChange(EVENT_STATUS.APPROVED);
           }}
           disabled={loading || disabled}
-          className="px-3 py-1.5 text-xs font-medium bg-green-600 text-white rounded-lg 
+          className="px-3 py-1.5 text-xs font-medium bg-green-600 text-white rounded-lg
                      hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           title="通过"
         >
@@ -133,7 +135,7 @@ function QuickActions({ event, onUpdate, disabled }) {
             handleStatusChange(EVENT_STATUS.REJECTED);
           }}
           disabled={loading || disabled}
-          className="px-3 py-1.5 text-xs font-medium bg-red-600 text-white rounded-lg 
+          className="px-3 py-1.5 text-xs font-medium bg-red-600 text-white rounded-lg
                      hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           title="拒绝"
         >
@@ -158,7 +160,7 @@ function QuickActions({ event, onUpdate, disabled }) {
           handleStatusChange(EVENT_STATUS.PENDING);
         }}
         disabled={loading || disabled}
-        className="px-3 py-1.5 text-xs font-medium bg-gray-600 text-white rounded-lg 
+        className="px-3 py-1.5 text-xs font-medium bg-gray-600 text-white rounded-lg
                    hover:bg-gray-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         title="重置为待审核"
       >
@@ -181,7 +183,7 @@ export default function EventTable({ events, users = {}, onEventClick, onEventUp
     return (
       <div className="bg-gray-800 rounded-xl border border-gray-700 p-12 text-center">
         <svg className="w-12 h-12 text-gray-600 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} 
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
             d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
         </svg>
         <p className="text-gray-400">暂无事件数据</p>
@@ -208,16 +210,16 @@ export default function EventTable({ events, users = {}, onEventClick, onEventUp
               <th className="px-6 py-3 font-medium">日期</th>
               <th className="px-6 py-3 font-medium">用户</th>
               <th className="px-6 py-3 font-medium">状态</th>
-              <th className="px-6 py-3 font-medium">备注</th>
+              <th className="px-6 py-3 font-medium">摘要</th>
               <th className="px-6 py-3 font-medium">操作</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-700">
             {events.map((event) => {
               const displayName = getUserDisplayName(event.userId);
-              
+
               return (
-                <tr 
+                <tr
                   key={`${event.userId}-${event.eventId}`}
                   className="hover:bg-gray-700/30 transition-colors cursor-pointer"
                   onClick={() => onEventClick?.(event)}
@@ -239,7 +241,7 @@ export default function EventTable({ events, users = {}, onEventClick, onEventUp
                         <span className="text-white text-sm">{displayName}</span>
                       )}
                       <code className="text-xs bg-gray-700/50 px-2 py-1 rounded text-gray-400 w-fit">
-                        {event.userId?.length > 16 
+                        {event.userId?.length > 16
                           ? `${event.userId.slice(0, 8)}...`
                           : event.userId}
                       </code>
@@ -251,17 +253,17 @@ export default function EventTable({ events, users = {}, onEventClick, onEventUp
                     <StatusBadge status={event.status} />
                   </td>
 
-                  {/* 备注 */}
+                  {/* 按当前 details 契约生成摘要 */}
                   <td className="px-6 py-4 text-gray-400 text-sm max-w-[200px]">
                     <span className="line-clamp-2">
-                      {event.note || '-'}
+                      {eventListSummary(event)}
                     </span>
                   </td>
 
                   {/* 操作 */}
                   <td className="px-6 py-4">
-                    <QuickActions 
-                      event={event} 
+                    <QuickActions
+                      event={event}
                       onUpdate={onEventUpdate}
                     />
                   </td>

@@ -90,6 +90,22 @@ export const mockResendSignUpCode = vi.fn(() =>
 );
 
 /**
+ * Mock 已登录用户的属性验证码重发接口。
+ */
+export const mockSendUserAttributeVerificationCode = vi.fn(() =>
+  Promise.resolve({
+    destination: 'n***@e***.com',
+    deliveryMedium: 'EMAIL',
+    attributeName: 'email',
+  })
+);
+
+/**
+ * Mock 已登录用户的属性验证码确认接口。
+ */
+export const mockConfirmUserAttribute = vi.fn(() => Promise.resolve());
+
+/**
  * Mock resetPassword
  */
 export const mockResetPassword = vi.fn(() =>
@@ -155,6 +171,12 @@ export const mockUpdateUserAttributes = vi.fn((attributes) =>
 );
 
 /**
+ * Mock updatePassword
+ * 默认模拟密码更新成功。
+ */
+export const mockUpdatePassword = vi.fn(() => Promise.resolve());
+
+/**
  * 导出所有 mock 函数
  */
 export const mockAmplifyAuth = {
@@ -164,12 +186,15 @@ export const mockAmplifyAuth = {
   signUp: mockSignUp,
   confirmSignUp: mockConfirmSignUp,
   resendSignUpCode: mockResendSignUpCode,
+  sendUserAttributeVerificationCode: mockSendUserAttributeVerificationCode,
+  confirmUserAttribute: mockConfirmUserAttribute,
   resetPassword: mockResetPassword,
   confirmResetPassword: mockConfirmResetPassword,
   confirmSignIn: mockConfirmSignIn,
   getCurrentUser: mockGetCurrentUser,
   fetchUserAttributes: mockFetchUserAttributes,
   updateUserAttributes: mockUpdateUserAttributes,
+  updatePassword: mockUpdatePassword,
 };
 
 /**
@@ -182,12 +207,15 @@ export function resetAuthMocks() {
   mockSignUp.mockClear();
   mockConfirmSignUp.mockClear();
   mockResendSignUpCode.mockClear();
+  mockSendUserAttributeVerificationCode.mockClear();
+  mockConfirmUserAttribute.mockClear();
   mockResetPassword.mockClear();
   mockConfirmResetPassword.mockClear();
   mockConfirmSignIn.mockClear();
   mockGetCurrentUser.mockClear();
   mockFetchUserAttributes.mockClear();
   mockUpdateUserAttributes.mockClear();
+  mockUpdatePassword.mockClear();
 }
 
 /**

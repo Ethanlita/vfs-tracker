@@ -1,4 +1,6 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import ModalDialog from './ModalDialog';
+import { parseEventDate } from '../utils/calendarDate.js';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -52,7 +54,12 @@ const PublicDashboard = () => {
   });
 
   const [selectedUserId, setSelectedUserId] = useState(null);
-  const [selectedUserProfile, setSelectedUserProfile] = useState(null);
+  const [profileState, setProfileState] = useState({ userId: null, value: null, loading: false, error: null });
+  const [profileRetry, setProfileRetry] = useState(0);
+  const profilePendingRef = useRef(false);
+  const selectedUserProfile = profileState.userId === selectedUserId ? profileState.value : null;
+  const profileLoading = selectedUserId && (profileState.userId !== selectedUserId || profileState.loading);
+  const profileError = profileState.userId === selectedUserId ? profileState.error : null;
   const [stats, setStats] = useState({
     avgImprovement: 0,
     variance: 0,
@@ -104,24 +111,31 @@ const PublicDashboard = () => {
     return usersList.find(u => u.userId === selectedUserId);
   }, [selectedUserId, usersList]);
 
-  // 当选择用户时，获取用户的公开资料
+  // 资料独立加载与重试；关闭或换人后，旧请求不能发布成功或错误状态。
   useEffect(() => {
     let active = true;
-    setSelectedUserProfile(null);
+    profilePendingRef.current = !!selectedUserId;
+    setProfileState({ userId: selectedUserId, value: null, loading: !!selectedUserId, error: null });
     if (selectedUserId) {
       getUserPublicProfile(selectedUserId)
-        .then(profile => {
-          if (active) setSelectedUserProfile(profile);
+        .then(value => {
+          if (active) setProfileState({ userId: selectedUserId, value, loading: false, error: null });
         })
         .catch(error => {
-          console.error('获取用户公开资料失败:', error);
-          if (active) setSelectedUserProfile(null);
-        });
-    } else {
-      setSelectedUserProfile(null);
+          if (active) setProfileState({ userId: selectedUserId, value: null, loading: false, error });
+        })
+        .finally(() => { if (active) profilePendingRef.current = false; });
     }
     return () => { active = false; };
-  }, [selectedUserId]);
+  }, [selectedUserId, profileRetry]);
+
+  /** 仅重试资料读取，同步锁阻止重复点击，不刷新事件与统计。 */
+  const retryProfile = () => {
+    if (profilePendingRef.current) return;
+    profilePendingRef.current = true;
+    setProfileState({ userId: selectedUserId, value: null, loading: true, error: null });
+    setProfileRetry(count => count + 1);
+  };
 
   // Bar chart data
   const barChartData = useMemo(() => {
@@ -262,7 +276,7 @@ const PublicDashboard = () => {
     if (!selectedUserId) return [];
     return allEventsState
       .filter((e) => e.userId === selectedUserId)
-      .sort((a, b) => new Date(a.date) - new Date(b.date));
+      .sort((a, b) => parseEventDate(a.date) - parseEventDate(b.date));
   }, [selectedUserId, allEventsState]);
 
   // 只在展开用户后读取一页明细；忽略旧请求，避免用户切换或翻页时串入数据。
@@ -328,7 +342,7 @@ const PublicDashboard = () => {
   const formatDate = (d) => {
     if (!d || !Number.isFinite(Date.parse(d))) return '-';
     try {
-      return new Date(d).toLocaleDateString();
+      return parseEventDate(d).toLocaleDateString();
     } catch {
       return String(d);
     }
@@ -533,15 +547,9 @@ const PublicDashboard = () => {
 
         {/* 用户档案抽屉 */}
         {selectedUser && (
-          <div className="fixed inset-0 z-50" role="dialog" aria-label="用户公开资料" aria-modal="true">
-            {/* 背景遮罩 */}
-            <div
-              className="absolute inset-0 bg-black/30"
-              onClick={() => setSelectedUserId(null)}
-              aria-hidden="true"
-            />
+          <ModalDialog label="用户公开资料" onClose={() => setSelectedUserId(null)} className="flex justify-end">
             {/* 抽屉面板 */}
-            <div className="absolute inset-y-0 right-0 w-full max-w-2xl bg-white shadow-2xl border-l border-gray-200 flex flex-col">
+            <div className="h-full w-full max-w-2xl bg-white shadow-2xl border-l border-gray-200 flex flex-col">
               <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
                 <div>
                   <h3 className="text-lg font-semibold text-gray-900">{selectedUser.userName}</h3>
@@ -550,6 +558,7 @@ const PublicDashboard = () => {
                 <button
                   type="button"
                   onClick={() => setSelectedUserId(null)}
+                  data-modal-close
                   aria-label="关闭用户资料"
                   className="inline-flex items-center rounded-md px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-gray-400"
                 >
@@ -559,9 +568,13 @@ const PublicDashboard = () => {
 
               <div className="px-6 py-4 overflow-y-auto flex-1">
                 {/* 公开资料信息 */}
+                <section aria-label="公开资料" className="mb-6">
+                  <h4 className="text-base font-semibold text-gray-900 mb-3">公开资料</h4>
+                  {profileLoading && <p role="status" className="text-sm text-gray-500">正在加载公开资料…</p>}
+                  {profileError && <ApiErrorNotice error={profileError} onRetry={retryProfile} retryLabel="重试公开资料" />}
+                  {!profileLoading && !profileError && !selectedUserProfile && <p className="text-sm text-gray-500">暂无公开资料</p>}
                 {selectedUserProfile && (
-                  <div className="mb-6">
-                    <h4 className="text-base font-semibold text-gray-900 mb-3">公开资料</h4>
+                  <div>
                     <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
                       <div className="grid grid-cols-1 gap-3">
                         <div>
@@ -579,7 +592,7 @@ const PublicDashboard = () => {
                             <span className="text-sm text-gray-500">社交媒体：</span>
                             <div className="mt-1 space-y-1">
                               {selectedUserProfile.profile.socials.map((social, index) => (
-                                <div key={index} className="text-sm text-gray-900">
+                                <div key={index} className="min-w-0 text-sm text-gray-900 [overflow-wrap:anywhere]">
                                   <span className="font-medium">{social.platform}:</span> {social.handle}
                                 </div>
                               ))}
@@ -590,6 +603,8 @@ const PublicDashboard = () => {
                     </div>
                   </div>
                 )}
+
+                </section>
 
                 {/* 统计信息 */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
@@ -825,7 +840,7 @@ const PublicDashboard = () => {
                 </div>
               </div>
             </div>
-          </div>
+          </ModalDialog>
         )}
       </div>
     </div>

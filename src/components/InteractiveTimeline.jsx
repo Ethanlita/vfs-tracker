@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import { parseEventDate } from '../utils/calendarDate.js';
+import React, { useState, useMemo, useSyncExternalStore, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { createPortal } from 'react-dom';
+import ModalDialog from './ModalDialog';
 import { EventDetailsPanel } from './events';
 import { usePagination } from '../hooks/usePagination';
 import Pagination from './ui/Pagination';
@@ -9,18 +10,23 @@ import Pagination from './ui/Pagination';
 void motion;
 
 /**
- * 移动端每页显示的事件数量
+ * 手机和桌面每页显示的事件数量
  * 可以根据需要调整
  */
-const MOBILE_ITEMS_PER_PAGE = 10;
+const ITEMS_PER_PAGE = 10;
+/** 订阅窗口宽度变化，仅在跨越桌面断点时更新布局。 */
+const subscribeViewport = listener => {
+  window.addEventListener('resize', listener);
+  return () => window.removeEventListener('resize', listener);
+};
+const desktopSnapshot = () => window.innerWidth >= 768;
 
 const InteractiveTimeline = ({ events = [] }) => {
   const [selectedEvent, setSelectedEvent] = useState(null);
+  const desktop = useSyncExternalStore(subscribeViewport, desktopSnapshot, () => false);
+  const desktopScrollRef = useRef(null);
 
-  console.log('🎯 InteractiveTimeline: 渲染开始', {
-    eventsCount: events.length,
-    events: events
-  });
+
 
 
   const typeConfig = {
@@ -32,23 +38,30 @@ const InteractiveTimeline = ({ events = [] }) => {
     feeling_log:     { label: '感受记录',  icon: '📝', bg: 'bg-orange-500' },
   };
 
+  // 日期格式仅取决于传入字符串，跨数据页复用缓存不会保留事件对象。
+  const formattedDates = useMemo(() => new Map(), []);
   const formatDate = (dateString) => {
-    const date = new Date(dateString);
-    return {
+    if (formattedDates.has(dateString)) return formattedDates.get(dateString);
+    const date = parseEventDate(dateString);
+    const formatted = {
       month: date.toLocaleDateString('zh-CN', { month: 'short' }),
       day: date.getDate(),
       full: date.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' }),
     };
+    formattedDates.set(dateString, formatted);
+    return formatted;
   };
 
   // 按时间排序的事件
-  const ordered = [...events].sort((a, b) => new Date(a.date || a.createdAt) - new Date(b.date || b.createdAt));
+  const ordered = useMemo(() => [...events].sort((a, b) => parseEventDate(a.date || a.createdAt) - parseEventDate(b.date || b.createdAt)), [events]);
 
-  // 移动端分页 - 使用 usePagination Hook
+  // 两种布局共用页码与数据，每次只挂载当前页。
   const pagination = usePagination({
     items: ordered,
-    itemsPerPage: MOBILE_ITEMS_PER_PAGE,
+    itemsPerPage: ITEMS_PER_PAGE,
   });
+
+  useEffect(() => { if (desktopScrollRef.current) desktopScrollRef.current.scrollLeft = 0; }, [pagination.currentPage, desktop]);
 
   if (!events || events.length === 0) {
     return (
@@ -69,7 +82,7 @@ const InteractiveTimeline = ({ events = [] }) => {
   return (
     <div className="relative isolate pt-4 pb-4">
       {/* 移动端：纵向列表（使用分页） */}
-      <div className="md:hidden px-1 space-y-4">
+      {!desktop && <div data-testid="timeline-mobile" className="px-1 space-y-4">
         {/* 分页后的事件列表 */}
         {pagination.paginatedItems.map((event, index) => {
           const cfg = typeConfig[event.type] || { label: event.type, icon: '📌', bg: 'bg-gray-400' };
@@ -83,7 +96,7 @@ const InteractiveTimeline = ({ events = [] }) => {
           return (
             <div key={event.eventId || index} className="rounded-2xl bg-white/90 backdrop-blur-sm border border-gray-200 shadow-sm p-4">
               <button
-                onClick={() => setSelectedEvent(event)}
+                data-testid="timeline-event" onClick={() => setSelectedEvent(event)}
                 className="w-full text-left"
               >
                 <div className="flex items-start justify-between gap-3">
@@ -121,11 +134,11 @@ const InteractiveTimeline = ({ events = [] }) => {
             variant="compact"
           />
         )}
-      </div>
+      </div>}
 
       {/* 桌面端：横向时间轴（保留轴与箭头） */}
-      <div className="hidden md:block">
-        <div className="overflow-x-auto overflow-y-visible">
+      {desktop && <div data-testid="timeline-desktop">
+        <div ref={desktopScrollRef} className="overflow-x-auto overflow-y-visible">
           <div className="relative overflow-visible">
             <div className="relative flex gap-10 px-6 sm:px-8 pb-4 min-w-max h-[26rem] snap-x snap-mandatory overflow-visible">
               {/* 时间轴（居中，1px 厚度） */}
@@ -141,7 +154,7 @@ const InteractiveTimeline = ({ events = [] }) => {
                 </svg>
               </div>
 
-              {ordered.map((event, index) => {
+              {pagination.paginatedItems.map((event, index) => {
                 const cfg = typeConfig[event.type] || { label: event.type, icon: '📌', bg: 'bg-gray-400' };
                 const dateInfo = formatDate(event.date || event.createdAt);
                 const summary =
@@ -153,9 +166,9 @@ const InteractiveTimeline = ({ events = [] }) => {
                 return (
                   <div key={event.eventId || index} className="relative snap-center shrink-0 w-72 h-full overflow-visible">
                     {/* 顶部卡片 */}
-                    <motion.div
-                      onClick={() => setSelectedEvent(event)}
-                      className="absolute left-1/2 -translate-x-1/2 bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl border border-gray-200 p-4 cursor-pointer transition-all duration-300 ease-out hover:scale-[1.02] hover:shadow-2xl z-10"
+                    <motion.button type="button"
+                      data-testid="timeline-event" onClick={() => setSelectedEvent(event)}
+                      className="text-left absolute left-1/2 -translate-x-1/2 bg-white/80 backdrop-blur-sm rounded-2xl shadow-xl border border-gray-200 p-4 cursor-pointer transition-all duration-300 ease-out hover:scale-[1.02] hover:shadow-2xl z-10"
                       style={{ bottom: `calc(50% + ${AXIS_GAP}px)`, width: '16rem', height: '10rem', transformOrigin: 'center bottom' }}
                     >
                       <div className="flex items-start justify-between">
@@ -170,7 +183,7 @@ const InteractiveTimeline = ({ events = [] }) => {
                       <p className={`mt-2 text-sm ${summaryIsEmpty ? 'text-gray-400 italic' : 'text-gray-600'} line-clamp-3`}>
                         {summary}
                       </p>
-                    </motion.div>
+                    </motion.button>
 
                     {/* 顶部连线 */}
                     <div
@@ -209,18 +222,19 @@ const InteractiveTimeline = ({ events = [] }) => {
             </div>
           </div>
         </div>
-      </div>
+        <Pagination {...pagination} variant="compact" />
+      </div>}
 
       {/* 事件详情弹窗 - 使用 EventDetailsPanel 组件展示格式化的事件详情 */}
-      {selectedEvent && createPortal(
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+      {selectedEvent && (
+        <ModalDialog label="时间轴事件详情" onClose={() => setSelectedEvent(null)} className="flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[85vh] overflow-y-auto">
             {/* 弹窗头部：关闭按钮 */}
             <div className="sticky top-0 bg-white border-b border-gray-200 p-4 rounded-t-2xl flex justify-end">
               <button
                 onClick={() => setSelectedEvent(null)}
                 className="p-2 hover:bg-gray-100 rounded-full transition-colors"
-                aria-label="关闭"
+                data-modal-close aria-label="关闭"
               >
                 <svg className="w-6 h-6 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -232,8 +246,7 @@ const InteractiveTimeline = ({ events = [] }) => {
               <EventDetailsPanel event={selectedEvent} />
             </div>
           </div>
-        </div>,
-        document.body
+        </ModalDialog>
       )}
     </div>
   );

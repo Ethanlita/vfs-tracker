@@ -73,6 +73,23 @@ def test_v2_legacy_structure_carries_reason_and_error_fields():
     assert metrics['sustained']['formant_analysis_failed'] is True
 
 
+def test_v2_successful_formants_omit_error_details():
+    """成功锚点不得携带空错误字段，否则旧处理程序会将成功误判为失败。"""
+    from analysis_refactor_v2 import _build_legacy_formant_block
+
+    result = _build_legacy_formant_block({
+        'file': 'sustained.wav',
+        'f0_hz': 200.0,
+        'f1_hz': 700.0,
+        'f2_hz': 1300.0,
+        'f3_hz': 2600.0,
+        'spl_db': 68.0,
+    })
+
+    assert result['reason'] == 'SUCCESS'
+    assert 'error_details' not in result
+
+
 def test_pdf_report_accepts_v2_compatible_metrics():
     """PDF 生成应能消费 v2 兼容结构，避免新链路写入后报告失败。"""
     from artifacts import create_pdf_report

@@ -11,6 +11,13 @@
 import { DynamoDBClient, GetItemCommand, UpdateItemCommand } from '@aws-sdk/client-dynamodb';
 import { SSMClient, GetParametersCommand } from '@aws-sdk/client-ssm';
 import { unmarshall, marshall } from '@aws-sdk/util-dynamodb';
+import {
+    createStructuredLogger,
+    describeError,
+    fingerprintIdentifier,
+} from './structuredLogger.mjs';
+
+const logger = createStructuredLogger({ service: 'ai-rate-limiter' });
 
 // AWS 客户端（复用连接）
 const dynamoClient = new DynamoDBClient({});
@@ -29,6 +36,27 @@ const DEFAULT_RATE_LIMIT_CONFIG = {
     songWindowHours: 24,
     songMaxRequests: 10
 };
+
+// 与管理页一致的有限整数边界；异常配置不得直接参与普通用户限速判定。
+const RATE_LIMIT_RULES = {
+    adviceWindowHours: { min: 1, max: 168 },
+    adviceMaxRequests: { min: 1, max: 100 },
+    songWindowHours: { min: 1, max: 168 },
+    songMaxRequests: { min: 1, max: 100 }
+};
+
+/** [CN] 校验并标准化完整限速配置；非法值抛错，由读取层统一记录并采用安全默认配置。 */
+export function validateRateLimitConfig(config) {
+    const normalized = {};
+    for (const [key, rule] of Object.entries(RATE_LIMIT_RULES)) {
+        const value = Number(config?.[key]);
+        if (!Number.isFinite(value) || !Number.isInteger(value) || value < rule.min || value > rule.max) {
+            throw new Error(`[RateLimiter] Invalid ${key}: ${String(config?.[key])}; expected integer ${rule.min}-${rule.max}`);
+        }
+        normalized[key] = value;
+    }
+    return normalized;
+}
 
 // 配置缓存（避免频繁调用 SSM）
 let configCache = null;
@@ -63,7 +91,7 @@ export async function getRateLimitConfig() {
         const config = { ...DEFAULT_RATE_LIMIT_CONFIG };
         for (const param of response.Parameters || []) {
             const name = param.Name;
-            const value = parseInt(param.Value, 10);
+            const value = Number(param.Value);
             
             if (name.endsWith('/advice-window-hours')) {
                 config.adviceWindowHours = value;
@@ -76,14 +104,14 @@ export async function getRateLimitConfig() {
             }
         }
         
-        // 更新缓存
-        configCache = config;
+        // 在写入缓存前验证，避免负数、小数或非有限值影响所有普通用户。
+        configCache = validateRateLimitConfig(config);
         configCacheTime = now;
         
-        console.log('[RateLimiter] Loaded config from SSM:', config);
-        return config;
+        logger.debug('configuration_loaded', configCache);
+        return configCache;
     } catch (error) {
-        console.error('[RateLimiter] Failed to get rate limit config from SSM:', error);
+        logger.error('configuration_load_failed', describeError(error));
         return DEFAULT_RATE_LIMIT_CONFIG;
     }
 }
@@ -127,7 +155,7 @@ export async function getUserRateLimitData(userId) {
             }
         };
     } catch (error) {
-        console.error('[RateLimiter] Failed to get user rate limit data:', error);
+        logger.error('user_rate_limit_read_failed', describeError(error));
         throw error;
     }
 }
@@ -142,6 +170,10 @@ export function cleanExpiredHistory(history, windowHours) {
     if (!Array.isArray(history) || history.length === 0) {
         return [];
     }
+    const validWindow = Number(windowHours);
+    if (!Number.isInteger(validWindow) || validWindow < 1 || validWindow > 168) {
+        throw new Error(`[RateLimiter] Invalid windowHours: ${String(windowHours)}`);
+    }
     
     const cutoffTime = new Date(Date.now() - windowHours * 60 * 60 * 1000);
     return history.filter(ts => new Date(ts) > cutoffTime);
@@ -154,8 +186,12 @@ export function cleanExpiredHistory(history, windowHours) {
  * @returns {object} { isLimited: boolean, count: number, oldestTimestamp: string|null }
  */
 export function checkRateLimit(history, maxRequests) {
+    const validMaximum = Number(maxRequests);
+    if (!Number.isInteger(validMaximum) || validMaximum < 1 || validMaximum > 100) {
+        throw new Error(`[RateLimiter] Invalid maxRequests: ${String(maxRequests)}`);
+    }
     const count = history.length;
-    const isLimited = count >= maxRequests;
+    const isLimited = count >= validMaximum;
     const oldestTimestamp = history.length > 0 ? history[0] : null;
     
     return {
@@ -214,13 +250,16 @@ export async function updateAdviceRateLimitData(userId, newAdviceHistory, lastRe
         });
         
         await dynamoClient.send(command);
-        console.log(`[RateLimiter] Updated advice rate limit data for user: ${userId}`);
+        logger.debug('advice_rate_limit_updated', { userHash: fingerprintIdentifier(userId) });
     } catch (error) {
         // 如果 aiRateLimit 不存在，需要创建整个对象
         if (error.name === 'ValidationException') {
             await initializeAndUpdateAdviceData(userId, newAdviceHistory, lastResponse);
         } else {
-            console.error('[RateLimiter] Failed to update advice rate limit data:', error);
+            logger.error('advice_rate_limit_update_failed', {
+                userHash: fingerprintIdentifier(userId),
+                ...describeError(error),
+            });
             throw error;
         }
     }
@@ -249,7 +288,7 @@ async function initializeAndUpdateAdviceData(userId, adviceHistory, lastResponse
     });
     
     await dynamoClient.send(command);
-    console.log(`[RateLimiter] Initialized and updated advice rate limit data for user: ${userId}`);
+    logger.debug('advice_rate_limit_initialized', { userHash: fingerprintIdentifier(userId) });
 }
 
 /**
@@ -272,13 +311,16 @@ export async function updateSongRateLimitData(userId, newSongHistory, lastRecomm
         });
         
         await dynamoClient.send(command);
-        console.log(`[RateLimiter] Updated song rate limit data for user: ${userId}`);
+        logger.debug('song_rate_limit_updated', { userHash: fingerprintIdentifier(userId) });
     } catch (error) {
         // 如果 aiRateLimit 不存在，需要创建整个对象
         if (error.name === 'ValidationException') {
             await initializeAndUpdateSongData(userId, newSongHistory, lastRecommendations);
         } else {
-            console.error('[RateLimiter] Failed to update song rate limit data:', error);
+            logger.error('song_rate_limit_update_failed', {
+                userHash: fingerprintIdentifier(userId),
+                ...describeError(error),
+            });
             throw error;
         }
     }
@@ -307,7 +349,7 @@ async function initializeAndUpdateSongData(userId, songHistory, lastRecommendati
     });
     
     await dynamoClient.send(command);
-    console.log(`[RateLimiter] Initialized and updated song rate limit data for user: ${userId}`);
+    logger.debug('song_rate_limit_initialized', { userHash: fingerprintIdentifier(userId) });
 }
 
 /**
@@ -327,10 +369,10 @@ export function extractUserIdFromEvent(event) {
         
         // 如果没有 claims，说明请求未通过 Cognito Authorizer 认证
         // 这种情况下返回 null，让调用方决定如何处理（例如返回 401 或跳过限速）
-        console.warn('[RateLimiter] No authorizer claims found in event');
+        logger.warn('authorizer_claims_missing');
         return null;
     } catch (error) {
-        console.error('[RateLimiter] Failed to extract user ID from event:', error);
+        logger.error('identity_extraction_failed', describeError(error));
         return null;
     }
 }

@@ -82,7 +82,7 @@ describe('attachments.js 单元测试', () => {
       expect(api.getFileUrl).toHaveBeenCalledTimes(3);
     });
 
-    it('getFileUrl 失败时应该回退到原始 fileUrl', async () => {
+    it('getFileUrl 失败时应该保留文件并标记失败', async () => {
       api.getFileUrl.mockRejectedValue(new Error('S3 Access Denied'));
 
       const attachments = [
@@ -92,11 +92,12 @@ describe('attachments.js 单元测试', () => {
       const result = await resolveAttachmentLinks(attachments);
 
       expect(result).toHaveLength(1);
-      expect(result[0].downloadUrl).toBe('s3://bucket/file1.pdf'); // 回退到原始
+      expect(result[0].downloadUrl).toBe('');
+      expect(result[0].downloadError).toBeInstanceOf(Error);
       expect(result[0].fileUrl).toBe('s3://bucket/file1.pdf');
     });
 
-    it('getFileUrl 返回 null 时应该回退到原始 fileUrl', async () => {
+    it('getFileUrl 返回 null 时应该保留文件并标记失败', async () => {
       api.getFileUrl.mockResolvedValue(null);
 
       const attachments = [
@@ -106,7 +107,8 @@ describe('attachments.js 单元测试', () => {
       const result = await resolveAttachmentLinks(attachments);
 
       expect(result).toHaveLength(1);
-      expect(result[0].downloadUrl).toBe('s3://bucket/file1.pdf');
+      expect(result[0].downloadUrl).toBe('');
+      expect(result[0].downloadError).toBeInstanceOf(Error);
     });
 
     it('应该过滤掉没有 fileUrl 的附件', async () => {
@@ -170,7 +172,7 @@ describe('attachments.js 单元测试', () => {
 
       expect(result).toHaveLength(3);
       expect(result[0].downloadUrl).toBe('https://s3.signed-url.com/file1.pdf');
-      expect(result[1].downloadUrl).toBe('s3://bucket/file2.pdf'); // 回退
+      expect(result[1].downloadUrl).toBe('');
       expect(result[2].downloadUrl).toBe('https://s3.signed-url.com/file3.pdf');
     });
   });
@@ -204,24 +206,20 @@ describe('attachments.js 单元测试', () => {
       expect(api.getFileUrl).not.toHaveBeenCalled();
     });
 
-    it('getFileUrl 失败时应该返回原始 key', async () => {
+    it('getFileUrl 失败时应该抛出错误', async () => {
       api.getFileUrl.mockRejectedValue(new Error('S3 Error'));
 
-      const result = await resolveAttachmentUrl('s3://bucket/file.pdf');
-
-      expect(result).toBe('s3://bucket/file.pdf'); // 回退到原始
+      await expect(resolveAttachmentUrl('s3://bucket/file.pdf')).rejects.toThrow();
     });
 
-    it('getFileUrl 返回 null 时应该返回原始 key', async () => {
+    it('getFileUrl 返回 null 时应该抛出错误', async () => {
       api.getFileUrl.mockResolvedValue(null);
 
-      const result = await resolveAttachmentUrl('s3://bucket/file.pdf');
-
-      expect(result).toBe('s3://bucket/file.pdf');
+      await expect(resolveAttachmentUrl('s3://bucket/file.pdf')).rejects.toThrow();
     });
 
-    it('应该通过 resolveAttachmentLinks 实现', async () => {
-      // 验证它内部调用了 resolveAttachmentLinks
+    it('成功时返回服务提供的访问地址', async () => {
+      // 验证公开返回值，不依赖内部实现
       api.getFileUrl.mockResolvedValue('https://s3.signed-url.com/test.pdf');
 
       const key = 's3://bucket/test.pdf';
@@ -230,4 +228,9 @@ describe('attachments.js 单元测试', () => {
       expect(result).toBe('https://s3.signed-url.com/test.pdf');
     });
   });
+});
+
+it.each(['',null,'attachments/private.png','javascript:alert(1)','data:text/plain,test'])('无效访问地址 %s 不返回伪造链接',async url=>{
+ const spy=vi.spyOn(api,'getFileUrl').mockResolvedValueOnce(url);
+ try{await expect(resolveAttachmentUrl('key')).rejects.toThrow()}finally{spy.mockRestore()}
 });
