@@ -14,6 +14,8 @@ export default defineConfig([
     '.review-pr-*/**',
     '.playwright-cli/**',
     '**/.pytest_cache/**',
+    // 本地 uv 隔离环境包含第三方 JavaScript；不应作为项目源码参与 ESLint。
+    '**/.uv-cache/**',
     '.venv/**',
     'public/WorldJS.js',
   ]),

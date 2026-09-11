@@ -372,9 +372,10 @@ describe('AuthContext 集成测试', () => {
         }),
       );
       const restoredMount = renderHook(() => useAuth(), { wrapper: AuthProvider });
+      // 持久化恢复由异步 Provider 完成；繁忙 CI 上允许与写入等待相同的时间窗口。
       await waitFor(() => {
         expect(restoredMount.result.current.userProfile?.profile?.name).toBe('离线可见名称');
-      });
+      }, { timeout: 2000 });
       expect(restoredMount.result.current.needsProfileSetup).toBe(false);
       expect(getCalls).toBe(readsAfterSeed);
     });
