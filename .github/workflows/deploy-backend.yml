@@ -94,6 +94,8 @@ jobs:
     needs: [check-image-changes, verify]
     if: needs.check-image-changes.outputs.image_changed == 'true' && needs.verify.result == 'success'
     uses: ./.github/workflows/build-python-lambda.yml
+    with:
+      publish: true
     secrets: inherit
 
   # 部署后端（等待镜像构建完成，如果需要的话）

@@ -1,0 +1,128 @@
+name: Verify Pull Request
+
+on:
+  pull_request:
+    branches: [master]
+
+permissions:
+  contents: read
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      python_changed: ${{ steps.diff.outputs.python_changed }}
+    steps:
+      - name: Checkout pull request
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Detect Python Lambda changes
+        id: diff
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          if git diff --name-only "$BASE_SHA" "$HEAD_SHA" | grep -q '^lambda-functions/online-praat-analysis/'; then
+            echo "python_changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "python_changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  frontend:
+    runs-on: ubuntu-latest
+    env:
+      # PR 代码只接收隔离配置；浏览器测试拦截请求，不向真实服务写入数据。
+      VITE_GOOGLE_GEMINI_API: test-only
+      VITE_COGNITO_USER_POOL_ID: us-east-1_testpool
+      VITE_COGNITO_USER_POOL_WEB_CLIENT_ID: 00000000000000000000000000
+      VITE_AWS_REGION: us-east-1
+      VITE_API_ENDPOINT: https://api.vfs-tracker.invalid
+      VITE_API_STAGE: dev
+      VITE_S3_BUCKET: vfs-tracker-pr-test
+    steps:
+      - name: Checkout pull request
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint source and tests
+        run: npm run lint
+
+      - name: Run unit tests
+        run: npm run test:unit
+
+      - name: Run integration tests
+        run: npm run test:integration
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run current-route browser tests
+        run: npx playwright test --project=chromium --workers=1 --reporter=list
+
+      - name: Run production PWA offline tests
+        run: npm run test:e2e:pwa
+
+      - name: Build production bundle and enforce budgets
+        run: npm run build
+
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout pull request
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Setup SAM CLI
+        uses: aws-actions/setup-sam@v3
+        with:
+          use-installer: true
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run backend and infrastructure tests
+        run: >-
+          npx vitest run
+          tests/unit/lambda
+          tests/unit/scripts
+          tests/unit/rateLimiter.test.js
+          tests/unit/reading-passages-infra.test.js
+          tests/unit/storage-cleanup-infra.test.js
+          tests/integration/api
+
+      - name: Validate production SAM template
+        working-directory: ./infra
+        run: sam validate --template template-production.yaml
+
+      - name: Build production SAM application
+        working-directory: ./infra
+        run: sam build --template template-production.yaml
+
+  python-image:
+    needs: changes
+    if: needs.changes.outputs.python_changed == 'true'
+    uses: ./.github/workflows/build-python-lambda.yml
+    with:
+      publish: false

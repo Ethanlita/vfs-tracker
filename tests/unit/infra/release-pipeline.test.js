@@ -7,9 +7,10 @@ import { describe, expect, it } from 'vitest';
 
 describe('release pipeline', () => {
   it('每次 master 推送先运行后端工作流，再由成功结果触发前端', async () => {
-    const [backend, frontend] = await Promise.all([
+    const [backend, frontend, pullRequest] = await Promise.all([
       readFile('.github/workflows/deploy-backend.yml', 'utf8'),
       readFile('.github/workflows/deploy.yml', 'utf8'),
+      readFile('.github/workflows/verify-pr.yml', 'utf8'),
     ]);
 
     const normalizedBackend = backend.replaceAll('\r\n', '\n');
@@ -20,6 +21,13 @@ describe('release pipeline', () => {
     expect(frontend).toContain("github.event.workflow_run.conclusion == 'success'");
     expect(frontend).toContain('ref: ${{ github.event.workflow_run.head_sha }}');
     expect(frontend).not.toContain('workflow_dispatch:');
+    expect(pullRequest).toContain('  pull_request:');
+    expect(pullRequest).toContain('Run integration tests');
+    expect(pullRequest).toContain('Run production PWA offline tests');
+    expect(pullRequest).toContain('Build production SAM application');
+    expect(pullRequest).toContain('VITE_API_ENDPOINT: https://api.vfs-tracker.invalid');
+    expect(pullRequest).not.toContain('${{ secrets.API_ENDPOINT }}');
+    expect(pullRequest).not.toContain('id-token: write');
   });
 
   it('后端部署与镜像更新都依赖自动回归验证', async () => {
@@ -41,11 +49,18 @@ describe('release pipeline', () => {
     expect(workflow).not.toContain('deploy_api_gateway');
     expect(imageWorkflow).toContain('  workflow_call:');
     expect(imageWorkflow).not.toContain('workflow_dispatch:');
+    expect(imageWorkflow).toContain('push: ${{ inputs.publish }}');
+    expect(workflow).toContain('publish: true');
     expect(imageWorkflow).toContain('image_uri: ${{ steps.image-uri.outputs.image_uri }}');
     expect(imageWorkflow).not.toContain('aws lambda update-function-code');
     expect(workflow.indexOf('sam deploy')).toBeLessThan(workflow.indexOf('Publish verified Python Lambda image'));
     expect(workflow).toContain('IMAGE_URI: ${{ needs.build-python-image.outputs.image_uri }}');
     expect(workflow).toContain('--image-uri "$IMAGE_URI"');
+
+    const pullRequest = await readFile('.github/workflows/verify-pr.yml', 'utf8');
+    expect(pullRequest).toContain("grep -q '^lambda-functions/online-praat-analysis/'");
+    expect(pullRequest).toContain('uses: ./.github/workflows/build-python-lambda.yml');
+    expect(pullRequest).toContain('publish: false');
   });
 
   it('Python Lambda 镜像构建完整测试且不把 pytest 带入运行阶段', async () => {

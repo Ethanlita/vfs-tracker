@@ -3,6 +3,12 @@ name: Build and Push Python Lambda Image
 on:
   # 仅允许统一后端发布工作流调用，避免绕过 Node/SAM 质量门禁。
   workflow_call:
+    inputs:
+      publish:
+        description: 是否把通过测试的镜像推送到 ECR
+        required: false
+        default: false
+        type: boolean
     outputs:
       image_uri:
         description: 由调用方在 SAM 成功后发布的不可变镜像地址
@@ -32,12 +38,14 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Configure AWS credentials
+        if: inputs.publish
         uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ secrets.AWS_REGION }}
 
       - name: Login to Amazon ECR
+        if: inputs.publish
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
@@ -49,13 +57,13 @@ jobs:
         with:
           context: ./lambda-functions/online-praat-analysis
           platforms: linux/arm64
-          push: true
+          push: ${{ inputs.publish }}
           # provenance: false 防止生成 OCI attestation 清单，
           # AWS Lambda 不支持带有 attestation 的多架构镜像索引格式
           provenance: false
           tags: |
-            ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest
-            ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+            ${{ inputs.publish && format('{0}/{1}:latest', steps.login-ecr.outputs.registry, env.ECR_REPOSITORY) || 'vfs-tracker-python:pr-check' }}
+            ${{ inputs.publish && format('{0}/{1}:{2}', steps.login-ecr.outputs.registry, env.ECR_REPOSITORY, github.sha) || format('vfs-tracker-python:pr-{0}', github.sha) }}
           build-args: |
             PARSELMOUTH_SOURCE_REPOSITORY=${{ env.PARSELMOUTH_SOURCE_REPOSITORY }}
             PARSELMOUTH_SOURCE_COMMIT=${{ env.PARSELMOUTH_SOURCE_COMMIT }}
@@ -63,6 +71,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Export immutable image URI
+        if: inputs.publish
         id: image-uri
         run: |
           IMAGE_URI="${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}"
@@ -72,7 +81,6 @@ jobs:
         run: |
           echo "## 🐳 Docker Image Built" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- **Repository:** ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Tags:** latest, ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Platform:** linux/arm64 (native build)" >> $GITHUB_STEP_SUMMARY
-          echo "- **Status:** pushed; the caller publishes the SHA tag after SAM succeeds" >> $GITHUB_STEP_SUMMARY
+          echo "- **Published:** ${{ inputs.publish }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY

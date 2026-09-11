@@ -154,6 +154,8 @@ npm run deploy:backend
 
 只有同一提交的 `Deploy Backend` 工作流成功后，`Deploy to GitHub Pages` 才会检出该工作流的 `head_sha`，执行前端单元测试、浏览器测试和生产 PWA 离线测试并发布。后端失败会阻止依赖新协议的前端版本上线；前端工作流不提供绕过顺序的独立手动发布入口，需要重跑时从后端工作流开始。
 
+面向 `master` 的 PR 会先运行 `Verify Pull Request`：完整前端单元/集成/Chromium/PWA/构建门禁、后端与基础设施测试及 SAM validate/build。PR 代码只获得固定隔离配置，不读取生产 Secrets。修改 Python 声学函数时还会在原生 ARM64 runner 上复用同一镜像工作流，但设置 `publish: false`，因此完整构建和 `pytest` 会执行，不会登录 ECR、更新 Lambda 或写入 AWS。
+
 > Node.js Lambda 统一使用 `nodejs24.x`。本地部署前请确认 AWS SAM CLI 版本不低于 `1.147.1`，旧版本会在 `sam build` 阶段报 `nodejs24.x runtime is not supported`。
 
 > 每个 Node.js Lambda 的 `CodeUri` 都提交独立 `package-lock.json`，两套 SAM 模板通过 `Metadata.BuildProperties.UseNpmCi: true` 强制使用 `npm ci`。源码新增第三方 import 时必须同步更新该函数的 `package.json` 与锁文件，不能依赖根目录或本地残留的 `node_modules`。
