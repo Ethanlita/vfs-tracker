@@ -7,6 +7,7 @@ import FieldRow from '../shared/FieldRow';
 import { MetricCardGroup } from '../shared/MetricCard';
 import CollapsibleSection from '../shared/CollapsibleSection';
 import {
+  formatMetricNumber,
   formatHz,
   formatDb,
   formatDbA,
@@ -31,7 +32,7 @@ const SelfTestDetails = ({ event }) => {
   const coreMetrics = [
     {
       label: '平均基频',
-      value: details.fundamentalFrequency ? parseFloat(details.fundamentalFrequency).toFixed(1) : null,
+      value: formatMetricNumber(details.fundamentalFrequency, 1),
       unit: 'Hz',
       icon: '🎵',
       color: 'purple',
@@ -45,21 +46,21 @@ const SelfTestDetails = ({ event }) => {
     },
     {
       label: '谐噪比 (HNR)',
-      value: details.hnr ? parseFloat(details.hnr).toFixed(1) : null,
+      value: formatMetricNumber(details.hnr, 1),
       unit: 'dB',
       icon: '🔊',
       color: 'green',
     },
     {
       label: 'Jitter',
-      value: details.jitter ? parseFloat(details.jitter).toFixed(2) : null,
+      value: formatMetricNumber(details.jitter, 2),
       unit: '%',
       icon: '〰️',
       color: 'orange',
     },
     {
       label: 'Shimmer',
-      value: details.shimmer ? parseFloat(details.shimmer).toFixed(2) : null,
+      value: formatMetricNumber(details.shimmer, 2),
       unit: '%',
       icon: '📈',
       color: 'orange',

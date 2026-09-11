@@ -32,10 +32,14 @@
     - `attachments.js`: 提供 `resolveAttachmentLinks` 函数，用于将私有S3存储键批量解析为临时的可下载URL。
     - `audioContextManager.js`: 统一管理共享与临时 `AudioContext` 实例，确保 RubberBand、WORLD、基频检测等音频算法在浏览器 AudioContext 限制内安全运行，并在一次性操作结束后主动关闭上下文以避免泄漏。
   - `components/`
-    - `EventForm.jsx`: 用于创建和编辑各种事件的动态表单，支持多附件上传。
+    - `EventForm.jsx`: 用于创建各种事件的动态表单，支持多附件上传。已保存记录不直接编辑，纠错时删除原记录后重新新增。
     - `InteractiveTimeline`, `EventList`, `EventManager`: 用于展示和管理事件列表的核心组件。
-    - **新增嗓音测试组件**:
-      - `VoiceTestWizard.jsx`: 整个嗓音测试流程的协调器和状态管理器，是功能的核心。
+    - **嗓音测试组件**:
+      - `VoiceTestWizard.jsx`: 只负责页面边界、布局与导航的轻量外壳。
+      - `voice-test/VoiceTestRecorderPane.jsx`, `VoiceTestSurveyPane.jsx`, `VoiceTestResultPane.jsx`, `VoiceTestProgress.jsx`: 按职责拆分的展示组件。
+      - `hooks/useVoiceTestWizard.js`: 连接会话草稿、步骤 actor、稿件、上传、回放和分析服务的编排层。
+      - `hooks/useVoiceTestUpload.js`, `hooks/useVoiceAnalysis.js`: 分别管理上传恢复与分析查询生命周期。
+      - `voice-test/voiceTestMachine.js`: XState 步骤状态机。完整状态图见 [嗓音测试前端状态机](voice-test-state-machine.md)。
       - `Recorder.jsx`: 可重用的录音组件，封装了 `MediaRecorder` API。
       - `SurveyRBH.jsx`, `SurveyOVHS9.jsx`, `SurveyTVQG.jsx`: 用于步骤7的三个独立问卷组件。
       - `TestResultsDisplay.jsx`: 用于在步骤8美观地展示最终的分析结果。
@@ -55,18 +59,18 @@
 ### 嗓音测试向导调用流程 (VoiceTestWizard)
 
 1.  **启动**: 用户在 `MyPage.jsx` 点击“启动嗓音测试”按钮，导航到 `/voice-test` 路由，渲染 `VoiceTestWizard.jsx`。
-2.  **会话初始化**: `VoiceTestWizard` 组件加载时，立即调用 `api.createVoiceTestSession` 来创建后端会话并获取 `sessionId`。
+2.  **会话初始化**: `useVoiceTestWizard` 优先恢复当前账号的有效草稿；没有草稿时调用 `api.createVoiceTestSession` 创建后端会话。
 3.  **录音步骤 (Steps 1-6)**: 
-    -   `VoiceTestWizard` 根据当前步骤的配置，渲染 `Recorder.jsx`。
+    -   步骤 actor 根据唯一步骤配置渲染 `VoiceTestRecorderPane` 和 `Recorder.jsx`。
     -   `Recorder.jsx` 完成录音后，通过 `onRecordingComplete` 回调返回 `Blob` 数据。
-    -   `VoiceTestWizard` 调用 `api.getVoiceTestUploadUrl` 获取预签名URL，然后调用 `api.uploadVoiceTestFileToS3` 将文件上传。上传成功后，更新内部状态 `recordedBlobs`。
+    -   `useVoiceTestUpload` 先临时保存原始录音，再取得预签名 URL 并上传；失败重试沿用同一会话和步骤快照。
 4.  **问卷步骤 (Step 7)**:
-    -   `VoiceTestWizard` 渲染 `SurveyRBH`, `SurveyOVHS9`, `SurveyTVQG` 组件。
-    -   用户填写问卷，通过 `onChange` 回调实时更新 `VoiceTestWizard` 中的 `formData` 状态。
+    -   `VoiceTestSurveyPane` 渲染 `SurveyRBH`, `SurveyOVHS9`, `SurveyTVQG` 组件。
+    -   用户填写问卷，通过 `onChange` 回调实时更新编排层中的 `formData` 状态。
 5.  **结果生成与展示 (Step 8)**:
     -   用户点击“生成报告”按钮。
-    -   `VoiceTestWizard` 调用 `api.requestVoiceTestAnalyze`，将 `sessionId` 和 `formData` 提交到后端。
-    -   `VoiceTestWizard` 进入轮询模式，反复调用 `api.getVoiceTestResults`。
+    -   `useVoiceAnalysis` 调用 `api.requestVoiceTestAnalyze`，将 `sessionId` 和 `formData` 提交到后端。
+    -   `useVoiceAnalysis` 串行调用 `api.getVoiceTestResults`；离线时暂停，恢复网络后继续原任务。
     -   当API返回 `status: 'done'` 时，停止轮询，并将完整的 `results` 对象传递给 `TestResultsDisplay.jsx` 组件进行渲染。
 
 ## 4. 数据流序列
@@ -96,8 +100,9 @@
 
 ## 5. 安全设计
 
-- **S3 访问控制**: S3 存储桶配置为完全私有。所有对 S3 的读写操作都必须通过后端生成的、具有短暂生命周期的预签名 URL 进行。这确保了只有经过授权的用户才能访问或上传文件。
-- **API 认证与授权**: 除公共看板 (`/all-events`) 外，所有 API 端点都通过 API Gateway 与 Cognito Authorizer 集成，要求在请求头中提供有效的 JWT。Lambda 函数内部会进一步校验 `userId`，确保用户只能访问自己的数据。
+- **S3 访问控制**: S3 存储桶配置为非公开。普通账户通过后端生成的限时预签名 URL 访问自己的文件；具有相应 AWS 权限的授权管理员、运维人员和后端服务使用独立权限路径访问。医院报告会由 `autoApproveEvent` 上传副本到 Google Gemini Files API 做自动一致性审核。
+- **API 认证与授权**: 公共看板端点只返回公开字段且移除附件。普通私有 API 通过 API Gateway 与 Cognito Authorizer 集成，Lambda 进一步校验 `userId`；管理后台的 AWS 权限是单独的授权边界。
+- **附件删除顺序**: `deleteEvent` 先一致读取事件并删除有效附件，全部 S3 请求成功后再条件删除 DynamoDB 记录。失败时保留事件供重试，避免数据库记录先消失后留下孤立附件。
 
 ## 6. 部署拓扑
 
@@ -119,5 +124,5 @@
 
 - 在 `attachments` 元素增加 `size`, `checksum` (完整性校验) 字段。
 - 支持附件类型预分类（如 `report` / `audio` / `raw-recording`）。
-- 提供批量删除事件时自动清理 S3 对象的后台任务。
+- 为批量删除和异常清理增加可观测的后台重试任务。
 - 为嗓音测试功能增加外部校准流程，允许用户通过输入已知声源的 SPL 值来校准录音的绝对声压级。

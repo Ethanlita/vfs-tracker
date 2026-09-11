@@ -8,12 +8,12 @@ import { ApiError } from './apiError.js';
 /**
  * 超时配置 (基于 IaC Lambda 函数超时设置)
  * 参考: data_of_dynamodb/VFS-Tracker-IaC-template-1759594356761.yaml
- * 
+ *
  * Lambda 超时时间:
  * - 标准 API 操作: 3秒
  * - 复杂查询操作: 29秒
  * - 文件处理操作: 300秒 (5分钟)
- * 
+ *
  * 前端超时配置:
  * - API Gateway 最大超时: 30秒
  * - 前端默认超时: Lambda超时 + 5秒缓冲 (考虑网络延迟)
@@ -24,7 +24,7 @@ import { ApiError } from './apiError.js';
 /**
  * API 端点超时配置映射
  * @type {Object<string, number>}
- * 
+ *
  * 配置规则:
  * - 快速操作 (GET/POST/PUT 单条数据): 8秒 (Lambda 3s + 5s缓冲)
  * - 复杂查询 (批量数据/计算密集): 34秒 (Lambda 29s + 5s缓冲)
@@ -58,10 +58,10 @@ export const TIMEOUT_CONFIG = {
 
 /**
  * 根据 API 路径获取超时时间
- * 
+ *
  * @param {string} path - API 请求路径
  * @returns {number} 超时时间(毫秒)
- * 
+ *
  * @example
  * getTimeout('/user/123') // 8000
  * getTimeout('/all-events') // 34000
@@ -89,7 +89,7 @@ export function getTimeout(path) {
 
 /**
  * 为 Promise 添加超时控制
- * 
+ *
  * @template T
  * @param {Promise<T>} promise - 要包装的 Promise
  * @param {number} timeoutMs - 超时时间(毫秒)
@@ -98,7 +98,7 @@ export function getTimeout(path) {
  * @param {string} context.path - API 路径
  * @returns {Promise<T>} 带超时控制的 Promise
  * @throws {ApiError} 超时时抛出 ApiError (code: 'TIMEOUT')
- * 
+ *
  * @example
  * const result = await withTimeout(
  *   fetch('/api/data'),
@@ -148,31 +148,31 @@ export function withTimeout(promise, timeoutMs, context = {}) {
 
 /**
  * 为 Amplify API 操作添加超时控制
- * 
+ *
  * @param {Object} operation - Amplify API 操作对象 (get/post/put/del 的返回值)
  * @param {number} timeoutMs - 超时时间(毫秒)
  * @param {Object} context - 请求上下文
  * @returns {Promise<any>} 带超时的 API 响应
- * 
+ *
  * @example
  * const op = get({ apiName: 'api', path: '/user/123' });
- * const result = await withAmplifyTimeout(op, 8000, { 
- *   method: 'GET', 
- *   path: '/user/123' 
+ * const result = await withAmplifyTimeout(op, 8000, {
+ *   method: 'GET',
+ *   path: '/user/123'
  * });
  */
 export async function withAmplifyTimeout(operation, timeoutMs, context = {}) {
   const responsePromise = operation.response
     .then(({ body }) => {
-      console.log('[withAmplifyTimeout] Got body, calling body.json()');
+
       return body.json();
     })
     .then(data => {
-      console.log('[withAmplifyTimeout] Parsed JSON data:', data);
+
       return data;
     })
     .catch(error => {
-      console.error('[withAmplifyTimeout] Error:', error);
+
       // 如果 response promise 被 reject,直接重新抛出
       // 这样错误会被 withTimeout 或外层 catch 捕获
       throw error;
@@ -182,38 +182,37 @@ export async function withAmplifyTimeout(operation, timeoutMs, context = {}) {
 
 /**
  * 使用自动超时配置包装 Amplify API 操作
- * 
+ *
  * @param {Object} operation - Amplify API 操作对象
  * @param {Object} context - 请求上下文
  * @param {string} context.method - HTTP 方法
  * @param {string} context.path - API 路径
  * @returns {Promise<any>} 带自动超时的 API 响应
- * 
+ *
  * @example
  * const op = get({ apiName: 'api', path: '/user/123' });
- * const result = await withAutoTimeout(op, { 
- *   method: 'GET', 
- *   path: '/user/123' 
+ * const result = await withAutoTimeout(op, {
+ *   method: 'GET',
+ *   path: '/user/123'
  * });
  */
 export async function withAutoTimeout(operation, context = {}) {
   const timeout = getTimeout(context.path || '');
-  // console.debug(`[Timeout] ${context.method} ${context.path}: ${timeout}ms`);
   return withAmplifyTimeout(operation, timeout, context);
 }
 
 /**
  * 检查错误是否为超时错误
- * 
+ *
  * @param {Error} error - 要检查的错误对象
  * @returns {boolean} 如果是超时错误返回 true
- * 
+ *
  * @example
  * try {
  *   await apiCall();
  * } catch (error) {
  *   if (isTimeoutError(error)) {
- *     console.log('请求超时，请重试');
+ *     showTimeoutMessage('请求超时，请重试');
  *   }
  * }
  */
@@ -228,10 +227,10 @@ export function isTimeoutError(error) {
 
 /**
  * 创建一个可取消的超时 Promise (用于实现请求取消)
- * 
+ *
  * @param {number} timeoutMs - 超时时间(毫秒)
  * @returns {{promise: Promise<void>, cancel: Function}} 超时 Promise 和取消函数
- * 
+ *
  * @example
  * const { promise: timeout, cancel } = createCancellableTimeout(5000);
  * try {

@@ -7,73 +7,43 @@ import { ApiErrorNotice } from './ApiErrorNotice.jsx';
 import { useAuth } from '../contexts/AuthContext'; // 使用AuthContext而不是直接使用useAuthenticator
 
 /**
- * @en EventManagerPage component for managing voice events
- * @zh 用于管理嗓音事件的页面组件
+ * @en EventManagerPage component for viewing and deleting voice events
+ * @zh 用于筛选、查看和删除嗓音事件的页面组件
  */
 const EventManagerPage = () => {
   const navigate = useNavigate();
 
   // 使用AuthContext提供的用户信息，而不是直接使用useAuthenticator
-  const { user, isAuthenticated } = useAuth();
+  const { user } = useAuth();
 
-  console.log('🔍 EventManagerPage - 用户状态分析 (使用AuthContext):', {
-    user,
-    isAuthenticated,
-    hasUser: !!user,
-    userId: user?.userId || user?.attributes?.sub,
-    username: user?.username,
-    userAttributes: user?.attributes
-  });
+
 
   // 直接使用AuthContext提供的用户对象
-  console.log('🔍 EventManagerPage - 最终用户对象 (来自AuthContext):', {
-    user,
-    userId: user?.userId || user?.attributes?.sub,
-    willCallAPI: !!(user?.userId || user?.attributes?.sub)
-  });
+
 
   const [events, setEvents] = useState([]);
   // 使用AuthContext提供的用户ID
   const eventsAsync = useAsync(async () => {
     const userId = user?.userId || user?.attributes?.sub;
-    console.log('🔍 EventManagerPage - useAsync 开始执行 (使用AuthContext用户):', {
-      userId,
-      hasUserId: !!userId,
-      userUserId: user?.userId,
-      userAttributesSub: user?.attributes?.sub,
-      userObject: user
-    });
+
 
     if (!userId) {
-      console.log('❌ EventManagerPage - 没有用户ID，返回空数组');
+
       return [];
     }
 
-    console.log('🚀 EventManagerPage - 调用 getEventsByUserId:', userId);
+
     const userEvents = await getEventsByUserId(userId);
-    console.log('✅ EventManagerPage - getEventsByUserId 返回结果:', {
-      userEvents,
-      isArray: Array.isArray(userEvents),
-      length: userEvents?.length,
-      firstEvent: userEvents?.[0]
-    });
+
 
     const sortedEvents = userEvents.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-    console.log('✅ EventManagerPage - 排序后的事件:', {
-      sortedEvents,
-      length: sortedEvents?.length
-    });
+
 
     return sortedEvents;
   }, [user?.userId, user?.attributes?.sub]); // 依赖AuthContext提供的用户ID
 
   useEffect(() => {
-    console.log('🔍 EventManagerPage - useEffect eventsAsync.value 变化:', {
-      value: eventsAsync.value,
-      hasValue: !!eventsAsync.value,
-      isArray: Array.isArray(eventsAsync.value),
-      length: eventsAsync.value?.length
-    });
+
     if (eventsAsync.value) setEvents(eventsAsync.value);
   }, [eventsAsync.value]);
 
@@ -81,20 +51,7 @@ const EventManagerPage = () => {
   const loadError = eventsAsync.error;
   const handleRetry = () => eventsAsync.execute();
 
-  console.log('🔍 EventManagerPage - 渲染状态:', {
-    isLoading,
-    loadError,
-    eventsCount: events?.length,
-    events: events
-  });
 
-  const handleEventUpdated = (updatedEvent) => {
-    setEvents(prevEvents =>
-        prevEvents.map(event =>
-            event.eventId === updatedEvent.eventId ? updatedEvent : event
-        )
-    );
-  };
 
   const handleEventDeleted = (eventId) => {
     setEvents(prevEvents => prevEvents.filter(event => event.eventId !== eventId));
@@ -129,7 +86,7 @@ const EventManagerPage = () => {
           事件管理
         </h1>
         <p className="text-lg text-gray-700 max-w-3xl mx-auto leading-relaxed font-medium">
-          查看、编辑和管理您的所有嗓音事件记录。您可以筛选、搜索和修改现有的事件数据。
+          筛选、搜索和查看您的嗓音事件记录，也可以删除不再需要的记录。
         </p>
       </div>
 
@@ -141,7 +98,7 @@ const EventManagerPage = () => {
             我的事件记录
           </h2>
           <p className="dashboard-card-description">
-            筛选、查看、编辑和删除您的事件记录。点击任何事件卡片来查看详细信息或进行编辑。
+            已保存的事件不能直接编辑。如需纠正，请删除原记录后重新新增；点击事件卡片可查看详情。
           </p>
         </div>
 
@@ -157,7 +114,6 @@ const EventManagerPage = () => {
         ) : (
           <EventManager
             events={events}
-            onEventUpdated={handleEventUpdated}
             onEventDeleted={handleEventDeleted}
           />
         )}

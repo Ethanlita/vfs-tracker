@@ -236,7 +236,7 @@ describe('InteractiveTimeline 分页功能集成测试', () => {
       simulateDesktopViewport();
     });
     
-    it('桌面端应该显示完整时间线（不分页或虚拟滚动）', async () => {
+    it('桌面端只挂载当前页且不包含隐藏手机副本', async () => {
       const manyEvents = generateManyEvents(25);
       
       renderWithProviders(
@@ -244,8 +244,9 @@ describe('InteractiveTimeline 分页功能集成测试', () => {
       );
       
       await waitFor(() => {
-        // 桌面端可能显示所有事件或使用不同的滚动方式
-        expect(document.body).toBeInTheDocument();
+        // 桌面端也按10条分页，检查实际可操作事件而非仅确认body存在。
+        expect(screen.getAllByTestId('timeline-event')).toHaveLength(10);
+        expect(screen.queryByTestId('timeline-mobile')).not.toBeInTheDocument();
       }, { timeout: 3000 });
     });
   });

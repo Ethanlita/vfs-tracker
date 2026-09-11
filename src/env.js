@@ -27,20 +27,3 @@ export const getApiStagePath = () => {
 export const getFullApiEndpoint = () => {
   return getNormalizedApiBase() + getApiStagePath();
 };
-
-// 提供一个调试日志函数（可按需替换为更完善的 logger）
-export const logEnvReadiness = (context = 'global') => {
-  // 仅在开发模式输出
-  if (import.meta.env.DEV) {
-    console.log(`[env] configuration @${context}`, {
-      hasUserPoolId: !!import.meta.env.VITE_COGNITO_USER_POOL_ID,
-      hasClientId: !!import.meta.env.VITE_COGNITO_USER_POOL_WEB_CLIENT_ID,
-      hasRegion: !!import.meta.env.VITE_AWS_REGION,
-      hasApiEndpoint: !!import.meta.env.VITE_API_ENDPOINT,
-      hasS3Bucket: !!import.meta.env.VITE_S3_BUCKET,
-      apiResolved: getFullApiEndpoint(),
-      bucket: import.meta.env.VITE_S3_BUCKET || null,
-      mode: import.meta.env.MODE
-    });
-  }
-};

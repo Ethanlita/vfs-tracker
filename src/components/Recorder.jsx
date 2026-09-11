@@ -1,4 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { createTemporaryAudioContext } from '../utils/audioContextManager';
+import { ClientError } from '../utils/apiError';
+import { ApiErrorNotice } from './ApiErrorNotice';
+import { usePwaUpdateBlocker } from '../hooks/usePwaUpdateBlocker.js';
 
 /**
  * @en A reusable audio recorder component that uses the MediaRecorder API.
@@ -21,13 +25,22 @@ const Recorder = ({ onRecordingComplete, onStartRecording, onStopRecording, onDi
   const [peakDb, setPeakDb] = useState(null); // 新增：峰值
   const [isClipping, setIsClipping] = useState(false); // 新增：过载指示
   const [elapsedSec, setElapsedSec] = useState(0);
+  const [phase, setPhase] = useState('idle');
+  const [conversionError, setConversionError] = useState(null);
+  // 授权、采集、停止等待、转码和失败待重试都持有不可恢复的内存音频。
+  usePwaUpdateBlocker(phase !== 'idle' || isRecording, '录音任务');
+  const pendingRecordingRef = useRef(null);
+  const phaseRef = useRef('idle');
+  const generationRef = useRef(0);
+  const mountedRef = useRef(true);
   const mediaRecorderRef = useRef(null);
-  const audioChunksRef = useRef([]);
   const streamRef = useRef(null);
   const analyserRef = useRef(null);
   const audioCtxRef = useRef(null);
+  const closeDecodeContextRef = useRef(null);
   const rafRef = useRef(null);
   const startTimeRef = useRef(null);
+  const recordedMsRef = useRef(0);
   const intervalRef = useRef(null);
   const stopModeRef = useRef('continue'); // 'continue' | 'discard' 用于 onstop 行为分流
 
@@ -43,17 +56,32 @@ const Recorder = ({ onRecordingComplete, onStartRecording, onStopRecording, onDi
       try {
         if (!mime) return undefined; // 使用默认
         if (MediaRecorder.isTypeSupported(mime)) return mime;
-      } catch { /* ignore */ }
+      } catch {
+        // 某些旧浏览器会拒绝 MIME 能力查询，继续检查下一个候选格式。
+      }
     }
     return undefined;
   };
 
+  /** 转换为单声道48kHz WAV；解码后立即关闭临时上下文，卸载也可提前释放。 */
   const encodeWav = async (blob) => {
     // 将任意音频 Blob 转换为 16-bit PCM 单声道 48kHz WAV
+    let closeDecodeContext;
     try {
       const arrayBuffer = await blob.arrayBuffer();
-      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      const decoded = await audioCtx.decodeAudioData(arrayBuffer);
+      if (!mountedRef.current) return null;
+      const temporary = createTemporaryAudioContext();
+      let closing;
+      // 卸载和finally共享关闭操作，不能重复调用原生close。
+      closeDecodeContext = () => closing ??= temporary.close().catch(() => undefined);
+      closeDecodeContextRef.current = closeDecodeContext;
+      let decoded;
+      try {
+        decoded = await temporary.context.decodeAudioData(arrayBuffer);
+      } finally {
+        await closeDecodeContext();
+      }
+      if (!mountedRef.current) return null;
       const sampleRate = 48000; // 统一重采样到 48kHz
       const offline = new OfflineAudioContext(1, Math.ceil(decoded.duration * sampleRate), sampleRate);
       const src = offline.createBufferSource();
@@ -99,15 +127,67 @@ const Recorder = ({ onRecordingComplete, onStartRecording, onStopRecording, onDi
         view.setInt16(44 + idx, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
       }
       return new Blob([buffer], { type: 'audio/wav' });
-    } catch (e) {
-      console.error('[Recorder] WAV 转码失败，回退原始 Blob:', e);
-      return blob; // 回退原 blob
+    } finally {
+      if (closeDecodeContext) await closeDecodeContext();
+      if (closeDecodeContextRef.current === closeDecodeContext) closeDecodeContextRef.current = null;
     }
   };
 
+  /** 处理同一份原始录音；仅转换成功才通知上层，失败保留原数据供显式重试。 */
+  const processRecording = async (rawBlob, generation) => {
+    phaseRef.current = 'processing';
+    setPhase('processing');
+    setConversionError(null);
+    pendingRecordingRef.current = { rawBlob, generation };
+    let finalBlob;
+    try {
+      // 所有输入都经过相同转换，不能仅凭MIME声明跳过格式规范化。
+      finalBlob = await encodeWav(rawBlob);
+    } catch (cause) {
+      if (!mountedRef.current || generation !== generationRef.current) return;
+      phaseRef.current = 'failed';
+      setPhase('failed');
+      setConversionError(new ClientError('录音转换失败，原录音已保留。请重试转换，或放弃此段后重新录制。', {
+        cause, errorCode: 'AUDIO_CONVERSION_FAILED'
+      }));
+      return;
+    }
+    if (!mountedRef.current || generation !== generationRef.current || !finalBlob) return;
+    pendingRecordingRef.current = null;
+    phaseRef.current = 'idle';
+    setPhase('idle');
+    onRecordingComplete(finalBlob);
+  };
+
+  /** 重试只使用失败的同一段音频，同步状态锁阻止重复转换。 */
+  const retryConversion = () => {
+    if (phaseRef.current !== 'failed' || !pendingRecordingRef.current) return;
+    const { rawBlob, generation } = pendingRecordingRef.current;
+    return processRecording(rawBlob, generation);
+  };
+
+  /** 用户明确放弃后释放原录音，恢复开始按钮，不调用上传回调。 */
+  const discardFailedRecording = () => {
+    if (phaseRef.current !== 'failed') return;
+    pendingRecordingRef.current = null;
+    setConversionError(null);
+    phaseRef.current = 'idle';
+    setPhase('idle');
+    onDiscardRecording?.();
+  };
+
+  /** 启动一轮独立录音；授权和转码期间禁止重复启动。 */
   const startRecording = async () => {
+    if (phaseRef.current !== 'idle' || propIsRecording) return;
+    const generation = ++generationRef.current;
+    phaseRef.current = 'requesting';
+    setPhase('requesting');
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      if (!mountedRef.current || generation !== generationRef.current) {
+        stream.getTracks().forEach(track => track.stop());
+        return;
+      }
       streamRef.current = stream;
       // 建立实时电平分析
       audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)();
@@ -121,46 +201,46 @@ const Recorder = ({ onRecordingComplete, onStartRecording, onStopRecording, onDi
       const mime = pickSupportedMimeType();
       const options = mime ? { mimeType: mime, audioBitsPerSecond: 192000 } : { audioBitsPerSecond: 192000 };
       mediaRecorderRef.current = new MediaRecorder(stream, options);
-      console.log('[Recorder] 使用 mimeType =', mediaRecorderRef.current.mimeType);
+      const recorder = mediaRecorderRef.current;
 
-      audioChunksRef.current = [];
+
+      const chunks = [];
       stopModeRef.current = 'continue'; // 每次开始录音时重置停止模式
       mediaRecorderRef.current.ondataavailable = (event) => {
-        if (event.data && event.data.size > 0) audioChunksRef.current.push(event.data);
+        if (event.data && event.data.size > 0) chunks.push(event.data);
       };
 
       mediaRecorderRef.current.onstop = async () => {
-        try {
-          if (stopModeRef.current === 'discard') {
+        if (!mountedRef.current || generation !== generationRef.current) return;
+        phaseRef.current = 'processing';
+        setPhase('processing');
+        // 先释放采集资源，再转码；回调仅属于本轮，不访问后续录音引用。
+        const discarded = stopModeRef.current === 'discard';
+        cleanupAudio();
+        if (discarded) {
             // 放弃本段：不做转码也不回调 blob，仅清理资源与通知可选回调
-            audioChunksRef.current = [];
+            phaseRef.current = 'idle';
+            setPhase('idle');
             onDiscardRecording && onDiscardRecording();
-          } else {
-            const rawBlob = new Blob(audioChunksRef.current, { type: mediaRecorderRef.current.mimeType || 'audio/webm' });
-            let finalBlob = rawBlob;
-            if (!/^audio\/wav$/i.test(rawBlob.type)) {
-              finalBlob = await encodeWav(rawBlob);
-            }
-            onRecordingComplete(finalBlob);
-            audioChunksRef.current = [];
-          }
-        } finally {
-          if (streamRef.current) {
-            streamRef.current.getTracks().forEach(track => track.stop());
-          }
-          cleanupAudio();
+        } else {
+            const rawBlob = new Blob(chunks, { type: recorder.mimeType || 'audio/webm' });
+            await processRecording(rawBlob, generation);
         }
       };
 
       mediaRecorderRef.current.start();
-      startTimeRef.current = Date.now();
+      phaseRef.current = 'recording';
+      setPhase('recording');
+      recordedMsRef.current = 0;
+      startTimeRef.current = performance.now();
       setElapsedSec(0);
       intervalRef.current = setInterval(() => {
-        if (!startTimeRef.current) return;
-        const elapsed = (Date.now() - startTimeRef.current) / 1000;
-        setElapsedSec(elapsed);
+        // 只累计实际录制片段；暂停时不更新进度或触发自动停止。
+        if (startTimeRef.current === null || recorder.state !== 'recording') return;
+        const elapsed = (recordedMsRef.current + performance.now() - startTimeRef.current) / 1000;
+        setElapsedSec(Math.min(maxDurationSec, elapsed));
         if (elapsed >= maxDurationSec) {
-          console.log('[Recorder] 达到最大录音时长，自动停止');
+
           // 达到上限默认视为“继续”（保留本段）
           stopModeRef.current = 'continue';
           stopRecording();
@@ -170,23 +250,35 @@ const Recorder = ({ onRecordingComplete, onStartRecording, onStopRecording, onDi
       setIsRecording(true);
       setIsPaused(false);
       onStartRecording && onStartRecording();
-      console.log('录音开始...');
-    } catch (err) {
-      console.error('无法获取麦克风权限或启动录音:', err);
+
+    } catch {
+      if (!mountedRef.current || generation !== generationRef.current) return;
+
       alert('无法启动录音：浏览器不支持或未授权麦克风。请检查权限或更换现代浏览器。');
       cleanupAudio();
+      phaseRef.current = 'idle';
+      setPhase('idle');
     }
   };
 
   const stopRecording = () => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
+      phaseRef.current = 'processing';
+      setPhase('processing');
       mediaRecorderRef.current.stop();
       setIsRecording(false);
       setIsPaused(false);
       onStopRecording && onStopRecording();
-      console.log('录音停止。');
+
       stopLevelLoop();
     }
+  };
+
+  /** 取消尚未完成的授权，迟到音轨由原请求负责关闭。 */
+  const cancelPermission = () => {
+    generationRef.current += 1;
+    phaseRef.current = 'idle';
+    setPhase('idle');
   };
 
   // 停止并保留当前段（继续流程）
@@ -202,21 +294,27 @@ const Recorder = ({ onRecordingComplete, onStartRecording, onStopRecording, onDi
     stopRecording();
   };
 
+  /** 暂停时结算当前录制片段，等待时间不计入录音上限。 */
   const pauseRecording = () => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
       mediaRecorderRef.current.pause();
+      recordedMsRef.current += performance.now() - startTimeRef.current;
+      startTimeRef.current = null;
+      setElapsedSec(Math.min(maxDurationSec, recordedMsRef.current / 1000));
       setIsPaused(true);
-      console.log('录音暂停。');
+
       stopLevelLoop();
     }
   };
 
+  /** 恢复后开启新的计时片段，保留此前已录制的累计时长。 */
   const resumeRecording = () => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'paused') {
       mediaRecorderRef.current.resume();
+      startTimeRef.current = performance.now();
       setIsPaused(false);
       levelLoop();
-      console.log('录音恢复。');
+
     }
   };
 
@@ -229,7 +327,7 @@ const Recorder = ({ onRecordingComplete, onStartRecording, onStopRecording, onDi
       }
       return;
     }
-    
+
     const analyser = analyserRef.current;
     const buffer = new Uint8Array(analyser.fftSize);
     analyser.getByteTimeDomainData(buffer);
@@ -269,7 +367,7 @@ const Recorder = ({ onRecordingComplete, onStartRecording, onStopRecording, onDi
       streamRef.current = null;
     }
     if (audioCtxRef.current) {
-      audioCtxRef.current.close().catch(e => console.error('[Recorder] 关闭 AudioContext 失败:', e));
+      audioCtxRef.current.close().catch(() => undefined);
       audioCtxRef.current = null;
     }
     setIsRecording(false);
@@ -278,6 +376,8 @@ const Recorder = ({ onRecordingComplete, onStartRecording, onStopRecording, onDi
     setPeakDb(null);
     setIsClipping(false);
     setElapsedSec(0);
+    recordedMsRef.current = 0;
+    startTimeRef.current = null;
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
       intervalRef.current = null;
@@ -286,7 +386,20 @@ const Recorder = ({ onRecordingComplete, onStartRecording, onStopRecording, onDi
 
   // 组件卸载时清理所有资源
   useEffect(() => {
+    mountedRef.current = true;
     return () => {
+      mountedRef.current = false;
+      pendingRecordingRef.current = null;
+      generationRef.current += 1;
+      // 即使解码Promise尚未完成，离开页面也立即释放其临时上下文。
+      closeDecodeContextRef.current?.();
+      // 使原生录音停止，同时切断卸载后的事件回调。
+      const recorder = mediaRecorderRef.current;
+      if (recorder) {
+        recorder.onstop = null;
+        recorder.ondataavailable = null;
+        if (recorder.state !== 'inactive') recorder.stop();
+      }
       // 清理动画帧
       if (rafRef.current) {
         cancelAnimationFrame(rafRef.current);
@@ -304,7 +417,7 @@ const Recorder = ({ onRecordingComplete, onStartRecording, onStopRecording, onDi
       }
       // 清理音频上下文
       if (audioCtxRef.current) {
-        audioCtxRef.current.close().catch(e => console.error('[Recorder] 组件卸载时关闭 AudioContext 失败:', e));
+        audioCtxRef.current.close().catch(() => undefined);
         audioCtxRef.current = null;
       }
     };
@@ -356,11 +469,22 @@ const Recorder = ({ onRecordingComplete, onStartRecording, onStopRecording, onDi
       {!isRecording && !isPaused && (
         <button
           onClick={startRecording}
-          disabled={propIsRecording} // Disable if controlled externally
+          disabled={propIsRecording || phase !== 'idle'} // 外部录音、授权和转码期间均禁止重复启动
           className="px-6 py-3 bg-green-500 text-white rounded-full shadow-lg hover:bg-green-600 transition-colors duration-200 disabled:bg-gray-400 disabled:cursor-not-allowed"
         >
-          开始录音
+          {phase === 'requesting' ? '等待麦克风授权...' : phase === 'processing' ? '正在处理录音...' : '开始录音'}
         </button>
+      )}
+
+      {phase === 'requesting' && (
+        <button onClick={cancelPermission} className="px-4 py-2 text-gray-700 underline">取消授权等待</button>
+      )}
+
+      {conversionError && (
+        <div className="w-full space-y-3">
+          <ApiErrorNotice error={conversionError} onRetry={retryConversion} retryLabel="重试转换" />
+          <button onClick={discardFailedRecording} className="px-4 py-2 text-red-700 border border-red-300 rounded-lg">放弃此段录音</button>
+        </div>
       )}
 
       {isRecording && !isPaused && (
@@ -409,7 +533,7 @@ const Recorder = ({ onRecordingComplete, onStartRecording, onStopRecording, onDi
         </div>
       )}
 
-      {isRecording && <p className="text-gray-600">正在录音...</p>}
+      {isRecording && !isPaused && <p className="text-gray-600">正在录音...</p>}
       {isPaused && <p className="text-gray-600">录音已暂停。</p>}
     </div>
   );

@@ -3,7 +3,7 @@
  * @description 测试用户资料设置相关 API 和工具函数
  * 
  * 当前 API 接口:
- * - setupUserProfile(profileData) - 为新用户设置资料
+ * - setupUserProfile(profileData, baseVersion) - 按服务端版本设置资料
  * - isUserProfileComplete(userProfile) - 检查资料完整性
  */
 
@@ -15,6 +15,12 @@ import { server } from '../../../src/test-utils/mocks/msw-server.js';
 import { ApiError } from '../../../src/utils/apiError.js';
 
 const API_URL = 'https://2rzxc2x5l8.execute-api.us-east-1.amazonaws.com/dev';
+const NEW_PROFILE_VERSION = { exists: false, updatedAt: null };
+
+/** 使用新用户版本提交完整资料，并为旧测试样例补齐协议必需的空简介。 */
+const submitProfile = profileData => setupUserProfile({
+  profile: { bio: '', ...profileData.profile },
+}, NEW_PROFILE_VERSION);
 
 describe('User Profile Setup API 集成测试', () => {
   beforeEach(() => {
@@ -36,7 +42,7 @@ describe('User Profile Setup API 集成测试', () => {
         }
       };
 
-      const result = await setupUserProfile(profileData);
+      const result = await submitProfile(profileData);
 
       expect(result).toBeDefined();
       expect(result).toHaveProperty('message');
@@ -56,7 +62,7 @@ describe('User Profile Setup API 集成测试', () => {
         }
       };
 
-      const result = await setupUserProfile(profileData);
+      const result = await submitProfile(profileData);
 
       expect(result.user).toBeDefined();
       expect(result.user).toHaveProperty('userId');
@@ -76,7 +82,7 @@ describe('User Profile Setup API 集成测试', () => {
         }
       };
 
-      const result = await setupUserProfile(profileData);
+      const result = await submitProfile(profileData);
 
       expect(typeof result.isNewUser).toBe('boolean');
     });
@@ -93,7 +99,7 @@ describe('User Profile Setup API 集成测试', () => {
         }
       };
 
-      const result = await setupUserProfile(profileData);
+      const result = await submitProfile(profileData);
 
       expect(result.user.profile.isNamePublic).toBe(false);
       expect(result.user.profile.areSocialsPublic).toBe(false);
@@ -109,7 +115,7 @@ describe('User Profile Setup API 集成测试', () => {
         }
       };
 
-      const result = await setupUserProfile(profileData);
+      const result = await submitProfile(profileData);
 
       expect(result.user.profile.socials).toEqual([]);
     });
@@ -128,21 +134,13 @@ describe('User Profile Setup API 集成测试', () => {
         }
       };
 
-      const result = await setupUserProfile(profileData);
+      const result = await submitProfile(profileData);
 
       expect(result.user.profile.socials.length).toBe(3);
     });
 
-    it('不传 profile 时应该使用默认值', async () => {
-      const profileData = {};
-
-      const result = await setupUserProfile(profileData);
-
-      expect(result.user.profile).toBeDefined();
-      expect(result.user.profile.name).toBe('');
-      expect(result.user.profile.isNamePublic).toBe(false);
-      expect(result.user.profile.socials).toEqual([]);
-      expect(result.user.profile.areSocialsPublic).toBe(false);
+    it('不传 profile 时应该在请求前拒绝', async () => {
+      await expect(setupUserProfile({}, NEW_PROFILE_VERSION)).rejects.toBeInstanceOf(TypeError);
     });
 
     it('message 应该包含成功提示', async () => {
@@ -155,7 +153,7 @@ describe('User Profile Setup API 集成测试', () => {
         }
       };
 
-      const result = await setupUserProfile(profileData);
+      const result = await submitProfile(profileData);
 
       expect(result.message).toMatch(/success|completed/i);
     });
@@ -372,7 +370,7 @@ describe('User Profile Setup API 集成测试', () => {
         );
 
         try {
-          await setupUserProfile(testProfileData);
+          await submitProfile(testProfileData);
           expect.fail('Should have thrown ApiError');
         } catch (error) {
           expect(error).toBeInstanceOf(ApiError);
@@ -391,7 +389,7 @@ describe('User Profile Setup API 集成测试', () => {
         );
 
         try {
-          await setupUserProfile(testProfileData);
+          await submitProfile(testProfileData);
           expect.fail('Should have thrown ApiError');
         } catch (error) {
           expect(error).toBeInstanceOf(ApiError);
@@ -410,7 +408,7 @@ describe('User Profile Setup API 集成测试', () => {
         );
 
         try {
-          await setupUserProfile(testProfileData);
+          await submitProfile(testProfileData);
           expect.fail('Should have thrown ApiError');
         } catch (error) {
           expect(error).toBeInstanceOf(ApiError);
@@ -429,7 +427,7 @@ describe('User Profile Setup API 集成测试', () => {
         );
 
         try {
-          await setupUserProfile(testProfileData);
+          await submitProfile(testProfileData);
           expect.fail('Should have thrown ApiError');
         } catch (error) {
           expect(error).toBeInstanceOf(ApiError);

@@ -13,6 +13,8 @@ VFS Tracker API provides endpoints for managing voice feminization training even
 
 > 新增说明: 事件对象支持多附件字段 `attachments` (Array<Attachment>)，该字段为 **私有**，只在需要鉴权的用户事件接口 (`GET /events/{userId}`) 与创建事件接口 (`POST /events`) 的响应/请求中出现。公共接口 (`GET /all-events`) 将自动移除该字段。
 
+> 事件纠错说明：当前用户事件 API 提供创建、读取和删除，不提供更新。已保存记录需要纠正时，应先删除原记录再重新创建，避免在没有重新审核协议的情况下直接改写已审核数据。
+
 ### Attachment Object (Private)
 ```json
 {
@@ -121,11 +123,13 @@ Content-Type: application/json
       "updatedAt": "2025-08-14T15:45:00.000Z"
     }
   ],
+  "complete": true,
   "debug": {
     "lambdaExecuted": true,
     "timestamp": "2025-08-14T15:45:01.000Z",
     "authenticatedUserId": "us-east-1:1234...",
     "eventCount": 1,
+    "pageCount": 1,
     "...": "省略若干调试字段"
   }
 }
@@ -133,6 +137,7 @@ Content-Type: application/json
 
 **Notes**:
 - 返回所有状态的事件（`pending`、`approved`、`rejected`），默认按创建时间降序排序。
+- Lambda 会持续查询 `LastEvaluatedKey` 直到结束；`complete: true` 表示响应包含该用户的全部 DynamoDB 查询页。任何后续页失败都会返回 500，不会把部分记录伪装为完整成功结果。
 - `debug` 字段目前主要用于排查问题，生产环境中也会返回；后续重构可移除或受控暴露。（这不是一个必须存在的字段）
 
 **HTTP Status Codes**:
@@ -197,7 +202,7 @@ Content-Type: application/json
 **Authentication**: Required (Cognito JWT)
 
 **Security**: Users can only delete their own events. The Lambda function will verify that the `userId` associated with the `eventId` matches the authenticated user's ID from the JWT token.
-这一API会同时级联删除当该事件在S3内的文件。
+这一 API 会先读取该用户的事件并删除能够识别的 S3 关联文件；所有附件删除成功后才删除 DynamoDB 事件记录。
 
 **Headers**:
 ```
@@ -210,11 +215,12 @@ Authorization: Bearer {jwt-token}
 **Response (200 OK)**:
 ```json
 {
-  "message": "Event deleted successfully"
+  "message": "Event deleted successfully",
+  "deletedAttachmentCount": 2
 }
 ```
 
-> 删除操作会尝试清理事件附件：Lambda 支持附件保存为 `s3://bucket/key`、`https://...` 或纯粹的 `key`；解析成功后逐一调用 S3 `DeleteObject`，失败条目会记录日志但不会阻止主流程完成。
+> Lambda 支持附件保存为当前桶的 `s3://bucket/key`、`https://...` 或纯 `key`。任一 S3 删除失败时返回 `500` 并保留事件记录，使用户可以重试；不会先删除数据库记录而遗留无法再次定位的附件。
 
 **HTTP Status Codes**:
 - `200 OK`: Event deleted successfully.
@@ -365,7 +371,7 @@ Content-Type: application/json
 
 ### POST /user/profile-setup
 
-**Description**: Creates or completes user profile setup for new users. This endpoint is designed for the onboarding flow where new users need to complete their profile information.
+**Description**: Creates, completes, or skips profile setup. Every request carries the profile version observed before editing so a stale offline draft cannot silently overwrite a newer server record.
 
 **Authentication**: Required (Cognito JWT)
 
@@ -379,26 +385,35 @@ Content-Type: application/json
 ```json
 {
   "profile": {
-    "name": "string (optional)",
-    "bio": "string (optional, defaults to empty)",
-    "isNamePublic": "boolean (optional, defaults to false)",
+    "name": "string (required, non-empty)",
+    "bio": "string (required, may be empty)",
+    "isNamePublic": "boolean (required)",
     "socials": [
       {
         "platform": "string",
         "handle": "string"
       }
     ],
-    "areSocialsPublic": "boolean (optional, defaults to false)",
-    "setupSkipped": "boolean (optional, 设为 true 表示用户跳过向导)"
+    "areSocialsPublic": "boolean (required)"
+  },
+  "baseVersion": {
+    "exists": true,
+    "updatedAt": "2025-08-16T10:00:00.000Z"
   }
 }
 ```
+
+新用户尚无 DynamoDB 记录时使用 `"baseVersion": { "exists": false, "updatedAt": null }`。完整设置不接受 `setupSkipped` 或其他额外字段。
 
 **Request Body (跳过场景)**:
 ```json
 {
   "profile": {
     "setupSkipped": true
+  },
+  "baseVersion": {
+    "exists": false,
+    "updatedAt": null
   }
 }
 ```
@@ -406,6 +421,12 @@ Content-Type: application/json
 **跳过行为**:
 - 当 `setupSkipped: true` 且用户已存在于 DynamoDB 时，仅通过 `UpdateCommand` 写入 `profile.setupSkipped = true`，**不会覆盖用户已有的资料**。
 - 当 `setupSkipped: true` 但用户不存在时（新用户），仍使用 `PutCommand` 创建包含 `email`、`createdAt` 的最小完整记录。
+- 跳过请求只允许 `{ "setupSkipped": true }`；不能与完整资料字段混用。
+
+**并发保护**:
+- Lambda 先使用强一致读取比较 `baseVersion`，再用 DynamoDB 条件表达式提交，覆盖读写之间的竞态窗口。
+- `exists` 必须与记录存在性相同；记录存在时 `updatedAt` 必须与当前值完全相同。
+- 版本过期返回 `409 PROFILE_SETUP_CONFLICT`，不写入任何字段。客户端必须显示冲突，并仅在用户明确选择覆盖后读取最新版本重新提交。
 
 **Server-Generated Fields**: The following fields are automatically generated/updated:
 - `userId`: Extracted from JWT token
@@ -436,7 +457,7 @@ Content-Type: application/json
 }
 ```
 
-> 当 `profile` 缺失时会使用默认值；`nickname` 同样来自 ID token。
+> `profile`、`baseVersion` 或必需字段缺失时返回 400；`nickname` 始终来自 ID token。
 > 跳过场景下（已有用户），响应中的 `user` 为 `UpdateCommand` 返回的完整最新记录，已有资料字段不会被清空。
 
 **HTTP Status Codes**:
@@ -444,6 +465,7 @@ Content-Type: application/json
 - `200 OK`: Existing user profile updated successfully
 - `400 Bad Request`: Invalid request format or data
 - `401 Unauthorized`: Missing or invalid JWT token
+- `409 Conflict`: `baseVersion` is stale (`PROFILE_SETUP_CONFLICT`)
 - `500 Internal Server Error`: Server error
 
 ---
@@ -913,7 +935,7 @@ This set of endpoints manages the multi-step voice analysis test feature.
 ### 概述
 VFS Tracker已迁移到安全的S3预签名URL架构，不再使用公开S3访问。这确保了：
 1. **头像公开访问**: 允许所有用户查看头像
-2. **附件私有访问**: 仅文件所有者可以访问自己的附件
+2. **附件私有访问**: 普通账户只能经认证读取自己的附件；具有相应 AWS 权限的授权管理员、运维人员和后端服务可通过独立管理或处理路径访问
 3. **安全上传**: 用户只能上传到自己的目录
 
 ### 文件路径规范
@@ -954,7 +976,7 @@ uploads/{userId}/           # 通用上传文件
 
 ### 运维注意事项 🔍
 - 监控 CloudWatch 日志，关注 403/500 异常峰值
-- 定期复查 `ATTACHMENTS_BUCKET_NAME`、`BUCKET_NAME` 等配置是否与 IaC 同步
+- 定期复查 `ATTACHMENTS_BUCKET`、`BUCKET_NAME` 等配置是否与 IaC 同步
 - 端到端测试应覆盖上传→下载→附件删除链路，以验证签名 URL 与权限策略
 
 ---

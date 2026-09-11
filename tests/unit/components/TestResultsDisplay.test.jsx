@@ -33,18 +33,10 @@ describe('TestResultsDisplay 组件测试', () => {
       expect(screen.getByText('无法加载结果。')).toBeInTheDocument();
     });
 
-    it('加载中显示加载提示', () => {
-      const results = {
-        metrics: {},
-        charts: {},
-      };
-
-      render(<TestResultsDisplay results={results} />);
-      
-      expect(screen.getByText(/正在加载分析报告中的图表和文件/)).toBeInTheDocument();
-      // 检查spinner div存在
-      const spinner = document.querySelector('.animate-spin');
-      expect(spinner).toBeInTheDocument();
+    it('文件加载时指标仍立即显示', () => {
+      resolveAttachmentUrl.mockReturnValueOnce(new Promise(()=>{}));
+      render(<TestResultsDisplay results={{metrics:{spontaneous:{f0_mean:180}},charts:{test:'key'}}}/>);
+      expect(screen.getByText(/180.0/)).toBeInTheDocument();expect(screen.getByRole('status')).toHaveTextContent('正在获取');
     });
 
     it('加载完成后显示报告标题', async () => {
@@ -371,103 +363,30 @@ describe('TestResultsDisplay 组件测试', () => {
       });
     });
 
-    it('无PDF时显示禁用状态', async () => {
-      const results = {
-        metrics: {
-          sustained: {},
-          spontaneous: {},
-          vrp: {},
-        },
-        charts: {},
-        reportPdf: '',
-      };
-
-      render(<TestResultsDisplay results={results} />);
-      
-      await waitFor(() => {
-        const downloadLink = screen.getByText('下载完整PDF报告');
-        expect(downloadLink).toBeInTheDocument();
-        expect(downloadLink).toHaveAttribute('aria-disabled', 'true');
-        expect(downloadLink).toHaveClass('cursor-not-allowed');
-      });
+    it('无PDF时显示禁用状态', () => {
+      render(<TestResultsDisplay results={{metrics:{},charts:{}}}/>);
+      expect(screen.getByText('暂无PDF报告。')).toBeInTheDocument();expect(screen.queryByRole('link',{name:'下载完整PDF报告'})).not.toBeInTheDocument();
     });
 
-    it('无PDF时点击不触发下载', async () => {
-      const user = userEvent.setup();
-      const results = {
-        metrics: {
-          sustained: {},
-          spontaneous: {},
-          vrp: {},
-        },
-        charts: {},
-        reportPdf: '',
-      };
-
-      render(<TestResultsDisplay results={results} />);
-      
-      await waitFor(() => {
-        expect(screen.getByText('下载完整PDF报告')).toBeInTheDocument();
-      });
-
-      const downloadLink = screen.getByText('下载完整PDF报告');
-      await user.click(downloadLink);
-
-      // 链接不应该有实际的href值
-      expect(downloadLink).not.toHaveAttribute('href', expect.stringContaining('resolved-'));
+    it('无PDF时点击不触发下载', () => {
+      render(<TestResultsDisplay results={{metrics:{},charts:{}}}/>);
+      expect(screen.getByText('暂无PDF报告。')).toBeInTheDocument();expect(screen.queryByRole('link',{name:'下载完整PDF报告'})).not.toBeInTheDocument();
     });
   });
 
   describe('URL解析错误处理', () => {
-    it('URL解析失败时使用原始URL', async () => {
-      resolveAttachmentUrl.mockRejectedValueOnce(new Error('Network error'));
-
-      const results = {
-        metrics: {
-          sustained: {},
-          spontaneous: {},
-          vrp: {},
-        },
-        charts: {
-          'test': 'original.png',
-        },
-      };
-
-      // Mock console.error
-      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-
-      render(<TestResultsDisplay results={results} />);
-      
-      await waitFor(() => {
-        expect(consoleErrorSpy).toHaveBeenCalledWith(
-          "Error resolving attachment URLs:",
-          expect.any(Error)
-        );
-      });
-
-      consoleErrorSpy.mockRestore();
+    it('URL解析失败时显示局部错误并允许重试', async () => {
+      resolveAttachmentUrl.mockRejectedValueOnce(new Error('failed'));
+      render(<TestResultsDisplay results={{metrics:{},charts:{test:'key'}}}/>);
+      expect(await screen.findByRole('alert')).toHaveTextContent('无法打开');expect(screen.queryByRole('img')).not.toBeInTheDocument();
+      await userEvent.click(screen.getByRole('button',{name:'重试文件链接'}));expect(await screen.findByRole('img')).toHaveAttribute('src','resolved-key');
     });
 
-    it('resolveAttachmentUrl返回null时使用原始URL', async () => {
+    it('resolveAttachmentUrl返回null时显示局部错误并允许重试', async () => {
       resolveAttachmentUrl.mockResolvedValueOnce(null);
-
-      const results = {
-        metrics: {
-          sustained: {},
-          spontaneous: {},
-          vrp: {},
-        },
-        charts: {
-          'test': 'fallback.png',
-        },
-      };
-
-      render(<TestResultsDisplay results={results} />);
-      
-      await waitFor(() => {
-        const img = screen.getByAltText('图表: test');
-        expect(img).toHaveAttribute('src', 'fallback.png');
-      });
+      render(<TestResultsDisplay results={{metrics:{},charts:{test:'key'}}}/>);
+      expect(await screen.findByRole('alert')).toHaveTextContent('无法打开');expect(screen.queryByRole('img')).not.toBeInTheDocument();
+      await userEvent.click(screen.getByRole('button',{name:'重试文件链接'}));expect(await screen.findByRole('img')).toHaveAttribute('src','resolved-key');
     });
   });
 

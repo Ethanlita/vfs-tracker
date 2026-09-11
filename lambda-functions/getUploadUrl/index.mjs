@@ -4,6 +4,7 @@
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { decode } from 'jsonwebtoken';
+import { createStructuredLogger, describeError, fingerprintIdentifier } from './structuredLogger.mjs';
 
 const s3Client = new S3Client({ region: process.env.AWS_REGION || 'us-east-1' });
 const BUCKET_NAME = process.env.BUCKET_NAME;
@@ -22,8 +23,8 @@ const verifyToken = (token) => {
     const decoded = decode(clean);
     if (!decoded) throw new Error('无法解码token');
     return decoded;
-  } catch (e) {
-    throw new Error('无效的token: ' + e.message);
+  } catch {
+    throw new TypeError('无效的token');
   }
 };
 
@@ -54,14 +55,8 @@ const errorResponse = (statusCode, message, extra = {}) => ({
  * @param {object} event - API Gateway Lambda 事件对象。请求体应包含 `fileKey` 和 `contentType`。
  * @returns {Promise<object>} 一个 API Gateway 响应，其中包含预签名的上传 URL 或错误消息。
  */
-export const handler = async (event) => {
-  // 基础调试日志
-  console.log('[getUploadUrl] incoming event meta', {
-    httpMethod: event.httpMethod,
-    path: event.path,
-    hasAuth: !!(event.headers?.Authorization || event.headers?.authorization),
-    bucketConfigured: !!BUCKET_NAME
-  });
+export const handler = async (event, context = {}) => {
+  const logger = createStructuredLogger({ service: 'getUploadUrl', requestId: context.awsRequestId });
 
   try {
     // 处理预检
@@ -110,8 +105,8 @@ export const handler = async (event) => {
     try {
       uploadUrl = await getSignedUrl(s3Client, put, { expiresIn: 900 });
     } catch (e) {
-      console.error('[getUploadUrl] 生成签名失败', e);
-      return errorResponse(500, '生成预签名URL失败', { reason: e.message });
+      logger.error('upload_signing_failed', describeError(e));
+      return errorResponse(500, '生成预签名URL失败');
     }
 
     const normalizedHost = String(
@@ -130,9 +125,15 @@ export const handler = async (event) => {
       parsed.host = cdnHost;
       uploadUrl = parsed.toString();
     } catch (e) {
-      // Failed to rewrite host; proceed with original uploadUrl
-      console.error('[getUploadUrl] Failed to rewrite uploadUrl host', e);
+      // 主机重写失败时保留 AWS 返回的有效签名地址。
+      logger.warn('upload_cdn_rewrite_failed', describeError(e));
     }
+
+    logger.info('upload_url_created', {
+      userHash: fingerprintIdentifier(currentUserId),
+      storageKind: folder,
+      expiresIn: 900,
+    });
 
     return {
       statusCode: 200,
@@ -140,7 +141,7 @@ export const handler = async (event) => {
       body: JSON.stringify({ uploadUrl, fileKey, expiresIn: 900 })
     };
   } catch (error) {
-    console.error('[getUploadUrl] 未捕获异常', error);
-    return errorResponse(500, '内部错误', { details: error.message });
+    logger.error('upload_url_failed', describeError(error));
+    return errorResponse(500, '内部错误');
   }
 };

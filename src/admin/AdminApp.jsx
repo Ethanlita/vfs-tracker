@@ -12,16 +12,17 @@ import UserListPage from './components/UserListPage';
 import EventListPage from './components/EventListPage';
 import TestListPage from './components/TestListPage';
 import RateLimitConfigPage from './components/RateLimitConfigPage';
+import ReadingPassagesPage from './components/ReadingPassagesPage';
 
 /**
  * 受保护的路由组件
  * 如果未认证则重定向到登录页面
  */
 function ProtectedRoute({ children }) {
-  const { isAuthenticated, loading } = useAWSClients();
+  const { isAuthenticated, isLoading } = useAWSClients();
 
   // 加载中显示空白（避免闪烁）
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-900 flex items-center justify-center">
         <div className="text-center">
@@ -45,7 +46,7 @@ function ProtectedRoute({ children }) {
  * 在 AWSClientProvider 内部使用
  */
 function AdminRoutes() {
-  const { isAuthenticated, loading } = useAWSClients();
+  const { isAuthenticated, isLoading } = useAWSClients();
 
   return (
     <Routes>
@@ -54,7 +55,7 @@ function AdminRoutes() {
         path="login" 
         element={
           // 如果已登录则重定向到仪表盘
-          isAuthenticated && !loading 
+          isAuthenticated && !isLoading
             ? <Navigate to="/admin" replace />
             : <AdminLogin />
         } 
@@ -81,6 +82,9 @@ function AdminRoutes() {
 
                 {/* 速率限制配置 */}
                 <Route path="settings/rate-limit" element={<RateLimitConfigPage />} />
+
+                {/* 朗读稿件管理 */}
+                <Route path="reading-passages" element={<ReadingPassagesPage />} />
 
                 {/* 未匹配的路由重定向到仪表盘 */}
                 <Route path="*" element={<Navigate to="/admin" replace />} />

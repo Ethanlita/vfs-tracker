@@ -4,8 +4,7 @@ import { dashboardFixture, chartEvents } from '../../src/test-utils/fixtures/ind
 
 test('用户列表位于最后，每页显示 20 人并支持往返翻页', async ({ page }, testInfo) => {
   const users = dashboardFixture(45).light.map((event, index) => ({ ...event, userId: `user-${index}`, userName: `用户 ${index}` }));
-  await page.route('http://127.0.0.1:3099/**', route => route.fulfill({ json: users,
-    headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': '*' } }));
+  await page.route(/\/public\/dashboard(?:\?|$)/, route => route.fulfill({ json: users }));
   await page.goto('/dashboard');
   const list = page.getByRole('region', { name: '用户列表' });
   const navigation = list.getByRole('navigation', { name: '用户列表分页' });
@@ -34,19 +33,18 @@ test('未登录访问、按需翻页、图表及布局', async ({ page }, testIn
   const requests = [];
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
-  await page.route('http://127.0.0.1:3099/**', async route => {
+  await page.route(/\/(?:public\/dashboard|user\/[^/]+\/public|public\/users\/[^/]+\/events)(?:\?|$)/, async route => {
     const url = new URL(route.request().url());
-    requests.push(url.pathname);
-    const headers = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': '*' };
-    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 200, headers });
-    if (url.pathname === '/public/dashboard') return route.fulfill({ json: events, headers });
-    if (url.pathname === '/user/user1/public') return route.fulfill({ json: { profile: { bio: '分页测试公开简介' } }, headers });
-    if (url.pathname === '/public/users/user1/events') {
+    const path = url.pathname.replace(/^\/dev/, '');
+    requests.push(path);
+    if (path === '/public/dashboard') return route.fulfill({ json: events });
+    if (path === '/user/user1/public') return route.fulfill({ json: { profile: { bio: '分页测试公开简介' } } });
+    if (path === '/public/users/user1/events') {
       const ids = JSON.parse(url.searchParams.get('ids'));
       expect(ids.length).toBeLessThanOrEqual(20);
-      return route.fulfill({ json: ids.map(id => fixture.details.find(event => event.eventId === id)), headers });
+      return route.fulfill({ json: ids.map(id => fixture.details.find(event => event.eventId === id)) });
     }
-    return route.fulfill({ status: 404, json: { message: 'Unexpected test API request' }, headers });
+    return route.fulfill({ status: 404, json: { message: 'Unexpected test API request' } });
   });
   await page.goto('/dashboard');
   await expect(page.getByRole('heading', { name: '公开仪表板', exact: true })).toBeVisible();

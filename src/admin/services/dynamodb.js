@@ -7,6 +7,7 @@ import {
   ScanCommand, 
   QueryCommand, 
   GetCommand, 
+  PutCommand,
   UpdateCommand,
   DeleteCommand,
 } from '@aws-sdk/lib-dynamodb';
@@ -20,7 +21,40 @@ export const TABLES = {
   USERS: 'VoiceFemUsers',
   EVENTS: 'VoiceFemEvents',
   TESTS: 'VoiceFemTests',
+  READING_PASSAGES: 'VoiceFemReadingPassages',
 };
+
+/**
+ * 读取全部朗读稿件，供管理页面编辑和启停。
+ * @param {DynamoDBDocumentClient} client - DynamoDB 文档客户端。
+ * @returns {Promise<Array<object>>} 按标题排序的稿件。
+ */
+export async function listReadingPassages(client) {
+  const items = await scanAllItems(client, TABLES.READING_PASSAGES);
+  return items.sort((a, b) => String(a.title || '').localeCompare(String(b.title || ''), 'zh-CN'));
+}
+
+/**
+ * 新增或完整保存一篇朗读稿件。
+ * @param {DynamoDBDocumentClient} client - DynamoDB 文档客户端。
+ * @param {object} passage - 已验证的完整稿件。
+ * @returns {Promise<object>} 实际写入的稿件。
+ */
+export async function saveReadingPassage(client, passage) {
+  const title = passage?.title?.trim();
+  const author = passage?.author?.trim();
+  const content = passage?.content?.trim();
+  if (!passage?.passageId || !title || !author || !content) throw new Error('稿件标题、作者和正文不能为空');
+  const now = new Date().toISOString();
+  const item = { ...passage, title, author, content, enabled: passage.enabled !== false, updatedAt: now, createdAt: passage.createdAt || now };
+  await client.send(new PutCommand({ TableName: TABLES.READING_PASSAGES, Item: item }));
+  return item;
+}
+
+/** 删除指定朗读稿件。 */
+export async function deleteReadingPassage(client, passageId) {
+  await client.send(new DeleteCommand({ TableName: TABLES.READING_PASSAGES, Key: { passageId } }));
+}
 
 /**
  * 事件状态常量
@@ -537,46 +571,49 @@ export async function searchEvents(client, options = {}) {
 }
 
 /**
- * 搜索用户（服务端搜索，支持分页）
- * DynamoDB 不支持对嵌套属性的 contains 搜索，需要扫描所有数据后本地过滤
+ * 搜索用户（服务端扫描，支持真实游标分页）
+ * 为保持 ID、邮箱和资料字段的大小写不敏感包含匹配，逐页扫描后在客户端过滤。
  * @param {DynamoDBDocumentClient} client
  * @param {object} options
- * @param {string} [options.query] - 搜索关键词（搜索 userId、显示名称）
+ * @param {string} [options.query] - 搜索关键词（搜索 userId、邮箱、姓名和昵称）
  * @param {number} [options.limit]
+ * @param {object} [options.lastEvaluatedKey] - 上一批扫描返回的真实 DynamoDB 游标
  * @returns {Promise<{items: Array, lastEvaluatedKey: object|null}>}
  */
 export async function searchUsers(client, options = {}) {
-  const { query, limit = 50 } = options;
+  const { query, limit = 20, lastEvaluatedKey = null } = options;
+  const normalizedQuery = query?.trim().toLowerCase() || '';
 
-  // DynamoDB 不支持对嵌套属性的 contains 搜索
-  // 对于用户搜索，需要扫描所有数据后本地过滤
-  // 这在小规模表（<1000 用户）上是可接受的
-  const allUsers = await scanAllItems(client, TABLES.USERS);
-
-  if (!query) {
-    // 无搜索条件时返回前 limit 个
-    return {
-      items: allUsers.slice(0, limit),
-      lastEvaluatedKey: allUsers.length > limit ? { userId: allUsers[limit - 1].userId } : null,
-    };
+  // 无搜索条件也走同一个服务入口，直接保留 DynamoDB 的分页语义。
+  if (!normalizedQuery) {
+    return scanTable(client, TABLES.USERS, { limit, lastEvaluatedKey });
   }
 
-  // 本地过滤匹配的用户
-  const queryLower = query.toLowerCase();
-  const filtered = allUsers.filter(user => {
-    // 搜索 userId
-    if (user.userId?.toLowerCase().includes(queryLower)) return true;
-    // 搜索 profile.name
-    if (user.profile?.name?.toLowerCase().includes(queryLower)) return true;
-    // 搜索 profile.nickname
-    if (user.profile?.nickname?.toLowerCase().includes(queryLower)) return true;
-    return false;
-  });
+  const items = [];
+  let cursor = lastEvaluatedKey;
 
-  return {
-    items: filtered.slice(0, limit),
-    lastEvaluatedKey: filtered.length > limit ? { userId: filtered[limit - 1].userId } : null,
-  };
+  do {
+    // 每次最多评估当前还缺少的数量，确保不会截断同一扫描页中的匹配项。
+    const result = await scanTable(client, TABLES.USERS, {
+      limit: limit - items.length,
+      lastEvaluatedKey: cursor,
+    });
+    cursor = result.lastEvaluatedKey;
+
+    for (const user of result.items) {
+      const searchableValues = [
+        user.userId,
+        user.email,
+        user.profile?.name,
+        user.profile?.nickname,
+      ];
+      if (searchableValues.some(value => String(value || '').toLowerCase().includes(normalizedQuery))) {
+        items.push(user);
+      }
+    }
+  } while (cursor && items.length < limit);
+
+  return { items, lastEvaluatedKey: cursor };
 }
 
 /**

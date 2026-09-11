@@ -1,7 +1,7 @@
 /**
  * @file AWS 客户端上下文
  * 管理 IAM 凭证状态和 AWS SDK 客户端实例
- * 
+ *
  * 功能：
  * - 提供 DynamoDB、S3、STS 客户端
  * - 支持凭证本地加密持久化（使用 PIN 码保护）
@@ -14,12 +14,13 @@ import { DynamoDBDocumentClient } from '@aws-sdk/lib-dynamodb';
 import { S3Client } from '@aws-sdk/client-s3';
 import { STSClient, GetCallerIdentityCommand } from '@aws-sdk/client-sts';
 import { SSMClient } from '@aws-sdk/client-ssm';
-import { 
-  saveCredentialsSecure, 
-  loadCredentialsSecure, 
+import {
+  saveCredentialsSecure,
+  loadCredentialsSecure,
   clearEncryptedCredentials,
   hasEncryptedCredentials,
-  validatePIN
+  validatePIN,
+  SecureCredentialStorageError
 } from '../utils/secureCredentialStorage';
 
 // AWS 区域配置 - 从环境变量读取，回退到默认值
@@ -27,6 +28,44 @@ const AWS_REGION = import.meta.env.VITE_AWS_REGION || 'us-east-1';
 
 // 创建上下文
 const AWSClientContext = createContext(null);
+
+// STS 明确表示密钥本身不可用时，才允许清除本地加密记录。
+const INVALID_CREDENTIAL_ERROR_NAMES = new Set([
+  'ExpiredToken',
+  'ExpiredTokenException',
+  'InvalidClientTokenId',
+  'InvalidSignatureException',
+  'SignatureDoesNotMatch',
+  'UnrecognizedClientException',
+]);
+
+/**
+ * 将解锁异常归类为稳定的用户结果。
+ * 默认保留凭证，因为未知异常不能证明密钥已经失效。
+ * @param {unknown} error - 解密或 STS 验证抛出的异常
+ * @returns {{ message: string, clearSaved: boolean }}
+ */
+export function classifyCredentialUnlockError(error) {
+  if (error instanceof SecureCredentialStorageError) {
+    if (error.code === 'PIN_OR_DATA_INVALID') {
+      return { message: error.message, clearSaved: false };
+    }
+    if (error.code === 'UNSUPPORTED_VERSION') {
+      return { message: error.message, clearSaved: false };
+    }
+    return { message: error.message, clearSaved: true };
+  }
+
+  const errorNames = [error?.name, error?.Code, error?.code];
+  if (errorNames.some(errorName => INVALID_CREDENTIAL_ERROR_NAMES.has(errorName))) {
+    return { message: 'AWS 已明确拒绝该凭证，请重新登录', clearSaved: true };
+  }
+
+  return {
+    message: '暂时无法连接 AWS 验证凭证，请检查网络后重试',
+    clearSaved: false,
+  };
+}
 
 /**
  * AWS 客户端提供者组件
@@ -65,7 +104,7 @@ export function AWSClientProvider({ children }) {
     const dynamoDBClient = new DynamoDBClient(config);
     // 使用 DocumentClient 简化操作（自动处理类型转换）
     const docClient = DynamoDBDocumentClient.from(dynamoDBClient, {
-      marshallOptions: { 
+      marshallOptions: {
         removeUndefinedValues: true,
         convertEmptyValues: false,
       },
@@ -82,10 +121,7 @@ export function AWSClientProvider({ children }) {
       forcePathStyle: false, // 默认使用虚拟主机样式，与 CORS 配置一致
     });
 
-    console.log('[AWS] 客户端初始化成功', {
-      region: AWS_REGION,
-      accessKeyId: config.credentials.accessKeyId.substring(0, 8) + '...',
-    });
+
 
     return {
       dynamoDB: docClient,
@@ -107,7 +143,7 @@ export function AWSClientProvider({ children }) {
   const login = useCallback(async (accessKeyId, secretAccessKey, rememberMe = false, pin = null) => {
     setError(null);
     setIsLoading(true);
-    
+
     const tempCredentials = { accessKeyId, secretAccessKey };
     const tempSTS = new STSClient({
       region: AWS_REGION,
@@ -117,8 +153,19 @@ export function AWSClientProvider({ children }) {
     try {
       // 通过 GetCallerIdentity 验证凭证有效性
       const identity = await tempSTS.send(new GetCallerIdentityCommand({}));
-      
-      // 验证成功，保存状态
+
+      // 如果选择记住，使用 PIN 加密保存到 localStorage
+      if (rememberMe && pin) {
+        const pinValidation = validatePIN(pin);
+        if (!pinValidation.valid) {
+          throw new Error(pinValidation.error);
+        }
+        // 必须等待持久化成功后再认证和导航，避免刷新中断仍在执行的加密写入。
+        await saveCredentialsSecure(accessKeyId, secretAccessKey, pin);
+        setHasSavedCredentials(true);
+      }
+
+      // 验证与可选持久化均成功后，再发布认证状态。
       setCredentials(tempCredentials);
       setAdminInfo({
         arn: identity.Arn,
@@ -126,23 +173,12 @@ export function AWSClientProvider({ children }) {
         userId: identity.UserId,
       });
       setIsAuthenticated(true);
-      
-      // 如果选择记住，使用 PIN 加密保存到 localStorage
-      if (rememberMe && pin) {
-        const pinValidation = validatePIN(pin);
-        if (!pinValidation.valid) {
-          console.warn('⚠️ PIN 验证失败:', pinValidation.error);
-        } else {
-          await saveCredentialsSecure(accessKeyId, secretAccessKey, pin);
-          setHasSavedCredentials(true);
-        }
-      }
-      
-      console.log('✅ 管理员登录成功:', identity.Arn);
+
+
       setIsLoading(false);
       return { success: true, identity };
     } catch (err) {
-      console.error('❌ 管理员登录失败:', err);
+
       setError(err.message);
       setIsLoading(false);
       return { success: false, error: err.message };
@@ -157,15 +193,16 @@ export function AWSClientProvider({ children }) {
   const unlockWithPIN = useCallback(async (pin) => {
     setError(null);
     setIsLoading(true);
-    
+
     try {
       // 解密凭证
       const stored = await loadCredentialsSecure(pin);
       if (!stored) {
+        setHasSavedCredentials(false);
         setIsLoading(false);
         return { success: false, error: '没有找到保存的凭证' };
       }
-      
+
       // 验证凭证是否仍然有效
       const tempSTS = new STSClient({
         region: AWS_REGION,
@@ -174,9 +211,9 @@ export function AWSClientProvider({ children }) {
           secretAccessKey: stored.secretAccessKey,
         },
       });
-      
+
       const identity = await tempSTS.send(new GetCallerIdentityCommand({}));
-      
+
       // 凭证有效，保存状态
       setCredentials({
         accessKeyId: stored.accessKeyId,
@@ -188,24 +225,33 @@ export function AWSClientProvider({ children }) {
         userId: identity.UserId,
       });
       setIsAuthenticated(true);
-      
-      console.log('✅ PIN 解锁成功');
+
+
       setIsLoading(false);
       return { success: true };
     } catch (err) {
-      console.error('❌ PIN 解锁失败:', err);
-      const errorMsg = err.message === 'PIN 码错误' ? 'PIN 码错误' : '凭证已失效，请重新登录';
-      setError(errorMsg);
+
+      const result = classifyCredentialUnlockError(err);
+      setError(result.message);
       setIsLoading(false);
-      
-      // 如果凭证已失效，清除保存的凭证
-      if (err.message !== 'PIN 码错误') {
+
+      // 只有损坏数据或 STS 明确拒绝才删除；网络、超时和服务故障均保留。
+      if (result.clearSaved) {
         clearEncryptedCredentials();
         setHasSavedCredentials(false);
       }
-      
-      return { success: false, error: errorMsg };
+
+      return { success: false, error: result.message };
     }
+  }, []);
+
+  /**
+   * 用户主动放弃当前保存的凭证，并同步上下文中的保存状态。
+   */
+  const forgetSavedCredentials = useCallback(() => {
+    clearEncryptedCredentials();
+    setHasSavedCredentials(false);
+    setError(null);
   }, []);
 
   /**
@@ -217,14 +263,14 @@ export function AWSClientProvider({ children }) {
     setIsAuthenticated(false);
     setAdminInfo(null);
     setError(null);
-    
+
     if (clearSaved) {
       clearEncryptedCredentials();
       setHasSavedCredentials(false);
-      console.log('🔒 已清除保存的加密凭证');
+
     }
-    
-    console.log('👋 管理员已登出');
+
+
   }, []);
 
   // 上下文值
@@ -242,7 +288,8 @@ export function AWSClientProvider({ children }) {
     login,
     logout,
     unlockWithPIN,
-  }), [clients, isAuthenticated, isLoading, adminInfo, error, hasSavedCredentials, login, logout, unlockWithPIN]);
+    forgetSavedCredentials,
+  }), [clients, isAuthenticated, isLoading, adminInfo, error, hasSavedCredentials, login, logout, unlockWithPIN, forgetSavedCredentials]);
 
   return (
     <AWSClientContext.Provider value={contextValue}>
@@ -262,7 +309,8 @@ export function AWSClientProvider({ children }) {
  *   hasSavedCredentials: boolean,
  *   login: (accessKeyId: string, secretAccessKey: string, rememberMe?: boolean, pin?: string) => Promise<{success: boolean}>,
  *   logout: (clearSaved?: boolean) => void,
- *   unlockWithPIN: (pin: string) => Promise<{success: boolean, error?: string}>
+ *   unlockWithPIN: (pin: string) => Promise<{success: boolean, error?: string}>,
+ *   forgetSavedCredentials: () => void
  * }}
  */
 export function useAWSClients() {

@@ -3,6 +3,7 @@
  */
 import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { createStructuredLogger, describeError, fingerprintIdentifier } from './structuredLogger.mjs';
 
 const s3Client = new S3Client({ region: process.env.AWS_REGION || 'us-east-1' });
 const BUCKET_NAME = process.env.BUCKET_NAME;
@@ -14,7 +15,8 @@ const BUCKET_NAME = process.env.BUCKET_NAME;
  * @param {object} event - API Gateway Lambda 事件对象，应在 `pathParameters` 中包含 `userId`。
  * @returns {Promise<object>} 一个 API Gateway 响应，其中包含头像的预签名 URL 或错误消息。
  */
-export const handler = async (event) => {
+export const handler = async (event, context = {}) => {
+    const logger = createStructuredLogger({ service: 'getAvatarUrl', requestId: context.awsRequestId });
     const headers = {
         'Content-Type': 'application/json',
         'Access-Control-Allow-Origin': '*',
@@ -55,7 +57,7 @@ export const handler = async (event) => {
 
         const expectedPrefix = `avatars/${userId}/`;
         if (!specificKey.startsWith(expectedPrefix)) {
-            console.warn(`尝试访问非法的 avatarKey: ${specificKey}, 期望前缀: ${expectedPrefix}`);
+            logger.warn('avatar_access_denied', { userHash: fingerprintIdentifier(userId) });
             return {
                 statusCode: 403,
                 headers: headers,
@@ -87,8 +89,10 @@ export const handler = async (event) => {
             parsed.host = cdnHost;
             signedUrl = parsed.toString();
         } catch (err) {
-            console.error('Failed to parse or modify signedUrl:', err);
+            logger.warn('avatar_cdn_rewrite_failed', describeError(err));
         }
+
+        logger.info('avatar_url_created', { userHash: fingerprintIdentifier(userId), expiresIn: 86400 });
 
         return {
             statusCode: 200,
@@ -100,14 +104,13 @@ export const handler = async (event) => {
         };
 
     } catch (error) {
-        console.error('获取头像URL失败:', error);
+        logger.error('avatar_url_failed', describeError(error));
 
         return {
             statusCode: 500,
             headers: headers,
             body: JSON.stringify({
-                error: '获取头像URL失败',
-                details: error.message
+                error: '获取头像URL失败'
             })
         };
     }

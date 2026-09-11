@@ -3,24 +3,33 @@ import { useNavigate } from 'react-router-dom';
 import Recorder from './Recorder';
 import { processWithRubberBand } from '../utils/rubberbandProcessor';
 import { createTemporaryAudioContext } from '../utils/audioContextManager';
+import { loadWorldJs } from '../utils/worldJsLoader.js';
 import { useDocumentMeta } from '../hooks/useDocumentMeta';
+import { matchTdPsolaEnergy } from '../utils/tdPsolaEnergy.js';
+import {
+  resolvePitchMarkPosition,
+  scorePitchPeriodCandidate,
+} from '../utils/tdPsolaPitchMarks.js';
+
+// 录音提示与计时上限共用同一个值，避免文案和实际限制不一致。
+const PREVIEW_RECORDING_LIMIT_SECONDS = 15;
 
 /**
  * @zh VFS效果预览组件
- * 
+ *
  * 基于VFS的原理，对用户语音进行变调处理，让用户通过录音-处理-播放来感受不同变调程度的效果。
- * 
+ *
  * 功能特点：
  * - 用户可以录制自己的声音
  * - 选择变调的程度（10-100Hz）
  * - 播放处理后的音频以预览效果
  * - 提供免责说明和原理说明
- * 
+ *
  * 技术实现：
  * - 使用 MediaRecorder API 进行录音
  * - 使用 Web Audio API 进行音频变调处理
  * - 纯前端实现，无需后端Lambda
- * 
+ *
  * @returns {JSX.Element} VFS效果预览组件
  */
 const VFSEffectPreview = ({ initialProcessedBlobs = null } = {}) => {
@@ -31,7 +40,7 @@ const VFSEffectPreview = ({ initialProcessedBlobs = null } = {}) => {
   });
 
   const navigate = useNavigate();
-  
+
   // 状态管理
   const [recordedBlob, setRecordedBlob] = useState(null); // 原始录音
   const [pitchShift, setPitchShift] = useState(50); // 变调量（Hz），默认50Hz
@@ -39,7 +48,8 @@ const VFSEffectPreview = ({ initialProcessedBlobs = null } = {}) => {
   const [isProcessing, setIsProcessing] = useState(false); // 处理中状态
   const [processingProgress, setProcessingProgress] = useState(0); // 处理进度 (0-1)
   const [isWorldJSLoaded, setIsWorldJSLoaded] = useState(false); // World.JS 加载状态
-  
+  const [worldLoadError, setWorldLoadError] = useState(false);
+
   // 多版本处理结果
   const [processedBlobs, setProcessedBlobs] = useState(() => ({
     'td-psola': null,
@@ -47,38 +57,39 @@ const VFSEffectPreview = ({ initialProcessedBlobs = null } = {}) => {
     'world': null,
     ...(initialProcessedBlobs || {})
   }));
-  
+
   const [isPlaying, setIsPlaying] = useState(false); // 播放状态
   const [playbackType, setPlaybackType] = useState(null); // 'original' | 'td-psola' | 'rubberband' | 'world'
   const [currentTime, setCurrentTime] = useState(0); // 播放进度
   const [duration, setDuration] = useState(0); // 音频总时长
   const [detectedF0, setDetectedF0] = useState(0); // 检测到的基频
-  
+
   // 引用
   const audioElementRef = useRef(null);
   const animationFrameRef = useRef(null);
 
-  /**
-   * @zh 检查 World.JS 是否已加载
-   */
+  /** 进入效果预览路由后才加载 WORLD；主页、登录和其他工具不会下载或初始化它。 */
   useEffect(() => {
-    const checkWorldJS = () => {
-      if (typeof window.Module !== 'undefined' && window.Module.Dio_JS) {
+    let active = true;
+    setWorldLoadError(false);
+    loadWorldJs()
+      .then(() => {
+        if (!active) return;
         setIsWorldJSLoaded(true);
-        console.log('[World.JS] 模块加载成功');
-      } else {
-        console.warn('[World.JS] 模块未加载，WORLD 算法将不可用');
-      }
-    };
-
-    // 立即检查
-    checkWorldJS();
-
-    // 如果未加载，等待一段时间后再检查（script 可能还在加载）
-    const timer = setTimeout(checkWorldJS, 2000);
-
-    return () => clearTimeout(timer);
+      })
+      .catch(() => {
+        if (active) setWorldLoadError(true);
+      });
+    return () => { active = false; };
   }, []);
+
+  /** WORLD 下载失败时沿相同加载入口重试，不引入轮询或第二套回退实现。 */
+  const retryWorldLoad = () => {
+    setWorldLoadError(false);
+    loadWorldJs()
+      .then(() => setIsWorldJSLoaded(true))
+      .catch(() => setWorldLoadError(true));
+  };
 
   /**
    * @zh 录音完成回调
@@ -102,16 +113,15 @@ const VFSEffectPreview = ({ initialProcessedBlobs = null } = {}) => {
     // 创建临时 AudioContext 用于解码
     const { context: audioContext, close: closeContext } = createTemporaryAudioContext();
     let detectionResult = null;
-    let detectionFailureReason = null;
 
     try {
       const arrayBuffer = await blob.arrayBuffer();
       const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-      
+
       // 获取音频数据
       const channelData = audioBuffer.getChannelData(0);
       const sampleRate = audioBuffer.sampleRate;
-      
+
       // 使用更大的窗口以包含更多周期，提高低频检测精度
       const bufferSize = Math.min(8192, channelData.length);
 
@@ -128,9 +138,7 @@ const VFSEffectPreview = ({ initialProcessedBlobs = null } = {}) => {
 
       // 能量阈值：如果信号太弱，认为是静音
       const energyThreshold = 0.001;
-      if (energy < energyThreshold) {
-        detectionFailureReason = 'low-energy';
-      } else {
+      if (energy >= energyThreshold) {
         // 中心削波：减少共振峰的影响
         const clippingLevel = Math.sqrt(energy) * 0.3;
         const clippedBuffer = buffer.map(sample => {
@@ -196,9 +204,7 @@ const VFSEffectPreview = ({ initialProcessedBlobs = null } = {}) => {
           }
         }
 
-        if (maxPeak.correlation < threshold) {
-          detectionFailureReason = 'no-peak';
-        } else {
+        if (maxPeak.correlation >= threshold) {
           // 抛物线插值以提高精度
           const lagIndex = correlations.findIndex(c => c.lag === maxPeak.lag);
           let refinedLag = maxPeak.lag;
@@ -214,25 +220,16 @@ const VFSEffectPreview = ({ initialProcessedBlobs = null } = {}) => {
           }
 
           detectionResult = sampleRate / refinedLag;
-          console.log(`基频检测结果: ${detectionResult.toFixed(1)} Hz (相关性: ${maxPeak.correlation.toFixed(3)})`);
 
-          if (!(detectionResult >= 80 && detectionResult <= 500)) {
-            detectionFailureReason = 'out-of-range';
-          } else {
+
+          if (detectionResult >= 80 && detectionResult <= 500) {
             setDetectedF0(Math.round(detectionResult));
           }
         }
       }
 
-      if (detectionFailureReason === 'low-energy') {
-        console.log('信号能量太低，可能是静音');
-      } else if (detectionFailureReason === 'no-peak') {
-        console.log('未找到显著的周期性峰值，可能不是纯音或语音');
-      } else if (detectionFailureReason === 'out-of-range' && detectionResult) {
-        console.log(`检测到的基频 ${detectionResult.toFixed(1)} Hz 超出合理范围`);
-      }
-    } catch (error) {
-      console.error('检测基频失败:', error);
+    } catch {
+      // 自动检测失败时保留默认基频，用户仍可手动调整后处理。
     } finally {
       // 确保 AudioContext 被关闭，避免资源泄漏
       await closeContext();
@@ -254,31 +251,31 @@ const VFSEffectPreview = ({ initialProcessedBlobs = null } = {}) => {
    */
   const processAudio = async () => {
     if (!recordedBlob) return;
-    
+
     setIsProcessing(true);
     setProcessingProgress(0);
-    
+
     // 创建临时 AudioContext 用于解码
     const { context: audioContext, close: closeContext } = createTemporaryAudioContext();
-    
+
     try {
       // 读取原始音频
       const arrayBuffer = await recordedBlob.arrayBuffer();
       const sourceBuffer = await audioContext.decodeAudioData(arrayBuffer);
-      
+
       // 计算音高参数
       const estimatedOriginalF0 = detectedF0 || 150;
       const targetF0 = estimatedOriginalF0 + pitchShift;
-      
-      console.log(`[${selectedAlgorithm.toUpperCase()}] 开始处理: ${estimatedOriginalF0} Hz → ${targetF0} Hz (+${pitchShift} Hz)`);
+
+
 
       let processedBuffer;
-      
+
       if (selectedAlgorithm === 'rubberband') {
         // 使用 RubberBand 处理
         processedBuffer = await processWithRubberBand(
-          sourceBuffer, 
-          pitchShift, 
+          sourceBuffer,
+          pitchShift,
           (progress) => setProcessingProgress(progress)
         );
       } else if (selectedAlgorithm === 'world') {
@@ -297,16 +294,16 @@ const VFSEffectPreview = ({ initialProcessedBlobs = null } = {}) => {
 
       // 将处理后的音频转换为Blob
       const wavBlob = await audioBufferToWav(processedBuffer);
-      
+
       // 保存到对应算法的结果中
       setProcessedBlobs(prev => ({
         ...prev,
         [selectedAlgorithm]: wavBlob
       }));
-      
-      console.log(`[${selectedAlgorithm.toUpperCase()}] 处理完成: 原始 ${sourceBuffer.duration.toFixed(2)}s → 输出 ${processedBuffer.duration.toFixed(2)}s`);
+
+
     } catch (error) {
-      console.error(`[${selectedAlgorithm.toUpperCase()}] 处理失败:`, error);
+
       alert(`音频处理失败: ${error.message}`);
     } finally {
       // 确保 AudioContext 被关闭，避免资源泄漏
@@ -326,53 +323,51 @@ const VFSEffectPreview = ({ initialProcessedBlobs = null } = {}) => {
   const processAudioWithTDPSOLA = async (sourceBuffer, pitchRatio, estimatedF0) => {
     const sampleRate = sourceBuffer.sampleRate;
     const channelData = sourceBuffer.getChannelData(0);
-    
-    console.log(`[TD-PSOLA] 开始处理: 采样率=${sampleRate}Hz, 长度=${channelData.length}, F0=${estimatedF0}Hz, 比例=${pitchRatio.toFixed(3)}`);
-    
+
+
+
     // 步骤1: 检测基频标记点（返回包含浊音信息的标记点）
     const pitchMarks = detectPitchMarks(channelData, sampleRate, estimatedF0);
-    
+
     if (pitchMarks.length < 2) {
       throw new Error('基频标记点太少（< 2），无法进行 PSOLA 处理。可能是信号太短或太弱。');
     }
-    
-    const voicedCount = pitchMarks.filter(m => m.isVoiced).length;
-    console.log(`[TD-PSOLA] 浊音标记: ${voicedCount}/${pitchMarks.length}`);
-    
+
     // 步骤2: 提取分析帧（保留原始信号）
     const analysisFrames = extractAnalysisFrames(channelData, pitchMarks, sampleRate);
-    console.log(`[TD-PSOLA] 提取了 ${analysisFrames.length} 个分析帧`);
-    
+
+
     // 步骤3: 计算合成位置（智能处理浊音/无浊音）
     const synthesisPositions = calculateSynthesisPositions(pitchMarks, pitchRatio);
-    console.log(`[TD-PSOLA] 计算了 ${synthesisPositions.length} 个合成位置`);
-    
+
+
     // 步骤4: 重叠相加合成（在合成时应用窗函数）
     const synthesizedData = overlapAddSynthesis(
       analysisFrames,
       synthesisPositions,
-      channelData.length
+      channelData.length,
+      channelData
     );
-    console.log(`[TD-PSOLA] 合成完成，输出长度=${synthesizedData.length}`);
-    
+
+
     // 使用临时 AudioContext 创建 AudioBuffer
     const { context: audioContext, close: closeContext } = createTemporaryAudioContext();
-    
+
     try {
       const outputBuffer = audioContext.createBuffer(
         sourceBuffer.numberOfChannels,
         synthesizedData.length,
         sampleRate
       );
-      
+
       // 复制处理后的数据到输出缓冲区
       outputBuffer.getChannelData(0).set(synthesizedData);
-      
+
       // 如果是立体声，复制到其他声道
       for (let i = 1; i < sourceBuffer.numberOfChannels; i++) {
         outputBuffer.getChannelData(i).set(synthesizedData);
       }
-      
+
       return outputBuffer;
     } finally {
       // 确保关闭 AudioContext
@@ -382,12 +377,12 @@ const VFSEffectPreview = ({ initialProcessedBlobs = null } = {}) => {
 
   /**
    * @zh 检测基频标记点（高质量版本）
-   * 
+   *
    * 改进策略：
    * 1. 使用更小的hopSize提高标记点密度和准确性
    * 2. 严格的标记点间距控制，确保连续性
    * 3. 更准确的浊音检测
-   * 
+   *
    * @param {Float32Array} buffer - 音频数据
    * @param {number} sampleRate - 采样率
    * @param {number} estimatedF0 - 估计的基频
@@ -398,36 +393,36 @@ const VFSEffectPreview = ({ initialProcessedBlobs = null } = {}) => {
     const estimatedPeriod = Math.round(sampleRate / estimatedF0);
     const windowSize = Math.min(estimatedPeriod * 3, 1536);
     const hopSize = Math.round(estimatedPeriod / 6); // 更密集的分析
-    
+
     const energyThreshold = 0.0005; // 降低阈值，捕获更多信号
     const voicingThreshold = 0.35; // 稍微降低浊音阈值
-    
+
     let position = 0;
     let expectedNextMark = 0; // 预期的下一个标记点位置
-    
+
     while (position < buffer.length - windowSize) {
       const windowStart = position;
       const windowEnd = Math.min(position + windowSize, buffer.length);
       const window = buffer.slice(windowStart, windowEnd);
-      
+
       // 计算能量
       let energy = 0;
       for (let i = 0; i < window.length; i++) {
         energy += window[i] * window[i];
       }
       energy = energy / window.length;
-      
+
       // 检测周期
       const periodInfo = findLocalPeriodWithConfidence(window, sampleRate, estimatedF0);
-      
+
       // 判断是否应该添加标记点
       const shouldAddMark = marks.length === 0 || position >= expectedNextMark - estimatedPeriod * 0.3;
-      
+
       if (!shouldAddMark) {
         position += hopSize;
         continue;
       }
-      
+
       if (energy < energyThreshold) {
         // 低能量：添加无浊音标记
         if (marks.length === 0 || position >= expectedNextMark - estimatedPeriod * 0.2) {
@@ -443,29 +438,30 @@ const VFSEffectPreview = ({ initialProcessedBlobs = null } = {}) => {
         position += Math.round(estimatedPeriod * 0.7);
         continue;
       }
-      
+
       if (periodInfo && periodInfo.confidence > voicingThreshold) {
         // 浊音：精确定位标记点
         const preciseMark = findPrecisePitchMark(buffer, windowStart + Math.floor(window.length / 3), periodInfo.period);
-        
-        // 检查标记点是否在预期范围内
-        if (marks.length === 0 || 
-            (preciseMark > marks[marks.length - 1].position + periodInfo.period * 0.4 &&
-             preciseMark < marks[marks.length - 1].position + periodInfo.period * 2.0)) {
-          
-          marks.push({
-            position: preciseMark,
-            period: periodInfo.period,
-            isVoiced: true,
-            energy: energy,
-            confidence: periodInfo.confidence
-          });
-          
-          expectedNextMark = preciseMark + periodInfo.period;
-          position = Math.floor(preciseMark + periodInfo.period * 0.6);
-        } else {
-          position += hopSize;
-        }
+        const resolvedMark = resolvePitchMarkPosition({
+          candidate: preciseMark,
+          previous: marks.length > 0 ? marks[marks.length - 1].position : null,
+          expected: expectedNextMark,
+          period: periodInfo.period,
+          bufferLength: buffer.length,
+        });
+
+        if (resolvedMark === null) break;
+
+        marks.push({
+          position: resolvedMark,
+          period: periodInfo.period,
+          isVoiced: true,
+          energy: energy,
+          confidence: periodInfo.confidence
+        });
+
+        expectedNextMark = resolvedMark + periodInfo.period;
+        position = Math.floor(resolvedMark + periodInfo.period * 0.6);
       } else {
         // 不确定或无浊音
         if (marks.length === 0 || position >= expectedNextMark - estimatedPeriod * 0.2) {
@@ -482,24 +478,21 @@ const VFSEffectPreview = ({ initialProcessedBlobs = null } = {}) => {
         position += Math.round(estimatedPeriod * 0.7);
       }
     }
-    
+
     // 后处理：平滑周期变化
     for (let i = 1; i < marks.length - 1; i++) {
       if (marks[i].isVoiced && marks[i - 1].isVoiced && marks[i + 1].isVoiced) {
         const prevPeriod = marks[i].position - marks[i - 1].position;
         const nextPeriod = marks[i + 1].position - marks[i].position;
         const avgPeriod = (prevPeriod + nextPeriod) / 2;
-        
+
         // 如果当前周期与平均值差异很大，进行平滑
         if (Math.abs(marks[i].period - avgPeriod) > avgPeriod * 0.3) {
           marks[i].period = avgPeriod;
         }
       }
     }
-    
-    const voicedCount = marks.filter(m => m.isVoiced).length;
-    console.log(`[TD-PSOLA] 检测: ${marks.length} 个标记点 (浊音: ${voicedCount}, 无浊音: ${marks.length - voicedCount})`);
-    
+
     return marks;
   };
 
@@ -513,42 +506,46 @@ const VFSEffectPreview = ({ initialProcessedBlobs = null } = {}) => {
   const findLocalPeriodWithConfidence = (window, sampleRate, estimatedF0) => {
     const minLag = Math.floor(sampleRate / (estimatedF0 * 1.5));
     const maxLag = Math.floor(sampleRate / (estimatedF0 * 0.5));
-    
+
     if (minLag >= window.length / 2) return null;
-    
+
     let maxCorrelation = -Infinity;
+    let maxScore = -Infinity;
     let bestLag = 0;
-    
+    const estimatedPeriod = sampleRate / estimatedF0;
+
     // 计算归一化自相关（使用能量归一化）
     for (let lag = minLag; lag <= maxLag && lag < window.length / 2; lag++) {
       let correlation = 0;
       let energy1 = 0;
       let energy2 = 0;
-      
+
       const effectiveLength = window.length - lag;
-      
+
       for (let i = 0; i < effectiveLength; i++) {
         correlation += window[i] * window[i + lag];
         energy1 += window[i] * window[i];
         energy2 += window[i + lag] * window[i + lag];
       }
-      
+
       if (energy1 > 0 && energy2 > 0) {
         // 归一化
         const normalizedCorrelation = correlation / Math.sqrt(energy1 * energy2);
-        
-        if (normalizedCorrelation > maxCorrelation) {
+
+        const score = scorePitchPeriodCandidate(normalizedCorrelation, lag, estimatedPeriod);
+        if (score > maxScore) {
+          maxScore = score;
           maxCorrelation = normalizedCorrelation;
           bestLag = lag;
         }
       }
     }
-    
+
     // 如果相关性太低，返回null
     if (maxCorrelation < 0.3) {
       return null;
     }
-    
+
     // 使用抛物线插值提高精度
     const lagIndex = bestLag - minLag;
     if (lagIndex > 0 && bestLag < maxLag) {
@@ -571,7 +568,7 @@ const VFSEffectPreview = ({ initialProcessedBlobs = null } = {}) => {
           correlations.push(0);
         }
       }
-      
+
       // 抛物线插值
       if (correlations.length === 3 && correlations[1] > correlations[0] && correlations[1] > correlations[2]) {
         const [y0, y1, y2] = correlations;
@@ -581,7 +578,7 @@ const VFSEffectPreview = ({ initialProcessedBlobs = null } = {}) => {
         }
       }
     }
-    
+
     return {
       period: Math.round(bestLag),
       confidence: maxCorrelation
@@ -590,9 +587,9 @@ const VFSEffectPreview = ({ initialProcessedBlobs = null } = {}) => {
 
   /**
    * @zh 精确定位基频标记点
-   * 
+   *
    * 使用零相位过零点检测方法，寻找最接近周期起始的位置
-   * 
+   *
    * @param {Float32Array} buffer - 完整音频数据
    * @param {number} centerPos - 中心位置
    * @param {number} period - 周期长度
@@ -602,11 +599,11 @@ const VFSEffectPreview = ({ initialProcessedBlobs = null } = {}) => {
     const searchRange = Math.floor(period * 0.4);
     const start = Math.max(1, centerPos - searchRange);
     const end = Math.min(buffer.length - 1, centerPos + searchRange);
-    
+
     // 方法1: 寻找最大正向过零点（从负到正）
     let bestZeroCrossing = -1;
     let maxSlope = 0;
-    
+
     for (let i = start; i < end; i++) {
       if (buffer[i - 1] < 0 && buffer[i] >= 0) {
         const slope = buffer[i] - buffer[i - 1]; // 过零斜率
@@ -616,17 +613,17 @@ const VFSEffectPreview = ({ initialProcessedBlobs = null } = {}) => {
         }
       }
     }
-    
+
     // 如果找到了好的过零点，使用它
     if (bestZeroCrossing > 0 && maxSlope > 0.01) {
       return bestZeroCrossing;
     }
-    
+
     // 方法2: 如果没有明显的过零点，寻找局部最大能量点
     let maxEnergy = 0;
     let energyPos = centerPos;
     const energyWindowSize = Math.max(3, Math.floor(period * 0.1));
-    
+
     for (let i = start; i < end - energyWindowSize; i++) {
       let localEnergy = 0;
       for (let j = 0; j < energyWindowSize; j++) {
@@ -637,18 +634,18 @@ const VFSEffectPreview = ({ initialProcessedBlobs = null } = {}) => {
         energyPos = i;
       }
     }
-    
+
     return energyPos;
   };
 
   /**
    * @zh 提取分析帧（高质量版本）
-   * 
+   *
    * 关键策略：
    * 1. 使用相邻标记点间距确定帧长度（更准确）
    * 2. 帧长度为 2.5 个局部周期（确保足够重叠）
    * 3. 直接复制原始信号（不加窗）
-   * 
+   *
    * @param {Float32Array} buffer - 音频数据
    * @param {Array} pitchMarks - 基频标记点信息数组
    * @param {number} sampleRate - 采样率
@@ -656,12 +653,12 @@ const VFSEffectPreview = ({ initialProcessedBlobs = null } = {}) => {
    */
   const extractAnalysisFrames = (buffer, pitchMarks, sampleRate) => {
     const frames = [];
-    
+
     for (let i = 0; i < pitchMarks.length; i++) {
       const markInfo = pitchMarks[i];
       const mark = markInfo.position;
       const isVoiced = markInfo.isVoiced;
-      
+
       // 计算局部平均周期
       let localPeriod;
       if (i > 0 && i < pitchMarks.length - 1) {
@@ -676,13 +673,13 @@ const VFSEffectPreview = ({ initialProcessedBlobs = null } = {}) => {
       } else {
         localPeriod = markInfo.period;
       }
-      
+
       // 确保周期在合理范围内
       localPeriod = Math.max(
         sampleRate / 500, // 最小周期（500Hz）
         Math.min(sampleRate / 50, localPeriod) // 最大周期（50Hz）
       );
-      
+
       // 帧长度策略
       let frameLength;
       if (isVoiced) {
@@ -692,34 +689,34 @@ const VFSEffectPreview = ({ initialProcessedBlobs = null } = {}) => {
         // 无浊音：使用相同的周期估计
         frameLength = Math.round(localPeriod * 2.0);
       }
-      
+
       // 限制帧长度
       frameLength = Math.min(frameLength, Math.round(sampleRate * 0.05)); // 最大50ms
       frameLength = Math.max(frameLength, Math.round(sampleRate * 0.01)); // 最小10ms
       // 确保是偶数，方便后续处理
       if (frameLength % 2 !== 0) frameLength++;
-      
+
       // 以标记点为中心提取帧
       const halfFrame = frameLength / 2;
       const start = Math.floor(mark - halfFrame);
       const end = Math.floor(mark + halfFrame);
-      
+
       // 处理边界
       const clampedStart = Math.max(0, start);
       const clampedEnd = Math.min(buffer.length, end);
       const actualLength = clampedEnd - clampedStart;
-      
+
       if (actualLength < frameLength * 0.5) {
         // 如果帧太短（接近边界），跳过
         continue;
       }
-      
+
       // 复制数据
       const frameData = new Float32Array(actualLength);
       for (let j = 0; j < actualLength; j++) {
         frameData[j] = buffer[clampedStart + j];
       }
-      
+
       frames.push({
         center: mark,
         data: frameData,
@@ -730,40 +727,40 @@ const VFSEffectPreview = ({ initialProcessedBlobs = null } = {}) => {
         confidence: markInfo.confidence || 0
       });
     }
-    
-    console.log(`[TD-PSOLA] 提取了 ${frames.length} 个有效帧（跳过了 ${pitchMarks.length - frames.length} 个边界帧）`);
-    
+
+
+
     return frames;
   };
 
   /**
    * @zh 计算合成位置（改进版）
-   * 
+   *
    * 根据音高比例和浊音状态智能调整帧的位置。
    * 关键改进：
    * 1. 对浊音段应用音高变换
    * 2. 对无浊音段保持原始间距（不变调）
    * 3. 确保位置的平滑过渡
-   * 
+   *
    * @param {Array} pitchMarks - 原始基频标记点信息数组
    * @param {number} pitchRatio - 音高比例
    * @returns {number[]} 合成位置数组
    */
   const calculateSynthesisPositions = (pitchMarks, pitchRatio) => {
     const positions = [];
-    
+
     if (pitchMarks.length === 0) return positions;
-    
+
     // 第一个位置保持不变
     positions.push(pitchMarks[0].position);
-    
+
     // 根据浊音状态和音高比例调整后续位置
     for (let i = 1; i < pitchMarks.length; i++) {
       const prevMark = pitchMarks[i - 1];
       const currMark = pitchMarks[i];
-      
+
       const originalInterval = currMark.position - prevMark.position;
-      
+
       let newInterval;
       if (currMark.isVoiced && prevMark.isVoiced) {
         // 两个都是浊音：应用音高变换
@@ -772,47 +769,48 @@ const VFSEffectPreview = ({ initialProcessedBlobs = null } = {}) => {
         // 至少有一个是无浊音：保持原始间距
         newInterval = originalInterval;
       }
-      
+
       const newPosition = positions[i - 1] + newInterval;
       positions.push(newPosition);
     }
-    
+
     return positions;
   };
 
   /**
    * @zh 重叠相加合成（高质量版本）
-   * 
+   *
    * 使用 OLA (Overlap-Add) 方法合成音频，确保：
    * 1. 无能量损失
    * 2. 相位连续性
    * 3. 平滑的帧过渡
-   * 
+   *
    * @param {Array} analysisFrames - 分析帧数组
    * @param {number[]} synthesisPositions - 合成位置数组（可以是小数）
    * @param {number} outputLength - 建议的输出长度
+   * @param {Float32Array} referenceSamples - 完整原始采样，用于统一尺度的响度匹配
    * @returns {Float32Array} 合成的音频数据
    */
-  const overlapAddSynthesis = (analysisFrames, synthesisPositions, outputLength) => {
+  const overlapAddSynthesis = (analysisFrames, synthesisPositions, outputLength, referenceSamples) => {
     // 确定输出长度
     const lastSynthPos = synthesisPositions[synthesisPositions.length - 1];
     const lastFrameLength = analysisFrames[analysisFrames.length - 1].data.length;
     const calculatedLength = Math.ceil(lastSynthPos) + Math.floor(lastFrameLength / 2) + 2000;
-    
+
     const finalLength = Math.max(outputLength, calculatedLength);
-    
+
     const output = new Float32Array(finalLength);
     const windowSum = new Float32Array(finalLength);
-    
+
     // 预计算汉宁窗（避免重复计算）
     const windowCache = new Map();
-    
+
     for (let i = 0; i < analysisFrames.length; i++) {
       const frame = analysisFrames[i];
       const synthPos = synthesisPositions[i]; // 保持浮点精度
       const frameLength = frame.data.length;
       const halfFrame = frameLength / 2;
-      
+
       // 获取或创建窗函数
       let window;
       const windowKey = `${frameLength}_${frame.isVoiced}`;
@@ -837,23 +835,23 @@ const VFSEffectPreview = ({ initialProcessedBlobs = null } = {}) => {
         }
         windowCache.set(windowKey, window);
       }
-      
+
       // 使用浮点位置进行线性插值添加
       // 这样可以避免整数舍入导致的相位不连续
       const startPos = synthPos - halfFrame;
-      
+
       for (let j = 0; j < frameLength; j++) {
         const exactPos = startPos + j;
         const basePos = Math.floor(exactPos);
         const frac = exactPos - basePos;
-        
+
         if (basePos >= 0 && basePos < finalLength - 1) {
           const windowedSample = frame.data[j] * window[j];
-          
+
           // 线性插值到两个相邻采样点
           output[basePos] += windowedSample * (1 - frac);
           output[basePos + 1] += windowedSample * frac;
-          
+
           windowSum[basePos] += window[j] * (1 - frac);
           windowSum[basePos + 1] += window[j] * frac;
         } else if (basePos >= 0 && basePos < finalLength) {
@@ -862,7 +860,7 @@ const VFSEffectPreview = ({ initialProcessedBlobs = null } = {}) => {
         }
       }
     }
-    
+
     // 归一化：保持能量
     // 关键：确保重叠区域的窗函数和接近1.0
     for (let i = 0; i < finalLength; i++) {
@@ -875,44 +873,18 @@ const VFSEffectPreview = ({ initialProcessedBlobs = null } = {}) => {
         output[i] = 0;
       }
     }
-    
-    // 计算原始和输出的能量比，进行能量匹配
-    let originalEnergy = 0;
-    for (let i = 0; i < analysisFrames.length; i++) {
-      const frameData = analysisFrames[i].data;
-      for (let j = 0; j < frameData.length; j++) {
-        originalEnergy += frameData[j] * frameData[j];
-      }
-    }
-    originalEnergy /= analysisFrames.length;
-    
-    let outputEnergy = 0;
-    let validSamples = 0;
-    for (let i = 0; i < finalLength; i++) {
-      if (windowSum[i] > 0.1) {
-        outputEnergy += output[i] * output[i];
-        validSamples++;
-      }
-    }
-    outputEnergy /= Math.max(1, validSamples);
-    
-    // 应用能量匹配（如果输出能量明显低于输入）
-    if (outputEnergy > 0 && originalEnergy / outputEnergy > 1.2) {
-      const energyScale = Math.sqrt(originalEnergy / outputEnergy) * 0.9; // 保守的缩放
-      for (let i = 0; i < finalLength; i++) {
-        output[i] *= energyScale;
-      }
-      console.log(`[TD-PSOLA] 能量匹配，缩放因子: ${energyScale.toFixed(3)}`);
-    }
-    
+
+    // 输入与输出统一按每采样点均方能量比较，避免帧长度被误当成增益。
+    matchTdPsolaEnergy(output, referenceSamples);
+
     // 应用平滑的淡入淡出
     const fadeLength = Math.min(1500, Math.floor(finalLength * 0.015));
-    
+
     for (let i = 0; i < fadeLength; i++) {
       const fade = 0.5 * (1 - Math.cos(Math.PI * i / fadeLength)); // 余弦淡入
       output[i] *= fade;
     }
-    
+
     for (let i = 0; i < fadeLength; i++) {
       const fadeOutPos = finalLength - 1 - i;
       if (fadeOutPos >= fadeLength) {
@@ -920,15 +892,15 @@ const VFSEffectPreview = ({ initialProcessedBlobs = null } = {}) => {
         output[fadeOutPos] *= fade;
       }
     }
-    
+
     // 软限幅（使用 tanh）
     let peakValue = 0;
     for (let i = 0; i < finalLength; i++) {
       peakValue = Math.max(peakValue, Math.abs(output[i]));
     }
-    
+
     if (peakValue > 1.0) {
-      console.log(`[TD-PSOLA] 检测到削波风险，峰值: ${peakValue.toFixed(3)}`);
+
       // 使用软限幅而不是硬截断
       const threshold = 0.9;
       for (let i = 0; i < finalLength; i++) {
@@ -939,7 +911,7 @@ const VFSEffectPreview = ({ initialProcessedBlobs = null } = {}) => {
         }
       }
     }
-    
+
     return output;
   };
 
@@ -956,14 +928,12 @@ const VFSEffectPreview = ({ initialProcessedBlobs = null } = {}) => {
     if (!isWorldJSLoaded || typeof window.Module === 'undefined' || !window.Module.Dio_JS) {
       throw new Error('World.JS 模块未加载。请刷新页面或稍后重试。');
     }
-    
+
     const Module = window.Module;
 
     const sampleRate = sourceBuffer.sampleRate;
     const channelData = sourceBuffer.getChannelData(0);
-    const length = channelData.length;
 
-    console.log(`[WORLD] 开始处理: 采样率=${sampleRate}Hz, 长度=${length}, F0=${estimatedF0}Hz, 变换=${pitchShiftHz}Hz`);
 
     try {
       // 步骤1: 转换为 Float64Array（World.JS 需要）
@@ -972,68 +942,68 @@ const VFSEffectPreview = ({ initialProcessedBlobs = null } = {}) => {
 
       // 步骤2: 使用 DIO 算法估计基频（F0）
       setProcessingProgress(0.2);
-      console.log('[WORLD] 步骤 1/4: 使用 DIO 算法估计基频...');
+
       const dioResult = Module.Dio_JS(x, sampleRate, frame_period);
-      
-      console.log('[WORLD] DIO 返回结果:', dioResult);
-      console.log('[WORLD] dioResult.f0 类型:', dioResult.f0?.constructor?.name);
-      
+
+
+
+
       // 保持为 emscripten::val，不要转换为 Float64Array
       const f0 = dioResult.f0;
       const time_axis = dioResult.time_axis;
-      
+
       // 获取长度（如果是 TypedArray）
       const f0_length = f0.length || f0.size();
-      
-      console.log(`[WORLD] DIO 完成: 检测到 ${f0_length} 帧`);
+
+
 
       // 步骤3: 计算频谱包络（CheapTrick）
       setProcessingProgress(0.4);
-      console.log('[WORLD] 步骤 2/4: 计算频谱包络 (CheapTrick)...');
-      console.log('[WORLD] CheapTrick 输入参数:');
-      console.log('  - x:', x?.constructor?.name, 'length:', x?.length);
-      console.log('  - f0:', f0?.constructor?.name);
-      console.log('  - time_axis:', time_axis?.constructor?.name);
-      console.log('  - sampleRate:', sampleRate);
-      
+
+
+
+
+
+
+
       const cheapTrickResult = Module.CheapTrick_JS(x, f0, time_axis, sampleRate);
-      
-      console.log('[WORLD] CheapTrick 返回结果:', cheapTrickResult);
-      
+
+
+
       // 注意：spectral 是 emscripten::val 对象，不要转换为 Float64Array
       // 保持原始的 val 对象以便传递给 Synthesis_JS
       const spectral = cheapTrickResult.spectral;
       const fft_size = cheapTrickResult.fft_size;
-      
-      console.log(`[WORLD] CheapTrick 完成: FFT 大小 = ${fft_size}`);
-      console.log('[WORLD] spectral 类型:', spectral?.constructor?.name);
+
+
+
 
       // 步骤4: 计算非周期性指标（D4C）
       setProcessingProgress(0.6);
-      console.log('[WORLD] 步骤 3/4: 计算非周期性指标 (D4C)...');
-      console.log('[WORLD] D4C 输入参数:');
-      console.log('  - x:', x?.constructor?.name);
-      console.log('  - f0:', f0?.constructor?.name);
-      console.log('  - time_axis:', time_axis?.constructor?.name);
-      console.log('  - fft_size:', fft_size);
-      console.log('  - sampleRate:', sampleRate);
-      
+
+
+
+
+
+
+
+
       const d4cResult = Module.D4C_JS(x, f0, time_axis, fft_size, sampleRate);
-      
-      console.log('[WORLD] D4C 返回结果:', d4cResult);
-      
+
+
+
       // 同样保持 aperiodicity 为 emscripten::val 对象
       const aperiodicity = d4cResult.aperiodicity;
-      
-      console.log(`[WORLD] D4C 完成`);
-      console.log('[WORLD] aperiodicity 类型:', aperiodicity?.constructor?.name);
+
+
+
 
       // 步骤5: 修改 F0（音高变换）
       const pitchRatio = (estimatedF0 + pitchShiftHz) / estimatedF0;
-      
-      console.log('[WORLD] 原始 f0 类型:', f0?.constructor?.name);
-      console.log('[WORLD] 原始 f0 长度:', f0_length);
-      
+
+
+
+
       // 创建修改后的 F0 数组
       // 关键：需要先将 emscripten::val 转换为 JavaScript 数组，再修改
       let f0Array;
@@ -1041,19 +1011,16 @@ const VFSEffectPreview = ({ initialProcessedBlobs = null } = {}) => {
         f0Array = Array.from(f0);
       } else {
         // 如果是 emscripten::val，尝试转换
-        try {
+        {
           f0Array = [];
           for (let i = 0; i < f0_length; i++) {
             f0Array.push(f0.get ? f0.get(i) : f0[i]);
           }
-        } catch (e) {
-          console.error('[WORLD] 无法读取 f0 数组:', e);
-          throw e;
         }
       }
-      
-      console.log('[WORLD] f0Array 样本 (前5个):', f0Array.slice(0, 5));
-      
+
+
+
       // 修改音高
       const modifiedF0Array = f0Array.map(f0Val => {
         if (f0Val > 0) {
@@ -1061,24 +1028,24 @@ const VFSEffectPreview = ({ initialProcessedBlobs = null } = {}) => {
         }
         return 0;
       });
-      
+
       // 转换回 Float64Array
       const modifiedF0 = new Float64Array(modifiedF0Array);
-      
-      console.log(`[WORLD] F0 修改: 比例 = ${pitchRatio.toFixed(3)}, 修改后样本:`, modifiedF0.slice(0, 5));
+
+
 
       // 步骤6: 合成音频（Synthesis）
       setProcessingProgress(0.8);
-      console.log('[WORLD] 步骤 4/4: 合成音频 (Synthesis)...');
-      
-      console.log('[WORLD] Synthesis 参数:');
-      console.log('  - modifiedF0:', modifiedF0?.constructor?.name, 'length:', modifiedF0?.length);
-      console.log('  - spectral:', spectral?.constructor?.name);
-      console.log('  - aperiodicity:', aperiodicity?.constructor?.name);
-      console.log('  - fft_size:', fft_size);
-      console.log('  - sampleRate:', sampleRate);
-      console.log('  - frame_period:', frame_period);
-      
+
+
+
+
+
+
+
+
+
+
       // Synthesis_JS 的 frame_period 参数是 emscripten::val，直接传数值即可
       // Emscripten 会自动转换 JavaScript 数值为 emscripten::val
       const synthesisResult = Module.Synthesis_JS(
@@ -1089,10 +1056,10 @@ const VFSEffectPreview = ({ initialProcessedBlobs = null } = {}) => {
         sampleRate,
         frame_period
       );
-      
-      console.log('[WORLD] Synthesis 返回结果:', synthesisResult);
-      console.log('[WORLD] synthesisResult 类型:', synthesisResult?.constructor?.name);
-      
+
+
+
+
       // synthesisResult 可能直接就是 Float64Array，或者是 emscripten::val
       let y;
       if (synthesisResult instanceof Float64Array) {
@@ -1101,26 +1068,26 @@ const VFSEffectPreview = ({ initialProcessedBlobs = null } = {}) => {
         y = new Float64Array(synthesisResult);
       } else {
         // 可能是 emscripten::val，尝试转换
-        console.log('[WORLD] 尝试从 emscripten::val 提取数据...');
+
         const yLength = synthesisResult.size ? synthesisResult.size() : synthesisResult.length;
         y = new Float64Array(yLength);
         for (let i = 0; i < yLength; i++) {
           y[i] = synthesisResult.get ? synthesisResult.get(i) : synthesisResult[i];
         }
       }
-      
-      console.log(`[WORLD] 合成完成: 输出长度 = ${y.length}, 样本:`, y.slice(0, 5));
+
+
 
       // 步骤7: 使用临时 AudioContext 创建 AudioBuffer
       const { context: audioContext, close: closeContext } = createTemporaryAudioContext();
-      
+
       try {
         const outputBuffer = audioContext.createBuffer(
           1, // 单声道
           y.length,
           sampleRate
         );
-        
+
         // 转换为 Float32Array
         const outputData = outputBuffer.getChannelData(0);
         for (let i = 0; i < y.length; i++) {
@@ -1128,8 +1095,8 @@ const VFSEffectPreview = ({ initialProcessedBlobs = null } = {}) => {
         }
 
         setProcessingProgress(1.0);
-        console.log(`[WORLD] 处理完成: ${(y.length / sampleRate).toFixed(2)}s`);
-        
+
+
         return outputBuffer;
       } finally {
         // 确保关闭 AudioContext
@@ -1137,7 +1104,7 @@ const VFSEffectPreview = ({ initialProcessedBlobs = null } = {}) => {
       }
 
     } catch (error) {
-      console.error('[WORLD] 处理错误:', error);
+
       throw new Error(`World.JS 处理失败: ${error.message}`);
     }
   };
@@ -1152,10 +1119,10 @@ const VFSEffectPreview = ({ initialProcessedBlobs = null } = {}) => {
     const sampleRate = buffer.sampleRate;
     const format = 1; // PCM
     const bitDepth = 16;
-    
+
     const bytesPerSample = bitDepth / 8;
     const blockAlign = numberOfChannels * bytesPerSample;
-    
+
     const data = [];
     for (let i = 0; i < buffer.length; i++) {
       for (let channel = 0; channel < numberOfChannels; channel++) {
@@ -1164,12 +1131,12 @@ const VFSEffectPreview = ({ initialProcessedBlobs = null } = {}) => {
         data.push(intSample < 0 ? intSample * 0x8000 : intSample * 0x7FFF);
       }
     }
-    
+
     const dataLength = data.length * bytesPerSample;
     const bufferLength = 44 + dataLength;
     const arrayBuffer = new ArrayBuffer(bufferLength);
     const view = new DataView(arrayBuffer);
-    
+
     // 写入 WAV 文件头
     let offset = 0;
     const writeString = (str) => {
@@ -1177,7 +1144,7 @@ const VFSEffectPreview = ({ initialProcessedBlobs = null } = {}) => {
         view.setUint8(offset++, str.charCodeAt(i));
       }
     };
-    
+
     writeString('RIFF');
     view.setUint32(offset, bufferLength - 8, true); offset += 4;
     writeString('WAVE');
@@ -1191,13 +1158,13 @@ const VFSEffectPreview = ({ initialProcessedBlobs = null } = {}) => {
     view.setUint16(offset, bitDepth, true); offset += 2;
     writeString('data');
     view.setUint32(offset, dataLength, true); offset += 4;
-    
+
     // 写入音频数据
     for (let i = 0; i < data.length; i++) {
       view.setInt16(offset, data[i], true);
       offset += 2;
     }
-    
+
     return new Blob([arrayBuffer], { type: 'audio/wav' });
   };
 
@@ -1212,25 +1179,25 @@ const VFSEffectPreview = ({ initialProcessedBlobs = null } = {}) => {
     } else {
       blob = processedBlobs[type];
     }
-    
+
     if (!blob) return;
-    
+
     // 停止当前播放
     if (audioElementRef.current) {
       audioElementRef.current.pause();
       audioElementRef.current.currentTime = 0;
     }
-    
+
     // 创建新的音频元素
     const audio = new Audio(URL.createObjectURL(blob));
     audioElementRef.current = audio;
     setPlaybackType(type);
     setIsPlaying(true);
-    
+
     audio.addEventListener('loadedmetadata', () => {
       setDuration(audio.duration);
     });
-    
+
     audio.addEventListener('ended', () => {
       setIsPlaying(false);
       setCurrentTime(0);
@@ -1239,9 +1206,9 @@ const VFSEffectPreview = ({ initialProcessedBlobs = null } = {}) => {
         cancelAnimationFrame(animationFrameRef.current);
       }
     });
-    
+
     audio.play();
-    
+
     // 更新播放进度
     const updateProgress = () => {
       if (audioElementRef.current) {
@@ -1341,7 +1308,7 @@ const VFSEffectPreview = ({ initialProcessedBlobs = null } = {}) => {
                 本工具通过调整录音的音高来模拟VFS后的效果，让您预先感受不同程度的音高变化。
               </p>
             </div>
-            
+
             <div className="border-l-4 border-amber-500 pl-4">
               <h3 className="text-lg font-semibold text-gray-900 mb-2">
                 ⚠️ 免责声明
@@ -1364,15 +1331,15 @@ const VFSEffectPreview = ({ initialProcessedBlobs = null } = {}) => {
               </span>
               录制您的声音
             </h2>
-            
+
             {!recordedBlob ? (
               <div className="bg-gray-50 rounded-lg p-6">
                 <p className="text-gray-600 mb-4">
-                  请录制一段3-60秒的声音。建议使用平稳的发音，比如持续发"啊"音，或朗读一句话。
+                  请录制一段3-{PREVIEW_RECORDING_LIMIT_SECONDS}秒的声音。暂停时间不计入录音时长。建议使用平稳的发音，比如持续发"啊"音，或朗读一句话。
                 </p>
                 <Recorder
                   onRecordingComplete={handleRecordingComplete}
-                  maxDurationSec={15}
+                  maxDurationSec={PREVIEW_RECORDING_LIMIT_SECONDS}
                 />
               </div>
             ) : (
@@ -1445,7 +1412,7 @@ const VFSEffectPreview = ({ initialProcessedBlobs = null } = {}) => {
                 </span>
                 选择变调程度
               </h2>
-              
+
               <div className="bg-gray-50 rounded-lg p-6">
                 <div className="mb-4">
                   <label className="block text-gray-700 font-medium mb-2">
@@ -1469,7 +1436,7 @@ const VFSEffectPreview = ({ initialProcessedBlobs = null } = {}) => {
                     <span>100 Hz (明显)</span>
                   </div>
                 </div>
-                
+
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
                   <p className="text-sm text-gray-700">
                     <strong>说明：</strong>
@@ -1517,7 +1484,7 @@ const VFSEffectPreview = ({ initialProcessedBlobs = null } = {}) => {
                         </span>
                       )}
                     </button>
-                    
+
                     <button
                       type="button"
                       onClick={() => setSelectedAlgorithm('td-psola')}
@@ -1550,7 +1517,7 @@ const VFSEffectPreview = ({ initialProcessedBlobs = null } = {}) => {
                       className={`p-4 rounded-lg border-2 text-left transition-all ${
                         selectedAlgorithm === 'world'
                           ? 'border-purple-600 bg-purple-50 shadow-md'
-                          : isWorldJSLoaded 
+                          : isWorldJSLoaded
                             ? 'border-gray-200 hover:border-purple-300'
                             : 'border-gray-200 bg-gray-50 opacity-60 cursor-not-allowed'
                       }`}
@@ -1566,7 +1533,7 @@ const VFSEffectPreview = ({ initialProcessedBlobs = null } = {}) => {
                       <p className="text-sm text-gray-600">
                         高保真声码器算法（处理耗时约1-2分钟）
                         {!isWorldJSLoaded && (
-                          <span className="text-orange-600 block mt-1">（加载中...）</span>
+                          <span className="text-orange-600 block mt-1">{worldLoadError ? '（加载失败）' : '（加载中...）'}</span>
                         )}
                       </p>
                       {processedBlobs['world'] && (
@@ -1576,6 +1543,12 @@ const VFSEffectPreview = ({ initialProcessedBlobs = null } = {}) => {
                       )}
                     </button>
                   </div>
+                  {worldLoadError && (
+                    <div role="alert" className="mt-3 rounded-lg bg-orange-50 p-3 text-sm text-orange-800">
+                      WORLD 声码器加载失败。
+                      <button type="button" onClick={retryWorldLoad} className="ml-2 font-semibold underline">重新加载</button>
+                    </div>
+                  )}
                 </div>
 
                 <button
@@ -1594,7 +1567,7 @@ const VFSEffectPreview = ({ initialProcessedBlobs = null } = {}) => {
                       </div>
                       {processingProgress > 0 && (
                         <div className="w-full bg-purple-800 rounded-full h-2 overflow-hidden">
-                          <div 
+                          <div
                             className="bg-white h-full transition-all duration-300"
                             style={{ width: `${processingProgress * 100}%` }}
                           />
@@ -1607,8 +1580,8 @@ const VFSEffectPreview = ({ initialProcessedBlobs = null } = {}) => {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                       </svg>
                       <span>处理音频 ({
-                        selectedAlgorithm === 'rubberband' ? 'RubberBand' : 
-                        selectedAlgorithm === 'world' ? 'WORLD' : 
+                        selectedAlgorithm === 'rubberband' ? 'RubberBand' :
+                        selectedAlgorithm === 'world' ? 'WORLD' :
                         'TD-PSOLA'
                       })</span>
                     </div>
@@ -1627,7 +1600,7 @@ const VFSEffectPreview = ({ initialProcessedBlobs = null } = {}) => {
                 </span>
                 预览效果
               </h2>
-              
+
               <div className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-lg p-6 border-2 border-purple-200">
                 <div className="flex items-center mb-4">
                   <svg className="w-6 h-6 text-purple-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1635,7 +1608,7 @@ const VFSEffectPreview = ({ initialProcessedBlobs = null } = {}) => {
                   </svg>
                   <span className="text-purple-900 font-medium">处理完成！您可以播放对比效果</span>
                 </div>
-                
+
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   {/* 原始录音 */}
                   <div className="bg-white rounded-lg p-4 shadow">
@@ -1665,7 +1638,7 @@ const VFSEffectPreview = ({ initialProcessedBlobs = null } = {}) => {
                       )}
                     </button>
                   </div>
-                  
+
                   {/* RubberBand 处理结果 */}
                   {processedBlobs['rubberband'] && (
                     <div className="bg-white rounded-lg p-4 shadow border-2 border-purple-300">
@@ -1696,7 +1669,7 @@ const VFSEffectPreview = ({ initialProcessedBlobs = null } = {}) => {
                       </button>
                     </div>
                   )}
-                  
+
                   {/* TD-PSOLA 处理结果 */}
                   {processedBlobs['td-psola'] && (
                     <div className="bg-white rounded-lg p-4 shadow border-2 border-indigo-300">
@@ -1759,7 +1732,7 @@ const VFSEffectPreview = ({ initialProcessedBlobs = null } = {}) => {
                     </div>
                   )}
                 </div>
-                
+
                 {isPlaying && (
                   <div className="mt-4">
                     <button
@@ -1770,21 +1743,21 @@ const VFSEffectPreview = ({ initialProcessedBlobs = null } = {}) => {
                     </button>
                     <div className="mt-2 text-center text-sm text-gray-600">
                       正在播放: {
-                        playbackType === 'original' ? '原始录音' : 
-                        playbackType === 'rubberband' ? 'RubberBand' : 
-                        playbackType === 'world' ? 'WORLD' : 
+                        playbackType === 'original' ? '原始录音' :
+                        playbackType === 'rubberband' ? 'RubberBand' :
+                        playbackType === 'world' ? 'WORLD' :
                         'TD-PSOLA'
                       } - {formatTime(currentTime)} / {formatTime(duration)}
                     </div>
                     <div className="mt-2 w-full bg-gray-200 rounded-full h-2">
-                      <div 
+                      <div
                         className="bg-purple-600 h-2 rounded-full transition-all duration-100"
                         style={{ width: `${(currentTime / duration) * 100}%` }}
                       />
                     </div>
                   </div>
                 )}
-                
+
                 {/* 对比提示 */}
                 {processedBlobs['rubberband'] && processedBlobs['td-psola'] && (
                   <div className="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-3">

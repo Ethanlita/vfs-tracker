@@ -2,43 +2,39 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 import wasm from 'vite-plugin-wasm'
-import { copyFileSync, mkdirSync, readdirSync, statSync } from 'fs'
-import { join, dirname } from 'path'
+import { readFileSync, readdirSync, statSync } from 'fs'
+import { join } from 'path'
+import { createProductionConsoleGuardPlugin, getBuildLoggingOptions } from './config/buildLogging.js'
 
-// 自定义插件：复制posts目录到构建输出
+/** 将公开文档作为构建资源输出，遵守实际outDir且在SW生成前可见。 */
 const copyPostsPlugin = () => {
   return {
     name: 'copy-posts',
     generateBundle() {
-      const copyRecursive = (src, dest) => {
-        try {
-          const stat = statSync(src)
-          if (stat.isDirectory()) {
-            mkdirSync(dest, { recursive: true })
-            const files = readdirSync(src)
-            files.forEach(file => {
-              copyRecursive(join(src, file), join(dest, file))
-            })
-          } else {
-            mkdirSync(dirname(dest), { recursive: true })
-            copyFileSync(src, dest)
-          }
-        } catch (error) {
-          console.warn(`Warning: Could not copy ${src} to ${dest}:`, error.message)
+      const emitRecursive = (src, assetPath) => {
+        const stat = statSync(src)
+        if (stat.isDirectory()) {
+          const files = readdirSync(src)
+          files.forEach(file => {
+            emitRecursive(join(src, file), `${assetPath}/${file}`)
+          })
+        } else {
+          this.emitFile({ type: 'asset', fileName: assetPath, source: readFileSync(src) })
         }
       }
 
-      // 复制posts目录到dist/posts
-      copyRecursive('posts', 'dist/posts')
-      console.log('✅ Posts directory copied to dist/posts')
+      // 不再写死dist目录或忽略复制错误，缺失文档应使构建失败。
+      emitRecursive('posts', 'posts')
     }
   }
 }
 
 // https://vite.dev/config/
-export default defineConfig({
+export default defineConfig(({ command }) => ({
   base: '/', // Set base to root ('/') for custom domain deployment
+  esbuild: getBuildLoggingOptions(command),
   plugins: [
+    createProductionConsoleGuardPlugin(),
     wasm(),  // WASM 支持（RubberBand, World.JS）
     react(),
     copyPostsPlugin(),
@@ -65,7 +61,10 @@ export default defineConfig({
         ]
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,wasm,woff,woff2}']
+        // 仅补充公开文档目录与正文，不扩大到其他JSON文件。
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,wasm,woff,woff2}', 'posts.json', 'posts/**/*.md'],
+        // 大尺寸源图没有运行时引用；管理后台依赖在线 AWS 服务，不进入面向用户的离线安装包。
+        globIgnores: ['icons/icon.png', 'icons/icon_origin.png', 'assets/AdminApp-*.js']
       }
     })
   ],
@@ -75,7 +74,14 @@ export default defineConfig({
     sourcemap: false,
     rollupOptions: {
       output: {
-        manualChunks: undefined,
+        /** 将稳定的状态与认证依赖独立缓存，业务入口更新时避免重复下载这些库。 */
+        manualChunks(id) {
+          if (id.includes('node_modules/@tanstack/')) return 'query-state';
+          if (id.includes('node_modules/aws-amplify/') || id.includes('node_modules/@aws-amplify/')) {
+            return 'amplify-auth';
+          }
+          return undefined;
+        },
       },
     },
     emptyOutDir: true, // Ensure the output directory is cleared before each build
@@ -136,4 +142,4 @@ export default defineConfig({
     testTimeout: process.env.COVERAGE ? 30000 : 10000,  // coverage模式: 30s, 普通模式: 10s
     hookTimeout: process.env.COVERAGE ? 20000 : 10000,  // coverage模式: 20s, 普通模式: 10s
   },
-})
+}))

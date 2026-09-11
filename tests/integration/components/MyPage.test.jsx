@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { BrowserRouter } from 'react-router-dom';
 import MyPage from '../../../src/components/MyPage';
@@ -166,13 +166,13 @@ describe('MyPage Component', () => {
     it('应该显示声音频率分析标题', async () => {
       renderWithRouter(<MyPage />);
 
-      expect(screen.getByText('声音频率分析')).toBeInTheDocument();
+      expect(await screen.findByText('声音频率分析')).toBeInTheDocument();
     });
 
     it('应该显示事件时间轴标题', async () => {
       renderWithRouter(<MyPage />);
 
-      expect(screen.getByText('事件时间轴')).toBeInTheDocument();
+      expect(await screen.findByText('事件时间轴')).toBeInTheDocument();
     });
   });
 
@@ -186,8 +186,7 @@ describe('MyPage Component', () => {
       renderWithRouter(<MyPage />);
 
       await waitFor(() => {
-        const spinners = document.querySelectorAll('.animate-spin');
-        expect(spinners.length).toBeGreaterThan(0);
+        expect(screen.getByRole('status')).toHaveTextContent('正在加载事件');
       });
     });
 
@@ -482,5 +481,23 @@ describe('MyPage Component', () => {
         expect(screen.queryByText(/共.*个事件/i)).not.toBeInTheDocument();
       });
     });
+  });
+
+  it.each(['400', '500', '网络故障'])('%s失败与慢重试不显示空态或旧统计', async reason => {
+    api.getEventsByUserId.mockRejectedValueOnce(new Error(reason));
+    renderWithRouter(<MyPage />);
+    await screen.findByRole('alert');
+    expect(screen.queryByText('暂无事件')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('voice-frequency-chart')).not.toBeInTheDocument();
+    let resolve;
+    api.getEventsByUserId.mockImplementationOnce(() => new Promise(yes => { resolve = yes; }));
+    await user.click(screen.getByRole('button', { name: '重试', exact: true }));
+    expect(screen.getByRole('status')).toHaveTextContent('正在加载事件');
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.queryByText('暂无事件')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('voice-frequency-chart')).not.toBeInTheDocument();
+    await act(async () => resolve(mockEvents));
+    expect(await screen.findByTestId('voice-frequency-chart')).toHaveTextContent('Events: 3');
+    expect(api.getEventsByUserId).toHaveBeenCalledTimes(2);
   });
 });

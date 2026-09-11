@@ -183,6 +183,9 @@ describe('AuthContext 单元测试', () => {
       expect(typeof result.current.refreshCognitoUserInfo).toBe('function');
       expect(typeof result.current.updateCognitoUserInfo).toBe('function');
       expect(typeof result.current.resendEmailVerification).toBe('function');
+      expect(typeof result.current.confirmEmailVerification).toBe('function');
+      expect(typeof result.current.cancelEmailChange).toBe('function');
+      expect(result.current.pendingEmailVerification).toBeNull();
     });
   });
 

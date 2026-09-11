@@ -5,16 +5,17 @@ import PostsDropdown from './PostsDropdown.jsx';
 import { useAuth } from '../contexts/AuthContext.jsx';
 import { generateAvatarFromName, getUserAvatarUrl, getUserDisplayName } from '../utils/avatar.js';
 
+/** 顶栏在桌面和触屏共用同一个功能导航入口。 */
 const Header = ({ AuthComponent }) => {
   const { user, userProfile } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [avatarUrl, setAvatarUrl] = useState('');
-  const [toolsMenuOpen, setToolsMenuOpen] = useState(false);
-  const toolsMenuTimeoutRef = useRef(null);
+  const menuButtonRef = useRef(null);
+  const shouldRestoreMenuFocusRef = useRef(false);
+  // 首次渲染即提供有效图片，避免异步头像加载前出现 src="" 和整页误请求。
+  const [avatarUrl, setAvatarUrl] = useState(() => generateAvatarFromName('Guest', 64));
 
   const displayName = useMemo(() => (user ? getUserDisplayName(user) : '访客'), [user]);
   const location = useLocation();
-  const toolsMenuRef = useRef(null);
 
   useEffect(() => {
     let active = true;
@@ -27,8 +28,9 @@ const Header = ({ AuthComponent }) => {
             setAvatarUrl(url);
           }
           return;
-        } catch (error) {
-          console.error('加载头像失败:', error);
+        } catch {
+      // 错误已由页面状态或恢复路径处理，不向控制台输出用户数据。
+
         }
       }
 
@@ -45,52 +47,32 @@ const Header = ({ AuthComponent }) => {
   }, [user, displayName, userProfile?.profile?.avatarKey]);
 
   const docLink = useMemo(() => ({ label: '文档', to: '/posts' }), []);
-  const toolLinks = useMemo(
-    () => [
-      { label: '公共仪表板', to: '/dashboard' },
-      { label: 'Hz-音符转换器', to: '/note-frequency-tool' },
-      { label: 'VFS效果预览', to: '/vfs-effect-preview' },
-    ],
-    [],
-  );
-
-  const isToolsActive = useMemo(
-    () => toolLinks.some(link => location.pathname.startsWith(link.to)),
-    [toolLinks, location.pathname],
-  );
 
   const isDocsActive = useMemo(
     () => location.pathname.startsWith('/posts') || location.pathname.startsWith('/docs'),
     [location.pathname],
   );
 
-  // #zh: 统一顶栏按钮的基础样式，确保“文档”和“工具”视觉保持一致。
+  /** 关闭原生对话框后显式回到入口，补齐 WebKit 不自动回焦点的行为差异。 */
+  const closeSidebar = () => {
+    shouldRestoreMenuFocusRef.current = true;
+    setSidebarOpen(false);
+  };
+
+  useEffect(() => {
+    if (sidebarOpen || !shouldRestoreMenuFocusRef.current) return undefined;
+    const frame = window.requestAnimationFrame(() => {
+      menuButtonRef.current?.focus();
+      shouldRestoreMenuFocusRef.current = false;
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [sidebarOpen]);
+
+  // #zh: 顶栏保留文档入口，全部功能统一由共享侧栏提供。
   const navButtonBaseClass = 'flex items-center gap-1 rounded-lg px-3 py-2 text-sm font-medium transition';
   const navButtonActiveClass = 'bg-pink-50 text-pink-600';
   const navButtonInactiveClass = 'text-gray-700 hover:bg-gray-50';
 
-  useEffect(() => {
-    setToolsMenuOpen(false);
-  }, [location.pathname]);
-
-  useEffect(() => () => {
-    window.clearTimeout(toolsMenuTimeoutRef.current);
-  }, []);
-
-  /**
-   * @zh 悬停打开工具菜单，离开后延迟关闭避免抖动。
-   * @en Open the tools menu on hover and delay closing to avoid flickers.
-   */
-  const handleToolsHover = (open) => {
-    window.clearTimeout(toolsMenuTimeoutRef.current);
-    if (open) {
-      setToolsMenuOpen(true);
-      return;
-    }
-    toolsMenuTimeoutRef.current = window.setTimeout(() => {
-      setToolsMenuOpen(false);
-    }, 240);
-  };
 
   return (
     <>
@@ -99,14 +81,19 @@ const Header = ({ AuthComponent }) => {
           <div className="flex items-center justify-between w-full">
             <div className="flex items-center gap-3">
               <button
+                ref={menuButtonRef}
                 type="button"
                 aria-label="打开菜单"
+                aria-haspopup="dialog"
+                aria-controls="site-navigation"
+                aria-expanded={sidebarOpen}
                 onClick={() => setSidebarOpen(true)}
-                className="lg:hidden rounded p-2 hover:bg-gray-100 text-gray-600"
+                className="flex items-center gap-2 rounded-lg p-2 hover:bg-gray-100 text-gray-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-pink-500"
               >
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                   <path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
                 </svg>
+                <span className="hidden lg:inline text-sm font-medium">全部功能</span>
               </button>
               <NavLink
                 to="/"
@@ -122,53 +109,6 @@ const Header = ({ AuthComponent }) => {
                   inactiveClassName={navButtonInactiveClass}
                   isActive={isDocsActive}
                 />
-                <div
-                  className="relative"
-                  ref={toolsMenuRef}
-                  onMouseEnter={() => handleToolsHover(true)}
-                  onMouseLeave={() => handleToolsHover(false)}
-                >
-                  <button
-                    type="button"
-                    className={`${navButtonBaseClass} ${
-                      isToolsActive ? navButtonActiveClass : navButtonInactiveClass
-                    }`}
-                    onClick={(event) => {
-                      event.preventDefault();
-                    }}
-                    aria-haspopup="true"
-                    aria-expanded={toolsMenuOpen}
-                  >
-                    工具
-                    <svg
-                      className={`h-4 w-4 transition-transform ${toolsMenuOpen ? 'rotate-180' : ''}`}
-                      viewBox="0 0 20 20"
-                      fill="currentColor"
-                      aria-hidden="true"
-                    >
-                      <path d="M5.23 7.21a.75.75 0 011.06.02L10 10.94l3.71-3.71a.75.75 0 111.06 1.06l-4.24 4.24a.75.75 0 01-1.06 0L5.21 8.27a.75.75 0 01.02-1.06z" />
-                    </svg>
-                  </button>
-                  {toolsMenuOpen ? (
-                    <div className="absolute left-0 mt-2 w-48 rounded-xl border border-gray-100 bg-white shadow-lg py-2">
-                      {toolLinks.map(link => (
-                        <NavLink
-                          key={link.to}
-                          to={link.to}
-                          className={({ isActive }) =>
-                            `block px-4 py-2 text-sm transition ${
-                              isActive ? 'text-pink-600 bg-pink-50' : 'text-gray-700 hover:bg-gray-50'
-                            }`
-                          }
-                          onClick={() => setToolsMenuOpen(false)}
-                          end
-                        >
-                          {link.label}
-                        </NavLink>
-                      ))}
-                    </div>
-                  ) : null}
-                </div>
               </div>
 
             </div>
@@ -178,7 +118,7 @@ const Header = ({ AuthComponent }) => {
                 {AuthComponent ? <AuthComponent /> : null}
               </div>
               <NavLink
-                to={user ? '/mypage' : '#'}
+                to={user ? '/mypage' : `/login?returnUrl=${encodeURIComponent(location.pathname + location.search + location.hash)}`}
                 className="lg:hidden block"
                 aria-label={user ? `${displayName}的个人页面` : '登录账户'}
               >
@@ -195,7 +135,7 @@ const Header = ({ AuthComponent }) => {
 
       <Sidebar
         open={sidebarOpen}
-        onClose={() => setSidebarOpen(false)}
+        onClose={closeSidebar}
         user={user}
         avatarUrl={avatarUrl}
         docLink={docLink}

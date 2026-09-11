@@ -11,7 +11,7 @@ import { getFileUrl } from '../../../api';
  */
 const AttachmentItem = ({ attachment, onDownload, isLoading }) => {
   const { fileName, fileType, fileUrl } = attachment;
-  
+
   // 根据文件类型确定图标
   const getFileIcon = (type) => {
     if (!type) return '📄';
@@ -45,15 +45,15 @@ const AttachmentItem = ({ attachment, onDownload, isLoading }) => {
           </p>
         </div>
       </div>
-      
+
       <button
         type="button"
         onClick={() => onDownload(fileUrl, fileName)}
         disabled={isLoading}
         className="
-          flex-shrink-0 ml-2 px-3 py-1.5 
+          flex-shrink-0 ml-2 px-3 py-1.5
           text-xs font-medium text-purple-600 dark:text-purple-400
-          bg-purple-50 dark:bg-purple-900/30 
+          bg-purple-50 dark:bg-purple-900/30
           hover:bg-purple-100 dark:hover:bg-purple-900/50
           rounded-md transition-colors
           disabled:opacity-50 disabled:cursor-not-allowed
@@ -95,16 +95,16 @@ const AttachmentList = ({ attachments, className = '' }) => {
    */
   const handleDownload = async (fileUrl) => {
     if (!fileUrl) return;
-    
+
     setLoadingUrl(fileUrl);
     try {
       // 调用 API 获取预签名 URL
       const presignedUrl = await getFileUrl(fileUrl);
-      
+
       // 在新标签页中打开（或触发下载）
       window.open(presignedUrl, '_blank');
-    } catch (error) {
-      console.error('获取文件 URL 失败:', error);
+    } catch {
+
       alert('获取文件链接失败，请稍后重试');
     } finally {
       setLoadingUrl(null);
@@ -119,7 +119,7 @@ const AttachmentList = ({ attachments, className = '' }) => {
           附件 ({attachments.length})
         </span>
       </div>
-      
+
       <div className="space-y-2">
         {attachments.map((attachment, index) => (
           <AttachmentItem

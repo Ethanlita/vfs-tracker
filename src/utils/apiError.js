@@ -15,6 +15,7 @@ function readHeaderValue(headers, keys) {
       }
     }
   } catch {
+      // 错误已由页面状态或恢复路径处理，不向控制台输出用户数据。
     // ignore header access errors
   }
   return undefined;

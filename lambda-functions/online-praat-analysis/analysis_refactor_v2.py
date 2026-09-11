@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import csv
 import json
-import logging
 import math
 import os
 from dataclasses import dataclass, asdict
@@ -25,9 +24,9 @@ from parselmouth.praat import call  # type: ignore
 from analysis import analyze_speech_flow
 from artifacts import create_pdf_report, create_formant_chart, create_placeholder_chart, create_time_series_chart
 from artifacts_refactor_v2 import create_formant_spl_expanded_chart_v2, create_vrp_chart_v2
+from structured_logging import create_structured_logger, describe_error
 
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
+logger = create_structured_logger('online-praat-analysis.pipeline-v2')
 
 
 @dataclass
@@ -252,10 +251,7 @@ def _extract_frames(
         voiced = pitch_vals[pitch_vals > 0]
         f0_med = float(np.median(voiced)) if voiced.size > 0 else np.nan
         fc, wl = _pick_formant_params(f0_med)
-        logger.info(
-            'Adaptive formant params for %s (task=%s): F0_median=%.1f Hz → ceiling=%.0f Hz, window=%.3f s',
-            file_id, task, f0_med if np.isfinite(f0_med) else 0.0, fc, wl,
-        )
+        logger.debug('adaptive_formant_parameters_selected')
 
     formant = call(
         sound,
@@ -383,22 +379,21 @@ def _extract_frames(
                     flag_counter[f] = flag_counter.get(f, 0) + 1
         total = len(rows)
         if flag_counter:
-            pct = round(100.0 * flagged_frame_count / total, 1)
-            summary = ', '.join(f'{k}={v}' for k, v in sorted(flag_counter.items(), key=lambda x: -x[1]))
-            logger.warning(
-                'QC flags summary for %s (task=%s): %d/%d frames flagged (%.1f%%) — %s',
-                file_id, task, flagged_frame_count, total, pct, summary,
-            )
+            logger.warning('frame_quality_flags_detected', {
+                'flaggedFrameCount': flagged_frame_count,
+                'frameCount': total,
+                'flagCategoryCount': len(flag_counter),
+            })
 
         # [CN] 检查共振峰 NaN 占比：即使未触发 QC flag，Praat 本身也可能返回 NaN
         f1_nan = sum(1 for r in rows if not np.isfinite(r.get('f1_hz', np.nan)))
         f2_nan = sum(1 for r in rows if not np.isfinite(r.get('f2_hz', np.nan)))
         if f1_nan > total * 0.5 or f2_nan > total * 0.5:
-            logger.warning(
-                'High NaN rate in formants for %s (task=%s): F1 NaN=%d/%d (%.1f%%), F2 NaN=%d/%d (%.1f%%)',
-                file_id, task, f1_nan, total, 100.0 * f1_nan / total,
-                f2_nan, total, 100.0 * f2_nan / total,
-            )
+            logger.warning('formant_missing_rate_high', {
+                'f1MissingCount': f1_nan,
+                'f2MissingCount': f2_nan,
+                'frameCount': total,
+            })
 
     return rows
 
@@ -481,7 +476,7 @@ def _extract_anchor(rows: List[Dict], task_name: str, file_selection: str = 'fir
     """
     sel = [r for r in rows if r.get('task') == task_name]
     if not sel:
-        logger.warning('Anchor extraction failed for task=%s: no matching rows', task_name)
+        logger.warning('anchor_rows_missing')
         return {'task': task_name, 'error': 'no_rows'}
 
     file_name = sel[0].get('file', '')
@@ -502,13 +497,13 @@ def _extract_anchor(rows: List[Dict], task_name: str, file_selection: str = 'fir
 
     file_rows = [r for r in sel if r.get('file') == file_name]
     if not file_rows:
-        logger.warning('Anchor extraction failed for task=%s, file=%s: no file rows', task_name, file_name)
+        logger.warning('anchor_file_rows_missing')
         return {'task': task_name, 'error': 'no_file_rows'}
 
     ts = np.asarray([r.get('time_s', np.nan) for r in file_rows], dtype=float)
     tmin, tmax = np.nanmin(ts), np.nanmax(ts)
     if not np.isfinite(tmin) or not np.isfinite(tmax) or tmax <= tmin:
-        logger.warning('Anchor extraction failed for task=%s, file=%s: invalid time range tmin=%s tmax=%s', task_name, file_name, tmin, tmax)
+        logger.warning('anchor_time_range_invalid')
         return {'task': task_name, 'error': 'invalid_time_range'}
 
     # 稳态窗：中间 50%（避免起止边缘）
@@ -526,11 +521,10 @@ def _extract_anchor(rows: List[Dict], task_name: str, file_selection: str = 'fir
         stable.append(r)
 
     if len(stable) < 5:
-        logger.warning(
-            'Anchor extraction failed for task=%s, file=%s: insufficient stable frames (%d < 5, '
-            'total file_rows=%d, mid-50%% window=[%.3f, %.3f]s)',
-            task_name, file_name, len(stable), len(file_rows), left, right,
-        )
+        logger.warning('anchor_stable_frames_insufficient', {
+            'stableFrameCount': len(stable),
+            'frameCount': len(file_rows),
+        })
         return {'task': task_name, 'error': 'insufficient_stable_frames'}
 
     def med(key):
@@ -560,10 +554,10 @@ def _extract_anchor(rows: List[Dict], task_name: str, file_selection: str = 'fir
     # [CN] 检查锚点关键指标是否为 NaN，记录 WARNING 便于追踪共振峰分析的静默失败
     nan_keys = [k for k in ('f0_hz', 'f1_hz', 'f2_hz', 'f3_hz', 'spl_db') if not np.isfinite(anchor.get(k, np.nan))]
     if nan_keys:
-        logger.warning(
-            'Anchor for task=%s, file=%s has NaN values: %s (n_stable_frames=%d)',
-            task_name, file_name, ', '.join(nan_keys), len(stable),
-        )
+        logger.warning('anchor_metrics_missing', {
+            'missingMetricCount': len(nan_keys),
+            'stableFrameCount': len(stable),
+        })
 
     return anchor
 
@@ -590,8 +584,8 @@ def _compute_sustained_quality_metrics(local_wav: Optional[str], p: Params) -> D
             'shimmer_local_percent': round(float(shimmer_local), 2) if np.isfinite(shimmer_local) else 0.0,
             'hnr_db': round(float(hnr_db), 2) if np.isfinite(hnr_db) else 0.0,
         }
-    except Exception as exc:
-        logger.warning(f'sustained quality metrics failed on {local_wav}: {exc}')
+    except Exception as error:
+        logger.warning('sustained_quality_metrics_failed', describe_error(error))
         return {
             'jitter_local_percent': 0.0,
             'shimmer_local_percent': 0.0,
@@ -652,11 +646,7 @@ def _build_legacy_formant_block(anchor: Dict) -> Dict:
                 nan_detail.append('F1')
             if f2_nan:
                 nan_detail.append('F2')
-            logger.warning(
-                'Formant block for task=%s: %s are NaN despite no extraction error '
-                '(likely caused by formant_ceiling mismatch or QC filtering)',
-                task_name, '+'.join(nan_detail),
-            )
+            logger.warning('formant_block_metrics_missing', {'missingMetricCount': len(nan_detail)})
         else:
             reason = 'SUCCESS'
 

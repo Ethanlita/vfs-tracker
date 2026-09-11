@@ -1,29 +1,31 @@
 name: Build and Push Python Lambda Image
 
 on:
-  # 手动触发
-  workflow_dispatch:
-  # 允许被其他 workflow 调用（由 deploy-backend.yml 调用）
+  # 仅允许统一后端发布工作流调用，避免绕过 Node/SAM 质量门禁。
   workflow_call:
+    outputs:
+      image_uri:
+        description: 由调用方在 SAM 成功后发布的不可变镜像地址
+        value: ${{ jobs.build-and-push.outputs.image_uri }}
 
 permissions:
   id-token: write
   contents: read
-  actions: read
 
 env:
   ECR_REPOSITORY: vfs-tracker-images
-  PARSELMOUTH_DEV_WHEEL_ENABLED: 'true'
-  PARSELMOUTH_DEV_WHEEL_RUN_ID: '21285172527'
-  PARSELMOUTH_DEV_WHEEL_REPO: 'YannickJadoul/Parselmouth'
-  PARSELMOUTH_DEV_WHEEL_ARTIFACT: 'wheels-manylinux_aarch64'
-  PARSELMOUTH_DEV_WHEEL_FILENAME: 'praat_parselmouth-0.5.0.dev0-cp313-cp313-manylinux2014_aarch64.manylinux_2_17_aarch64.whl'
-  PARSELMOUTH_DEV_WHEEL_SHA256: ''
+  # v2 管线依赖 filtered autocorrelation；稳定版 0.4.7 尚未提供该命令。
+  # 固定源码提交比引用 90 天过期的外部 artifact 可重复。
+  PARSELMOUTH_SOURCE_REPOSITORY: 'https://github.com/YannickJadoul/Parselmouth.git'
+  PARSELMOUTH_SOURCE_COMMIT: '0a0594265823f5c3fdaa661a05c887cdf02ec143'
 
 jobs:
   build-and-push:
     runs-on: ubuntu-24.04-arm
-    timeout-minutes: 15
+    outputs:
+      image_uri: ${{ steps.image-uri.outputs.image_uri }}
+    # 首次固定源码构建 Praat 较慢，后续由 BuildKit/GHA 缓存复用。
+    timeout-minutes: 45
     
     steps:
       - name: Checkout code
@@ -42,50 +44,7 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
-      - name: Prepare Parselmouth dev wheel (optional)
-        id: parselmouth-wheel
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          WHEEL_PATH=""
-          WHEEL_SHA256=""
-
-          if [[ "${PARSELMOUTH_DEV_WHEEL_ENABLED}" == "true" ]]; then
-            ARTIFACT_DIR="lambda-functions/online-praat-analysis/tmp/parselmouth-dev-ci"
-            mkdir -p "${ARTIFACT_DIR}"
-
-            echo "Downloading artifact ${PARSELMOUTH_DEV_WHEEL_ARTIFACT} from run ${PARSELMOUTH_DEV_WHEEL_RUN_ID}"
-            gh run download "${PARSELMOUTH_DEV_WHEEL_RUN_ID}" \
-              -R "${PARSELMOUTH_DEV_WHEEL_REPO}" \
-              -n "${PARSELMOUTH_DEV_WHEEL_ARTIFACT}" \
-              -D "${ARTIFACT_DIR}"
-
-            FOUND_WHEEL=$(find "${ARTIFACT_DIR}" -type f -name "${PARSELMOUTH_DEV_WHEEL_FILENAME}" | head -n 1)
-            if [[ -z "${FOUND_WHEEL}" ]]; then
-              echo "[ERROR] Required wheel not found: ${PARSELMOUTH_DEV_WHEEL_FILENAME}"
-              exit 1
-            fi
-
-            cp "${FOUND_WHEEL}" "lambda-functions/online-praat-analysis/${PARSELMOUTH_DEV_WHEEL_FILENAME}"
-            WHEEL_PATH="${PARSELMOUTH_DEV_WHEEL_FILENAME}"
-
-            if [[ -n "${PARSELMOUTH_DEV_WHEEL_SHA256}" ]]; then
-              echo "${PARSELMOUTH_DEV_WHEEL_SHA256}  lambda-functions/online-praat-analysis/${PARSELMOUTH_DEV_WHEEL_FILENAME}" | sha256sum -c -
-              WHEEL_SHA256="${PARSELMOUTH_DEV_WHEEL_SHA256}"
-            fi
-
-            echo "Using dev wheel: ${FOUND_WHEEL}"
-          else
-            echo "Dev wheel injection disabled. Using requirements.txt default package versions."
-          fi
-
-          echo "wheel_path=${WHEEL_PATH}" >> "$GITHUB_OUTPUT"
-          echo "wheel_sha256=${WHEEL_SHA256}" >> "$GITHUB_OUTPUT"
-
       - name: Build and push Docker image
-        id: build-image
         uses: docker/build-push-action@v7
         with:
           context: ./lambda-functions/online-praat-analysis
@@ -98,25 +57,16 @@ jobs:
             ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest
             ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
           build-args: |
-            PARSELMOUTH_DEV_WHEEL_PATH=${{ steps.parselmouth-wheel.outputs.wheel_path }}
-            PARSELMOUTH_DEV_WHEEL_SHA256=${{ steps.parselmouth-wheel.outputs.wheel_sha256 }}
+            PARSELMOUTH_SOURCE_REPOSITORY=${{ env.PARSELMOUTH_SOURCE_REPOSITORY }}
+            PARSELMOUTH_SOURCE_COMMIT=${{ env.PARSELMOUTH_SOURCE_COMMIT }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Update Lambda function image
-        # 直接更新 Lambda 函数镜像，不使用 || echo 吞掉错误
+      - name: Export immutable image URI
+        id: image-uri
         run: |
           IMAGE_URI="${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}"
-          echo "Updating Lambda function with image: ${IMAGE_URI}"
-          aws lambda update-function-code \
-            --function-name online-praat-analysis \
-            --image-uri "${IMAGE_URI}" \
-            --region ${{ secrets.AWS_REGION }}
-          echo "Waiting for Lambda function update to complete..."
-          aws lambda wait function-updated \
-            --function-name online-praat-analysis \
-            --region ${{ secrets.AWS_REGION }}
-          echo "Lambda function successfully updated."
+          echo "image_uri=${IMAGE_URI}" >> "$GITHUB_OUTPUT"
 
       - name: Output image info
         run: |
@@ -125,3 +75,4 @@ jobs:
           echo "- **Repository:** ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Tags:** latest, ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Platform:** linux/arm64 (native build)" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status:** pushed; the caller publishes the SHA tag after SAM succeeds" >> $GITHUB_STEP_SUMMARY

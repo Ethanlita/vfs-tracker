@@ -2,6 +2,9 @@ import os
 import sys
 import importlib
 
+import numpy as np
+import parselmouth
+
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 
@@ -45,3 +48,17 @@ def test_task_mapping_glide_up_down():
     assert _task_from_s3_key(base + '3_2.wav') == 'glide_up'
     assert _task_from_s3_key(base + '3_3.wav') == 'glide_down'
     assert _task_from_s3_key(base + '3_4.wav') == 'glide_down'
+
+
+def test_filtered_autocorrelation_command_is_available():
+    """[CN] 生产 v2 单路径依赖的 filtered autocorrelation 必须真实可调用。"""
+    from analysis_refactor_v2 import Params, _build_pitch
+
+    sample_rate = 16000
+    times = np.arange(sample_rate, dtype=np.float64) / sample_rate
+    sound = parselmouth.Sound(np.sin(2 * np.pi * 180 * times), sample_rate)
+
+    pitch = _build_pitch(sound, Params())
+    frequencies = pitch.selected_array['frequency']
+
+    assert np.any(frequencies > 0)

@@ -11,6 +11,7 @@ const isLikelyChinaLocale = () => {
       return true;
     }
   } catch {
+      // 错误已由页面状态或恢复路径处理，不向控制台输出用户数据。
     // ignore
   }
 
@@ -26,6 +27,7 @@ const isLikelyChinaLocale = () => {
       return hasChinaLocale;
     }
   } catch {
+      // 错误已由页面状态或恢复路径处理，不向控制台输出用户数据。
     // ignore
   }
 
@@ -77,6 +79,7 @@ const RegionSwitchBanner = () => {
     try {
       localStorage.setItem(DISMISS_KEY, '1');
     } catch {
+      // 错误已由页面状态或恢复路径处理，不向控制台输出用户数据。
       // ignore
     }
     setOpen(false);

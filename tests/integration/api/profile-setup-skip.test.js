@@ -7,6 +7,8 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { setupUserProfile, isUserProfileComplete } from '../../../src/api.js';
 import { setAuthenticated } from '../../../src/test-utils/mocks/amplify-auth.js';
 
+const NEW_PROFILE_VERSION = { exists: false, updatedAt: null };
+
 describe('Profile Setup Skip 功能测试', () => {
   beforeEach(() => {
     setAuthenticated({
@@ -20,16 +22,11 @@ describe('Profile Setup Skip 功能测试', () => {
     it('应该成功保存 setupSkipped=true 标记', async () => {
       const skipPayload = {
         profile: {
-          name: '',
-          bio: '',
-          isNamePublic: false,
-          socials: [],
-          areSocialsPublic: false,
           setupSkipped: true  // 核心字段
         }
       };
 
-      const response = await setupUserProfile(skipPayload);
+      const response = await setupUserProfile(skipPayload, NEW_PROFILE_VERSION);
 
       expect(response).toBeDefined();
       expect(response.user).toBeDefined();
@@ -140,7 +137,7 @@ describe('Profile Setup Skip 功能测试', () => {
         }
       };
 
-      const response = await setupUserProfile(payload);
+      const response = await setupUserProfile(payload, NEW_PROFILE_VERSION);
 
       expect(response).toBeDefined();
       expect(response.user).toBeDefined();
@@ -160,12 +157,11 @@ describe('Profile Setup Skip 功能测试', () => {
             { platform: 'Twitter', handle: '@testuser' },
             { platform: 'Discord', handle: 'testuser#1234' }
           ],
-          areSocialsPublic: true,
-          setupSkipped: false  // 明确表示不是跳过
+          areSocialsPublic: true
         }
       };
 
-      const response = await setupUserProfile(completePayload);
+      const response = await setupUserProfile(completePayload, NEW_PROFILE_VERSION);
 
       expect(response).toBeDefined();
       expect(response.user).toBeDefined();

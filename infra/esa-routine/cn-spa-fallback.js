@@ -113,7 +113,6 @@ async function fetchUpstream(upstreamRequest, originalUrl) {
  * @returns {Promise<Response>} 首页 HTML 响应。
  */
 async function createIndexResponse(request, markerHeader) {
-  const url = new URL(request.url);
   const indexUrl = new URL('/', `https://${UPSTREAM_HOST}`);
   const indexRequest = new Request(indexUrl.toString(), {
     method: 'GET',

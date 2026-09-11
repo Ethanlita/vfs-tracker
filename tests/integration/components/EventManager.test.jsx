@@ -258,6 +258,32 @@ describe('EventManager 组件集成测试', () => {
   });
 
   describe('事件详情弹窗', () => {
+    it.each([
+      ['self_test', 'pending'],
+      ['hospital_test', 'approved'],
+      ['voice_training', 'rejected'],
+      ['self_practice', 'pending'],
+      ['surgery', 'approved'],
+      ['feeling_log', 'rejected']
+    ])('%s / %s 均说明删除后重新新增且不显示编辑按钮', async (type, status) => {
+      const event = {
+        eventId: `${type}-${status}`,
+        type,
+        status,
+        date: '2025-10-10',
+        createdAt: '2025-10-10T10:00:00.000Z',
+        details: {},
+        attachments: []
+      };
+      render(<EventManager events={[event]} onEventDeleted={mockOnEventDeleted} />);
+
+      await user.click(screen.getByText('查看详情'));
+
+      expect(screen.getByRole('status')).toHaveTextContent('已保存的事件不能直接编辑');
+      expect(screen.getByRole('status')).toHaveTextContent('删除原记录后重新新增');
+      expect(screen.queryByRole('button', { name: /编辑/ })).not.toBeInTheDocument();
+    });
+
     it('点击"查看详情"按钮应该打开详情弹窗', async () => {
       render(<EventManager events={mockEvents} onEventDeleted={mockOnEventDeleted} />);
       

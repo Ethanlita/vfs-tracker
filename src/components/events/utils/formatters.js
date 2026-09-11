@@ -1,3 +1,4 @@
+import { parseEventDate } from '../../../utils/calendarDate.js';
 /**
  * 事件字段数值格式化工具
  * 用于将原始数值转换为带单位的用户友好显示格式
@@ -90,7 +91,7 @@ export const formatCount = (value) => {
 export const formatDateTime = (isoString) => {
   if (!isoString) return '-';
   try {
-    const date = new Date(isoString);
+    const date = parseEventDate(isoString);
     if (isNaN(date.getTime())) return isoString;
     return date.toLocaleString('zh-CN', {
       year: 'numeric',
@@ -112,7 +113,7 @@ export const formatDateTime = (isoString) => {
 export const formatDate = (isoString) => {
   if (!isoString) return '-';
   try {
-    const date = new Date(isoString);
+    const date = parseEventDate(isoString);
     if (isNaN(date.getTime())) return isoString;
     return date.toLocaleDateString('zh-CN');
   } catch {
@@ -303,4 +304,17 @@ export const getNestedValue = (obj, path, defaultValue = undefined) => {
   }
   
   return current !== undefined ? current : defaultValue;
+};
+
+/**
+ * 格式化独立指标卡片数值，保留零值，缺失或非有限数值不生成卡片。
+ * @param {number|string} value - 数值或完整数字字符串。
+ * @param {number} decimals - 小数位数。
+ * @returns {string|null} 无单位的显示值。
+ */
+export const formatMetricNumber = (value, decimals = 1) => {
+  if (value == null || (typeof value === 'string' && !value.trim())) return null;
+  if (typeof value !== 'number' && typeof value !== 'string') return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number.toFixed(decimals) : null;
 };

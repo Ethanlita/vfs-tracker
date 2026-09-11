@@ -53,8 +53,9 @@ export const loadPendingSignUp = (now = Date.now()) => {
   let record = null;
   try {
     record = JSON.parse(raw);
-  } catch (error) {
-    console.warn('[pendingSignUp] 待验证账号记录已损坏，已清除:', error);
+  } catch {
+      // 错误已由页面状态或恢复路径处理，不向控制台输出用户数据。
+
   }
 
   const isValid = !!record
@@ -96,8 +97,8 @@ export const savePendingSignUp = ({ username, email = '' }, now = Date.now()) =>
 
   try {
     storage.setItem(PENDING_SIGNUP_STORAGE_KEY, JSON.stringify(record));
-  } catch (error) {
-    console.warn('[pendingSignUp] 写入待验证账号记录失败，已忽略:', error);
+  } catch {
+
     return null;
   }
   return record;

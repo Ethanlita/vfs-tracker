@@ -1,7 +1,7 @@
 /**
  * @file 安全凭证存储工具
  * 使用 Web Crypto API + 用户 PIN 对 IAM 凭证进行 AES-GCM 加密存储
- * 
+ *
  * 安全特性：
  * - 使用 PBKDF2 从用户 PIN 派生 256 位 AES 密钥
  * - 使用 AES-GCM 进行认证加密（同时提供机密性和完整性）
@@ -16,6 +16,23 @@ const STORAGE_KEY = 'vfs-admin-credentials-secure';
 const PBKDF2_ITERATIONS = 100000;
 
 /**
+ * 本地加密凭证读取错误。
+ * 错误码供界面区分 PIN、损坏数据和不支持的版本，避免依赖易变化的文案。
+ */
+export class SecureCredentialStorageError extends Error {
+  /**
+   * @param {'PIN_OR_DATA_INVALID'|'CORRUPT_DATA'|'UNSUPPORTED_VERSION'} code - 稳定错误码
+   * @param {string} message - 面向用户的中文错误信息
+   * @param {unknown} [cause] - 原始异常
+   */
+  constructor(code, message, cause) {
+    super(message, cause ? { cause } : undefined);
+    this.name = 'SecureCredentialStorageError';
+    this.code = code;
+  }
+}
+
+/**
  * 从用户 PIN 派生 AES-256 加密密钥
  * @param {string} pin - 用户输入的 PIN 码
  * @param {Uint8Array} salt - 随机盐值
@@ -24,7 +41,7 @@ const PBKDF2_ITERATIONS = 100000;
 async function deriveKeyFromPIN(pin, salt) {
   const encoder = new TextEncoder();
   const pinBuffer = encoder.encode(pin);
-  
+
   // 导入 PIN 作为密钥材料
   const keyMaterial = await crypto.subtle.importKey(
     'raw',
@@ -33,7 +50,7 @@ async function deriveKeyFromPIN(pin, salt) {
     false,
     ['deriveKey']
   );
-  
+
   // 使用 PBKDF2 派生 AES-256 密钥
   return crypto.subtle.deriveKey(
     {
@@ -60,25 +77,25 @@ export async function saveCredentialsSecure(accessKeyId, secretAccessKey, pin) {
   // 生成随机 salt (16 字节) 和 IV (12 字节，AES-GCM 推荐)
   const salt = crypto.getRandomValues(new Uint8Array(16));
   const iv = crypto.getRandomValues(new Uint8Array(12));
-  
+
   // 从 PIN 派生密钥
   const key = await deriveKeyFromPIN(pin, salt);
-  
+
   // 准备要加密的数据
   const encoder = new TextEncoder();
-  const plaintext = encoder.encode(JSON.stringify({ 
-    accessKeyId, 
+  const plaintext = encoder.encode(JSON.stringify({
+    accessKeyId,
     secretAccessKey,
     savedAt: Date.now()
   }));
-  
+
   // AES-GCM 加密
   const ciphertext = await crypto.subtle.encrypt(
     { name: 'AES-GCM', iv },
     key,
     plaintext
   );
-  
+
   // 将加密数据和元信息存储到 localStorage
   // 注意：salt 和 iv 不需要保密，可以明文存储
   const stored = {
@@ -87,9 +104,9 @@ export async function saveCredentialsSecure(accessKeyId, secretAccessKey, pin) {
     iv: arrayToBase64(iv),
     salt: arrayToBase64(salt),
   };
-  
+
   localStorage.setItem(STORAGE_KEY, JSON.stringify(stored));
-  console.log('🔐 凭证已加密保存');
+
 }
 
 /**
@@ -101,36 +118,64 @@ export async function saveCredentialsSecure(accessKeyId, secretAccessKey, pin) {
 export async function loadCredentialsSecure(pin) {
   const raw = localStorage.getItem(STORAGE_KEY);
   if (!raw) return null;
-  
+
+  let stored;
   try {
-    const stored = JSON.parse(raw);
-    
-    // 检查版本
-    if (stored.version !== 1) {
-      console.warn('⚠️ 凭证存储版本不匹配');
-      return null;
-    }
-    
+    stored = JSON.parse(raw);
+  } catch (error) {
+    throw new SecureCredentialStorageError('CORRUPT_DATA', '保存的凭证数据已损坏', error);
+  }
+
+  if (!stored || typeof stored !== 'object' || Array.isArray(stored) || !('version' in stored)) {
+    throw new SecureCredentialStorageError('CORRUPT_DATA', '保存的凭证数据已损坏');
+  }
+
+  // 版本不匹配时保留原始数据，避免旧版页面破坏未来版本的凭证。
+  if (stored.version !== 1) {
+    throw new SecureCredentialStorageError(
+      'UNSUPPORTED_VERSION',
+      '保存的凭证版本不受当前页面支持，请更新页面后重试'
+    );
+  }
+
+  if (
+    typeof stored.ciphertext !== 'string'
+    || typeof stored.salt !== 'string'
+    || typeof stored.iv !== 'string'
+  ) {
+    throw new SecureCredentialStorageError('CORRUPT_DATA', '保存的凭证数据已损坏');
+  }
+
+  try {
+
     // 解码 Base64 数据
     const salt = base64ToArray(stored.salt);
     const iv = base64ToArray(stored.iv);
     const ciphertext = base64ToArray(stored.ciphertext);
-    
+
     // 从 PIN 派生密钥
     const key = await deriveKeyFromPIN(pin, salt);
-    
+
     // AES-GCM 解密
     const plaintext = await crypto.subtle.decrypt(
       { name: 'AES-GCM', iv },
       key,
       ciphertext
     );
-    
+
     // 解析 JSON
     const decoder = new TextDecoder();
     const data = JSON.parse(decoder.decode(plaintext));
-    
-    console.log('🔓 凭证解密成功');
+
+    if (
+      typeof data.accessKeyId !== 'string'
+      || typeof data.secretAccessKey !== 'string'
+      || typeof data.savedAt !== 'number'
+    ) {
+      throw new SecureCredentialStorageError('CORRUPT_DATA', '保存的凭证内容不完整');
+    }
+
+
     return {
       accessKeyId: data.accessKeyId,
       secretAccessKey: data.secretAccessKey,
@@ -139,11 +184,19 @@ export async function loadCredentialsSecure(pin) {
   } catch (error) {
     // AES-GCM 解密失败通常意味着 PIN 错误
     // crypto.subtle.decrypt 会抛出 OperationError
-    if (error.name === 'OperationError') {
-      throw new Error('PIN 码错误');
+    if (error instanceof SecureCredentialStorageError) {
+      throw error;
     }
-    console.error('❌ 凭证解密失败:', error);
-    throw error;
+    if (error.name === 'OperationError') {
+      // AES-GCM 无法区分错误 PIN 与密文被篡改，因此保留原数据供用户重试。
+      throw new SecureCredentialStorageError(
+        'PIN_OR_DATA_INVALID',
+        'PIN 码错误，或保存的凭证数据已损坏',
+        error
+      );
+    }
+
+    throw new SecureCredentialStorageError('CORRUPT_DATA', '保存的凭证数据已损坏', error);
   }
 }
 
@@ -152,12 +205,9 @@ export async function loadCredentialsSecure(pin) {
  * @returns {boolean}
  */
 export function hasEncryptedCredentials() {
-  const raw = localStorage.getItem(STORAGE_KEY);
-  if (!raw) return false;
-  
   try {
-    const stored = JSON.parse(raw);
-    return stored.version === 1 && stored.ciphertext && stored.salt && stored.iv;
+    // 只判断记录是否存在；格式问题在解锁时给出明确反馈并同步清理状态。
+    return Boolean(localStorage.getItem(STORAGE_KEY));
   } catch {
     return false;
   }
@@ -168,7 +218,7 @@ export function hasEncryptedCredentials() {
  */
 export function clearEncryptedCredentials() {
   localStorage.removeItem(STORAGE_KEY);
-  console.log('🗑️ 已清除保存的加密凭证');
+
 }
 
 /**
@@ -179,7 +229,7 @@ export function clearEncryptedCredentials() {
 export function getCredentialInfo() {
   const raw = localStorage.getItem(STORAGE_KEY);
   if (!raw) return null;
-  
+
   try {
     const stored = JSON.parse(raw);
     return {
@@ -228,14 +278,14 @@ export function validatePIN(pin) {
   if (!pin || typeof pin !== 'string') {
     return { valid: false, error: 'PIN 不能为空' };
   }
-  
+
   if (pin.length < 4) {
     return { valid: false, error: 'PIN 至少需要 4 位' };
   }
-  
+
   if (pin.length > 16) {
     return { valid: false, error: 'PIN 不能超过 16 位' };
   }
-  
+
   return { valid: true };
 }

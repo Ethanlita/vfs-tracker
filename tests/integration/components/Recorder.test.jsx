@@ -8,6 +8,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, act, cleanup } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import Recorder from '../../../src/components/Recorder';
+import { Blob as NodeBlob } from 'node:buffer';
 
 describe('Recorder Component', () => {
   const user = userEvent.setup();
@@ -32,6 +33,7 @@ describe('Recorder Component', () => {
   let originalRevokeObjectURL;
   let originalConfirm;
   let originalAlert;
+  let originalBlob;
 
   beforeAll(() => {
     // 保存原始全局对象引用
@@ -46,9 +48,12 @@ describe('Recorder Component', () => {
     originalRevokeObjectURL = global.URL?.revokeObjectURL;
     originalConfirm = global.confirm;
     originalAlert = global.alert;
+    originalBlob = global.Blob;
   });
 
   beforeEach(() => {
+    // jsdom的Blob缺少arrayBuffer；使用真实可读Blob，测试必须走成功转码路径。
+    global.Blob = NodeBlob;
     // 重置所有mock
     onRecordingCompleteMock = vi.fn();
     onStartRecordingMock = vi.fn();
@@ -146,6 +151,7 @@ describe('Recorder Component', () => {
 
   afterEach(() => {
     cleanup(); // 清理之前渲染的组件
+    global.Blob = originalBlob;
     vi.clearAllMocks();
 
     // 恢复原始全局对象

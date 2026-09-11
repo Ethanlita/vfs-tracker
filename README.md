@@ -33,21 +33,20 @@ npm run test:contract
 - **Integration Tests** (集成测试): 使用 MSW 模拟 API 调用测试完整流程
   - `tests/integration/api/` - API 层集成测试
   - `tests/integration/components/` - React 组件集成测试
-  - ⚠️ 部分失败是预期的 - 这些测试定义了 Phase 3.2 的重构规范
 - **Contract Tests** (契约测试): 调用真实 API 验证数据契约
   - `tests/contract/api-contract.test.js`
   - 需要完整的 AWS 环境变量配置
 
-### Playwright / 真实后端
-1. 复制 `.env.contract`（或 `.env.contract.example`）到 `.env.local`，填入文档要求的 5 个 AWS/Cognito/S3 必填变量，以及 Playwright 登录账号。
-2. `npm run test:e2e` 会自动调用 `npm run dev:playwright`，该脚本通过 `dotenv-cli` 注入 `.env.contract` / `.env.local`，确保 Vite dev server 直接连到真实后端。
-3. 如果只想手动联调，可单独运行 `npm run dev:playwright` 打开真实环境的本地开发服务器。
-4. `npm run build` / `npm run preview` 现在同样会使用 `.env.local`（若不存在则退回 `.env.contract`），预览站点不再落回 mock，而是完整命中云端 API。
-5. 需要纯人工测试时，可在另一个终端执行 `npm run playwright:open`，它会在注入真实环境变量的前提下启动一个 Playwright 浏览器，后续操作完全由人工完成。
+### Playwright / PWA
+1. `npm run test:e2e -- --project=chromium --workers=1` 运行开发模式浏览器流程。测试会隔离公开 API，不读取或写入真实用户数据。
+2. `npm run test:e2e:pwa` 构建生产版本，在桌面和 Pixel 5 视口验证 Service Worker 接管、断网直达、离线刷新、Markdown 正文与本地工具。
+3. 真实登录、云端事件写入、S3 上传及物理麦克风测试必须使用独立测试账号并按人工验收清单执行。
+4. 需要手动联调时，执行 `npm run dev:playwright`；开发服务器不会注册 Service Worker，不能用于验收 PWA 离线行为。
 
 ### 重要文档
 - 📖 **[完整测试指南](docs/TESTING_GUIDE.md)** - 500+ 行详细文档
 - 📖 **[契约测试说明](tests/contract/README.md)** - 契约测试使用指南
+- 📖 **[S3 存储清理](docs/storage-cleanup.md)** - 孤儿附件与过期原始录音的每日清理策略
 - 📊 **[Phase 3.1 状态报告](tests/PHASE3.1_STATUS.md)** - 测试框架实施状态
 
 ### 测试数据
@@ -57,20 +56,7 @@ npm run test:contract
   - 5 种事件 fixtures (self_test, surgery, feeling_log 等)
 - **MSW Handlers** (`src/test-utils/mocks/`): 模拟 API 响应
 
-> 💡 **注意**: 集成测试的部分失败是预期的。这些测试采用**规范驱动开发 (Specification-Driven Development)** 方法，定义了理想的 API 和组件接口。Phase 3.2 将重构实际代码以匹配这些规范。详见 [Phase 3.1 状态报告](tests/PHASE3.1_STATUS.md)。
-
-### GitHub Secrets（Playwright / E2E）
-
-- Playwright E2E / 契约测试会直接登录真实的 Cognito 账号（参考 `docs/TESTING_GUIDE.md`）。本地运行时请在 `.env.local` 或 `.env.contract` 中提供 `VITE_CONTRACT_TEST_USER_EMAIL`、`VITE_CONTRACT_TEST_USER_PASSWORD`。
-- 在 GitHub Actions 中，请为这些变量配置 Secrets。例如：
-  - `TEST_USER_EMAIL`、`TEST_USER_PASSWORD` —— 保存真实测试账号。
-  - 在 workflow 中将其映射到 `VITE_CONTRACT_TEST_USER_EMAIL`、`VITE_CONTRACT_TEST_USER_PASSWORD`（示例见 `ROADMAP.md` Phase 5.2 片段）。
-- 未提供上述凭据时，Playwright 将无法完成自动登录，相关测试会全部失败。
-- 已安装 GitHub CLI（`C:\Program Files\GitHub CLI\gh.exe`），但尚未登录。请执行：
-  1. `\"C:\\Program Files\\GitHub CLI\\gh.exe\" auth login --hostname github.com --web`
-  2. `\"C:\\Program Files\\GitHub CLI\\gh.exe\" secret set TEST_USER_EMAIL --body \"test-contract@yourdomain.com\"`
-  3. `\"C:\\Program Files\\GitHub CLI\\gh.exe\" secret set TEST_USER_PASSWORD --body \"YourSecurePassword123!\"`
-  4. 根据需要再写入 `VITE_CONTRACT_TEST_USER_EMAIL`、`VITE_CONTRACT_TEST_USER_PASSWORD` 等 Secrets。
+完整范围和调试方式见 [Playwright 端到端测试](tests/e2e/README.md)。
 
 ## 环境变量配置
 
@@ -118,6 +104,7 @@ VFS Tracker 是一个**声音训练、监测与数据可视化平台**，主要�
   - **新增功能**: 提供一个多步骤向导，引导用户完成一系列标准化声学测试（如：持续元音、朗读、自发音等）。
   - **后端分析**: 使用新的 `online-praat-analysis` Lambda 函数，通过 `praat-parselmouth` 等库进行专业的声学分析。
   - **结果生成**: 自动计算基频 (F0)、Jitter、Shimmer、HNR 等核心指标，并生成图表和 PDF 报告。
+  - **中断恢复**: 测试会话、已上传片段、量表和报告查询按账号保留 60 分钟；待上传原始录音仅临时保存在浏览器 IndexedDB。详见 [嗓音测试刷新恢复](docs/voice-test-recovery.md)。
 - 个人时间轴与指标
   - 基于 Chart.js 的时间序列可视化
   - AI 鼓励消息（生产环境启用 Gemini API，否则回退为默认消息）
@@ -133,12 +120,14 @@ VFS Tracker 是一个**声音训练、监测与数据可视化平台**，主要�
   - 构建时自动生成 posts.json；构建产物复制 posts 目录到 dist/posts
 - **PWA 支持**
   - 使用 `vite-plugin-pwa` 自动生成 Service Worker，支持离线访问与自动更新。
+  - 首页按路由加载图表、文档和音频工具；WORLD 只在效果预览页初始化，并由生产构建体积预算防止首屏回退。详见 [前端加载性能](docs/frontend-loading-performance.md)。
   - 自动缓存静态资源与 Google Fonts。
+  - 激活更新前会检查所有本站标签页中的未完成表单、上传、录音和练习进度；存在未保存工作时保留等待中的版本并提示处理。详见 [PWA 跨标签页更新协调](docs/pwa-update-coordination.md)。
 
 ## 目录结构（摘录）
 
 - src/components
-  - VoiceTestWizard.jsx: 在线嗓音测试向导核心组件。
+  - VoiceTestWizard.jsx: 在线嗓音测试的轻量页面外壳；XState 状态图、上传和分析服务见 [嗓音测试前端状态机](docs/voice-test-state-machine.md)。
   - PublicDashboard.jsx：公开仪表板，聚合全体用户匿名数据与可视化
   - EventForm.jsx：事件录入表单，支持文件上传与动态字段
   - Timeline.jsx：个人时间轴与图表展示

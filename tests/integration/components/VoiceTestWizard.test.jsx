@@ -4,11 +4,13 @@
  * @zh 测试嗓音测试向导的多步骤流程，包括录音、问卷、分析等
  */
 
+import { StrictMode } from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor, act } from '@testing-library/react';
+import { render, screen, waitFor, act, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import VoiceTestWizard from '../../../src/components/VoiceTestWizard';
 import * as api from '../../../src/api';
+import * as draftStorage from '../../../src/utils/voiceTestDraft.js';
 
 // Mock API functions
 vi.mock('../../../src/api', async () => {
@@ -16,10 +18,22 @@ vi.mock('../../../src/api', async () => {
   return {
     ...actual,
     createVoiceTestSession: vi.fn(),
+    getReadingPassages: vi.fn(),
     getVoiceTestUploadUrl: vi.fn(),
     uploadVoiceTestFileToS3: vi.fn(),
     requestVoiceTestAnalyze: vi.fn(),
     getVoiceTestResults: vi.fn()
+  };
+});
+
+// jsdom 不提供稳定的原生 IndexedDB；组件测试只替换原始录音存储边界，localStorage 草稿协议仍使用真实实现。
+vi.mock('../../../src/utils/voiceTestDraft.js', async () => {
+  const actual = await vi.importActual('../../../src/utils/voiceTestDraft.js');
+  return {
+    ...actual,
+    readPendingVoiceRecording: vi.fn(),
+    removePendingVoiceRecording: vi.fn(),
+    savePendingVoiceRecording: vi.fn(),
   };
 });
 
@@ -93,8 +107,29 @@ describe('VoiceTestWizard Component', () => {
 
   const mockSessionId = 'session-123';
 
+  /** 写入一份符合正式协议的账号草稿，用于覆盖刷新和重新进入页面。 */
+  const saveRecoverableDraft = (overrides = {}) => {
+    const createdAt = Date.now() - 60_000;
+    return draftStorage.writeVoiceTestDraft(mockUser.userId, {
+      ownerUserId: mockUser.userId,
+      sessionId: mockSessionId,
+      currentStep: 1,
+      uploadedRecordings: {},
+      formData: {
+        rbh: { R: null, B: null, H: null },
+        ovhs9: Array(9).fill(null),
+        tvqg: Array(12).fill(null),
+      },
+      analysisStarted: false,
+      createdAt,
+      expiresAt: createdAt + 60 * 60 * 1000,
+      ...overrides,
+    });
+  };
+
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.clear();
 
     // Mock AuthContext
     mockUseAuth.mockReturnValue({
@@ -103,6 +138,10 @@ describe('VoiceTestWizard Component', () => {
 
     // Mock API responses
     api.createVoiceTestSession.mockResolvedValue({ sessionId: mockSessionId });
+    api.getReadingPassages.mockResolvedValue([
+      { passageId: 'passage-dawn', title: '晨曦', author: '作者甲', content: '第一篇稿件。' },
+      { passageId: 'passage-spring', title: '春天', author: '作者乙', content: '第二篇稿件。' },
+    ]);
     api.getVoiceTestUploadUrl.mockResolvedValue({
       putUrl: 'https://s3.example.com/upload',
       objectKey: 'test-key'
@@ -112,19 +151,23 @@ describe('VoiceTestWizard Component', () => {
     api.getVoiceTestResults.mockResolvedValue({
       status: 'processing'
     });
+    draftStorage.readPendingVoiceRecording.mockResolvedValue(null);
+    draftStorage.removePendingVoiceRecording.mockResolvedValue(undefined);
+    draftStorage.savePendingVoiceRecording.mockResolvedValue(undefined);
 
     // Mock window.confirm
     global.confirm = vi.fn(() => true);
   });
 
   describe('初始化', () => {
-    it('应该显示加载状态', () => {
+    it('应该显示加载状态', async () => {
       api.createVoiceTestSession.mockImplementation(
         () => new Promise(() => {}) // 永不resolve
       );
 
       render(<VoiceTestWizard />);
 
+      await waitFor(() => expect(api.createVoiceTestSession).toHaveBeenCalledTimes(1));
       expect(screen.getByText(/正在初始化.../i)).toBeInTheDocument();
     });
 
@@ -134,6 +177,7 @@ describe('VoiceTestWizard Component', () => {
       await waitFor(() => {
         expect(api.createVoiceTestSession).toHaveBeenCalledWith('test-user-123');
       });
+      expect(draftStorage.removePendingVoiceRecording).toHaveBeenCalledWith('test-user-123');
     });
 
     it('会话创建失败应该显示错误', async () => {
@@ -166,9 +210,131 @@ describe('VoiceTestWizard Component', () => {
         expect(api.createVoiceTestSession).toHaveBeenCalledTimes(2);
       });
     });
+
+    it('StrictMode 重放初始化 effect 时只创建一次会话', async () => {
+      render(<StrictMode><VoiceTestWizard /></StrictMode>);
+
+      await screen.findByText(/说明与同意/i);
+      expect(api.createVoiceTestSession).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('草稿恢复', () => {
+    it('刷新后恢复原会话、步骤和已上传文件，不重复创建会话', async () => {
+      saveRecoverableDraft({
+        currentStep: 2,
+        uploadedRecordings: {
+          2: [{ objectKey: 'private/session-123/2_1.wav', fileName: '2_1.wav' }],
+        },
+      });
+
+      render(<VoiceTestWizard />);
+
+      await screen.findByText(/已恢复上一次未完成的嗓音测试/);
+      expect(screen.getByRole('heading', { name: /最长发声时/ })).toBeInTheDocument();
+      expect(screen.getByText('2_1.wav')).toBeInTheDocument();
+      expect(screen.getByText('已上传')).toBeInTheDocument();
+      expect(api.createVoiceTestSession).not.toHaveBeenCalled();
+    });
+
+    it('恢复朗读录音时保留原稿件并禁止换稿', async () => {
+      saveRecoverableDraft({
+        currentStep: 5,
+        readingPassageId: 'passage-spring',
+        uploadedRecordings: {
+          5: [{ objectKey: 'private/session-123/5_1.wav', fileName: '5_1.wav' }],
+        },
+      });
+
+      render(<VoiceTestWizard />);
+
+      await screen.findByRole('heading', { name: '《春天》' });
+      expect(screen.getByRole('button', { name: '换一篇' })).toBeDisabled();
+      expect(screen.getByText(/为确保稿件与录音一致/)).toBeInTheDocument();
+      expect(api.createVoiceTestSession).not.toHaveBeenCalled();
+    });
+
+    it('恢复已经提交的分析时只续查原任务', async () => {
+      saveRecoverableDraft({ currentStep: 8, analysisStarted: true });
+      api.getVoiceTestResults.mockResolvedValueOnce({ status: 'done' });
+
+      render(<VoiceTestWizard />);
+
+      await screen.findByTestId('test-results');
+      expect(api.getVoiceTestResults).toHaveBeenCalledWith(mockSessionId, expect.any(Object));
+      expect(api.requestVoiceTestAnalyze).not.toHaveBeenCalled();
+      expect(api.createVoiceTestSession).not.toHaveBeenCalled();
+    });
+
+    it('恢复本地待上传片段后允许重试同一会话和步骤', async () => {
+      const pendingBlob = new Blob(['pending'], { type: 'audio/wav' });
+      saveRecoverableDraft({ currentStep: 1 });
+      draftStorage.readPendingVoiceRecording.mockResolvedValueOnce({
+        ownerUserId: mockUser.userId,
+        sessionId: mockSessionId,
+        stepId: 1,
+        fileName: '1_1.wav',
+        blob: pendingBlob,
+        expiresAt: Date.now() + 60_000,
+      });
+
+      render(<VoiceTestWizard />);
+
+      const retry = await screen.findByRole('button', { name: /^重试$/i });
+      await user.click(retry);
+      await waitFor(() => expect(api.uploadVoiceTestFileToS3).toHaveBeenCalled());
+
+      expect(draftStorage.savePendingVoiceRecording).toHaveBeenCalledWith(
+        mockUser.userId,
+        expect.objectContaining({ sessionId: mockSessionId, stepId: 1, fileName: '1_1.wav', blob: pendingBlob }),
+        expect.any(Number)
+      );
+      expect(screen.getByText(/进度: 1 \/ 2/)).toBeInTheDocument();
+    });
+
+    it('过期草稿被清理并创建新会话', async () => {
+      const createdAt = Date.now() - 2 * 60 * 60 * 1000;
+      saveRecoverableDraft({ createdAt, expiresAt: Date.now() - 1 });
+
+      render(<VoiceTestWizard />);
+
+      await screen.findByText(/已超过 60 分钟并清理/);
+      expect(api.createVoiceTestSession).toHaveBeenCalledTimes(1);
+      expect(draftStorage.removePendingVoiceRecording).toHaveBeenCalledWith(mockUser.userId);
+    });
+
+    it('页面保持打开跨过固定期限时立即清理并创建新会话', async () => {
+      const createdAt = Date.now() - 60_000;
+      saveRecoverableDraft({ createdAt, expiresAt: Date.now() + 500 });
+
+      render(<VoiceTestWizard />);
+
+      await screen.findByText(/已恢复上一次未完成的嗓音测试/);
+      await screen.findByText(/已达到 60 分钟期限并清理/, {}, { timeout: 1500 });
+      expect(api.createVoiceTestSession).toHaveBeenCalledTimes(1);
+      expect(draftStorage.removePendingVoiceRecording).toHaveBeenCalledWith(mockUser.userId);
+    });
   });
 
   describe('步骤导航', () => {
+    it('应该发布不含用户数据的状态转换事件', async () => {
+      const observer = vi.fn();
+      window.addEventListener('vfs:voice-test-transition', observer);
+      render(<VoiceTestWizard />);
+
+      await screen.findByRole('heading', { name: /说明与同意/i });
+      await user.click(screen.getByRole('button', { name: '下一步' }));
+
+      expect(observer).toHaveBeenCalledTimes(1);
+      expect(observer.mock.calls[0][0].detail).toEqual({
+        from: 'consent',
+        to: 'calibration',
+        event: 'NEXT',
+      });
+      expect(observer.mock.calls[0][0].detail).not.toHaveProperty('userId');
+      window.removeEventListener('vfs:voice-test-transition', observer);
+    });
+
     it('应该显示第一步（说明与同意）', async () => {
       render(<VoiceTestWizard />);
 
@@ -249,6 +415,47 @@ describe('VoiceTestWizard Component', () => {
       await waitFor(() => {
         expect(screen.getByText(/设备与环境校准/i)).toBeInTheDocument();
       });
+    });
+
+    it.each(['presign', 'put'])('%s失败后跨步骤重试与慢上传只更新原步骤', async failure => {
+      for (let count=1; count<=2; count++) {
+        await user.click(screen.getByRole('button', { name: '模拟录音完成' }));
+        await waitFor(() => expect(screen.getByText(`进度: ${count} / 2`)).toBeInTheDocument());
+      }
+      await user.click(screen.getByRole('button', { name: '下一步' }));
+      const operation = failure === 'presign' ? api.getVoiceTestUploadUrl : api.uploadVoiceTestFileToS3;
+      operation.mockRejectedValueOnce(new Error('模拟上传失败'));
+      await user.click(screen.getByRole('button', { name: '模拟录音完成' }));
+      await screen.findByRole('alert');
+      await user.click(screen.getByRole('button', { name: '上一步' }));
+      expect(screen.getByText('进度: 2 / 2')).toBeInTheDocument();
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: '返回该步骤处理' }));
+      let resolve;
+      api.uploadVoiceTestFileToS3.mockImplementationOnce(() => new Promise(done => { resolve=done; }));
+      const retry=screen.getByRole('button', { name: '重试' });
+      await act(async()=>{ fireEvent.click(retry); fireEvent.click(retry); });
+      await user.click(screen.getByRole('button', { name: '上一步' }));
+      await act(async()=>resolve());
+      expect(screen.getByText('进度: 2 / 2')).toBeInTheDocument();
+      expect(screen.queryByText('2_1.wav')).not.toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: '下一步' }));
+      expect(screen.getByText('2_1.wav')).toBeInTheDocument();
+      expect(screen.getByText(/^进度: 1 /)).toBeInTheDocument();
+      expect(api.getVoiceTestUploadUrl).toHaveBeenLastCalledWith(mockSessionId, 2, '2_1.wav', 'audio/wav');
+      expect(api.getVoiceTestUploadUrl).toHaveBeenCalledTimes(4);
+    });
+
+    it('失败片段不能被新录音覆盖，明确放弃后可重新录制', async()=>{
+      api.uploadVoiceTestFileToS3.mockRejectedValueOnce(new Error('上传失败'));
+      await user.click(screen.getByRole('button', { name:'模拟录音完成' }));
+      await screen.findByRole('alert');
+      await user.click(screen.getByRole('button', { name:'模拟录音完成' }));
+      expect(api.getVoiceTestUploadUrl).toHaveBeenCalledTimes(1);
+      await user.click(screen.getByRole('button', { name:'放弃未上传片段' }));
+      await user.click(screen.getByRole('button', { name:'模拟录音完成' }));
+      await waitFor(()=>expect(screen.getByText('进度: 1 / 2')).toBeInTheDocument());
+      expect(api.getVoiceTestUploadUrl).toHaveBeenLastCalledWith(mockSessionId,1,'1_1.wav','audio/wav');
     });
 
     it('应该显示录音组件', async () => {

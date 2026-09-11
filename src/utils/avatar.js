@@ -62,8 +62,9 @@ export const getUserAvatarUrl = async (user, size = 40, avatarKey) => {
       if (url) {
         return url;
       }
-    } catch (error) {
-      console.error('获取头像URL失败:', error);
+    } catch {
+      // 错误已由页面状态或恢复路径处理，不向控制台输出用户数据。
+
     }
   }
 
@@ -82,15 +83,7 @@ export const getUserAvatarUrl = async (user, size = 40, avatarKey) => {
  * @returns {string} 用户显示名称
  */
 export const getUserDisplayName = (user) => {
-  console.log('🔍 getUserDisplayName: 检查用户对象', {
-    user,
-    attributes: user?.attributes,
-    nickname: user?.attributes?.nickname,
-    name: user?.attributes?.name,
-    preferred_username: user?.attributes?.preferred_username,
-    username: user?.username,
-    email: user?.attributes?.email
-  });
+
 
   // 优先级：nickname > name > preferred_username > username > email用户名部分
   const displayName = user?.attributes?.nickname ||

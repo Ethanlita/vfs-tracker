@@ -4,6 +4,7 @@
 
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand } from '@aws-sdk/lib-dynamodb';
+import { createStructuredLogger, describeError, fingerprintIdentifier } from './structuredLogger.mjs';
 
 // 初始化DynamoDB客户端
 const client = new DynamoDBClient({});
@@ -39,8 +40,8 @@ function createResponse(statusCode, body) {
  * @param {object} event - API Gateway Lambda 事件对象，应在 `pathParameters` 中包含 `userId`。
  * @returns {Promise<object>} 一个 API Gateway 响应，其中包含用户的公开个人资料信息或错误消息。
  */
-export const handler = async (event) => {
-    console.log('Event:', JSON.stringify(event, null, 2));
+export const handler = async (event, context = {}) => {
+    const logger = createStructuredLogger({ service: 'getUserPublicProfile', requestId: context.awsRequestId });
 
     try {
         // 处理OPTIONS预检请求
@@ -48,7 +49,8 @@ export const handler = async (event) => {
             return createResponse(200, { message: 'OK' });
         }
 
-        const userId = event.pathParameters.userId;
+        const userId = event.pathParameters?.userId;
+        if (!userId) return createResponse(400, { message: 'Missing user ID' });
 
         const command = new GetCommand({
             TableName: USERS_TABLE,
@@ -58,6 +60,7 @@ export const handler = async (event) => {
         const result = await dynamodb.send(command);
 
         if (!result.Item) {
+            logger.info('public_profile_not_found', { userHash: fingerprintIdentifier(userId) });
             return createResponse(404, {
                 message: 'User not found'
             });
@@ -77,13 +80,16 @@ export const handler = async (event) => {
             }
         };
 
+        logger.info('public_profile_read', {
+            userHash: fingerprintIdentifier(userId),
+            socialCount: publicProfile.profile.socials.length,
+        });
         return createResponse(200, publicProfile);
 
     } catch (error) {
-        console.error('Error getting public user profile:', error);
+        logger.error('public_profile_read_failed', describeError(error));
         return createResponse(500, {
-            message: 'Error fetching public user profile',
-            error: error.message
+            message: 'Error fetching public user profile'
         });
     }
 };

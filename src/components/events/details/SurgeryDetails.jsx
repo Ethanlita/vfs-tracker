@@ -1,3 +1,4 @@
+import { doctorName } from '../utils/eventSummary';
 /**
  * 手术记录详情组件
  * 展示 VFS 手术相关信息
@@ -16,10 +17,7 @@ const SurgeryDetails = ({ event }) => {
 
   // 获取医生名称（处理自定义情况）
   const getDoctorName = () => {
-    if (details.doctor === '自定义' && details.customDoctor) {
-      return details.customDoctor;
-    }
-    return details.doctor || '-';
+    return doctorName(details) || '-';
   };
 
   // 获取地点名称（处理自定义情况）

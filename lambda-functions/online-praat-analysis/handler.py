@@ -3,7 +3,6 @@
 它通过 API Gateway 暴露多个端点，用于创建会话、获取上传URL、触发异步分析以及检索结果。
 """
 import json
-import logging
 import os
 import uuid
 import base64
@@ -17,6 +16,7 @@ import math
 import numpy as np
 from urllib.parse import urlparse, urlunparse
 from refactor_config import load_analysis_branch_config
+from structured_logging import create_structured_logger, describe_error, fingerprint_identifier
 
 # ---- Environment and Cache Setup ----
 os.environ.setdefault('LOG_LEVEL', 'INFO')
@@ -30,8 +30,7 @@ for d in ('/tmp/mplconfig', '/tmp/librosa_cache', '/tmp/numba_cache'):
     except Exception:
         pass
 
-logger = logging.getLogger()
-logger.setLevel(os.environ['LOG_LEVEL'].upper())
+logger = create_structured_logger('online-praat-analysis')
 
 # ---- AWS Clients & Globals ----
 _s3_client = None
@@ -272,8 +271,8 @@ def extract_user_info(event) -> Dict[str, Optional[str]]:
 
             info['userId'] = payload.get('sub')
             info['userName'] = _resolve_display_name_from_claims(payload)
-        except Exception as e:
-            logger.warning(f"Could not decode auth header manually: {e}")
+        except Exception as error:
+            logger.warning('identity_decode_failed', describe_error(error))
             # Return default info with no userId
             return {'userId': None, 'userName': 'Anonymous'}
 
@@ -318,15 +317,17 @@ def perform_full_analysis(session_id: str, calibration: dict = None, forms: dict
     :return: 一个包含 (metrics, charts, report_url) 的元组。
     """
     audio_groups = list_session_audio_keys(session_id)
-    logger.info(f'perform_full_analysis: Audio groups found: { {k:len(v) for k,v in audio_groups.items()} }')
+    logger.info('analysis_audio_groups_loaded', {
+        'sessionHash': fingerprint_identifier(session_id),
+        'groupCount': len(audio_groups),
+        'audioCount': sum(len(files) for files in audio_groups.values()),
+    })
 
     # v2 重构分支（默认开启）。保留 legacy 代码以便回滚。
     if USE_REFACTOR_V2:
         from analysis_refactor_v2 import perform_full_analysis_v2
 
-        logger.info(
-            f"Using refactored analysis pipeline: ONLINE_PRAAT_ANALYSIS_PIPELINE={ANALYSIS_PIPELINE}"
-        )
+        logger.info('analysis_pipeline_selected', {'pipeline': ANALYSIS_PIPELINE})
         return perform_full_analysis_v2(
             session_id=session_id,
             audio_groups=audio_groups,
@@ -382,7 +383,7 @@ def perform_full_analysis(session_id: str, calibration: dict = None, forms: dict
 
     # The file identified as 'low_note_file' (alphabetically second) is processed first
     if low_note_file:
-        logger.info(f"Analyzing low note (file: {os.path.basename(low_note_file)})")
+        logger.info('low_note_analysis_started')
         formant_low_metrics = analyze_note_file_robust(low_note_file)
         debug_info_collection['low_note'] = formant_low_metrics.pop('debug_info', None)
         # Store at the top level of metrics
@@ -398,7 +399,7 @@ def perform_full_analysis(session_id: str, calibration: dict = None, forms: dict
 
     # The file identified as 'high_note_file' (alphabetically first) is processed second
     if high_note_file:
-        logger.info(f"Analyzing high note (file: {os.path.basename(high_note_file)})")
+        logger.info('high_note_analysis_started')
         formant_high_metrics = analyze_note_file_robust(high_note_file)
         debug_info_collection['high_note'] = formant_high_metrics.pop('debug_info', None)
         # Store at the top level of metrics
@@ -528,8 +529,8 @@ def handle_create_session(event):
             'createdAt': int(datetime.utcnow().timestamp())
         })
         return {'statusCode': 201, 'headers': CORS_HEADERS, 'body': json.dumps({'sessionId': session_id})}
-    except ClientError as e:
-        logger.error(f'create_session ddb error: {e}')
+    except ClientError as error:
+        logger.error('session_create_failed', describe_error(error))
         return {'statusCode': 500, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Could not create session'})}
 
 def handle_get_upload_url(event):
@@ -553,7 +554,10 @@ def handle_get_upload_url(event):
         resp = get_table().get_item(Key={'sessionId': session_id})
         item = resp.get('Item')
         if not item or item.get('userId') != user_id:
-            logger.warning(f"Forbidden upload attempt: user {user_id} to session {session_id}")
+            logger.warning('upload_access_denied', {
+                'userHash': fingerprint_identifier(user_id),
+                'sessionHash': fingerprint_identifier(session_id),
+            })
             return {'statusCode': 403, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Forbidden'})}
 
         object_key = f"voice-tests/{session_id}/raw/{body['step']}/{body['fileName']}"
@@ -561,7 +565,6 @@ def handle_get_upload_url(event):
             'Bucket': BUCKET,
             'Key': object_key
         }, ExpiresIn=3600)
-        print("SIGNED_HOST =", urlparse(url).netloc)
         headers = (event.get('headers') or {})
         normalized_host = str(
             headers.get('x-forwarded-host')
@@ -578,8 +581,8 @@ def handle_get_upload_url(event):
         except Exception:
             pass
         return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': json.dumps({'putUrl': url, 'objectKey': object_key})}
-    except ClientError as e:
-        logger.error(f'handle_get_upload_url error: {e}')
+    except ClientError as error:
+        logger.error('upload_url_failed', describe_error(error))
         return {'statusCode': 500, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Could not generate upload URL'})}
 
 def handle_analyze_trigger(event):
@@ -616,8 +619,11 @@ def handle_analyze_trigger(event):
         )
 
         return {'statusCode': 202, 'headers': CORS_HEADERS, 'body': json.dumps({'status': 'queued', 'sessionId': session_id})}
-    except Exception as e:
-        logger.error(f'handle_analyze_trigger failed: {e}')
+    except Exception as error:
+        logger.error('analysis_queue_failed', {
+            'sessionHash': fingerprint_identifier(session_id),
+            **describe_error(error),
+        })
         return {'statusCode': 500, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Failed to queue analysis'})}
 
 def generate_presigned_url_from_s3_uri(s3_uri: str, event=None, expiration: int = 3600) -> Optional[str]:
@@ -656,8 +662,8 @@ def generate_presigned_url_from_s3_uri(s3_uri: str, event=None, expiration: int 
             except Exception:
                 pass
         return url
-    except (ValueError, ClientError) as e:
-        logger.error(f"Failed to generate presigned URL for {s3_uri}: {e}")
+    except (ValueError, ClientError) as error:
+        logger.error('result_url_failed', describe_error(error))
         return None
 
 def handle_get_results(event):
@@ -680,7 +686,10 @@ def handle_get_results(event):
         resp = get_table().get_item(Key={'sessionId': session_id})
         item = resp.get('Item')
         if not item or item.get('userId') != user_id:
-            logger.warning(f"Forbidden results access attempt: user {user_id} for session {session_id}")
+            logger.warning('results_access_denied', {
+                'userHash': fingerprint_identifier(user_id),
+                'sessionHash': fingerprint_identifier(session_id),
+            })
             return {'statusCode': 404, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Session not found'})}
 
         # If analysis is done, convert S3 URIs to presigned URLs
@@ -693,8 +702,8 @@ def handle_get_results(event):
                 item['reportPdf'] = generate_presigned_url_from_s3_uri(item['reportPdf'], event) or item['reportPdf']
 
         return {'statusCode': 200, 'headers': CORS_HEADERS, 'body': json.dumps(_from_dynamo(item), ensure_ascii=False)}
-    except ClientError as e:
-        logger.error(f'get_results ddb error: {e}')
+    except ClientError as error:
+        logger.error('results_read_failed', describe_error(error))
         return {'statusCode': 500, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Could not fetch results'})}
 
 # ---------- Async Task Handler ----------
@@ -709,7 +718,7 @@ def handle_analyze_task(event):
     body = event.get('body', {})
     userInfo = event.get('userInfo', {'userId': None, 'userName': 'N/A'})
     user_id = userInfo.get('userId')
-    logger.info(f"Starting async analysis for session {session_id}")
+    logger.info('analysis_started', {'sessionHash': fingerprint_identifier(session_id)})
 
     try:
         metrics, charts, report_url = perform_full_analysis(
@@ -786,20 +795,29 @@ def handle_analyze_task(event):
                     'createdAt': now_iso,
                     'updatedAt': now_iso
                 })
-            except Exception as ee:
-                logger.error(f'create event failed: {ee}')
+            except Exception as event_error:
+                logger.error('analysis_event_create_failed', {
+                    'sessionHash': fingerprint_identifier(session_id),
+                    **describe_error(event_error),
+                })
 
-    except Exception as e:
-        logger.error(f'handle_analyze_task failed: {e}', exc_info=True)
+    except Exception as error:
+        logger.error('analysis_failed', {
+            'sessionHash': fingerprint_identifier(session_id),
+            **describe_error(error),
+        })
         try:
             get_table().update_item(
                 Key={'sessionId': session_id},
                 UpdateExpression='SET #st=:st, errorMessage=:e, updatedAt=:u',
                 ExpressionAttributeNames={'#st': 'status'},
-                ExpressionAttributeValues={':st': 'failed', ':e': str(e), ':u': int(datetime.utcnow().timestamp())}
+                ExpressionAttributeValues={':st': 'failed', ':e': 'Analysis failed', ':u': int(datetime.utcnow().timestamp())}
             )
-        except Exception as ee:
-            logger.error(f'Failed to update status to failed: {ee}')
+        except Exception as status_error:
+            logger.error('analysis_failure_status_update_failed', {
+                'sessionHash': fingerprint_identifier(session_id),
+                **describe_error(status_error),
+            })
 
 # ---------- Main Handler & Router ----------
 def handler(event, context):
@@ -810,14 +828,14 @@ def handler(event, context):
     :param context: Lambda 上下文对象。
     :return: API Gateway 响应对象。
     """
-    logger.info(f'Handler started. Request ID: {getattr(context, "aws_request_id", "N/A")}')
+    logger.info('request_received', {'requestId': getattr(context, 'aws_request_id', None)})
 
     if 'task' in event and event['task'] == 'analyze':
         handle_analyze_task(event)
         return {'status': 'ok', 'message': 'Analysis task finished.'}
 
     if not all([DDB_TABLE, BUCKET, get_table(), FUNCTION_NAME]):
-        logger.error("Server misconfiguration: Missing critical environment variables.")
+        logger.error('server_configuration_missing')
         return {'statusCode': 500, 'headers': CORS_HEADERS, 'body': json.dumps({'error': 'Server misconfiguration'})}
 
     rc = event.get('requestContext', {}) or {}
@@ -868,8 +886,8 @@ def safe_download(key: str) -> str:
     try:
         get_s3_client().download_file(BUCKET, key, local_path)
         return local_path
-    except Exception as e:
-        logger.error(f'safe_download: Failed to download key={key} err={e}')
+    except Exception as error:
+        logger.error('audio_download_failed', describe_error(error))
         return ''
 
 def pick_longest_file(local_paths):
@@ -887,6 +905,6 @@ def pick_longest_file(local_paths):
                 duration = w.getnframes() / float(w.getframerate())
             if duration > max_duration:
                 best_path, max_duration = p, duration
-        except Exception as e:
-            logger.warning(f'pick_longest_file: Could not read {p}: {e}')
+        except Exception as error:
+            logger.warning('audio_duration_read_failed', describe_error(error))
     return best_path

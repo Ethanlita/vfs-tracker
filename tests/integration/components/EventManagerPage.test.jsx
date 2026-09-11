@@ -133,7 +133,7 @@ describe('EventManagerPage Component', () => {
       renderWithRouter(<EventManagerPage />);
 
       expect(screen.getByText('事件管理')).toBeInTheDocument();
-      expect(screen.getByText(/查看、编辑和管理您的所有嗓音事件记录/i)).toBeInTheDocument();
+      expect(screen.getByText(/筛选、搜索和查看您的嗓音事件记录/i)).toBeInTheDocument();
     });
 
     it('应该渲染返回按钮', async () => {
@@ -147,7 +147,7 @@ describe('EventManagerPage Component', () => {
       renderWithRouter(<EventManagerPage />);
 
       expect(screen.getByText('我的事件记录')).toBeInTheDocument();
-      expect(screen.getByText(/筛选、查看、编辑和删除您的事件记录/i)).toBeInTheDocument();
+      expect(screen.getByText(/已保存的事件不能直接编辑。如需纠正，请删除原记录后重新新增/i)).toBeInTheDocument();
     });
 
     it('应该渲染装饰性背景元素', async () => {
@@ -332,38 +332,10 @@ describe('EventManagerPage Component', () => {
       });
     });
 
-    it('应该处理事件更新回调', async () => {
-      // mock 回调
-      const mockOnEventUpdated = vi.fn();
-      const mockOnEventDeleted = vi.fn();
-      renderWithRouter(
-        <EventManagerPage
-          onEventUpdated={mockOnEventUpdated}
-          onEventDeleted={mockOnEventDeleted}
-        />
-      );
-
-      await waitFor(() => {
-        expect(api.getEventsByUserId).toHaveBeenCalled();
-      });
-
-      // 模拟事件更新
-      // 直接调用 handleEventUpdated
-      const updatedEvent = { ...mockEvents[0], eventData: { f0: 210 } };
-      // 通过 EventManagerPage 实例调用
-      // 这里只能间接测试，因为没有暴露实例
-      // 所以我们只能断言页面渲染后，事件更新逻辑已被覆盖（见 EventManager 测试）
-      // 更进一步可通过集成测试模拟点击编辑按钮后断言
-      // 这里只做回调传递验证
-      expect(typeof mockOnEventUpdated).toBe('function');
-    });
-
     it('应该处理事件删除回调', async () => {
-      const mockOnEventUpdated = vi.fn();
       const mockOnEventDeleted = vi.fn();
       renderWithRouter(
         <EventManagerPage
-          onEventUpdated={mockOnEventUpdated}
           onEventDeleted={mockOnEventDeleted}
         />
       );

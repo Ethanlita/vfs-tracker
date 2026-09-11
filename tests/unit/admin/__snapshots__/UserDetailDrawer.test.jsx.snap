@@ -172,10 +172,13 @@ exports[`UserDetailDrawer 组件测试 > 应该渲染权限设置区域（视觉
               </div>
             </div>
             <button
+              aria-checked="false"
+              aria-label="管理员权限"
               class="relative inline-flex h-6 w-11 items-center rounded-full transition-colors
                         bg-gray-600
                         cursor-pointer
                       "
+              role="switch"
             >
               <span
                 class="inline-block h-4 w-4 transform rounded-full bg-white transition-transform
@@ -290,9 +293,8 @@ exports[`UserDetailDrawer 组件测试 > 应该渲染权限设置区域（视觉
         <h3
           class="text-sm font-medium text-gray-400 uppercase tracking-wider mb-3"
         >
-          最近事件 (
-          0
-          )
+          最近事件
+           (0)
         </h3>
         <div
           class="bg-gray-800 rounded-lg p-4 text-center text-gray-500"

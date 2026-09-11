@@ -10,6 +10,11 @@
 
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import {
+    createStructuredLogger,
+    describeError,
+    fingerprintIdentifier,
+} from './structuredLogger.mjs';
+import {
     getRateLimitConfig,
     getUserRateLimitData,
     cleanExpiredHistory,
@@ -132,16 +137,12 @@ const KNOWLEDGE_BASE = `
  * @param {object} event - API Gateway Lambda 事件对象。它应包含一个带有“prompt”字段的 JSON 正文。
  * @returns {Promise<object>} 一个 API Gateway 响应，其中包含 Gemini 的分析或错误消息。
  */
-export const handler = async (event) => {
-    console.log("🚀 --- Lambda Invocation Start --- 🚀");
-    // Log essential request context
-    console.log("📝 EVENT CONTEXT:", JSON.stringify({
-        httpMethod: event.httpMethod,
-        path: event.path,
-        sourceIp: event.requestContext?.identity?.sourceIp,
-        userAgent: event.requestContext?.identity?.userAgent,
-        cognitoIdentityId: event.requestContext?.identity?.cognitoIdentityId,
-    }, null, 2));
+export const handler = async (event, context = {}) => {
+    const logger = createStructuredLogger({
+        service: 'gemini-proxy',
+        requestId: context.awsRequestId || event.requestContext?.requestId,
+    });
+    logger.info('invocation_started', { method: event.httpMethod, route: event.path });
 
     // Handle CORS preflight requests
     if (event.httpMethod === 'OPTIONS') {
@@ -151,7 +152,7 @@ export const handler = async (event) => {
     // 1. Get API Key from environment variables
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
-        console.error('❌ FATAL: GEMINI_API_KEY is not set in environment variables.');
+        logger.error('configuration_missing', { variable: 'GEMINI_API_KEY' });
         return createResponse(500, { success: false, error: 'Server configuration error.' });
     }
 
@@ -161,21 +162,21 @@ export const handler = async (event) => {
         const body = JSON.parse(event.body);
         user_prompt = body.prompt;
         if (!user_prompt || typeof user_prompt !== 'string') {
-            console.error("❌ Validation Error: 'prompt' is missing or not a string in the request body.", { body });
+            logger.warn('request_validation_failed', { field: 'prompt', receivedType: typeof user_prompt });
             return createResponse(400, { success: false, error: "Invalid 'prompt' in request body. It must be a non-empty string." });
         }
     } catch (error) {
-        console.error('❌ Failed to parse request body:', error);
+        logger.warn('request_json_invalid', describeError(error));
         return createResponse(400, { success: false, error: 'Invalid JSON in request body.' });
     }
 
     // 3. Extract user ID from the event (from Cognito authorizer)
     const userId = extractUserIdFromEvent(event);
     if (!userId) {
-        console.error('❌ Failed to extract user ID from event');
+        logger.warn('identity_missing');
         return createResponse(401, { success: false, error: 'Unable to identify user.' });
     }
-    console.log(`📋 User ID: ${userId}`);
+    const userHash = fingerprintIdentifier(userId);
 
     // 4. Check rate limit and pre-charge quota before the AI request.
     // 仅当后续请求失败时再回退本次扣减。
@@ -189,8 +190,11 @@ export const handler = async (event) => {
         const { adviceWindowHours, adviceMaxRequests } = rateLimitConfig;
         const { isAdmin, aiRateLimit } = userRateLimitData;
 
-        console.log(`⚙️ Rate limit config: ${adviceMaxRequests} requests per ${adviceWindowHours} hours`);
-        console.log(`👤 User isAdmin: ${isAdmin}`);
+        logger.debug('rate_limit_configuration_loaded', {
+            windowHours: adviceWindowHours,
+            maxRequests: adviceMaxRequests,
+            isAdmin,
+        });
 
         // 管理员跳过限速检查
         if (!isAdmin) {
@@ -198,7 +202,11 @@ export const handler = async (event) => {
             const cleanedHistory = cleanExpiredHistory(aiRateLimit.adviceHistory || [], adviceWindowHours);
             const rateLimitResult = checkRateLimit(cleanedHistory, adviceMaxRequests);
 
-            console.log(`📊 Rate limit check: ${rateLimitResult.count}/${adviceMaxRequests} requests used`);
+            logger.info('rate_limit_checked', {
+                userHash,
+                requestCount: rateLimitResult.count,
+                maxRequests: adviceMaxRequests,
+            });
 
             if (rateLimitResult.isLimited) {
                 // 用户超限，返回上次的 AI 建议
@@ -210,7 +218,7 @@ export const handler = async (event) => {
                     aiRateLimit.lastAdviceResponse
                 );
 
-                console.log(`⚠️ Rate limit exceeded for user: ${userId}. Next available at: ${nextAvailableTime}`);
+                logger.warn('rate_limit_exceeded', { userHash, nextAvailableAt: nextAvailableTime });
 
                 return createResponse(200, {
                     success: true,
@@ -234,13 +242,13 @@ export const handler = async (event) => {
                 history: reservedHistory,
                 previousResponse: aiRateLimit.lastAdviceResponse || null
             };
-            console.log(`📝 Pre-charged advice quota for user: ${userId} at ${reservationTimestamp}`);
+            logger.info('quota_reserved', { userHash, reservedAt: reservationTimestamp });
         } else {
-            console.log('👑 Admin user - skipping rate limit check');
+            logger.info('rate_limit_admin_bypass', { userHash });
         }
     } catch (rateLimitError) {
         // 限速/预扣失败时不继续调用 AI，避免配额状态不一致。
-        console.error('❌ Rate limit check or pre-charge failed:', rateLimitError);
+        logger.error('rate_limit_service_failed', { userHash, ...describeError(rateLimitError) });
         return createResponse(503, { success: false, error: 'Rate limit service unavailable.' });
     }
 
@@ -260,34 +268,25 @@ ${user_prompt}
         const genAI = new GoogleGenerativeAI(apiKey);
         const model = genAI.getGenerativeModel({ model: modelName });
 
-        // 6. Log the exact data being sent to Gemini
-        const geminiRequestPayload = {
-            model: modelName,
-            prompt: final_prompt, // The actual prompt content
-        };
-        console.log("➡️ --- Calling Gemini API --- ➡️");
-        console.log("REQUEST TO GEMINI:", JSON.stringify(geminiRequestPayload, null, 2));
+        // 只记录模型和长度，不记录包含健康数据的完整提示词。
+        logger.info('ai_request_started', { userHash, model: modelName, inputCharacters: final_prompt.length });
 
         // 7. Call the Gemini API
         const result = await model.generateContent(final_prompt);
 
-        // 8. Log the full, raw response from Gemini for debugging
-        console.log("⬅️ --- Gemini API Response Received --- ⬅️");
-        console.log("RAW RESPONSE FROM GEMINI:", JSON.stringify(result, null, 2));
-
         const response = result.response;
         const text = response.text();
-        console.log('✅ Successfully extracted text from Gemini response.');
+        logger.info('ai_response_received', { userHash, model: modelName, outputCharacters: text.length });
 
         // 9. Persist latest response while keeping the pre-charged history.
         try {
             if (quotaReservation) {
                 await updateAdviceRateLimitData(userId, quotaReservation.history, text);
             }
-            console.log('📝 Rate limit data updated successfully');
+            logger.info('quota_result_persisted', { userHash });
         } catch (updateError) {
             // 更新失败不应影响响应返回
-            console.error('⚠️ Failed to update rate limit data:', updateError);
+            logger.error('quota_result_persist_failed', { userHash, ...describeError(updateError) });
         }
 
         // 10. Return the successful response
@@ -306,20 +305,13 @@ ${user_prompt}
                     rolledBackHistory,
                     latestUserRateLimitData.aiRateLimit?.lastAdviceResponse || quotaReservation.previousResponse || null
                 );
-                console.log(`↩️ Rolled back advice quota for user: ${userId} at ${quotaReservation.timestamp}`);
+                logger.info('quota_reservation_rolled_back', { userHash, reservedAt: quotaReservation.timestamp });
             } catch (rollbackError) {
-                console.error('⚠️ Failed to rollback advice quota:', rollbackError);
+                logger.error('quota_rollback_failed', { userHash, ...describeError(rollbackError) });
             }
         }
 
-        // 11. Log the full error object for detailed debugging
-        console.error("❌ --- Gemini API Call Failed --- ❌");
-        console.error("ERROR DETAILS:", JSON.stringify({
-            message: error.message,
-            stack: error.stack,
-            status: error.status, // For GoogleGenerativeAIFetchError
-            statusText: error.statusText, // For GoogleGenerativeAIFetchError
-        }, null, 2));
+        logger.error('ai_request_failed', { userHash, ...describeError(error) });
         return createResponse(502, { success: false, error: 'Failed to call Gemini API.' });
     }
 };

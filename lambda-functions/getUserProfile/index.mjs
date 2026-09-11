@@ -4,6 +4,7 @@
 
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand } from '@aws-sdk/lib-dynamodb';
+import { createStructuredLogger, describeError, fingerprintIdentifier } from './structuredLogger.mjs';
 
 // 初始化DynamoDB客户端
 const client = new DynamoDBClient({});
@@ -26,17 +27,15 @@ const corsHeaders = {
  * @returns {{userId: string, email: string, username: string, nickname: string}} 提取出的用户信息对象。
  * @throws {Error} 如果在请求中找不到有效的 ID token 或解析失败。
  */
-function extractUserFromEvent(event) {
+function extractUserFromEvent(event, logger) {
   try {
-    console.log('🔍 开始提取用户信息，优先处理ID Token');
-
     // 尝试多种方式获取用户信息
     let claims = null;
 
     // 方法1：从API Gateway Cognito授权器 (如果设置了)
     if (event.requestContext?.authorizer?.claims) {
       claims = event.requestContext.authorizer.claims;
-      console.log('✅ 使用API Gateway授权器提供的claims');
+      logger.debug('identity_source_selected', { source: 'authorizer' });
     }
 
     // 方法2：手动解析Authorization头中的ID Token
@@ -50,24 +49,23 @@ function extractUserFromEvent(event) {
           // 验证这是ID Token
           if (payload.token_use === 'id') {
             claims = payload;
-            console.log('✅ 成功解析ID Token，token_use:', payload.token_use);
+            logger.debug('identity_source_selected', { source: 'bearer', tokenUse: payload.token_use });
           } else {
-            console.warn('⚠️ 收到的不是ID Token，token_use:', payload.token_use);
+            logger.warn('token_type_invalid', { receivedTokenUse: payload.token_use });
             throw new Error(`Expected ID token, but received: ${payload.token_use}`);
           }
         } catch (parseError) {
-          console.error('❌ JWT Token解析失败:', parseError);
+          logger.warn('token_parse_failed', describeError(parseError));
           throw new Error(`ID Token parsing failed: ${parseError.message}`);
         }
       }
     }
 
     if (!claims) {
-      console.error('❌ 未找到认证claims，事件详情:', {
+      logger.warn('identity_missing', {
         hasAuthorizer: !!event.requestContext?.authorizer,
         hasAuthHeader: !!(event.headers?.Authorization || event.headers?.authorization),
-        headers: Object.keys(event.headers || {}),
-        authHeaderPreview: (event.headers?.Authorization || event.headers?.authorization)?.substring(0, 30) + '...'
+        headerCount: Object.keys(event.headers || {}).length,
       });
       throw new Error('No ID token found in request');
     }
@@ -80,18 +78,16 @@ function extractUserFromEvent(event) {
       nickname: claims.nickname || claims.name || claims['cognito:username'] || claims.email?.split('@')[0] || 'Unknown'
     };
 
-    console.log('✅ 成功提取用户信息:', {
-      userId: userInfo.userId,
-      email: userInfo.email,
-      username: userInfo.username,
-      tokenType: claims.token_use
+    logger.debug('identity_extracted', {
+      userHash: fingerprintIdentifier(userInfo.userId),
+      tokenType: claims.token_use,
     });
 
     return userInfo;
 
   } catch (error) {
-    console.error('❌ 从事件中提取用户信息失败:', error);
-    throw new Error(`Invalid ID token: ${error.message}`);
+    logger.warn('identity_extraction_failed', describeError(error));
+    throw new TypeError('Invalid ID token');
   }
 }
 
@@ -114,10 +110,12 @@ function createResponse(statusCode, body) {
  * 它验证请求者只能访问自己的个人资料。如果数据库中不存在该用户的个人资料，
  * 它会根据 token 中的信息返回一个基本的默认个人资料。
  * @param {object} event - API Gateway Lambda 事件对象。
+ * @param {object} context - AWS Lambda 调用上下文。
  * @returns {Promise<object>} 一个 API Gateway 响应，其中包含用户的个人资料信息或错误消息。
  */
-export const handler = async (event) => {
-  console.log('Event:', JSON.stringify(event, null, 2));
+export const handler = async (event, context = {}) => {
+  const logger = createStructuredLogger({ service: 'getUserProfile', requestId: context.awsRequestId });
+  logger.info('invocation_started', { method: event.httpMethod, route: event.resource });
 
   try {
     // 处理OPTIONS预检请求
@@ -126,7 +124,7 @@ export const handler = async (event) => {
     }
 
     // 从JWT Token获取认证用户信息
-    const authenticatedUser = extractUserFromEvent(event);
+    const authenticatedUser = extractUserFromEvent(event, logger);
 
     // 安全地获取路径参数
     const pathUserId = event.pathParameters?.userId;
@@ -135,26 +133,18 @@ export const handler = async (event) => {
     const targetUserId = pathUserId || authenticatedUser.userId;
 
     if (!targetUserId) {
-      console.error('❌ 无法获取用户ID，详情:', {
-        pathParameters: event.pathParameters,
-        authenticatedUserId: authenticatedUser.userId,
-        requestContext: event.requestContext,
-        rawPath: event.path,
-        resource: event.resource
-      });
+      logger.warn('target_user_missing', { hasPathParameters: !!event.pathParameters });
       return createResponse(400, {
-        message: 'Bad Request: Unable to determine user ID',
-        debug: {
-          pathParameters: event.pathParameters,
-          hasAuthenticatedUser: !!authenticatedUser.userId,
-          resource: event.resource,
-          path: event.path
-        }
+        message: 'Bad Request: Unable to determine user ID'
       });
     }
 
     // 安全验证：确保用户只能访问自己的资料
     if (pathUserId && pathUserId !== authenticatedUser.userId) {
+      logger.warn('profile_access_denied', {
+        requesterHash: fingerprintIdentifier(authenticatedUser.userId),
+        targetHash: fingerprintIdentifier(pathUserId),
+      });
       return createResponse(403, {
         message: 'Forbidden: You can only access your own profile'
       });
@@ -171,7 +161,10 @@ export const handler = async (event) => {
     if (!result.Item) {
       // 用户不存在于 DynamoDB 中，只返回 exists: false 和 userId
       // 不再返回虚构的默认数据，避免前端无法区分"不存在"和"存在但为空"
-      console.log('📋 用户不存在于数据库中 (exists: false)');
+      logger.info('profile_read_completed', {
+        userHash: fingerprintIdentifier(authenticatedUser.userId),
+        exists: false,
+      });
       return createResponse(200, {
         exists: false,
         userId: authenticatedUser.userId
@@ -189,13 +182,16 @@ export const handler = async (event) => {
       }
     };
 
+    logger.info('profile_read_completed', {
+      userHash: fingerprintIdentifier(authenticatedUser.userId),
+      exists: true,
+    });
     return createResponse(200, userProfile);
 
   } catch (error) {
-    console.error('Error getting user profile:', error);
+    logger.error('profile_read_failed', describeError(error));
     return createResponse(500, {
-      message: 'Error fetching user profile',
-      error: error.message
+      message: 'Error fetching user profile'
     });
   }
 };

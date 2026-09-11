@@ -197,7 +197,7 @@ describe('avatar.js 单元测试', () => {
 
       expect(url).toContain('ui-avatars.com');
       expect(url).toContain('name=C'); // Charlie 的首字母
-      expect(console.error).toHaveBeenCalledWith('获取头像URL失败:', expect.any(Error));
+      expect(console.error).not.toHaveBeenCalled();
     });
 
     it('API 返回 null 时应该回退到生成的头像', async () => {
@@ -377,7 +377,7 @@ describe('avatar.js 单元测试', () => {
       expect(getUserDisplayName(user3)).toBe('未知用户');
     });
 
-    it('应该输出调试日志', () => {
+    it('读取显示名时不向控制台输出用户资料', () => {
       const user = {
         attributes: {
           nickname: 'TestUser'
@@ -386,13 +386,7 @@ describe('avatar.js 单元测试', () => {
 
       getUserDisplayName(user);
 
-      // 验证 console.log 被调用
-      expect(console.log).toHaveBeenCalledWith(
-        expect.stringContaining('getUserDisplayName'),
-        expect.objectContaining({
-          nickname: 'TestUser'
-        })
-      );
+      expect(console.log).not.toHaveBeenCalled();
     });
   });
 });

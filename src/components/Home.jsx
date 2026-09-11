@@ -1,8 +1,10 @@
-import React from 'react';
+import React, { lazy, Suspense } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import Timeline from './Timeline';
 import { useDocumentMeta } from '../hooks/useDocumentMeta';
+
+// 访客首页不需要个人图表和 Markdown；只在认证用户实际查看首页时下载。
+const Timeline = lazy(() => import('./Timeline'));
 
 /**
  * @en The Home page component, serving as the main landing page for the application.
@@ -27,7 +29,11 @@ const Home = () => {
   };
 
   if (isAuthenticated) {
-    return <Timeline />;
+    return (
+      <Suspense fallback={<div role="status" className="py-16 text-center text-gray-600">正在加载个人时间线…</div>}>
+        <Timeline />
+      </Suspense>
+    );
   }
 
   return (

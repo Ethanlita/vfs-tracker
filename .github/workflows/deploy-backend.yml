@@ -4,22 +4,7 @@ on:
   push:
     branches:
       - master
-    paths:
-      - 'lambda-functions/**'
-      - 'infra/**'
-      - '.github/workflows/deploy-backend.yml'
   workflow_dispatch:
-    inputs:
-      deploy_api_gateway:
-        description: 'Deploy new API Gateway (will create new endpoint)'
-        required: false
-        default: false
-        type: boolean
-      skip_image_build:
-        description: 'Skip Python Lambda image build (use existing image)'
-        required: false
-        default: false
-        type: boolean
 
 permissions:
   id-token: write
@@ -32,19 +17,40 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       image_changed: ${{ steps.check.outputs.image_changed }}
+      backend_changed: ${{ steps.check.outputs.backend_changed }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
         with:
-          fetch-depth: 2
+          # 需要覆盖一次 push 中的全部提交，不能只比较最后两个提交。
+          fetch-depth: 0
 
       - name: Check for online-praat-analysis changes
         id: check
         run: |
-          if [ "${{ github.event.inputs.skip_image_build }}" = "true" ]; then
-            echo "image_changed=false" >> $GITHUB_OUTPUT
-            echo "Skipping image build (manual override)"
-          elif git diff --name-only HEAD~1 HEAD | grep -q "^lambda-functions/online-praat-analysis/"; then
+          set -euo pipefail
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "backend_changed=true" >> "$GITHUB_OUTPUT"
+          else
+            BEFORE_SHA="${{ github.event.before }}"
+            if [[ "$BEFORE_SHA" =~ ^0+$ ]] || ! git cat-file -e "${BEFORE_SHA}^{commit}"; then
+              CHANGED_FILES=$(git ls-tree -r --name-only "${{ github.sha }}")
+            else
+              CHANGED_FILES=$(git diff --name-only "$BEFORE_SHA" "${{ github.sha }}")
+            fi
+
+            if grep -Eq '^(lambda-functions/|infra/|scripts/seed-reading-passages\.mjs$|package(-lock)?\.json$|\.github/workflows/(deploy-backend|build-python-lambda)\.yml$)' <<< "$CHANGED_FILES"; then
+              echo "backend_changed=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "backend_changed=false" >> "$GITHUB_OUTPUT"
+            fi
+          fi
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "image_changed=true" >> $GITHUB_OUTPUT
+            echo "Manual deployment requested, will rebuild Python image"
+          elif grep -q "^lambda-functions/online-praat-analysis/" <<< "$CHANGED_FILES"; then
             echo "image_changed=true" >> $GITHUB_OUTPUT
             echo "Python Lambda files changed, will build image"
           else
@@ -52,18 +58,54 @@ jobs:
             echo "No Python Lambda changes detected"
           fi
 
+  # 所有后端写入前先验证 Lambda、API 契约与基础设施声明。
+  verify:
+    needs: check-image-changes
+    if: needs.check-image-changes.outputs.backend_changed == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint backend and infrastructure sources
+        run: npm run lint
+
+      - name: Run backend unit and contract-isolation tests
+        run: >-
+          npx vitest run
+          tests/unit/lambda
+          tests/unit/scripts
+          tests/unit/rateLimiter.test.js
+          tests/unit/reading-passages-infra.test.js
+          tests/unit/storage-cleanup-infra.test.js
+          tests/integration/api
+
   # 构建 Python Lambda 镜像（仅在代码变化时）
   build-python-image:
-    needs: check-image-changes
-    if: needs.check-image-changes.outputs.image_changed == 'true'
+    needs: [check-image-changes, verify]
+    if: needs.check-image-changes.outputs.image_changed == 'true' && needs.verify.result == 'success'
     uses: ./.github/workflows/build-python-lambda.yml
     secrets: inherit
 
   # 部署后端（等待镜像构建完成，如果需要的话）
   deploy:
-    needs: [check-image-changes, build-python-image]
+    needs: [check-image-changes, verify, build-python-image]
     # 无论 build-python-image 是否运行，都执行部署
-    if: always() && !failure() && !cancelled()
+    if: >-
+      always() &&
+      needs.check-image-changes.outputs.backend_changed == 'true' &&
+      needs.verify.result == 'success' &&
+      !failure() &&
+      !cancelled()
     runs-on: ubuntu-latest
     
     steps:
@@ -111,6 +153,29 @@ jobs:
             --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND \
             --resolve-s3 \
             --region ${{ secrets.AWS_REGION }}
+
+      - name: Publish verified Python Lambda image
+        if: needs.check-image-changes.outputs.image_changed == 'true'
+        env:
+          IMAGE_URI: ${{ needs.build-python-image.outputs.image_uri }}
+        run: |
+          set -euo pipefail
+          test -n "$IMAGE_URI"
+          aws lambda update-function-code \
+            --function-name online-praat-analysis \
+            --image-uri "$IMAGE_URI" \
+            --region ${{ secrets.AWS_REGION }}
+          aws lambda wait function-updated \
+            --function-name online-praat-analysis \
+            --region ${{ secrets.AWS_REGION }}
+
+      - name: Install reading-passage seed dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Seed default reading passages
+        run: node scripts/seed-reading-passages.mjs
+        env:
+          READING_PASSAGES_TABLE_NAME: VoiceFemReadingPassages
 
       - name: Output deployment info
         working-directory: ./infra

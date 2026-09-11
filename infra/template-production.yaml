@@ -49,6 +49,8 @@ Globals:
       Variables:
         ENVIRONMENT: !Ref Environment
         AWS_NODEJS_CONNECTION_REUSE_ENABLED: "1"
+        # Node.js Lambda 应用日志的最低级别；结构化日志器默认从该变量读取。
+        LOG_LEVEL: INFO
     LoggingConfig:
       LogFormat: JSON
       ApplicationLogLevel: INFO
@@ -118,6 +120,20 @@ Resources:
         - AttributeName: sessionId
           KeyType: HASH
 
+  VoiceFemReadingPassagesTable:
+    Type: AWS::DynamoDB::Table
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      TableName: VoiceFemReadingPassages
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: passageId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: passageId
+          KeyType: HASH
+
   # ==========================================
   # API Gateway (新创建)
   # ==========================================
@@ -141,6 +157,37 @@ Resources:
       Tags:
         Project: vfs-tracker
 
+  GetReadingPassagesFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildProperties:
+        # 使用提交的锁文件进行可复现安装，避免部署时重新解析依赖版本。
+        UseNpmCi: true
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      FunctionName: getReadingPassages
+      Description: Return enabled reading passages for voice tests
+      CodeUri: ../lambda-functions/getReadingPassages/
+      Handler: index.handler
+      Runtime: nodejs24.x
+      Timeout: 5
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref VoiceFemReadingPassagesTable
+      Environment:
+        Variables:
+          READING_PASSAGES_TABLE_NAME: !Ref VoiceFemReadingPassagesTable
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref VoiceFemApi
+            Path: /reading-passages
+            Method: GET
+            Auth:
+              Authorizer: NONE
+
   # ==========================================
   # Lambda Functions - Events (已导入，更新代码)
   # 注意: FunctionName 保持与现有函数名一致，不带环境后缀
@@ -148,6 +195,10 @@ Resources:
 
   AddVoiceEventFunction:
     Type: AWS::Serverless::Function
+    Metadata:
+      BuildProperties:
+        # 使用提交的锁文件进行可复现安装，避免部署时重新解析依赖版本。
+        UseNpmCi: true
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
@@ -170,6 +221,10 @@ Resources:
 
   GetVoiceEventsFunction:
     Type: AWS::Serverless::Function
+    Metadata:
+      BuildProperties:
+        # 使用提交的锁文件进行可复现安装，避免部署时重新解析依赖版本。
+        UseNpmCi: true
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
@@ -178,6 +233,7 @@ Resources:
       CodeUri: ../lambda-functions/getVoiceEvents/
       Handler: index.handler
       Runtime: nodejs24.x
+      Timeout: 10
       Role: arn:aws:iam::296821242554:role/service-role/addVoiceEvent-role-l30o387r
       Environment:
         Variables:
@@ -192,6 +248,10 @@ Resources:
 
   GetAllPublicEventsFunction:
     Type: AWS::Serverless::Function
+    Metadata:
+      BuildProperties:
+        # 使用提交的锁文件进行可复现安装，避免部署时重新解析依赖版本。
+        UseNpmCi: true
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
@@ -206,6 +266,7 @@ Resources:
       Environment:
         Variables:
           EVENTS_TABLE: !Ref VoiceFemEventsTable
+          USERS_TABLE: !Ref VoiceFemUsersTable
       Events:
         ApiEvent:
           Type: Api
@@ -234,6 +295,10 @@ Resources:
 
   DeleteEventFunction:
     Type: AWS::Serverless::Function
+    Metadata:
+      BuildProperties:
+        # 使用提交的锁文件进行可复现安装，避免部署时重新解析依赖版本。
+        UseNpmCi: true
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
@@ -246,6 +311,7 @@ Resources:
       Environment:
         Variables:
           EVENTS_TABLE: !Ref VoiceFemEventsTable
+          ATTACHMENTS_BUCKET: !Ref ExistingS3BucketName
       Events:
         ApiEvent:
           Type: Api
@@ -256,6 +322,10 @@ Resources:
 
   AutoApproveEventFunction:
     Type: AWS::Serverless::Function
+    Metadata:
+      BuildProperties:
+        # 使用提交的锁文件进行可复现安装，避免部署时重新解析依赖版本。
+        UseNpmCi: true
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
@@ -270,6 +340,8 @@ Resources:
       Environment:
         Variables:
           EVENTS_TABLE: !Ref VoiceFemEventsTable
+          ATTACHMENTS_BUCKET: !Ref ExistingS3BucketName
+          GEMINI_API_KEY: '{{resolve:ssm:/vfs-tracker/gemini-api-key}}'
       # 注意: DynamoDB Stream 事件源映射已在 AWS 控制台配置
       # UUID: 7bfcd575-9ba9-4a37-a229-57394642a9f0
       # 不在此处重复定义，避免冲突
@@ -280,6 +352,10 @@ Resources:
 
   GetUserProfileFunction:
     Type: AWS::Serverless::Function
+    Metadata:
+      BuildProperties:
+        # 使用提交的锁文件进行可复现安装，避免部署时重新解析依赖版本。
+        UseNpmCi: true
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
@@ -302,6 +378,10 @@ Resources:
 
   GetUserPublicProfileFunction:
     Type: AWS::Serverless::Function
+    Metadata:
+      BuildProperties:
+        # 使用提交的锁文件进行可复现安装，避免部署时重新解析依赖版本。
+        UseNpmCi: true
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
@@ -326,6 +406,10 @@ Resources:
 
   UpdateUserProfileFunction:
     Type: AWS::Serverless::Function
+    Metadata:
+      BuildProperties:
+        # 使用提交的锁文件进行可复现安装，避免部署时重新解析依赖版本。
+        UseNpmCi: true
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
@@ -348,6 +432,10 @@ Resources:
 
   UserProfileSetupFunction:
     Type: AWS::Serverless::Function
+    Metadata:
+      BuildProperties:
+        # 使用提交的锁文件进行可复现安装，避免部署时重新解析依赖版本。
+        UseNpmCi: true
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
@@ -374,6 +462,10 @@ Resources:
 
   GetUploadUrlFunction:
     Type: AWS::Serverless::Function
+    Metadata:
+      BuildProperties:
+        # 使用提交的锁文件进行可复现安装，避免部署时重新解析依赖版本。
+        UseNpmCi: true
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
@@ -396,6 +488,10 @@ Resources:
 
   GetFileUrlFunction:
     Type: AWS::Serverless::Function
+    Metadata:
+      BuildProperties:
+        # 使用提交的锁文件进行可复现安装，避免部署时重新解析依赖版本。
+        UseNpmCi: true
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
@@ -419,6 +515,10 @@ Resources:
 
   GetAvatarUrlFunction:
     Type: AWS::Serverless::Function
+    Metadata:
+      BuildProperties:
+        # 使用提交的锁文件进行可复现安装，避免部署时重新解析依赖版本。
+        UseNpmCi: true
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
@@ -497,6 +597,10 @@ Resources:
 
   GeminiProxyFunction:
     Type: AWS::Serverless::Function
+    Metadata:
+      BuildProperties:
+        # 使用提交的锁文件进行可复现安装，避免部署时重新解析依赖版本。
+        UseNpmCi: true
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
@@ -521,6 +625,10 @@ Resources:
 
   GetSongRecommendationsFunction:
     Type: AWS::Serverless::Function
+    Metadata:
+      BuildProperties:
+        # 使用提交的锁文件进行可复现安装，避免部署时重新解析依赖版本。
+        UseNpmCi: true
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
@@ -545,6 +653,10 @@ Resources:
 
   EdgeProbeFunction:
     Type: AWS::Serverless::Function
+    Metadata:
+      BuildProperties:
+        # 使用提交的锁文件进行可复现安装，避免部署时重新解析依赖版本。
+        UseNpmCi: true
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
@@ -572,6 +684,61 @@ Resources:
             Auth:
               Authorizer: NONE
 
+  CleanupStorageFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      BuildProperties:
+        # 使用提交的锁文件进行可复现安装，避免部署时重新解析依赖版本。
+        UseNpmCi: true
+    Properties:
+      FunctionName: cleanupStorage
+      Description: Delete orphan event attachments and expired voice-test raw recordings
+      CodeUri: ../lambda-functions/cleanupStorage/
+      Handler: index.handler
+      Runtime: nodejs24.x
+      MemorySize: 256
+      Timeout: 900
+      Environment:
+        Variables:
+          BUCKET_NAME: !Ref ExistingS3BucketName
+          EVENTS_TABLE: !Ref VoiceFemEventsTable
+          VOICE_TESTS_TABLE: !Ref VoiceFemTestsTable
+          ATTACHMENT_GRACE_DAYS: "7"
+          TERMINAL_RAW_RETENTION_HOURS: "1"
+          ABANDONED_RAW_RETENTION_HOURS: "2"
+          PROCESSING_RAW_RETENTION_HOURS: "6"
+          DRY_RUN: "false"
+      Policies:
+        - Statement:
+            - Sid: ScanStorageReferences
+              Effect: Allow
+              Action: dynamodb:Scan
+              Resource:
+                - !GetAtt VoiceFemEventsTable.Arn
+                - !GetAtt VoiceFemTestsTable.Arn
+            - Sid: ListCleanupPrefixes
+              Effect: Allow
+              Action: s3:ListBucket
+              Resource: !Sub arn:aws:s3:::${ExistingS3BucketName}
+              Condition:
+                StringLike:
+                  s3:prefix:
+                    - attachments/*
+                    - voice-tests/*
+            - Sid: DeleteCleanupObjects
+              Effect: Allow
+              Action: s3:DeleteObject
+              Resource:
+                - !Sub arn:aws:s3:::${ExistingS3BucketName}/attachments/*
+                - !Sub arn:aws:s3:::${ExistingS3BucketName}/voice-tests/*/raw/*
+      Events:
+        DailyCleanup:
+          Type: Schedule
+          Properties:
+            Description: Daily cleanup of unreferenced S3 uploads
+            Schedule: cron(15 3 * * ? *)
+            Enabled: true
+
 # ============================================
 # 输出
 # ============================================
@@ -595,3 +762,7 @@ Outputs:
   TestsTableName:
     Description: DynamoDB Tests table name
     Value: !Ref VoiceFemTestsTable
+
+  ReadingPassagesTableName:
+    Description: DynamoDB reading passages table name
+    Value: !Ref VoiceFemReadingPassagesTable

@@ -3,10 +3,11 @@
  */
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient, QueryCommand } from "@aws-sdk/lib-dynamodb";
+import { createStructuredLogger, describeError, fingerprintIdentifier } from './structuredLogger.mjs';
 
 const client = new DynamoDBClient({});
 const docClient = DynamoDBDocumentClient.from(client);
-const tableName = "VoiceFemEvents";
+const tableName = process.env.EVENTS_TABLE || "VoiceFemEvents";
 
 // CORS头部
 const corsHeaders = {
@@ -22,17 +23,15 @@ const corsHeaders = {
  * @returns {{userId: string, email: string, username: string, nickname: string}} 提取出的用户信息对象。
  * @throws {Error} 如果在请求中找不到有效的 ID token 或解析失败。
  */
-function extractUserFromEvent(event) {
+function extractUserFromEvent(event, logger) {
   try {
-    console.log('🔍 开始提取用户信息，优先处理ID Token');
-
     // 尝试多种方式获取用户信息
     let claims = null;
 
     // 方法1：从API Gateway Cognito授权器 (如果设置了)
     if (event.requestContext?.authorizer?.claims) {
       claims = event.requestContext.authorizer.claims;
-      console.log('✅ 使用API Gateway授权器提供的claims');
+      logger.debug('identity_source_selected', { source: 'authorizer' });
     }
 
     // 方法2：手动解析Authorization头中的ID Token
@@ -46,20 +45,20 @@ function extractUserFromEvent(event) {
           // 验证这是ID Token
           if (payload.token_use === 'id') {
             claims = payload;
-            console.log('✅ 成功解析ID Token，token_use:', payload.token_use);
+            logger.debug('identity_source_selected', { source: 'bearer', tokenUse: payload.token_use });
           } else {
-            console.warn('⚠️ 收到的不是ID Token，token_use:', payload.token_use);
+            logger.warn('token_type_invalid', { receivedTokenUse: payload.token_use });
             throw new Error(`Expected ID token, but received: ${payload.token_use}`);
           }
         } catch (parseError) {
-          console.error('❌ JWT Token解析失败:', parseError);
+          logger.warn('token_parse_failed', describeError(parseError));
           throw new Error(`ID Token parsing failed: ${parseError.message}`);
         }
       }
     }
 
     if (!claims) {
-      console.error('❌ 未找到认证claims');
+      logger.warn('identity_missing');
       throw new Error('No ID token found in request');
     }
 
@@ -71,17 +70,16 @@ function extractUserFromEvent(event) {
       nickname: claims.nickname || claims.name || claims['cognito:username'] || claims.email?.split('@')[0] || 'Unknown'
     };
 
-    console.log('✅ 成功提取用户信息:', {
-      userId: userInfo.userId,
-      email: userInfo.email,
-      tokenType: claims.token_use
+    logger.debug('identity_extracted', {
+      userHash: fingerprintIdentifier(userInfo.userId),
+      tokenType: claims.token_use,
     });
 
     return userInfo;
 
   } catch (error) {
-    console.error('❌ 从事件中提取用户信息失败:', error);
-    throw new Error(`Invalid ID token: ${error.message}`);
+    logger.warn('identity_extraction_failed', describeError(error));
+    throw new TypeError('Invalid ID token');
   }
 }
 
@@ -89,22 +87,14 @@ function extractUserFromEvent(event) {
  * [CN] Lambda 函数的主处理程序。它通过从授权 token 中提取的用户 ID 查询并返回该用户的所有嗓音事件。
  * 它强制执行一项安全检查，以确保用户只能访问自己的数据。事件按创建日期降序返回。
  * @param {object} event - API Gateway Lambda 事件对象，应在 `pathParameters` 中包含 `userId`。
+ * @param {object} context - AWS Lambda 调用上下文。
  * @returns {Promise<object>} 一个 API Gateway 响应，其中包含用户的嗓音事件列表或错误消息。
  */
-export const handler = async (event) => {
-    // 调试信息
-    const debugInfo = {
-        lambdaExecuted: true,
-        timestamp: new Date().toISOString(),
-        pathUserId: event.pathParameters?.userId,
-        hasAuthorizer: !!event.requestContext?.authorizer,
-        hasAuthorizerClaims: !!event.requestContext?.authorizer?.claims,
-        hasAuthHeader: !!(event.headers?.Authorization || event.headers?.authorization)
-    };
+export const handler = async (event, context = {}) => {
+    const logger = createStructuredLogger({ service: 'getVoiceEvents', requestId: context.awsRequestId });
+    logger.info('invocation_started', { method: event.httpMethod, route: event.resource });
 
     try {
-        console.log('🔍 Lambda: 开始执行，调试信息:', debugInfo);
-
         // 处理OPTIONS预检请求
         if (event.httpMethod === 'OPTIONS') {
             return {
@@ -118,68 +108,74 @@ export const handler = async (event) => {
         const pathUserId = event.pathParameters?.userId;
 
         // 从ID Token中提取认证的用户信息
-        const userInfo = extractUserFromEvent(event);
+        const userInfo = extractUserFromEvent(event, logger);
         const authenticatedUserId = userInfo.userId;
 
         // 安全检查：确保用户只能访问自己的数据
         if (pathUserId !== authenticatedUserId) {
-            console.log('❌ Lambda: 用户id错误', { authenticatedUserId, pathUserId });
+            logger.warn('event_access_denied', {
+                requesterHash: fingerprintIdentifier(authenticatedUserId),
+                targetHash: fingerprintIdentifier(pathUserId),
+            });
             return {
                 statusCode: 403,
                 headers: corsHeaders,
                 body: JSON.stringify({
-                    message: "Forbidden: Cannot access other user's data",
-                    debug: {
-                        ...debugInfo,
-                        authenticatedUserId,
-                        pathUserId,
-                        reason: "Path userId does not match authenticated user"
-                    }
+                    message: "Forbidden: Cannot access other user's data"
                 }),
             };
         }
 
-        // 查询用户的语音事件
-        const command = new QueryCommand({
-            TableName: tableName,
-            KeyConditionExpression: "userId = :userId",
-            ExpressionAttributeValues: {
-                ":userId": authenticatedUserId,
-            },
-            // 按创建时间降序排列，最新的在前面
-            ScanIndexForward: false
+        // 完整消费 DynamoDB Query 游标；空结果页也可能带有下一页游标。
+        const items = [];
+        let lastEvaluatedKey;
+        let pageCount = 0;
+        do {
+            const command = new QueryCommand({
+                TableName: tableName,
+                KeyConditionExpression: "userId = :userId",
+                ExpressionAttributeValues: {
+                    ":userId": authenticatedUserId,
+                },
+                // 分区内先按 eventId 降序读取，汇总后再按真实创建时间统一排序。
+                ScanIndexForward: false,
+                ...(lastEvaluatedKey ? { ExclusiveStartKey: lastEvaluatedKey } : {})
+            });
+            const result = await docClient.send(command);
+            items.push(...(result.Items || []));
+            lastEvaluatedKey = result.LastEvaluatedKey;
+            pageCount += 1;
+        } while (lastEvaluatedKey);
+
+        // API 文档承诺按创建时间降序；eventId 排序不能替代业务时间排序。
+        items.sort((left, right) => {
+            const leftTime = Date.parse(left.createdAt || left.date || '') || 0;
+            const rightTime = Date.parse(right.createdAt || right.date || '') || 0;
+            return rightTime - leftTime || String(right.eventId || '').localeCompare(String(left.eventId || ''));
         });
 
-        const { Items } = await docClient.send(command);
-
-        console.log('✅ Lambda: 成功查询到用户事件', {
-            userId: authenticatedUserId,
-            eventCount: Items.length
+        logger.info('events_read_completed', {
+            userHash: fingerprintIdentifier(authenticatedUserId),
+            eventCount: items.length,
+            pageCount
         });
 
         return {
             statusCode: 200,
             headers: corsHeaders,
             body: JSON.stringify({
-                events: Items,
-                debug: {
-                    ...debugInfo,
-                    success: true,
-                    eventCount: Items.length,
-                    authenticatedUserId
-                }
+                events: items,
+                complete: true
             }),
         };
 
     } catch (error) {
-        console.error('❌ Lambda执行错误:', error);
+        logger.error('events_read_failed', describeError(error));
         return {
             statusCode: 500,
             headers: corsHeaders,
             body: JSON.stringify({
                 message: "Error fetching voice events",
-                error: error.message,
-                debug: debugInfo
             }),
         };
     }

@@ -5,5 +5,4 @@ librosa
 soundfile
 webrtcvad
 matplotlib
-praat-parselmouth
 reportlab

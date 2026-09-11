@@ -1,5 +1,27 @@
 # Error Handling Guide / 错误处理指南
 
+## 事件表单提交错误
+
+EventForm同时展示本地校验错误与useAsync捕获的API错误。错误框重试通过form.requestSubmit进入同一提交路径，保持浏览器必填校验、业务校验、防重入及成功回调一致；不直接调用底层execute绕过表单。详见[事件提交说明](event-form-submission.md)。
+
+## 文档离线缓存缺失
+
+公开目录和正文统一通过 `readDocumentation` 读取。离线读取失败转换为 `DOCUMENT_NOT_AVAILABLE_OFFLINE` 的 `ClientError`，保留原始原因、GET方法和路径，中文提示用户联网重试。在线HTTP错误仍保留实际状态。详见[离线文档说明](offline-documentation.md)。
+
+## 嗓音报告读取恢复
+
+`useVoiceAnalysis`区分读取错误和服务端任务失败。读取失败的重试只调用GET查询现有会话；重新计算走显式确认。401/403不自动重试，网络/408/429/5xx有限退避，10分钟后停止本轮等待。取消信号和超时同时终止底层Amplify GET操作，旧响应不能发布到新会话。详见[报告查询说明](voice-analysis-polling.md)。
+
+## 录音转换错误
+
+Recorder在读取、解码或重采样失败时显示`ClientError`（`AUDIO_CONVERSION_FAILED`），保留原因但不伪造HTTP上下文。失败的原录音仅保存在当前组件内存，用户可“重试转换”或“放弃此段录音”。转换成功前不触发上层录音完成回调，因此不能计入向导进度或请求上传。刷新、离开页面仍会丢失该内存片段，持久化恢复属于独立事项。见[录音生命周期](recorder-lifecycle.md)。
+
+## 离线事件归属校验
+
+带 `clientRequestId` 的事件创建具备服务端条件写入去重：标识非法为400/`INVALID_CLIENT_REQUEST_ID`，同标识对应不同内容为409/`IDEMPOTENCY_CONFLICT`，响应契约见 `eventIdempotencyErrorSchema`。条件失败未返回旧记录或其他服务错误仍为500，不能当作已经保存成功。
+
+`addEvent(eventData, { expectedUserId })` 会核对实际取得并准备发送的 ID Token 所属账号。账号不匹配或无法确认时，在发起 POST 前抛出 `AuthenticationError`；离线同步界面显示错误并保留记录。队列读取和写入问题继续使用 `StorageError`。该检查不替代后端认证，事件请求体不增加账号字段。验证见 `tests/unit/api-event-owner.test.js` 与 [离线队列说明](offline-events.md)。
+
 This document summarizes the shared error classes in `src/utils/apiError.js` and how to work with them in both production and development flows. 本指南汇总 `src/utils/apiError.js` 中的通用错误类，并说明在生产模式与开发模式下应如何使用这些工具。
 
 ## addVoiceEvent 请求体错误（Issue #38）
@@ -159,3 +181,11 @@ In development mode the client may short-circuit requests (for example when cred
 
 - Tests verifying the scenarios above live in `tests/unit/utils/apiError.test.js`. 对应的验证案例位于 `tests/unit/utils/apiError.test.js`。
 - Development readiness criteria are tracked in `README.md` and summarized in `AGENTS.md`. 开发模式与生产模式的判定标准记录在 `README.md`，并在 `AGENTS.md` 中有摘要。
+
+## 公开资料读取错误
+
+公共仪表板的资料读取具有独立加载与错误状态。ApiErrorNotice直接展示原错误，重试仅读取当前用户资料，不以空对象掩盖失败，也不刷新事件明细。详见[公开资料加载说明](public-profile-loading.md)。
+
+## 个人历史读取状态
+
+MyPage历史加载、错误和成功互斥。错误不转换为空记录，重试清除旧值，成功空结果才触发新记录引导；详见[个人历史状态](personal-history-status.md)。

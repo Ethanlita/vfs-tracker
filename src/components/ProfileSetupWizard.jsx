@@ -1,13 +1,32 @@
-import React, { useState } from 'react';
+import { safeReturnUrl } from '../routes/authReturn.js';
+import React, { useEffect, useRef, useState } from 'react';
 import PropTypes from 'prop-types';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { ensureAppError } from '../utils/apiError.js';
 import { ApiErrorNotice } from './ApiErrorNotice.jsx';
+import {
+  profileBaseVersion,
+  removePendingProfileSetup,
+  savePendingProfileSetup,
+} from '../utils/pendingProfileSetup.js';
+import { usePwaUpdateBlocker } from '../hooks/usePwaUpdateBlocker.js';
 
+/** 分步填写展示名称和社交资料，确认页仅呈现用户内容与公开范围。 */
 const ProfileSetupWizard = ({ onComplete, canSkip = true }) => {
-  const { user, completeProfileSetup } = useAuth();
+  const {
+    user,
+    userProfile,
+    completeProfileSetup,
+    pendingProfileSetup,
+    pendingProfileSyncing,
+    pendingProfileError,
+    pendingProfileConflict,
+    retryPendingProfileSetup,
+  } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const returnUrl = safeReturnUrl(new URLSearchParams(location.search).get('returnUrl'));
   const [currentStep, setCurrentStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -21,6 +40,14 @@ const ProfileSetupWizard = ({ onComplete, canSkip = true }) => {
   });
 
   const [currentSocial, setCurrentSocial] = useState({ platform: '', handle: '' });
+  const restoredDraftId = useRef(null);
+
+  // 填写中的首次资料仍只在内存里，离线草稿确认写入前不能被更新清空。
+  usePwaUpdateBlocker(
+    loading || currentStep > 1 || formData.name !== '' || formData.socials.length > 0 ||
+      currentSocial.platform !== '' || currentSocial.handle !== '',
+    '首次资料设置'
+  );
 
   // 社交平台选项
   const socialPlatforms = [
@@ -30,13 +57,27 @@ const ProfileSetupWizard = ({ onComplete, canSkip = true }) => {
 
   const totalSteps = 3;
 
-  const pendingProfileKey = 'pendingProfileSetup:v1';
+  const ownerUserId = user?.userId || user?.attributes?.sub;
+
+  // 返回向导时恢复当前账号的完成草稿；同一草稿只恢复一次，避免覆盖之后的编辑。
+  useEffect(() => {
+    if (!pendingProfileSetup || pendingProfileSetup.ownerUserId !== ownerUserId ||
+        pendingProfileSetup.kind !== 'complete' || restoredDraftId.current === pendingProfileSetup.draftId) return;
+    const profile = pendingProfileSetup.payload.profile;
+    setFormData({
+      name: profile.name || '',
+      isNamePublic: profile.isNamePublic === true,
+      socials: Array.isArray(profile.socials) ? profile.socials : [],
+      areSocialsPublic: profile.areSocialsPublic === true,
+    });
+    restoredDraftId.current = pendingProfileSetup.draftId;
+  }, [ownerUserId, pendingProfileSetup]);
 
   const finishSetup = () => {
     if (onComplete) {
       onComplete();
     } else {
-      navigate('/mypage', { replace: true });
+      navigate(returnUrl, { replace: true });
     }
   };
 
@@ -51,26 +92,17 @@ const ProfileSetupWizard = ({ onComplete, canSkip = true }) => {
 
   const addSocialAccount = () => {
     if (currentSocial.platform && currentSocial.handle.trim()) {
-      console.log('🔍 添加社交账号:', {
-        platform: currentSocial.platform,
-        handle: currentSocial.handle.trim(),
-        currentSocials: formData.socials
-      });
+
 
       setFormData(prev => {
         const newSocials = [...prev.socials, { ...currentSocial, handle: currentSocial.handle.trim() }];
-        console.log('✅ 社交账号已添加，新的socials数组:', newSocials);
+
         return {
           ...prev,
           socials: newSocials
         };
       });
       setCurrentSocial({ platform: '', handle: '' });
-    } else {
-      console.log('❌ 无法添加社交账号，缺少必要信息:', {
-        platform: currentSocial.platform,
-        handle: currentSocial.handle.trim()
-      });
     }
   };
 
@@ -92,15 +124,12 @@ const ProfileSetupWizard = ({ onComplete, canSkip = true }) => {
     // 在第2步，如果用户填写了社交账号信息但没有点击添加，自动添加
     if (currentStep === 2) {
       if (currentSocial.platform && currentSocial.handle.trim()) {
-        console.log('🔍 用户没有点击添加按钮，自动添加社交账号:', {
-          platform: currentSocial.platform,
-          handle: currentSocial.handle.trim()
-        });
+
 
         // 自动添加当前填写的社交账号
         setFormData(prev => {
           const newSocials = [...prev.socials, { ...currentSocial, handle: currentSocial.handle.trim() }];
-          console.log('✅ 自动添加社交账号，新的socials数组:', newSocials);
+
           return {
             ...prev,
             socials: newSocials
@@ -147,28 +176,33 @@ const ProfileSetupWizard = ({ onComplete, canSkip = true }) => {
     try {
       if (typeof navigator !== 'undefined' && navigator.onLine === false) {
         try {
-          localStorage.setItem(pendingProfileKey, JSON.stringify({
-            userId: user?.userId || user?.attributes?.sub || null,
+          await savePendingProfileSetup({
+            ownerUserId,
             payload,
-            savedAt: Date.now()
-          }));
+            baseVersion: profileBaseVersion(userProfile),
+            kind: 'complete',
+            returnUrl,
+          });
           if (typeof window !== 'undefined') {
             window.alert?.('已离线保存，将在联网后尝试同步。');
           }
         } catch (storageError) {
-          console.warn('⚠️ 离线暂存用户资料失败', storageError);
+          throw ensureAppError(storageError, { message: '无法保存离线资料，请检查浏览器存储权限后重试。' });
         }
         finishSetup();
         return;
       }
 
-      await completeProfileSetup(payload);
+      await completeProfileSetup(payload, profileBaseVersion(userProfile));
+      if (pendingProfileSetup?.ownerUserId === ownerUserId) {
+        await removePendingProfileSetup(ownerUserId, pendingProfileSetup.draftId);
+      }
       // 不再调用 refreshUserProfile()，因为 completeProfileSetup 已经
       // 更新了 userProfile 和 needsProfileSetup 状态，再次请求后端
       // 可能因延迟/失败导致状态被覆盖回 needsProfileSetup=true（竞态条件）
       finishSetup();
     } catch (error) {
-      console.error('设置用户资料失败:', error);
+
       setError('');
       setApiError(ensureAppError(error, {
         message: error.message || '设置失败，请重试',
@@ -195,30 +229,50 @@ const ProfileSetupWizard = ({ onComplete, canSkip = true }) => {
     try {
       if (typeof navigator !== 'undefined' && navigator.onLine === false) {
         try {
-          localStorage.setItem(pendingProfileKey, JSON.stringify({
-            userId: user?.userId || user?.attributes?.sub || null,
+          await savePendingProfileSetup({
+            ownerUserId,
             payload,
-            savedAt: Date.now()
-          }));
+            baseVersion: profileBaseVersion(userProfile),
+            kind: 'skip',
+            returnUrl,
+          });
           if (typeof window !== 'undefined') {
             window.alert?.('已离线保存，将在联网后尝试同步。');
           }
         } catch (storageError) {
-          console.warn('⚠️ 离线暂存用户资料失败', storageError);
+          throw ensureAppError(storageError, { message: '无法保存离线资料，请检查浏览器存储权限后重试。' });
         }
         finishSetup();
         return;
       }
 
-      await completeProfileSetup(payload);
+      await completeProfileSetup(payload, profileBaseVersion(userProfile));
+      if (pendingProfileSetup?.ownerUserId === ownerUserId) {
+        await removePendingProfileSetup(ownerUserId, pendingProfileSetup.draftId);
+      }
       // 不再调用 refreshUserProfile()，避免竞态条件
       // completeProfileSetup 已经正确设置了 needsProfileSetup=false
       finishSetup();
     } catch (error) {
-      console.error('跳过并写入基础资料失败:', error);
-      setError(error.message || '跳过失败，请稍后重试');
+
+      setError('');
+      setApiError(ensureAppError(error, {
+        message: error.message || '跳过失败，请稍后重试',
+        requestMethod: 'POST',
+        requestPath: '/user/profile-setup'
+      }));
     } finally {
       setLoading(false);
+    }
+  };
+
+  /** 手动重试已保存草稿；覆盖操作只由冲突提示中的明确按钮触发。 */
+  const handlePendingRetry = async (overwrite = false) => {
+    const target = pendingProfileSetup?.returnUrl || returnUrl;
+    const synced = await retryPendingProfileSetup?.({ overwrite });
+    if (synced) {
+      if (onComplete) onComplete();
+      else navigate(target, { replace: true });
     }
   };
 
@@ -290,14 +344,14 @@ const ProfileSetupWizard = ({ onComplete, canSkip = true }) => {
               <div className="space-y-2">
                 <h3 className="text-sm font-medium text-gray-700">已添加的账号：</h3>
                 {formData.socials.map((social, index) => (
-                  <div key={index} className="flex items-center justify-between bg-gray-50 p-3 rounded-lg">
-                    <div>
+                  <div key={index} className="flex items-center justify-between gap-3 bg-gray-50 p-3 rounded-lg">
+                    <div className="min-w-0 flex-1 [overflow-wrap:anywhere]">
                       <span className="font-medium text-sm text-gray-700">{social.platform}:</span>
                       <span className="ml-2 text-gray-900">{social.handle}</span>
                     </div>
                     <button
                       onClick={() => removeSocialAccount(index)}
-                      className="text-red-600 hover:text-red-800 text-sm"
+                      className="shrink-0 text-red-600 hover:text-red-800 text-sm"
                     >
                       删除
                     </button>
@@ -309,14 +363,14 @@ const ProfileSetupWizard = ({ onComplete, canSkip = true }) => {
             {/* 添加新社交账号 */}
             <div className="space-y-3">
               <h3 className="text-sm font-medium text-gray-700">添加新账号：</h3>
-              <div className="flex space-x-2">
-                <select
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <select aria-label="社交平台"
                   value={currentSocial.platform}
                   onChange={(e) => {
-                    console.log('🔍 选择平台:', e.target.value);
+
                     setCurrentSocial(prev => ({ ...prev, platform: e.target.value }));
                   }}
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
+                  className="min-w-0 w-full sm:flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
                 >
                   <option value="">选择平台</option>
                   {socialPlatforms.map(platform => (
@@ -325,23 +379,18 @@ const ProfileSetupWizard = ({ onComplete, canSkip = true }) => {
                 </select>
                 <input
                   type="text"
+                  aria-label="社交账号"
                   value={currentSocial.handle}
                   onChange={(e) => {
-                    console.log('🔍 输入账号:', e.target.value);
+
                     setCurrentSocial(prev => ({ ...prev, handle: e.target.value }));
                   }}
                   placeholder="账号名/ID"
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
+                  className="min-w-0 w-full sm:flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-pink-500"
                 />
                 <button
                   onClick={() => {
-                    console.log('🔍 点击添加按钮，当前状态:', {
-                      platform: currentSocial.platform,
-                      handle: currentSocial.handle,
-                      hasPlatform: !!currentSocial.platform,
-                      hasTrimmedHandle: !!currentSocial.handle.trim(),
-                      isDisabled: !currentSocial.platform || !currentSocial.handle.trim()
-                    });
+
                     addSocialAccount();
                   }}
                   disabled={!currentSocial.platform || !currentSocial.handle.trim()}
@@ -351,13 +400,7 @@ const ProfileSetupWizard = ({ onComplete, canSkip = true }) => {
                 </button>
               </div>
 
-              {/* 调试信息显示 */}
-              <div className="text-xs text-gray-500 bg-gray-100 p-2 rounded">
-                调试信息 - 当前社交账号输入状态:<br/>
-                平台: "{currentSocial.platform}" (是否有效: {currentSocial.platform ? '✅' : '❌'})<br/>
-                账号: "{currentSocial.handle}" (trim后: "{currentSocial.handle.trim()}", 是否有效: {currentSocial.handle.trim() ? '✅' : '❌'})<br/>
-                按钮状态: {(!currentSocial.platform || !currentSocial.handle.trim()) ? '禁用' : '启用'}
-              </div>
+
             </div>
 
             <div className="flex items-center p-4 bg-blue-50 rounded-lg">
@@ -379,9 +422,9 @@ const ProfileSetupWizard = ({ onComplete, canSkip = true }) => {
         );
 
       case 3:
-        console.log('🔍 确认页面 - 当前formData:', formData);
-        console.log('🔍 确认页面 - socials数组长度:', formData.socials.length);
-        console.log('🔍 确认页面 - socials内容:', formData.socials);
+
+
+
 
         return (
           <div className="space-y-6">
@@ -398,18 +441,18 @@ const ProfileSetupWizard = ({ onComplete, canSkip = true }) => {
             <div className="bg-gray-50 rounded-lg p-6 space-y-4">
               <div>
                 <h3 className="text-sm font-medium text-gray-500">昵称</h3>
-                <p className="text-lg text-gray-900">{formData.name}</p>
+                <p className="text-lg text-gray-900 [overflow-wrap:anywhere]">{formData.name}</p>
                 <p className="text-sm text-gray-600">
                   {formData.isNamePublic ? '✅ 将在公共页面显示' : '❌ 不在公共页面显示'}
                 </p>
               </div>
 
               <div>
-                <h3 className="text-sm font-medium text-gray-500">社交账号 (调试: 数组长度={formData.socials.length})</h3>
+                <h3 className="text-sm font-medium text-gray-500">社交账号</h3>
                 {formData.socials.length > 0 ? (
                   <div className="space-y-1">
                     {formData.socials.map((social, index) => (
-                      <p key={index} className="text-gray-900">
+                      <p key={index} className="text-gray-900 [overflow-wrap:anywhere]">
                         {social.platform}: {social.handle}
                       </p>
                     ))}
@@ -418,7 +461,7 @@ const ProfileSetupWizard = ({ onComplete, canSkip = true }) => {
                     </p>
                   </div>
                 ) : (
-                  <p className="text-gray-900">未添加社交账号 (调试: socials = {JSON.stringify(formData.socials)})</p>
+                  <p className="text-gray-900">未添加社交账号</p>
                 )}
               </div>
             </div>
@@ -458,8 +501,8 @@ const ProfileSetupWizard = ({ onComplete, canSkip = true }) => {
               {[1, 2, 3].map((step) => (
                 <div key={step} className="flex items-center">
                   <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
-                    step <= currentStep 
-                      ? 'bg-pink-600 text-white' 
+                    step <= currentStep
+                      ? 'bg-pink-600 text-white'
                       : 'bg-gray-200 text-gray-500'
                   }`}>
                     {step}
@@ -472,6 +515,38 @@ const ProfileSetupWizard = ({ onComplete, canSkip = true }) => {
                 </div>
               ))}
             </div>
+
+            {(pendingProfileSetup || pendingProfileError) && (
+              <section role="status" aria-label="离线资料同步状态" className="mb-6 rounded-lg border border-amber-300 bg-amber-50 p-4 text-amber-950">
+                <p className="font-semibold">
+                  {pendingProfileConflict
+                    ? '服务器资料已在草稿保存后发生变化。'
+                    : pendingProfileError
+                      ? '离线资料尚未同步。'
+                      : pendingProfileSyncing
+                        ? '正在同步离线资料…'
+                        : '资料草稿已按当前账号保存，联网后会自动同步。'}
+                </p>
+                {pendingProfileError && !pendingProfileConflict && (
+                  <p className="mt-1 text-sm">{pendingProfileError.message || '同步失败，请重试。'}</p>
+                )}
+                {pendingProfileConflict && (
+                  <p className="mt-1 text-sm">请继续编辑草稿，或明确使用这份离线草稿覆盖服务器上的资料字段。</p>
+                )}
+                {pendingProfileSetup && navigator.onLine !== false && (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button type="button" disabled={pendingProfileSyncing} onClick={() => handlePendingRetry(false)} className="rounded-lg bg-amber-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
+                      {pendingProfileSyncing ? '同步中…' : '重试同步'}
+                    </button>
+                    {pendingProfileConflict && (
+                      <button type="button" disabled={pendingProfileSyncing} onClick={() => handlePendingRetry(true)} className="rounded-lg border border-red-500 bg-white px-4 py-2 text-sm font-semibold text-red-700 disabled:opacity-50">
+                        使用离线草稿覆盖
+                      </button>
+                    )}
+                  </div>
+                )}
+              </section>
+            )}
 
             {/* 错误消息 */}
             {apiError && (
@@ -489,8 +564,8 @@ const ProfileSetupWizard = ({ onComplete, canSkip = true }) => {
             {renderStepContent()}
 
             {/* 底部按钮 */}
-            <div className="flex justify-between items-center mt-8 pt-6 border-t border-gray-200">
-              <div className="flex space-x-3">
+            <div className="flex flex-wrap gap-3 justify-between items-center mt-8 pt-6 border-t border-gray-200">
+              <div className="flex flex-wrap gap-3">
                 {currentStep > 1 && (
                   <button
                     onClick={handlePrevious}

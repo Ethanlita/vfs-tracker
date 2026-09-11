@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useAsync } from '../utils/useAsync.js';
-import { ApiError } from '../utils/apiError.js';
+import { readDocumentation } from '../utils/documentation';
 import { ApiErrorNotice } from './ApiErrorNotice.jsx';
 import { useDocumentMeta } from '../hooks/useDocumentMeta';
 
@@ -18,11 +18,7 @@ const PostList = () => {
 
   // 使用 useAsync 统一数据获取
   const postsAsync = useAsync(async () => {
-    const res = await fetch('/posts.json');
-    if (!res.ok) {
-      throw await ApiError.fromResponse(res, { requestMethod: 'GET', requestPath: '/posts.json' });
-    }
-    return await res.json();
+    return readDocumentation('/posts.json', 'json');
   }, []);
 
   useEffect(() => { if (postsAsync.value) setPosts(postsAsync.value); }, [postsAsync.value]);

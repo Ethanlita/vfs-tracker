@@ -226,6 +226,7 @@ describe('API Contract 测试', () => {
       
       const events = data.events || data;
       expect(Array.isArray(events)).toBe(true);
+      expect(data.complete).toBe(true);
       
       console.log(`✓ 成功获取 ${events.length} 个用户事件`);
     });

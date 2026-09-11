@@ -1,3 +1,4 @@
+import { createAudioTasks } from '../utils/audioTasks.js';
 import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PitchDetector } from 'pitchy';
@@ -10,6 +11,7 @@ import { getSongRecommendations } from '../api.js'; // Import the new API functi
 import { ensureAppError } from '../utils/apiError.js';
 import { ApiErrorNotice } from './ApiErrorNotice.jsx';
 import { useDocumentMeta } from '../hooks/useDocumentMeta';
+import { usePwaUpdateBlocker } from '../hooks/usePwaUpdateBlocker.js';
 
 /**
  * @zh 将给定的频率（Hz）转换为最接近的音乐音名。
@@ -95,32 +97,8 @@ const computeModeFloorFreq = (mode, startOffsetVal, semitoneRatioVal) => {
 const MIN_SEMITONE_OFFSET = -36; // C1
 const MAX_SEMITONE_OFFSET = 36;  // C7
 
-// 模块级 Soundfont 缓存。注意：piano 实例内部会持有创建它的 AudioContext 的引用，
-// 一旦那个 ctx 被 close()（用户离开页面 → 组件卸载 → cleanupAudio 关 ctx），整个 piano 就报废了：
-// 再用它会产生 "Construction of GainNode is not useful when context is closed" 等报错。
-// 所以缓存必须**以 ctx 实例本身**为 key（不是 sampleRate），并在 ctx 关掉时主动失效。
-let cachedPiano = null;
-let cachedPianoCtx = null;
-
-const loadPianoInstrument = async (ctx) => {
-  // 命中条件：必须是同一个 ctx 且仍处于活动状态。
-  if (cachedPiano && cachedPianoCtx === ctx && ctx.state !== 'closed') {
-    return cachedPiano;
-  }
-  cachedPiano = null;
-  cachedPianoCtx = null;
-  const inst = await Soundfont.instrument(ctx, 'acoustic_grand_piano');
-  cachedPiano = inst;
-  cachedPianoCtx = ctx;
-  return inst;
-};
-
-const invalidatePianoCacheFor = (ctx) => {
-  if (cachedPianoCtx === ctx) {
-    cachedPiano = null;
-    cachedPianoCtx = null;
-  }
-};
+/** 每次初始化只加载所属上下文的音色，不在模块中持有已关闭的上下文。 */
+const loadPianoInstrument = ctx => Soundfont.instrument(ctx, 'acoustic_grand_piano');
 
 /**
  * @zh ScalePractice 组件用于配置化的音阶练习与音域测定。
@@ -135,9 +113,15 @@ const ScalePractice = () => {
   });
 
   const navigate = useNavigate();
+  // 结束、离开和新初始化使上一轮异步授权/音色加载失效。
+  const audioGenerationRef = useRef(0);
+  const audioTasksRef = useRef(null);
+  const requestingAudioRef = useRef(false);
 
   // --- 向导步骤状态 ---
   const [step, setStep] = useState('intro');
+  // 进入权限、校准或练习流程后，保护当前轮次和已测得的边界。
+  usePwaUpdateBlocker(step !== 'intro', '音阶练习进度');
   const [message, setMessage] = useState('');
   const [syllable, setSyllable] = useState('a');
   const [permissionError, setPermissionError] = useState('');
@@ -398,6 +382,9 @@ const ScalePractice = () => {
 
   // --- 音频初始化与清理 ---
   const cleanupAudio = useCallback(() => {
+    audioGenerationRef.current += 1;
+    audioTasksRef.current?.cancel();
+    requestingAudioRef.current = false;
     cancelPendingCycle();
     if (rafRef.current) {
       cancelAnimationFrame(rafRef.current);
@@ -409,8 +396,6 @@ const ScalePractice = () => {
     }
     if (audioCtxRef.current) {
       const ctxToClose = audioCtxRef.current;
-      // 在 close() 之前先失效 piano 模块缓存，避免下次 mount 拿到指向已死 ctx 的旧 piano
-      invalidatePianoCacheFor(ctxToClose);
       ctxToClose.close().catch(() => {});
       audioCtxRef.current = null;
     }
@@ -580,7 +565,7 @@ const ScalePractice = () => {
     rafRef.current = requestAnimationFrame(pitchLoop);
   }, []);
 
-  const initAudio = useCallback(async () => {
+  const initAudio = useCallback(async (generation) => {
     // 关闭浏览器侧的 AGC / 降噪 / 回声消除，这些 DSP 会非线性地修改输入信号、扰乱基频检测
     const stream = await navigator.mediaDevices.getUserMedia({
       audio: {
@@ -589,6 +574,10 @@ const ScalePractice = () => {
         autoGainControl: false
       }
     });
+    if (generation !== audioGenerationRef.current) {
+      stream.getTracks().forEach(track => track.stop());
+      return false;
+    }
     mediaStreamRef.current = stream;
     // 尝试固化 sampleRate=48000，消除设备/驱动差异（Bluetooth 16kHz 等会让低频检测劣化）。
     // 部分 Safari 不接受指定 sampleRate，捕获后退回默认。
@@ -603,11 +592,14 @@ const ScalePractice = () => {
     let pianoLoaded = false;
     if (typeof navigator !== 'undefined' && navigator.onLine) {
       try {
-        pianoRef.current = await loadPianoInstrument(ctx);
+        const instrument = await loadPianoInstrument(ctx);
+        if (generation !== audioGenerationRef.current) return false;
+        pianoRef.current = instrument;
         pianoLoaded = true;
         setShowOfflineNotice(false);
-      } catch (instrumentError) {
-        console.warn('无法加载钢琴音色，使用振荡器兜底', instrumentError);
+      } catch {
+        if (generation !== audioGenerationRef.current) return false;
+
       }
     }
 
@@ -638,6 +630,7 @@ const ScalePractice = () => {
     // 仍保留以防其他逻辑兜底使用（取 RAF 的近似间隔，约 16.7 ms）。
     frameDurationRef.current = 1000 / 60;
     pitchLoop();
+    return true;
   }, [pitchLoop]);
 
   /**
@@ -655,7 +648,9 @@ const ScalePractice = () => {
     if (current === desired) return;
     try {
       analyserRef.current?.disconnect();
-    } catch { /* ignore */ }
+    } catch {
+      // 旧分析器断开失败不会影响新分析器接管输入。
+    }
     const analyser = ctx.createAnalyser();
     analyser.fftSize = desired;
     inputGain.connect(analyser); // analyser 接在 inputGain 之后，软件增益依然生效
@@ -678,7 +673,7 @@ const ScalePractice = () => {
           duration: duration / 1000,
           gain: gainValue
         });
-        setTimeout(resolve, duration);
+        audioTasksRef.current.wait(duration).then(resolve);
       } else {
         const osc = audioCtxRef.current.createOscillator();
         const gain = audioCtxRef.current.createGain();
@@ -693,71 +688,60 @@ const ScalePractice = () => {
         gain.gain.exponentialRampToValueAtTime(0.0001, stopAt);
         osc.start(now);
         osc.stop(stopAt);
-        setTimeout(resolve, duration);
+        audioTasksRef.current.wait(duration).then(resolve);
       }
     });
   };
 
-  // --- 工具函数：测量 RMS，用于耳机检测 ---
+  /** 用当前会话采样麦克风RMS，结束时立即取消动画帧。 */
   const measureRms = (duration = 1000) => {
-    return new Promise(resolve => {
-      const samples = [];
-      const end = performance.now() + duration;
-      const collect = () => {
-        const buffer = new Float32Array(analyserRef.current.fftSize);
-        analyserRef.current.getFloatTimeDomainData(buffer);
-        let sum = 0;
-        for (let i = 0; i < buffer.length; i++) sum += buffer[i] * buffer[i];
-        samples.push(Math.sqrt(sum / buffer.length));
-        if (performance.now() < end) {
-          requestAnimationFrame(collect);
-        } else {
-          const avg = samples.reduce((a, b) => a + b, 0) / samples.length;
-          resolve(avg);
-        }
-      };
-      collect();
+    const analyser = analyserRef.current;
+    const buffer = new Float32Array(analyser.fftSize);
+    return audioTasksRef.current.sample(duration, () => {
+      analyser.getFloatTimeDomainData(buffer);
+      let sum = 0;
+      for (const value of buffer) sum += value * value;
+      return Math.sqrt(sum / buffer.length);
     });
   };
 
-  // --- 测量指定频率处的能量（dB） ---
+  /** 测量指定频率处的能量；取消返回null，由调用者停止后续步骤。 */
   const measureFreqDb = (freq, duration = 800) => {
-    return new Promise(resolve => {
-      const analyser = analyserRef.current;
-      const buffer = new Float32Array(analyser.frequencyBinCount);
-      const index = Math.round((freq / audioCtxRef.current.sampleRate) * analyser.fftSize);
-      const samples = [];
-      const end = performance.now() + duration;
-      const collect = () => {
-        analyser.getFloatFrequencyData(buffer);
-        samples.push(buffer[index]);
-        if (performance.now() < end) {
-          requestAnimationFrame(collect);
-        } else {
-          const avg = samples.reduce((a, b) => a + b, 0) / samples.length;
-          resolve(avg);
-        }
-      };
-      collect();
+    const analyser = analyserRef.current;
+    const buffer = new Float32Array(analyser.frequencyBinCount);
+    const index = Math.round((freq / audioCtxRef.current.sampleRate) * analyser.fftSize);
+    return audioTasksRef.current.sample(duration, () => {
+      analyser.getFloatFrequencyData(buffer);
+      return buffer[index];
     });
   };
 
   // --- Step0: 申请权限 ---
   const requestPermission = useCallback(async () => {
+    if (requestingAudioRef.current) return;
+    cleanupAudio();
+    requestingAudioRef.current = true;
+    audioTasksRef.current = createAudioTasks();
+    const generation = audioGenerationRef.current;
     setPermissionMsg('正在申请麦克风权限...');
     setPermissionError('');
     setPermissionGranted(false);
     try {
-      await initAudio();
+      if (!await initAudio(generation)) return;
       setPermissionMsg('已成功获取麦克风权限，请戴上耳机');
       setPermissionGranted(true);
-    } catch (err) {
-      console.error(err);
+    } catch {
+      if (generation !== audioGenerationRef.current) return;
+      cleanupAudio();
+
       setPermissionMsg('');
       setPermissionGranted(false);
       setPermissionError('无法获取麦克风权限，请确认已授予浏览器麦克风访问权限。');
     }
-  }, [initAudio]);
+    finally {
+      if (generation === audioGenerationRef.current) requestingAudioRef.current = false;
+    }
+  }, [initAudio, cleanupAudio]);
 
   // --- Step1: 耳机检测 ---
   // 测试音始终走振荡器（不依赖钢琴 soundfont 是否加载、不依赖网络），增益设为 4，
@@ -766,18 +750,21 @@ const ScalePractice = () => {
     setStep('headphone');
     setMessage('请保持安静，我们正在检测环境噪音...');
     const baselineRms = await measureRms(800);
+    if (baselineRms === null) return;
     baselineRmsRef.current = baselineRms;
     const baselineDb = await measureFreqDb(1000, 2000);
+    if (baselineDb === null) return;
     setMessage('现在播放 1 kHz 标准音，请确认不会被麦克风录到');
     const testPromise = measureFreqDb(1000, 2000);
-    await playTone(1000, 2000, false, 4); // 强制振荡器 + 增大音量
+    if (!await playTone(1000, 2000, false, 4)) return; // 强制振荡器 + 增大音量
     const testDb = await testPromise;
+    if (testDb === null) return;
     if (testDb > baselineDb + 6) {
       setMessage('似乎未佩戴耳机，建议佩戴耳机以获得更佳效果。');
       setStep('headphoneFail');
     } else {
       setMessage('耳机检测通过！');
-      setTimeout(() => setStep('calibration'), 500);
+      if (await audioTasksRef.current.wait(500)) setStep('calibration');
     }
   };
 
@@ -786,9 +773,9 @@ const ScalePractice = () => {
     setStep('calibrating');
     setMessage('正在录音，请在听到嘀声后以舒适的音高发 /a/ 音');
     currentFramesRef.current = [];
-    await playTone(1000, 300, false, 4); // 嘀声同样强制振荡器
+    if (!await playTone(1000, 300, false, 4)) return; // 嘀声同样强制振荡器
     collectingRef.current = true;
-    await new Promise(r => setTimeout(r, 3000));
+    if (!await audioTasksRef.current.wait(3000)) return;
     collectingRef.current = false;
     const valid = currentFramesRef.current.filter(f => f.pitch > 50 && f.pitch < 2000 && f.clarity >= clarityTheta);
     const f0s = valid.map(f => f.pitch);
@@ -916,9 +903,9 @@ const ScalePractice = () => {
         setBeatLabel(`${isDemo ? '演示' : '练习'} ${frequencyToNoteName(freq)}`);
       }
       if (freq) {
-        await playTone(freq, beatDur);
+        if (!await playTone(freq, beatDur)) return;
       } else {
-        await new Promise(r => setTimeout(r, beatDur));
+        if (!await audioTasksRef.current.wait(beatDur)) return;
       }
       collectingRef.current = false;
       beatData.push([...currentFramesRef.current]);
@@ -998,11 +985,8 @@ const ScalePractice = () => {
     } else {
       setStep('descending');
       const cycleLow = baseFreq * Math.pow(semitoneRatio, minOffset);
-      setLowestHz(prev => {
-        const floorFreq = lowestFloorRef.current || computeModeFloorFreq(currentMode, startOffset, semitoneRatio);
-        const baseLow = prev === 0 ? cycleLow : Math.min(prev, cycleLow);
-        return floorFreq ? Math.min(baseLow, floorFreq) : baseLow;
-      });
+      // 只记录本轮通过检测的下界，不将参考最低音计入结果。
+      setLowestHz(prev => prev === 0 ? cycleLow : Math.min(prev, cycleLow));
       descendingIndexRef.current -= currentMode.transposeStep ?? 1;
       cycleTimeoutRef.current = setTimeout(() => {
         cycleTimeoutRef.current = null;
@@ -1025,7 +1009,7 @@ const ScalePractice = () => {
     if (!ensureModeReady()) return;
     cancelPendingCycle();
     cycleAbortedRef.current = false;
-    // 记录当前起始音下可达到的最低参考频率，用于结果页兜底
+    // 记录当前起始音参考频率，仅用于分析器窗口配置
     lowestFloorRef.current = computeModeFloorFreq(currentMode, startOffset, semitoneRatio);
     reinitAnalyserForPitch(lowestFloorRef.current);
     rootIndexRef.current = startOffset;
@@ -1049,19 +1033,14 @@ const ScalePractice = () => {
   };
 
   /**
-   * @zh 强制通过上行失败：以本轮的目标音作为已达成最高音并推进到下一轮。
+   * @zh 跳过上行失败轮次并推进，不把未检测通过的目标计入结果。
    */
   const handleForcePassAscend = () => {
     if (!ensureModeReady()) return;
     cancelPendingCycle();
     cycleAbortedRef.current = false;
-    const baseIndex = rootIndexRef.current;
-    const baseFreq = 261.63 * Math.pow(semitoneRatio, baseIndex);
-    const offsets = currentMode?.patternOffsets ?? [];
-    const maxOffset = offsets.length ? Math.max(...offsets, 0) : 0;
-    const cycleHigh = baseFreq * Math.pow(semitoneRatio, maxOffset);
-    setHighestHz(prev => Math.max(prev, cycleHigh));
-    setMessage('已强制通过本轮上行判定，进入下一个音阶。');
+    // 手动跳过只推进练习，不代表检测通过，不能修改已测音域。
+    setMessage('已跳过本轮上行，不计入测量结果。');
     setStep('ascending');
     rootIndexRef.current += currentMode?.transposeStep ?? 1;
     cycleTimeoutRef.current = setTimeout(() => {
@@ -1079,19 +1058,14 @@ const ScalePractice = () => {
   };
 
   /**
-   * @zh 强制通过下降失败：以本轮的目标低音作为已达成最低音并推进到下一轮。
+   * @zh 跳过下降失败轮次并推进，不把未检测通过的目标计入结果。
    */
   const handleForcePassDescend = () => {
     if (!ensureModeReady()) return;
     cancelPendingCycle();
     cycleAbortedRef.current = false;
-    const baseIndex = descendingIndexRef.current;
-    const baseFreq = 261.63 * Math.pow(semitoneRatio, baseIndex);
-    const offsets = currentMode?.patternOffsets ?? [];
-    const minOffset = offsets.length ? Math.min(...offsets, 0) : 0;
-    const cycleLow = baseFreq * Math.pow(semitoneRatio, minOffset);
-    setLowestHz(prev => (prev === 0 ? cycleLow : Math.min(prev, cycleLow)));
-    setMessage('已强制通过本轮下降判定，进入下一个音阶。');
+    // 手动跳过只推进练习，不代表检测通过，不能修改已测音域。
+    setMessage('已跳过本轮下降，不计入测量结果。');
     setStep('descending');
     descendingIndexRef.current -= currentMode?.transposeStep ?? 1;
     cycleTimeoutRef.current = setTimeout(() => {
@@ -1100,51 +1074,16 @@ const ScalePractice = () => {
     }, 800);
   };
 
-  /**
-   * @zh 中途结束练习，直接进入结果页。可在 demoLoop / ascending / descending / *Fail 任意阶段触发。
-   */
+  /** 所有结束入口共用此路径：停止采集与调度，保留检测通过的结果。 */
   const handleEndPractice = () => {
-    cancelPendingCycle();
-    stopProgressAnimation(true);
-    // 兜底：若上行从未通过任意一轮，至少把"起始音处的目标最高音"记入最高音；
-    // 同理下行未通过时使用 floorFreq（与 handleFinishPractice 兜底一致）。
-    if (currentMode) {
-      const offsets = currentMode.patternOffsets ?? [];
-      const maxOffset = offsets.length ? Math.max(...offsets, 0) : 0;
-      const startBaseFreq = 261.63 * Math.pow(semitoneRatio, startOffset);
-      const startHigh = startBaseFreq * Math.pow(semitoneRatio, maxOffset);
-      setHighestHz(prev => (prev > 0 ? prev : startHigh));
-    }
-    const floorFreq = lowestFloorRef.current || computeModeFloorFreq(currentMode, startOffset, semitoneRatio);
-    setLowestHz(prev => {
-      if (!floorFreq) return prev;
-      if (prev === 0 || prev > floorFreq) return floorFreq;
-      return prev;
-    });
-    setStep('result');
-  };
-
-  const handleFinishPractice = () => {
-    cancelPendingCycle();
     cleanupAudio();
-    const floorFreq = lowestFloorRef.current || computeModeFloorFreq(currentMode, startOffset, semitoneRatio);
-    setLowestHz(prev => {
-      if (!floorFreq) return prev;
-      if (prev === 0 || prev > floorFreq) return floorFreq;
-      return prev;
-    });
-    if (currentMode && highestHz === 0) {
-      const offsets = currentMode.patternOffsets ?? [];
-      const maxOffset = offsets.length ? Math.max(...offsets, 0) : 0;
-      const startBaseFreq = 261.63 * Math.pow(semitoneRatio, startOffset);
-      setHighestHz(startBaseFreq * Math.pow(semitoneRatio, maxOffset));
-    }
-    stopProgressAnimation(true);
     setStep('result');
   };
 
   // --- 获取歌曲推荐 ---
   const handleGetRecommendations = async () => {
+    // 两个方向均有检测通过的有效边界才能请求推荐。
+    if (!(lowestHz > 0 && highestHz >= lowestHz)) return;
     setIsGenerating(true);
     setRecommendationError(null);
     setRecommendations([]);
@@ -1154,14 +1093,14 @@ const ScalePractice = () => {
       const lowestNote = frequencyToNoteName(lowestHz);
       const highestNote = frequencyToNoteName(highestHz);
       const result = await getSongRecommendations({ lowestNote, highestNote });
-      
+
       // 处理限速响应
       if (result.rateLimited) {
         setRateLimitMessage(result.message);
       }
       setRecommendations(result.recommendations || []);
     } catch (err) {
-      console.error('Failed to get song recommendations:', err);
+
       setRecommendationError(ensureAppError(err, {
         message: '获取推荐失败，请稍后再试。',
         requestMethod: 'POST',
@@ -1347,10 +1286,10 @@ const ScalePractice = () => {
     <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-6 max-w-3xl">
       <div className="relative mb-8 text-center">
         <button
-          onClick={() => navigate('/mypage')}
+          onClick={() => navigate('/')}
           className="absolute left-0 top-1/2 -translate-y-1/2 bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded-lg font-semibold transition-colors duration-300"
         >
-          &larr; 返回
+          &larr; 首页
         </button>
         <h1 className="text-4xl font-bold text-pink-600">音阶练习</h1>
       </div>
@@ -1369,7 +1308,7 @@ const ScalePractice = () => {
           </div>
         </div>
       )}
-      {showOfflineNotice && (
+      {showOfflineNotice && step !== 'result' && (
         <div className="bg-amber-50 border border-amber-200 text-amber-900 p-4 rounded-lg mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <span>当前未联网或音色资源加载失败，已切换为本地合成器（Oscillator），音色效果将不够理想。</span>
           <button
@@ -1382,7 +1321,7 @@ const ScalePractice = () => {
       )}
 
       {/* ============== 麦克风音量监视 + 增益控制 ============== */}
-      {permissionGranted && step !== 'intro' && step !== 'permission' && (() => {
+      {permissionGranted && !['intro', 'permission', 'result'].includes(step) && (() => {
         const stats = diagLatestRef.current;
         const rms = stats?.rms ?? 0;
         const peak = stats?.peak ?? 0;
@@ -1771,7 +1710,7 @@ const ScalePractice = () => {
               重试
             </button>
             <button
-              onClick={handleFinishPractice}
+              onClick={handleEndPractice}
               className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded-lg font-semibold"
             >
               结束
@@ -1796,16 +1735,18 @@ const ScalePractice = () => {
             最低音：{lowestHz > 0 ? `${frequencyToNoteName(lowestHz)} (${lowestHz.toFixed(1)} Hz)` : '未测得'}
           </p>
           {renderRangeKeyboard()}
+          <p className="mt-4 text-sm text-gray-600">结果仅包含检测通过的轮次，手动跳过不计入。数据不足时不能获取歌曲推荐；推荐需要联网登录。</p>
+          <p className="mt-2 text-sm text-gray-500">练习已结束，麦克风已关闭。</p>
           <div className="flex justify-center gap-4 mt-6">
             <button
-              onClick={() => navigate('/mypage')}
+              onClick={() => navigate('/')}
               className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded-lg font-semibold"
             >
               返回
             </button>
             <button
               onClick={handleGetRecommendations}
-              disabled={isGenerating}
+              disabled={isGenerating || !(lowestHz > 0 && highestHz >= lowestHz)}
               className="bg-pink-500 hover:bg-pink-600 text-white px-4 py-2 rounded-lg font-semibold disabled:bg-pink-300 disabled:cursor-not-allowed"
             >
               {isGenerating ? '生成中...' : '获取歌曲推荐'}

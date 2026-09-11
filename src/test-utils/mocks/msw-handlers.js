@@ -33,6 +33,12 @@ const getAllEventsHandler = http.get(`${API_URL}/all-events`, () => {
 const getPublicDashboardHandler = http.get(`${API_URL}/public/dashboard`, () =>
   HttpResponse.json(dashboardFixture().light));
 
+/** 返回嗓音测试使用的启用朗读稿件。 */
+const getReadingPassagesHandler = http.get(`${API_URL}/reading-passages`, () => HttpResponse.json([
+  { passageId: 'morning-light', title: '第25小时的晨曦', author: 'VFS Tracker 社区', content: '请不要盯着倒影里的裂痕\n便断言那是不可饶恕的错构' },
+  { passageId: 'spring', title: '春天来信', author: '测试作者', content: '风从窗边经过，带来一封春天的信。' },
+]));
+
 /** 根据本页 ID 读取明细 fixture，保留请求顺序。 */
 const getPublicEventDetailsHandler = http.get(`${API_URL}/public/users/:userId/events`, ({ request, params }) => {
   let ids;
@@ -58,6 +64,7 @@ const getUserEventsHandler = http.get(`${API_URL}/events/:userId`, ({ params }) 
   // 返回 {events: [...]} 格式 (匹配真实 API)
   return HttpResponse.json({
     events: userEvents,
+    complete: true,
     debug: {
       lambdaExecuted: true,
       timestamp: new Date().toISOString(),
@@ -241,7 +248,7 @@ const updateUserProfileHandler = http.put(`${API_URL}/user/:userId`, async ({ re
     const user = mockUsers.find(u => u.userId === userId) || mockUsers[0];
     const updatedUser = {
       ...user,
-      profile: { ...user.profile, ...body.profile },
+      profile: { ...user.profile, ...(body.profilePatch ?? body.profile) },
       updatedAt: new Date().toISOString(),
     };
     
@@ -292,7 +299,7 @@ const getUserPublicProfileHandler = http.get(`${API_URL}/user/:userId/public`, (
 
 /**
  * POST /user/profile-setup - 新用户资料设置
- * 接收: {profile: {name, isNamePublic, socials, areSocialsPublic, setupSkipped?}}
+ * 接收: {profile: 完整资料或{setupSkipped:true}, baseVersion: {exists, updatedAt}}
  * 返回: {message, user, isNewUser}
  */
 const setupUserProfileHandler = http.post(`${API_URL}/user/profile-setup`, async ({ request }) => {
@@ -300,12 +307,10 @@ const setupUserProfileHandler = http.post(`${API_URL}/user/profile-setup`, async
   
   try {
     const body = await request.json();
-    const profile = body.profile || {
-      name: '',
-      isNamePublic: false,
-      socials: [],
-      areSocialsPublic: false
-    };
+    const { setupUserProfileRequestSchema } = await import('../../api/schemas.js');
+    const { error, value } = setupUserProfileRequestSchema.validate(body);
+    if (error) return HttpResponse.json({ error: 'Invalid request body', message: error.message }, { status: 400 });
+    const profile = value.profile;
     
     console.log('[MSW] Profile setup data:', profile);
     
@@ -574,6 +579,7 @@ const getAvatarUrlHandler = http.get(`${API_URL}/avatar/:userId`, ({ request, pa
 
 export const handlers = [
   getPublicDashboardHandler,
+  getReadingPassagesHandler,
   getPublicEventDetailsHandler,
   // Event APIs
   getAllEventsHandler,
@@ -622,4 +628,5 @@ export {
   getUploadUrlHandler,
   getFileUrlHandler,
   getAvatarUrlHandler,
+  getReadingPassagesHandler,
 };

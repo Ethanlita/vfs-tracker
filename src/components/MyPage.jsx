@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getEventsByUserId } from '../api';
 import VoiceFrequencyChart from './VoiceFrequencyChart';
@@ -30,17 +30,17 @@ const MyPage = () => {
 
   // @en Use AuthContext exclusively - it already uses Amplify v6 standard APIs
   // @zh 专门使用 AuthContext - 它已经使用了 Amplify v6 标准 API
-  const { user: authContextUser, cognitoUserInfo } = useAuth();
+  const {
+    user: authContextUser,
+    cognitoUserInfo,
+    pendingProfileSetup,
+    pendingProfileSyncing,
+    pendingProfileError,
+    pendingProfileConflict,
+    retryPendingProfileSetup,
+  } = useAuth();
 
-  console.debug('📍 [验证点20] MyPage组件用户信息来源验证:', {
-    source: 'AuthContext (使用Amplify v6标准API)',
-    authContextUser: !!authContextUser,
-    cognitoUserInfo: !!cognitoUserInfo,
-    userIdFromContext: authContextUser?.userId,
-    emailFromCognito: cognitoUserInfo?.email,
-    nicknameFromCognito: cognitoUserInfo?.nickname,
-    混合来源检查: '无 - 仅使用AuthContext'
-  });
+
 
   // @en Create user object with proper data from AuthContext (which uses Amplify v6 APIs)
   // @zh 从 AuthContext 创建用户对象（AuthContext 使用 Amplify v6 API）
@@ -55,36 +55,24 @@ const MyPage = () => {
     username: authContextUser.username
   } : null;
 
-  console.log('🔍 MyPage: 最终用户对象 (仅来自AuthContext)', user ? {
-    user,
-    displayName: getUserDisplayName(user),
-    hasNickname: !!user.attributes?.nickname
-  } : null);
+
 
   // @en State for storing the list of user events.
   // @zh 用于存储用户事件列表的状态。
-  const [events, setEvents] = useState([]);
+  // 事件数据直接使用读取结果，避免复制状态落后于请求状态。
   // 移除单独 isLoading state，改为 useAsync 管理
   const eventsAsync = useAsync(async () => {
-    if (!user?.attributes?.sub) return [];
-    console.log('🔍 MyPage: 开始获取用户事件', { userId: user.attributes.sub });
+    if (!user?.attributes?.sub) return { userId: null, events: [] };
+
     const userEvents = await getEventsByUserId(user.attributes.sub);
-    console.log('📊 MyPage: 获取到的事件数据', {
-      count: userEvents?.length || 0,
-      events: userEvents,
-      hasVoiceData: userEvents?.filter(e =>
-        (e.type === 'self_test' || e.type === 'hospital_test') &&
-        e.details?.fundamentalFrequency
-      ).length || 0
-    });
-    return userEvents.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-  }, [user?.attributes?.sub]);
 
-  useEffect(() => {
-    if (eventsAsync.value) setEvents(eventsAsync.value);
-  }, [eventsAsync.value]);
+    return { userId: user.attributes.sub, events: [...userEvents].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)) };
+  }, [user?.attributes?.sub], { preserveValue: false });
 
-  const isLoading = eventsAsync.loading;
+  // 只有当前账号成功读取后才展示数据；请求中或失败时不把旧记录标成最新。
+  const currentResult = eventsAsync.value?.userId === (user?.attributes?.sub || null) ? eventsAsync.value : null;
+  const events = currentResult?.events || [];
+  const isLoading = eventsAsync.loading || (!currentResult && !eventsAsync.error);
   const loadError = eventsAsync.error;
   const handleRetryFetch = () => eventsAsync.execute();
 
@@ -115,7 +103,7 @@ const MyPage = () => {
 
   // --- RENDER ---
   return (
-    <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-6 max-w-7xl">
+    <div className="container mx-auto min-w-0 px-2 sm:px-6 lg:px-8 py-6 max-w-7xl">
       {/* 页面标题 */}
       <div className="text-center mb-8">
         <h1 className="text-4xl font-bold text-pink-600 mb-4">
@@ -179,38 +167,68 @@ const MyPage = () => {
         <PendingSyncButton className="bg-gradient-to-r from-yellow-500 to-amber-600 text-white px-6 py-3 rounded-lg font-semibold shadow-lg hover:from-yellow-600 hover:to-amber-700 transition-all duration-300 transform hover:scale-105" />
       </div>
 
-      {/* 错误处理 */}
-      {loadError && (
-        <div className="mb-8">
-          <ApiErrorNotice error={loadError} onRetry={handleRetryFetch} />
-        </div>
+      {(pendingProfileSetup || pendingProfileError) && (
+        <section role="status" aria-label="离线资料同步状态" className="mb-8 rounded-xl border border-amber-300 bg-amber-50 p-5 text-amber-950 shadow-sm">
+          <h2 className="text-lg font-semibold">
+            {pendingProfileConflict
+              ? '离线资料与服务器资料有冲突'
+              : pendingProfileError
+                ? '离线资料尚未同步'
+                : pendingProfileSyncing
+                  ? '正在同步离线资料…'
+                  : '资料已离线保存'}
+          </h2>
+          <p className="mt-1 text-sm">
+            {pendingProfileConflict
+              ? '服务器资料在草稿保存后发生了变化。请查看草稿，或明确选择覆盖。'
+              : pendingProfileError?.message || '恢复网络后会自动同步；同步成功前草稿会保留在当前账号下。'}
+          </p>
+          <div className="mt-4 flex flex-wrap gap-3">
+            {pendingProfileSetup && navigator.onLine !== false && (
+              <button type="button" disabled={pendingProfileSyncing} onClick={() => retryPendingProfileSetup({ overwrite: false })} className="rounded-lg bg-amber-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
+                {pendingProfileSyncing ? '同步中…' : '重试同步'}
+              </button>
+            )}
+            {pendingProfileSetup && pendingProfileConflict && navigator.onLine !== false && (
+              <button type="button" disabled={pendingProfileSyncing} onClick={() => retryPendingProfileSetup({ overwrite: true })} className="rounded-lg border border-red-500 bg-white px-4 py-2 text-sm font-semibold text-red-700 disabled:opacity-50">
+                使用离线草稿覆盖
+              </button>
+            )}
+            {pendingProfileSetup && (
+              <button type="button" onClick={() => navigate(`/profile-setup-wizard?returnUrl=${encodeURIComponent('/mypage')}`)} className="rounded-lg border border-amber-600 bg-white px-4 py-2 text-sm font-semibold text-amber-800">
+                查看草稿
+              </button>
+            )}
+          </div>
+        </section>
       )}
 
+      {/* 历史读取状态与成功内容互斥，空态只能来自成功响应。 */}
+      {isLoading ? (
+        <div role="status" className="bg-white rounded-xl border border-gray-200 p-8 text-center text-gray-600">正在加载事件...</div>
+      ) : loadError ? (
+        <section aria-label="历史记录读取失败" className="bg-white rounded-xl border border-gray-200 p-6">
+          <h2 className="text-xl font-semibold text-gray-900 mb-4">无法加载历史记录</h2>
+          <ApiErrorNotice error={loadError} onRetry={handleRetryFetch} />
+        </section>
+      ) : <>
       {/* 声音频率图表 */}
-      <div className="bg-white rounded-xl shadow-md border border-gray-200 p-6 mb-8">
+      <div className="min-w-0 bg-white rounded-xl shadow-md border border-gray-200 p-3 sm:p-6 mb-8">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-semibold text-gray-900">声音频率分析</h2>
-          {isLoading && (
-            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-pink-500"></div>
-          )}
         </div>
         <VoiceFrequencyChart userId={user?.attributes?.sub} events={events} />
       </div>
 
       {/* 交互式时间轴 */}
-      <div className="bg-white rounded-xl shadow-md border border-gray-200 p-6">
+      <div className="min-w-0 bg-white rounded-xl shadow-md border border-gray-200 p-3 sm:p-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-semibold text-gray-900">事件时间轴</h2>
           {events.length > 0 && (
             <span className="text-sm text-gray-500">共 {events.length} 个事件</span>
           )}
         </div>
-        {isLoading ? (
-          <div className="flex items-center justify-center py-12">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-pink-500"></div>
-            <span className="ml-3 text-gray-600">正在加载事件...</span>
-          </div>
-        ) : events.length === 0 ? (
+        {events.length === 0 ? (
           <div className="text-center py-12">
             <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
@@ -230,6 +248,7 @@ const MyPage = () => {
           <InteractiveTimeline events={events} />
         )}
       </div>
+      </>}
     </div>
   );
 };

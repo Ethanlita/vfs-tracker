@@ -4,6 +4,8 @@
 
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, UpdateCommand } from '@aws-sdk/lib-dynamodb';
+import { buildProfileUpdate } from './profile-update.mjs';
+import { createStructuredLogger, describeError, fingerprintIdentifier } from './structuredLogger.mjs';
 
 // 初始化DynamoDB客户端
 const client = new DynamoDBClient({});
@@ -26,17 +28,15 @@ const corsHeaders = {
  * @returns {{userId: string, email: string, username: string, nickname: string}} 提取出的用户信息对象。
  * @throws {Error} 如果在请求中找不到有效的 ID token 或解析失败。
  */
-function extractUserFromEvent(event) {
+function extractUserFromEvent(event, logger) {
   try {
-    console.log('🔍 开始提取用户信息，优先处理ID Token');
-
     // 尝试多种方式获取用户信息
     let claims = null;
 
     // 方法1：从API Gateway Cognito授权器 (如果设置了)
     if (event.requestContext?.authorizer?.claims) {
       claims = event.requestContext.authorizer.claims;
-      console.log('✅ 使用API Gateway授权器提供的claims');
+      logger.debug('identity_source_selected', { source: 'authorizer' });
     }
 
     // 方法2：手动解析Authorization头中的ID Token
@@ -50,20 +50,20 @@ function extractUserFromEvent(event) {
           // 验证这是ID Token
           if (payload.token_use === 'id') {
             claims = payload;
-            console.log('✅ 成功解析ID Token，token_use:', payload.token_use);
+            logger.debug('identity_source_selected', { source: 'bearer', tokenUse: payload.token_use });
           } else {
-            console.warn('⚠️ 收到的不是ID Token，token_use:', payload.token_use);
+            logger.warn('token_type_invalid', { receivedTokenUse: payload.token_use });
             throw new Error(`Expected ID token, but received: ${payload.token_use}`);
           }
         } catch (parseError) {
-          console.error('❌ JWT Token解析失败:', parseError);
+          logger.warn('token_parse_failed', describeError(parseError));
           throw new Error(`ID Token parsing failed: ${parseError.message}`);
         }
       }
     }
 
     if (!claims) {
-      console.error('❌ 未找到认证claims');
+      logger.warn('identity_missing');
       throw new Error('No ID token found in request');
     }
 
@@ -75,17 +75,16 @@ function extractUserFromEvent(event) {
       nickname: claims.nickname || claims.name || claims['cognito:username'] || claims.email?.split('@')[0] || 'Unknown'
     };
 
-    console.log('✅ 成功提取用户信息:', {
-      userId: userInfo.userId,
-      email: userInfo.email,
-      tokenType: claims.token_use
+    logger.debug('identity_extracted', {
+      userHash: fingerprintIdentifier(userInfo.userId),
+      tokenType: claims.token_use,
     });
 
     return userInfo;
 
   } catch (error) {
-    console.error('❌ 从事件中提取用户信息失败:', error);
-    throw new Error(`Invalid ID token: ${error.message}`);
+    logger.warn('identity_extraction_failed', describeError(error));
+    throw new TypeError('Invalid ID token');
   }
 }
 
@@ -107,24 +106,16 @@ function createResponse(statusCode, body) {
  * [CN] Lambda 函数的主处理程序。它接收一个用户的个人资料更新，并将其保存到 DynamoDB。
  * 该函数强制执行一项安全检查，以确保用户只能更新自己的个人资料。它会忽略请求中的 `nickname` 字段，
  * 因为该字段由 Cognito 管理，并在响应中重新注入来自 token 的 `nickname`。
- * @param {object} event - API Gateway Lambda 事件对象。请求体应包含一个 `profile` 对象。
+ * @param {object} event - API Gateway Lambda 事件对象。请求体包含 `profilePatch` 字段补丁；兼容旧客户端的 `profile` 对象。
+ * @param {object} context - AWS Lambda 调用上下文。
  * @returns {Promise<object>} 一个 API Gateway 响应，其中包含更新后的用户个人资料或错误消息。
  */
-export const handler = async (event) => {
-  console.log('Event:', JSON.stringify(event, null, 2));
-
-  // 添加详细的调试信息
-  console.log('🔍 详细事件分析:', {
-    httpMethod: event.httpMethod,
-    pathParameters: event.pathParameters,
-    pathParametersType: typeof event.pathParameters,
-    requestContext: {
-      resourcePath: event.requestContext?.resourcePath,
-      httpMethod: event.requestContext?.httpMethod,
-      path: event.requestContext?.path
-    },
-    headers: Object.keys(event.headers || {}),
-    hasBody: !!event.body
+export const handler = async (event, context = {}) => {
+  const logger = createStructuredLogger({ service: 'updateUserProfile', requestId: context.awsRequestId });
+  logger.info('invocation_started', {
+    method: event.httpMethod,
+    route: event.resource,
+    hasBody: !!event.body,
   });
 
   try {
@@ -136,56 +127,54 @@ export const handler = async (event) => {
     // 安全地获取路径参数
     const pathUserId = event.pathParameters?.userId;
     if (!pathUserId) {
-      console.error('❌ pathParameters 问题详情:', {
-        pathParameters: event.pathParameters,
-        requestContext: event.requestContext,
-        rawPath: event.path,
-        resource: event.resource
-      });
+      logger.warn('target_user_missing', { hasPathParameters: !!event.pathParameters });
       return createResponse(400, {
-        message: 'Bad Request: userId path parameter is required',
-        debug: {
-          pathParameters: event.pathParameters,
-          resource: event.resource,
-          path: event.path
-        }
+        message: 'Bad Request: userId path parameter is required'
       });
     }
 
-    const authenticatedUser = extractUserFromEvent(event);
-    const requestBody = JSON.parse(event.body);
+    const authenticatedUser = extractUserFromEvent(event, logger);
+    let requestBody;
+    try {
+      requestBody = JSON.parse(event.body);
+      if (!requestBody || typeof requestBody !== 'object' || Array.isArray(requestBody)) throw new TypeError('object required');
+    } catch {
+      return createResponse(400, { message: 'Bad Request: JSON object body is required' });
+    }
 
     // 验证用户只能修改自己的资料
     if (pathUserId !== authenticatedUser.userId) {
+      logger.warn('profile_update_denied', {
+        requesterHash: fingerprintIdentifier(authenticatedUser.userId),
+        targetHash: fingerprintIdentifier(pathUserId),
+      });
       return createResponse(403, {
         message: 'Forbidden: You can only update your own profile'
       });
     }
 
     // 验证请求体
-    if (!requestBody.profile) {
+    if (!requestBody.profile && !requestBody.profilePatch) {
       return createResponse(400, {
         message: 'Bad Request: profile data is required'
       });
     }
 
-    // 过滤掉nickname字段，因为它由Cognito管理
-    const { nickname, ...profileData } = requestBody.profile;
-    if (nickname) {
-      console.log('Warning: nickname field ignored, managed by Cognito');
-    }
-
     const now = new Date().toISOString();
+    let update;
+    try {
+      // 新客户端显式发送补丁；兼容已部署旧客户端的profile请求，统一执行字段更新。
+      if (requestBody.profile && requestBody.profilePatch) throw new TypeError('Provide profilePatch or legacy profile, not both');
+      update = buildProfileUpdate(requestBody.profilePatch ?? requestBody.profile, now);
+    } catch (error) {
+      return createResponse(400, { message: error.message });
+    }
 
     // 构建更新表达式
     const command = new UpdateCommand({
       TableName: USERS_TABLE,
       Key: { userId: pathUserId },
-      UpdateExpression: 'SET profile = :profile, updatedAt = :updatedAt',
-      ExpressionAttributeValues: {
-        ':profile': profileData,
-        ':updatedAt': now
-      },
+      ...update,
       ReturnValues: 'ALL_NEW'
     });
 
@@ -200,16 +189,23 @@ export const handler = async (event) => {
       }
     };
 
+    logger.info('profile_update_completed', {
+      userHash: fingerprintIdentifier(authenticatedUser.userId),
+      fieldCount: Object.keys(requestBody.profilePatch ?? requestBody.profile).length,
+    });
     return createResponse(200, {
       message: 'Profile updated successfully',
       user: responseProfile
     });
 
   } catch (error) {
-    console.error('Error updating user profile:', error);
+    if (error.name === 'ConditionalCheckFailedException') {
+      logger.warn('profile_update_conflict');
+      return createResponse(409, { message: 'Please complete profile setup before updating your profile' });
+    }
+    logger.error('profile_update_failed', describeError(error));
     return createResponse(500, {
-      message: 'Error updating user profile',
-      error: error.message
+      message: 'Error updating user profile'
     });
   }
 };

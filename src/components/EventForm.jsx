@@ -1,11 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { addEvent } from '../api';
 import { useAsync } from '../utils/useAsync.js';
 import SecureFileUpload from './SecureFileUpload';
 import { useAuth } from '../contexts/AuthContext.jsx';
-import { resolveAttachmentLinks } from '../utils/attachments.js';
 import { AuthenticationError, ensureAppError, AppError } from '../utils/apiError.js';
 import { ApiErrorNotice } from './ApiErrorNotice.jsx';
+import { localCalendarDate } from '../utils/calendarDate.js';
+import { usePwaUpdateBlocker } from '../hooks/usePwaUpdateBlocker.js';
 
 /**
  * @en A form for creating new voice events. It handles data input, file uploads, and submission to the backend.
@@ -32,44 +33,55 @@ const EventForm = ({ onEventAdded }) => {
     );
   }
 
-  const user = authContextUser;
+  return <AuthenticatedEventForm key={authContextUser.userId} user={authContextUser} onEventAdded={onEventAdded} />;
+};
+
+/** 按用户隔离表单状态；卸载后旧请求不再触发完成回调。 */
+const AuthenticatedEventForm = ({ user, onEventAdded }) => {
 
   const [eventType, setEventType] = useState('self_test');
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [date, setDate] = useState(() => localCalendarDate());
+  const initialDate = useRef(date);
   const [attachments, setAttachments] = useState([]); // 多附件集合
-  const [resolvedAttachments, setResolvedAttachments] = useState([]);
   const [submitSuccess, setSubmitSuccess] = useState(false);
   const [errorState, setErrorState] = useState(null);
+  const formRef = useRef(null);
+  const submittingRef = useRef(false);
+  const lifetime = useRef(null);
+
+  // 每次挂载持有独立标识，迟到结果不能操作离开后或重新进入的表单。
+  useEffect(() => {
+    lifetime.current = {};
+    return () => { lifetime.current = null; };
+  }, []);
+
+  useEffect(() => {
+    if (!submitSuccess) return;
+    const timer = setTimeout(() => setSubmitSuccess(false), 2500);
+    return () => clearTimeout(timer);
+  }, [submitSuccess]);
+  const [attachmentStatus, setAttachmentStatus] = useState('idle');
+  const attachmentStatusRef = useRef('idle');
+
+  /** 同步记录附件状态，阻止上传中或失败未处理时通过回车/重试漏传附件。 */
+  const handleAttachmentStatus = (status) => {
+    attachmentStatusRef.current = status;
+    setAttachmentStatus(status);
+  };
 
   // 动态表单数据状态
   const [formData, setFormData] = useState({});
 
-  // 处理文件上传完成
+  /** 使用上传阶段已取得的链接展示附件，避免重新解析造成列表和删除对象不同步。 */
   const handleFileUploaded = (fileUrl, fileKey, meta = {}) => {
     // fileUrl 是临时访问URL，fileKey 为内部存储key；我们仅存储 fileKey (作为 Attachment.fileUrl)
-    setAttachments(prev => [...prev, { fileUrl: fileKey, fileType: meta.fileType, fileName: meta.fileName }]);
+    setAttachments(prev => [...prev, { fileUrl: fileKey, fileType: meta.fileType, fileName: meta.fileName, downloadUrl: fileUrl }]);
   };
 
-  const handleRemoveAttachment = (index) => {
-    setAttachments(prev => prev.filter((_, i) => i !== index));
+  /** 按对象标识移除关联，重复操作同一文件不会影响其他文件。 */
+  const handleRemoveAttachment = (fileKey) => {
+    setAttachments(prev => prev.filter(attachment => attachment.fileUrl !== fileKey));
   };
-
-  React.useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      if (attachments.length === 0) {
-        setResolvedAttachments([]);
-        return;
-      }
-      const list = await resolveAttachmentLinks(attachments);
-      if (!cancelled) {
-        setResolvedAttachments(list);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [attachments]);
 
   // --- FORM FIELD DEFINITIONS ---
   const eventTypeOptions = [
@@ -187,15 +199,25 @@ const EventForm = ({ onEventAdded }) => {
 
   const renderNumberInput = (field, label, unit = '', required = false) => (
       <div key={field} className="form-field">
-        <label className="text-sm font-medium text-gray-700">
+        <label htmlFor={`event-number-${field}`} className="text-sm font-medium text-gray-700">
           {label} {unit && <span className="text-xs text-gray-500">({unit})</span>}
           {required && <span className="text-red-500">*</span>}
         </label>
         <input
+            id={`event-number-${field}`}
             type="number"
             step="0.01"
-            value={formData[field] || ''}
-            onChange={(e) => handleFormDataChange(field, parseFloat(e.target.value) || '')}
+            value={formData[field] ?? ''}
+            onChange={(e) => {
+              // 空值与0不同；未填写字段从数据中移除，不发送空字符串冒充数字。
+              const value = e.target.valueAsNumber;
+              setFormData(prev => {
+                const next = { ...prev };
+                if (Number.isFinite(value)) next[field] = value;
+                else delete next[field];
+                return next;
+              });
+            }}
             className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-pink-500 focus:border-pink-500 transition-colors duration-200"
             required={required}
         />
@@ -266,19 +288,44 @@ const EventForm = ({ onEventAdded }) => {
         fields.push(<div key="hospital-header" className="form-field col-span-full"><h3 className="text-base font-semibold text-gray-900">医院检测</h3></div>);
         fields.push(
           <div key="gemini-tip" className="md:col-span-2 bg-indigo-50 border-l-4 border-indigo-400 p-4 rounded-r-lg my-2">
-            <div className="flex items-start">
+            <div className="flex flex-col sm:flex-row sm:items-start">
               <div className="flex-shrink-0">
                 <svg className="h-6 w-6 text-indigo-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
                 </svg>
               </div>
-              <div className="ml-3">
-                <p className="font-semibold text-indigo-800">请上传您的医院报告（附件）</p>
-                  <p className="text-sm text-indigo-700 mt-1">
-                      为确保数据准确性，<span className="font-bold">Gemini AI</span> 将会自动审核您上传的报告内容。请确保报告清晰可读，包含所有相关页面（如正反面）。全过程没有人工干预，不会有人看到您的报告。
-                      <br />
-                      <span className="font-semibold">提示：</span>出于隐私保护的考虑，您可以选择遮挡住您的个人识别信息，这不会影响判断。
-                  </p>
+              <div className="mt-2 min-w-0 sm:ml-3 sm:mt-0">
+                <p className="font-semibold text-indigo-800">上传医院报告前，请确认处理和访问范围</p>
+                <ul className="mt-2 space-y-2 text-sm text-indigo-800 list-disc pl-5">
+                  <li>
+                    <span className="font-semibold">默认自动审核：</span>
+                    报告副本会发送给 Google Gemini API，与您填写的数据做一致性比对；结果仅用于事件审核，不是医疗建议。
+                  </li>
+                  <li>
+                    <span className="font-semibold">访问范围：</span>
+                    报告不会出现在公开页面。您的账户可通过私有接口查看；具有相应 AWS 权限的授权管理员或运维人员可在管理后台生成限时链接，用于审核或排查故障。
+                  </li>
+                  <li>
+                    <span className="font-semibold">保留与删除：</span>
+                    原文件随事件保存在私有 S3；删除事件时会先删除关联原文件。上传到 Gemini Files API 的副本按 Google 文档在 48 小时后自动删除。
+                  </li>
+                  <li>
+                    上传前请遮挡姓名、证件号、联系方式、条码等个人识别信息；如果您不希望 Google 处理报告，请不要上传附件。
+                  </li>
+                </ul>
+                <p className="mt-3 text-xs text-indigo-700">
+                  继续前请阅读
+                  <a className="mx-1 font-semibold underline hover:text-indigo-950" href="/docs?doc=数据保护指南.md">数据保护指南</a>
+                  和
+                  <a className="mx-1 font-semibold underline hover:text-indigo-950" href="/docs?doc=使用协议.md">使用协议</a>
+                  。Gemini 临时文件期限见
+                  <a
+                    className="ml-1 font-semibold underline hover:text-indigo-950"
+                    href="https://ai.google.dev/gemini-api/docs/files"
+                    target="_blank"
+                    rel="noreferrer"
+                  >Google 官方说明</a>。
+                </p>
               </div>
             </div>
           </div>
@@ -390,21 +437,35 @@ const EventForm = ({ onEventAdded }) => {
 
     const eventData = {
       type: eventType,
-      date: new Date(date).toISOString(),
+      // 用户选择的是日历日期，不为它制造UTC午夜时间。
+      date,
       details,
     };
-    if (attachments.length) eventData.attachments = attachments;
+    if (attachments.length) eventData.attachments = attachments.map(({ fileUrl, fileType, fileName }) => ({ fileUrl, fileType, fileName }));
 
     const apiResp = await addEvent(eventData);
     return apiResp.item || apiResp;
   }, [user], { immediate: false }); // 禁用自动执行
 
+  // 任一输入、附件阶段或服务提交都属于不可静默刷新的用户工作。
+  usePwaUpdateBlocker(
+    eventType !== 'self_test' || date !== initialDate.current || Object.keys(formData).length > 0 ||
+      attachments.length > 0 || attachmentStatus !== 'idle' || submitAsync.loading,
+    '新增事件表单'
+  );
+
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (submitAsync.loading) return; // 防抖
+    if (submittingRef.current) return; // 同步阻止重复提交。
+    if (attachmentStatusRef.current !== 'idle') return;
+
+    if (eventType === 'feeling_log' && !formData.content?.trim()) {
+      setErrorState(new AppError('请填写感受记录正文。'));
+      return;
+    }
     
-    // 验证必填的 checkbox 组字段（仅对 self_test 和 feeling_log 类型）
-    if (eventType === 'self_test' || eventType === 'feeling_log') {
+    // 仅自我测试需要声音状态和发声方式；感受记录契约只要求正文。
+    if (eventType === 'self_test') {
       const errors = [];
       
       // 检查声音状态
@@ -429,23 +490,29 @@ const EventForm = ({ onEventAdded }) => {
       }
     }
     
+    submittingRef.current = true;
+    const requestLifetime = lifetime.current;
     submitAsync.execute()
       .then(newEvent => {
-        if (newEvent) {
+        if (newEvent && lifetime.current === requestLifetime) {
           setErrorState(null);
           setSubmitSuccess(true);
           onEventAdded(newEvent);
           resetForm();
-          setTimeout(() => setSubmitSuccess(false), 2500);
         }
       })
-      .catch(err => setErrorState(ensureAppError(err, { requestMethod: 'POST', requestPath: '/events' })));
+      .catch(err => {
+        if (lifetime.current === requestLifetime) setErrorState(ensureAppError(err, { requestMethod: 'POST', requestPath: '/events' }));
+      })
+      .finally(() => { submittingRef.current = false; });
   };
 
   const resetForm = () => {
     setFormData({});
     setEventType('self_test');
-    setDate(new Date().toISOString().split('T')[0]);
+    const nextDate = localCalendarDate();
+    initialDate.current = nextDate;
+    setDate(nextDate);
     setAttachments([]);
   };
 
@@ -453,9 +520,12 @@ const EventForm = ({ onEventAdded }) => {
   return (
       <div className="max-w-3xl mx-auto p-4">
         <form
+            ref={formRef}
             onSubmit={handleSubmit}
             className="bg-white/70 backdrop-blur-sm rounded-2xl shadow-sm ring-1 ring-gray-200 p-6 md:p-8 space-y-8"
         >
+          {/* 锁定整个提交快照，避免等待响应时接受随后会被清空的新输入。 */}
+          <fieldset disabled={submitAsync.loading} aria-busy={submitAsync.loading} aria-label="事件内容" className="min-w-0 space-y-8">
           {/* 基本信息 */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* 事件类型选择 */}
@@ -523,6 +593,8 @@ const EventForm = ({ onEventAdded }) => {
                   fileType="attachment"
                   currentFileUrl=""
                   onFileUpdate={handleFileUploaded}
+                  onStatusChange={handleAttachmentStatus}
+                  disabled={submitAsync.loading}
                   allowedTypes={['image/*','application/pdf','application/msword','application/vnd.openxmlformats-officedocument.wordprocessingml.document']}
                   maxSize={15 * 1024 * 1024}
                   className="w-full"
@@ -531,8 +603,8 @@ const EventForm = ({ onEventAdded }) => {
                   <div className="bg-gray-50 rounded-md p-3 space-y-2">
                     <p className="text-xs font-medium text-gray-600">已添加附件 ({attachments.length}):</p>
                     <ul className="space-y-1 text-xs">
-                      {resolvedAttachments.map((att, idx) => (
-                        <li key={idx} className="flex items-center justify-between gap-2">
+                      {attachments.map((att) => (
+                        <li key={att.fileUrl} className="flex items-center justify-between gap-2">
                           <a
                             href={att.downloadUrl || '#'}
                             target="_blank"
@@ -541,7 +613,7 @@ const EventForm = ({ onEventAdded }) => {
                           >
                             📎 {att.fileName || att.fileUrl}
                           </a>
-                          <button type="button" onClick={() => handleRemoveAttachment(idx)} className="text-red-500 hover:text-red-600">移除</button>
+                          <button type="button" onClick={() => handleRemoveAttachment(att.fileUrl)} className="text-red-500 hover:text-red-600">移除</button>
                         </li>
                       ))}
                     </ul>
@@ -550,9 +622,12 @@ const EventForm = ({ onEventAdded }) => {
               </div>
             </div>
             <div className="pt-2">
+              {attachmentStatus !== 'idle' && <p role="status" className="mb-3 text-sm text-gray-700">
+                {attachmentStatus === 'uploading' ? '附件正在上传，请等待完成后提交。' : '附件尚未就绪，请重试或放弃此附件后提交。'}
+              </p>}
               <button
                   type="submit"
-                  disabled={submitAsync.loading}
+                  disabled={submitAsync.loading || attachmentStatus !== 'idle'}
                   className="w-full group relative inline-flex justify-center py-3 px-6 border-0 shadow-lg text-base font-bold rounded-xl text-white bg-gradient-to-r from-pink-600 via-purple-600 to-indigo-600 hover:from-pink-500 hover:via-purple-500 hover:to-indigo-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-pink-500 active:scale-[0.99] transition disabled:opacity-60"
               >
                 <span className="absolute left-0 inset-y-0 flex items-center pl-4">
@@ -569,12 +644,14 @@ const EventForm = ({ onEventAdded }) => {
             </div>
           </div>
 
+          </fieldset>
+
           {/* 提示信息 */}
           <div className="mt-4 space-y-3">
-            {errorState && (
-              <ApiErrorNotice error={errorState} onRetry={() => submitAsync.execute()} />
+            {(errorState || submitAsync.error) && (
+              <ApiErrorNotice error={errorState || submitAsync.error} onRetry={() => formRef.current?.requestSubmit()} />
             )}
-            {submitSuccess && !errorState && (
+            {submitSuccess && !errorState && !submitAsync.error && (
               <div className="rounded-md bg-emerald-50 border border-emerald-200 px-4 py-3 text-sm text-emerald-700">事件添加成功！</div>
             )}
           </div>

@@ -1,3 +1,4 @@
+import { parseEventDate, isCalendarDate, isInRecentDays } from '../utils/calendarDate.js';
 import React, { useState, useEffect } from 'react';
 import { Line } from 'react-chartjs-2';
 import {
@@ -41,19 +42,17 @@ const Timeline = () => {
 
   // 获取用户ID
   const getUserId = () => {
-    console.log('🔍 Timeline: 用户检查', {
-      hasUser: !!user
-    });
+
 
     if (user) {
       // 使用真实用户ID
       const realUserId = user.userId || user.username || user.sub;
-      console.log('✅ Timeline: 使用真实用户ID', realUserId);
+
       return realUserId;
     }
 
     // 无用户：不加载数据（避免无用的 AWS 调用）
-    console.log('⚠️ Timeline: 无用户 - 不加载数据');
+
     return null;
   };
 
@@ -164,11 +163,11 @@ const Timeline = () => {
 
     // 按日期排序并提取数据
     const sortedEvents = eventsWithFrequency
-      .sort((a, b) => new Date(a.date || a.createdAt) - new Date(b.date || b.createdAt))
+      .sort((a, b) => parseEventDate(a.date || a.createdAt) - parseEventDate(b.date || b.createdAt))
       .slice(-10); // 只取最近10条记录
 
     const labels = sortedEvents.map((event) => {
-      const date = new Date(event.date || event.createdAt);
+      const date = parseEventDate(event.date || event.createdAt);
       return date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
     });
 
@@ -190,9 +189,9 @@ const Timeline = () => {
 
   // 使用 useAsync 管理事件数据获取
   const eventsAsync = useAsync(async () => {
-    console.log('🔍 Timeline: 开始获取事件数据', { currentUserId, user });
+
     const events = await getEventsByUserId(currentUserId);
-    console.log('📡 Timeline: 获取到的事件数据', { eventCount: events?.length || 0 });
+
     return events;
   }, [currentUserId]);
 
@@ -203,7 +202,7 @@ const Timeline = () => {
 
     // 按时间排序并取最近的30个事件用于AI分析
     const recentEventsForAI = [...allEvents]
-      .sort((a, b) => new Date(b.date || b.createdAt) - new Date(a.date || a.createdAt))
+      .sort((a, b) => parseEventDate(b.date || b.createdAt) - parseEventDate(a.date || a.createdAt))
       .slice(0, 30);
 
     // 构造用户数据用于AI分析 - 使用最近30个事件
@@ -212,11 +211,7 @@ const Timeline = () => {
       voiceParameters: {} // 可以根据需要添加更多参数
     };
 
-    console.log('🤖 Timeline: 准备调用AI，事件数量:', {
-      allEventsCount: allEvents.length,
-      recentEventsForAI: recentEventsForAI.length,
-      timelineEventsCount: timelineEvents.length
-    });
+
 
     return await getEncouragingMessage(userData, { throwOnError: true });
   }, [eventsAsync.value], { immediate: false });
@@ -231,27 +226,18 @@ const Timeline = () => {
     try {
       const chartConfig = generateChartDataFromEvents(events);
       setChartData(chartConfig);
-    } catch (error) {
-      console.error('生成图表失败:', error);
+    } catch {
+      // 错误已由页面状态或恢复路径处理，不向控制台输出用户数据。
+
     }
 
     // 筛选最近的时间轴事件
-    let recentEvents = events.filter(event => {
-      const eventDate = new Date(event.date || event.createdAt);
-      const thirtyDaysAgo = new Date();
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-      return eventDate >= thirtyDaysAgo;
-    });
+    let recentEvents = events.filter(event => isInRecentDays(event.date || event.createdAt, 30));
 
-    // 如果30天内没有事件，则显示所有事件
-    if (recentEvents.length === 0) {
-      console.log('⚠️ Timeline: 30天内无事件，显示所有可用事件');
-      recentEvents = events;
-    }
 
     // 按时间排序并限制数量
     recentEvents = recentEvents
-      .sort((a, b) => new Date(b.date || b.createdAt) - new Date(a.date || a.createdAt))
+      .sort((a, b) => parseEventDate(b.date || b.createdAt) - parseEventDate(a.date || a.createdAt))
       .slice(0, 10);
 
     setTimelineEvents(recentEvents);
@@ -300,7 +286,7 @@ const Timeline = () => {
     yesterday.setDate(yesterday.getDate() - 1);
 
     events.forEach(event => {
-      const eventDate = new Date(event.date || event.createdAt);
+      const eventDate = parseEventDate(event.date || event.createdAt);
       const eventDay = new Date(eventDate.getFullYear(), eventDate.getMonth(), eventDate.getDate());
 
       let dayKey;
@@ -316,7 +302,7 @@ const Timeline = () => {
         groupedEvents[dayKey] = [];
       }
 
-      const time = eventDate.toLocaleTimeString('zh-CN', {
+      const time = isCalendarDate(event.date) ? '日期记录' : eventDate.toLocaleTimeString('zh-CN', {
         hour: '2-digit',
         minute: '2-digit'
       });
@@ -325,6 +311,7 @@ const Timeline = () => {
 
       groupedEvents[dayKey].push({
         time,
+        sortTime: eventDate.getTime(),
         description,
         eventType: event.type,
         eventId: event.eventId
@@ -334,9 +321,7 @@ const Timeline = () => {
     // 按时间排序每组中的事件
     Object.keys(groupedEvents).forEach(dayKey => {
       groupedEvents[dayKey].sort((a, b) => {
-        const timeA = new Date(`1970-01-01 ${a.time}`);
-        const timeB = new Date(`1970-01-01 ${b.time}`);
-        return timeB - timeA; // 最新的在前
+        return b.sortTime - a.sortTime; // 按实际日期排序，不解析展示文案。
       });
     });
 

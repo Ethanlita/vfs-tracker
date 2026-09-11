@@ -31,6 +31,8 @@ import {
 } from '../../../src/test-utils/mocks/amplify-auth.js';
 import { ApiError } from '../../../src/utils/apiError.js';
 
+const API_URL = 'https://2rzxc2x5l8.execute-api.us-east-1.amazonaws.com/dev';
+
 describe('Events API 集成测试', () => {
   beforeEach(() => {
     setAuthenticated({
@@ -83,6 +85,15 @@ describe('Events API 集成测试', () => {
       // 真实 API 直接返回数组
       expect(events).toBeDefined();
       expect(Array.isArray(events)).toBe(true);
+    });
+
+    it('后端未确认完整分页时不把部分事件当成全量', async () => {
+      const userId = 'us-east-1:complete-user-001';
+      server.use(http.get(`${API_URL}/events/${userId}`, () => HttpResponse.json({
+        events: [completeSelfTest],
+      })));
+
+      await expect(getEventsByUserId(userId)).rejects.toThrow('事件历史响应不完整');
     });
 
     it('返回的私有事件应该包含 attachments', async () => {
@@ -240,8 +251,6 @@ describe('Events API 集成测试', () => {
   // ============================================
 
   describe('错误处理', () => {
-    const API_URL = 'https://2rzxc2x5l8.execute-api.us-east-1.amazonaws.com/dev';
-
     describe('getAllEvents 错误状态码', () => {
       it('应该处理 401 未授权错误', async () => {
         server.use(
