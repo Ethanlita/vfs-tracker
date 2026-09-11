@@ -623,13 +623,13 @@ def _build_legacy_formant_block(anchor: Dict) -> Dict:
     """
     [CN] 将 soft/loud 锚点映射为 legacy 的 formant 字段结构。
 
-    说明：为保持 DynamoDB 结构与旧链路兼容，统一输出 F1/F2/F3、f0_mean、spl_dbA_est、reason、error_details 等键。
+    说明：为保持 DynamoDB 结构与旧链路兼容，统一输出 F1/F2/F3、f0_mean、spl_dbA_est 与 reason 等键。
+    error_details 只在分析失败时存在；旧处理程序和前端都以该键是否存在判断失败，
+    因此成功结果不能保留空字符串占位。
     当锚点提取成功（无 error 键）但关键共振峰值为 NaN 时，标记 reason 为 FORMANT_NAN
     而非 SUCCESS，避免下游的静默失败。
     """
     explicit_error = anchor.get('error')
-    task_name = anchor.get('task', 'unknown')
-
     # [CN] 确定 reason：优先使用显式错误；
     # 若无显式错误但 F1/F2 为 NaN，则标记为 FORMANT_NAN
     if explicit_error:
@@ -650,7 +650,7 @@ def _build_legacy_formant_block(anchor: Dict) -> Dict:
         else:
             reason = 'SUCCESS'
 
-    return {
+    result = {
         'F1': anchor.get('f1_hz'),
         'B1': anchor.get('b1_hz'),
         'F2': anchor.get('f2_hz'),
@@ -661,10 +661,13 @@ def _build_legacy_formant_block(anchor: Dict) -> Dict:
         'spl_dbA_est': anchor.get('spl_db'),
         'source_file': anchor.get('file'),
         'reason': reason,
-        'error_details': explicit_error or ('F1/F2 NaN' if reason == 'FORMANT_NAN' else ''),
         'best_segment_time': None,
         'is_high_pitch': False,
     }
+    if reason != 'SUCCESS':
+        # [CN] 失败详情采用键存在语义，成功时必须彻底省略该键。
+        result['error_details'] = explicit_error or 'F1/F2 NaN'
+    return result
 
 
 def _ensure_legacy_metrics_structure(metrics: Dict, soft_anchor: Dict, loud_anchor: Dict):

@@ -194,6 +194,8 @@ python scripts/install_parselmouth_dev.py
 
 v2 默认管线直接依赖 `To Pitch (filtered autocorrelation)`，PyPI 稳定版 0.4.7 不提供该命令，因此 `requirements.txt` 不声明稳定版，也不存在稳定版回退路径。后端镜像工作流从 `PARSELMOUTH_SOURCE_COMMIT` 指定的上游提交及其固定子模块构建 ARM64 wheel；Dockerfile 会在运行完整测试前直接调用该命令，缺少能力时停止构建。该镜像工作流只能由统一后端发布工作流调用；它同时刷新模板兼容的 `latest` 标签并输出不可变 SHA 地址，统一工作流在 SAM 成功后才明确将该 SHA 地址发布到 Lambda。
 
+共振峰兼容结构中的 `error_details` 使用“键存在即失败”的契约：成功结果只返回 `reason: SUCCESS`，失败结果才返回 `error_details`。不要用空字符串补齐成功结果，否则旧处理程序和前端会把有效分析误判为失败。
+
 外部 GitHub Actions artifact 只有有限保留期，不能作为可重复构建来源。升级 Parselmouth 时必须修改 `.github/workflows/build-python-lambda.yml` 中的固定提交，重新通过 filtered autocorrelation 探针和完整 Lambda 测试，再更新本节记录。
 
 ---

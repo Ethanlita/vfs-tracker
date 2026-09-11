@@ -28,6 +28,8 @@ describe('release pipeline', () => {
     expect(pullRequest).toContain('VITE_API_ENDPOINT: https://api.vfs-tracker.invalid');
     expect(pullRequest).not.toContain('${{ secrets.API_ENDPOINT }}');
     expect(pullRequest).not.toContain('id-token: write');
+    expect(pullRequest).toContain('group: verify-pr-${{ github.event.pull_request.number }}');
+    expect(pullRequest).toContain('cancel-in-progress: true');
   });
 
   it('后端部署与镜像更新都依赖自动回归验证', async () => {

@@ -1,6 +1,6 @@
 # 前端体验审查（进行中）
 
-> 发布链路补充（2026-09-11）：复核上线前置条件时新增 [#176](https://github.com/Ethanlita/vfs-tracker/issues/176) 与 [#177](https://github.com/Ethanlita/vfs-tracker/issues/177)。前者复现同一提交的后端与 Pages 独立响应 push、可能让新资料/幂等协议先于 Lambda 上线；后者复现 Python 镜像引用的 run `21285172527` artifact 已过期、稳定 Parselmouth 0.4.7 无法调用 v2 默认 filtered autocorrelation，且原镜像构建不跑完整 pytest。当前本地修复将每个 master 提交统一为后端分类/测试/部署成功后才触发同 SHA 前端发布；Parselmouth 改由固定上游提交及子模块构建，命令探针和完整声学测试在任何 Lambda 更新前执行。累计已发布 80 个审查 issue；ARM CI 和真实发布尚未执行。
+> 发布链路补充（2026-09-12）：复核上线前置条件时新增 [#176](https://github.com/Ethanlita/vfs-tracker/issues/176)、[#177](https://github.com/Ethanlita/vfs-tracker/issues/177) 与 [#179](https://github.com/Ethanlita/vfs-tracker/issues/179)。前两项分别复现前后端并行发布窗口，以及 Python 镜像 artifact 过期、稳定 Parselmouth 缺少默认算法命令且没有完整 pytest 门禁；#179 由首个 PR 门禁真实复现 ESA Routine 隐式复制跨运行域 `Request` 后在 Node 24 拒绝 `AbortSignal`。当前修复将 master 统一为后端测试/部署成功后才触发同 SHA 前端发布，Parselmouth 从固定提交构建，并显式重建 ESA 回源请求。首轮 ARM CI 的固定源码能力探针通过，完整测试发现成功共振峰仍携带空错误字段；该契约错误已在源头修复并新增回归。累计已发布 82 个审查 issue，下一轮 PR #178 门禁将完成验证，真实发布尚未执行。
 
 > 回归基础设施更新（2026-09-11）：旧 Playwright 套件仍访问 `/events`、`/public-dashboard`、`/quick-pitch`、`/note-frequency-converter` 及已删除的结果子页面，并含 40 个条件跳过，无法证明现有用户路径。现已收敛为 26 项当前开发模式流程，不使用条件跳过或真实用户写入；路由契约测试会拒绝再次引用不存在的页面。Chromium、Firefox 和 iPhone 12 WebKit 各 26/26 通过；桌面 WebKit 暴露并修复了原生 dialog 关闭后不回到菜单入口的差异，失败专项修复后 6/6 通过。另新增生产 PWA 桌面与 Pixel 5 共 4 项测试，真实等待 Service Worker 接管后断网直达并刷新 7 个公开/本地页面，Markdown 正文、Hz 双向转换及整页横向溢出检查通过。开发服务器不再作为 PWA 离线证据。
 

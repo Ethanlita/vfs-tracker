@@ -7,6 +7,11 @@ on:
 permissions:
   contents: read
 
+# 同一 PR 的新提交会取消旧验证，避免昂贵的 ARM64 源码构建继续占用 runner。
+concurrency:
+  group: verify-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
   changes:
     runs-on: ubuntu-latest
