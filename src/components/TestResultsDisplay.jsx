@@ -55,12 +55,12 @@ const TestResultsDisplay = ({ results }) => {
           <div className="space-y-2 text-gray-800">
             {sustained.formants_low && (
               <div>
-                <strong>最低音:</strong> F1: {sustained.formants_low.F1?.toFixed(0)} Hz, F2: {sustained.formants_low.F2?.toFixed(0)} Hz, F3: {sustained.formants_low.F3?.toFixed(0)} Hz, SPL: {sustained.formants_low.spl_dbA_est?.toFixed(1)} dB
+                <strong>低音量发声:</strong> F1: {sustained.formants_low.F1?.toFixed(0)} Hz, F2: {sustained.formants_low.F2?.toFixed(0)} Hz, F3: {sustained.formants_low.F3?.toFixed(0)} Hz, SPL: {sustained.formants_low.spl_dbA_est?.toFixed(1)} dB
               </div>
             )}
             {sustained.formants_high && (
               <div>
-                <strong>最高音:</strong> F1: {sustained.formants_high.F1?.toFixed(0)} Hz, F2: {sustained.formants_high.F2?.toFixed(0)} Hz, F3: {sustained.formants_high.F3?.toFixed(0)} Hz, SPL: {sustained.formants_high.spl_dbA_est?.toFixed(1)} dB
+                <strong>高音量发声:</strong> F1: {sustained.formants_high.F1?.toFixed(0)} Hz, F2: {sustained.formants_high.F2?.toFixed(0)} Hz, F3: {sustained.formants_high.F3?.toFixed(0)} Hz, SPL: {sustained.formants_high.spl_dbA_est?.toFixed(1)} dB
               </div>
             )}
           </div>

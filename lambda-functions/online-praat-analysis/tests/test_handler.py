@@ -156,10 +156,11 @@ def test_handle_get_upload_url(mocked_aws_services, mock_api_gateway_event):
     assert 'putUrl' in body
 
 def test_end_to_end_with_known_audio(mocked_aws_services, tmp_path_factory):
+    """使用前端实际对象键验证 v2 声学分析、持久化和产物生成。"""
     from .conftest import generate_realistic_vowel
     tmp_path = tmp_path_factory.mktemp("e2e_audio")
 
-    # Create files for each step
+    # 创建持续元音与两个不同音量锚点的合成录音。
     sustained_audio_path = tmp_path / "sustained_vowel.wav"
     generate_realistic_vowel(str(sustained_audio_path), f0=200.0, duration=4.0)
 
@@ -177,9 +178,9 @@ def test_end_to_end_with_known_audio(mocked_aws_services, tmp_path_factory):
     session_id = 'e2e-test-session'
 
     s3_client.upload_file(sustained_audio_path, handler.BUCKET, f"voice-tests/{session_id}/raw/2/sustained.wav")
-    # Upload both notes to step '4'
-    s3_client.upload_file(low_note_audio_path, handler.BUCKET, f"voice-tests/{session_id}/raw/4/low_note.wav")
-    s3_client.upload_file(high_note_audio_path, handler.BUCKET, f"voice-tests/{session_id}/raw/4/high_note.wav")
+    # 前端固定使用 4_1/4_2；v2 只沿这一契约映射 soft_a/loud_a。
+    s3_client.upload_file(low_note_audio_path, handler.BUCKET, f"voice-tests/{session_id}/raw/4/4_1.wav")
+    s3_client.upload_file(high_note_audio_path, handler.BUCKET, f"voice-tests/{session_id}/raw/4/4_2.wav")
 
     table = boto3.resource('dynamodb').Table(handler.DDB_TABLE)
     table.put_item(Item={'sessionId': session_id, 'status': 'created', 'userId': 'mock-user-id-12345'})
@@ -195,7 +196,7 @@ def test_end_to_end_with_known_audio(mocked_aws_services, tmp_path_factory):
     assert results_item is not None
     assert results_item['status'] == 'done'
 
-    # Check that the SPL chart was created even on failure
+    # 即使部分声学指标失败，SPL 图仍应生成。
     artifact_prefix = f"voice-tests/{session_id}/artifacts/"
     s3_objects = s3_client.list_objects_v2(Bucket=handler.BUCKET, Prefix=artifact_prefix)
     artifact_keys = [obj['Key'] for obj in s3_objects.get('Contents', [])]
@@ -208,13 +209,13 @@ def test_end_to_end_with_known_audio(mocked_aws_services, tmp_path_factory):
     assert abs(sustained_metrics.get('mpt_s', 0) - 3.9) < 0.2
     assert abs(sustained_metrics.get('f0_mean', 0) - 200.0) < 10
 
-    # Assert that the sustained vowel now has its own formant analysis
+    # 持续元音应拥有独立的共振峰结果。
     formants_sustained = sustained_metrics.get('formants_sustained', {})
     assert 'error' not in formants_sustained and 'error_details' not in formants_sustained, \
         f"Sustained vowel formant analysis failed: {formants_sustained.get('reason')}"
     assert abs(formants_sustained.get('f0_mean', 0) - 200.0) < 10
 
-    # Assert that the note formants are now at the top level of the metrics
+    # 音量锚点同时写入历史兼容的顶层 formants_low/high 键。
     formants_low_actual = metrics.get('formants_low', {})
     assert 'error' not in formants_low_actual and 'error_details' not in formants_low_actual, \
         f"Low note formant analysis failed unexpectedly: {formants_low_actual.get('reason')}"

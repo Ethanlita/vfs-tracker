@@ -160,8 +160,8 @@ describe('TestResultsDisplay 组件测试', () => {
       
       await waitFor(() => {
         expect(screen.getByText('共振峰分析')).toBeInTheDocument();
-        expect(screen.getByText(/最低音/)).toBeInTheDocument();
-        expect(screen.getByText(/最高音/)).toBeInTheDocument();
+        expect(screen.getByText(/低音量发声/)).toBeInTheDocument();
+        expect(screen.getByText(/高音量发声/)).toBeInTheDocument();
         expect(screen.getByText(/F1: 500 Hz/)).toBeInTheDocument();
         expect(screen.getByText(/F2: 1500 Hz/)).toBeInTheDocument();
         expect(screen.getByText(/F3: 2500 Hz/)).toBeInTheDocument();
@@ -169,7 +169,7 @@ describe('TestResultsDisplay 组件测试', () => {
       });
     });
 
-    it('只有formants_low时只显示最低音', async () => {
+    it('只有formants_low时只显示低音量发声', async () => {
       const results = {
         metrics: {
           sustained: {
@@ -189,8 +189,8 @@ describe('TestResultsDisplay 组件测试', () => {
       render(<TestResultsDisplay results={results} />);
       
       await waitFor(() => {
-        expect(screen.getByText(/最低音/)).toBeInTheDocument();
-        expect(screen.queryByText(/最高音/)).not.toBeInTheDocument();
+        expect(screen.getByText(/低音量发声/)).toBeInTheDocument();
+        expect(screen.queryByText(/高音量发声/)).not.toBeInTheDocument();
       });
     });
 

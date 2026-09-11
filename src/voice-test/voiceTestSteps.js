@@ -15,7 +15,7 @@ export const VOICE_TEST_STEPS = [
   { id: 3, state: 'glide', title: '音域测定：滑音', instructions: '请从您最低的音平滑地唱到最高的音（上滑音），然后从最高的音平滑地唱到最低的音（下滑音）。上下滑音各需录制两次。' +
           '\n提示：滑音，即选择一个元音（如“/a/ (啊)”或“/u/ (呜)”），从自己舒适的中音开始，把声音顺滑地持续拉高到能达到的最高音（上滑音），再连续滑回最低音（下滑音）。' +
           '\n要求连贯不中断、不突然跳音，用来测试声音能覆盖的最高与最低范围，也就是音域极限。', requiresRecording: true, recordingsNeeded: 4, recordingLabels: ['第一次上滑音，录制完成后请点击停止', '第二次上滑音，录制完成后请点击停止', '第一次下滑音，录制完成后请点击停止', '第二次下滑音，录制完成后请点击停止'] },
-  { id: 4, state: 'formant', title: '定点音 + 共振峰', instructions: '请分别用您最低和最高的可控音量，稳定地发出元音 /a/，各持续3-4秒。', requiresRecording: true, recordingsNeeded: 2, recordingLabels: ['最低音 /a/，录制完成后请点击停止', '最高音 /a/，录制完成后请点击停止'] },
+  { id: 4, state: 'formant', title: '定点音 + 共振峰', instructions: '请分别用您最低和最高的可控音量，稳定地发出元音 /a/，各持续3-4秒。音高尽量保持舒适、稳定。', requiresRecording: true, recordingsNeeded: 2, recordingLabels: ['最低音量 /a/，录制完成后请点击停止', '最高音量 /a/，录制完成后请点击停止'] },
   { id: 5, state: 'reading', title: '朗读指定语句', instructions: '请按屏幕上显示的文字进行朗读。', requiresRecording: true, recordingsNeeded: 1 },
   { id: 6, state: 'freeSpeech', title: '自由说话', instructions: '请围绕开放话题“介绍一下你最喜欢的食物”进行30-60秒的自由发言。', requiresRecording: true, recordingsNeeded: 1 },
   { id: 7, state: 'survey', title: '主观量表', instructions: '请根据您近期的嗓音情况，完成以下主观评估量表。', requiresRecording: false },

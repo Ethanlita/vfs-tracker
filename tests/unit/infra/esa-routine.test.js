@@ -33,10 +33,8 @@ describe('ESA cn-spa-fallback routine', () => {
   it('重建当前运行域请求并保留 HEAD 方法，不复制原请求 signal', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 200 }));
     const handle = loadRoutine(fetchMock);
-    const controller = new AbortController();
     const request = new Request('https://vfs-tracker.cn/assets/app.js', {
       method: 'HEAD',
-      signal: controller.signal,
     });
 
     await handle(request);

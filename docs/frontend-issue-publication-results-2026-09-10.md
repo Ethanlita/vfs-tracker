@@ -2,7 +2,7 @@
 
 2026-09-10，经用户明确授权，29 个新 issue、5 条此前待发布的补充，以及1条本地 Dashboard 403 排查说明已全部发布。逐项读取 GitHub 核对，35份正文与本地文件一致，29个新 issue 均为 OPEN；#37 仍为 CLOSED。
 
-此前的 #97—#175 共79个问题，加上后续发布链路复核新增的 #176、#177 与 #179，累计发布82个前端审查 issue；#178 是修复 PR，不计入 issue 数。发布完成不代表应用修复已经完成。
+此前的 #97—#175 共79个问题，加上后续复核新增的 #176、#177、#179 与 #180，累计发布83个前端审查 issue；#178 是修复 PR，不计入 issue 数。发布完成不代表应用修复已经完成。
 
 | 本地编号 | 问题或补充 | GitHub |
 |---|---|---|
@@ -44,6 +44,7 @@
 | D30 | 前后端并行发布造成新协议上线顺序窗口 | [#176](https://github.com/Ethanlita/vfs-tracker/issues/176) |
 | D31 | Python 声学镜像依赖过期 artifact 且缺完整测试门禁 | [#177](https://github.com/Ethanlita/vfs-tracker/issues/177) |
 | D32 | ESA Routine 跨运行域复制 Request 导致 Node 24 构造失败 | [#179](https://github.com/Ethanlita/vfs-tracker/issues/179) |
+| D33 | 嗓音测试 Step 4 将音量锚点显示为最低音和最高音 | [#180](https://github.com/Ethanlita/vfs-tracker/issues/180) |
 
 D1—D29 保留原审阅清单编号，D30—D32 为修复阶段复核发布链路时新增。C1—C5 为既有五条补充；C6 为刚发现并已在本地解决的旧 API 地址问题，不单独创建未解决缺陷。
 
