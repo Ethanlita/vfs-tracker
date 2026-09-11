@@ -132,7 +132,7 @@
 
 Routine 运行时也已经验证：ESA EdgeRoutine 使用模块入口格式 `export default { fetch(request) {} }`。Cloudflare Worker 风格的 `addEventListener('fetch', ...)` 虽然可以上传和部署，但在线上会返回 `599 Error: Load user script error`。
 
-当前仓库中的 `infra/esa-routine/cn-spa-fallback.js` 已改为 ESA 模块入口，并显式从 `origin-probe.vfs-tracker.cn` 读取上游内容。静态资源会被放行到上游，同时由 Routine 补充长期缓存头；SPA 深链返回上游首页 HTML，并用 `x-esa-spa-route` 或 `x-esa-spa-fallback` 标记。
+当前仓库中的 `infra/esa-routine/cn-spa-fallback.js` 已改为 ESA 模块入口，并显式从 `origin-probe.vfs-tracker.cn` 读取上游内容。静态资源会被放行到上游，同时由 Routine 补充长期缓存头；SPA 深链返回上游首页 HTML，并用 `x-esa-spa-route` 或 `x-esa-spa-fallback` 标记。重建上游请求时只显式复制 method 与 headers，避免把其他运行域的 `AbortSignal` 或运行时内部字段当作 `RequestInit` 传递；Node 24、测试拦截器和 ESA 因此共用同一条请求构造路径。
 
 最终切换结果：
 
