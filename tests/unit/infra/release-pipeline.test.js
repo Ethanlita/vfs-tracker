@@ -49,6 +49,7 @@ describe('release pipeline', () => {
     expect(workflow).not.toContain('deploy_api_gateway');
     expect(imageWorkflow).toContain('  workflow_call:');
     expect(imageWorkflow).not.toContain('workflow_dispatch:');
+    expect(imageWorkflow).not.toContain('id-token: write');
     expect(imageWorkflow).toContain('push: ${{ inputs.publish }}');
     expect(workflow).toContain('publish: true');
     expect(imageWorkflow).toContain('image_uri: ${{ steps.image-uri.outputs.image_uri }}');

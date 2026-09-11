@@ -14,10 +14,6 @@ on:
         description: 由调用方在 SAM 成功后发布的不可变镜像地址
         value: ${{ jobs.build-and-push.outputs.image_uri }}
 
-permissions:
-  id-token: write
-  contents: read
-
 env:
   ECR_REPOSITORY: vfs-tracker-images
   # v2 管线依赖 filtered autocorrelation；稳定版 0.4.7 尚未提供该命令。
