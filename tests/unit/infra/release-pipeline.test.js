@@ -54,10 +54,11 @@ describe('release pipeline', () => {
     expect(imageWorkflow).not.toContain('id-token: write');
     expect(imageWorkflow).toContain('push: ${{ inputs.publish }}');
     expect(workflow).toContain('publish: true');
-    expect(imageWorkflow).toContain('image_uri: ${{ steps.image-uri.outputs.image_uri }}');
+    expect(imageWorkflow).not.toContain('image_uri: ${{ steps.image-uri.outputs.image_uri }}');
     expect(imageWorkflow).not.toContain('aws lambda update-function-code');
     expect(workflow.indexOf('sam deploy')).toBeLessThan(workflow.indexOf('Publish verified Python Lambda image'));
-    expect(workflow).toContain('IMAGE_URI: ${{ needs.build-python-image.outputs.image_uri }}');
+    expect(workflow).toContain("IMAGE_URI: ${{ format('{0}:{1}', secrets.ECR_REPOSITORY_URI, github.sha) }}");
+    expect(workflow).not.toContain('needs.build-python-image.outputs.image_uri');
     expect(workflow).toContain('--image-uri "$IMAGE_URI"');
 
     const pullRequest = await readFile('.github/workflows/verify-pr.yml', 'utf8');

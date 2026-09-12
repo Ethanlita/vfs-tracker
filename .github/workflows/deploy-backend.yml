@@ -159,7 +159,8 @@ jobs:
       - name: Publish verified Python Lambda image
         if: needs.check-image-changes.outputs.image_changed == 'true'
         env:
-          IMAGE_URI: ${{ needs.build-python-image.outputs.image_uri }}
+          # 失败 job 重跑不会恢复复用 job 的输出；仓库 URI 与提交 SHA 唯一定位已验证镜像。
+          IMAGE_URI: ${{ format('{0}:{1}', secrets.ECR_REPOSITORY_URI, github.sha) }}
         run: |
           set -euo pipefail
           test -n "$IMAGE_URI"
