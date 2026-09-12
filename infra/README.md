@@ -135,6 +135,8 @@ GET/POST /edge-probe        → edge-probe (公开)
 | 自定义域名 | `api.vfs-tracker.app` | Base Path Mapping 需手动切换 |
 | DynamoDB Stream Mapping | autoApproveEvent 触发器 | 已存在于堆栈外部 |
 
+GitHub Actions 使用控制台管理的 `vfs-tracker-github-actions-role` 部署栈。它的 `VFSTrackerDeployPolicy` 必须允许对 `arn:aws:events:us-east-1:296821242554:rule/vfs-tracker-*` 执行 `PutRule`、`DescribeRule`、`DeleteRule`、`PutTargets`、`RemoveTargets`、`ListTargetsByRule`、`ListTagsForResource`、`TagResource` 和 `UntagResource`，否则 CloudFormation 无法管理 `cleanupStorage` 的每日计划规则。
+
 ---
 
 ## 🚀 快速开始
@@ -150,7 +152,7 @@ npm run deploy:backend
 
 ### 自动发布顺序与门禁
 
-推送到 `master` 后固定执行一条发布路径：`Deploy Backend` 先判断本次提交是否包含后端改动；存在改动时，先运行 ESLint、Lambda/基础设施单元测试与 API 集成测试，再构建 Python 镜像并执行其中的完整 `pytest` 声学测试。镜像阶段只推送标签并返回不可变 SHA 地址；SAM validate/build/deploy 成功后，统一工作流才将该 SHA 地址发布到 Python Lambda，随后初始化朗读稿件。没有后端改动时该工作流只完成变更分类，不写入 AWS。
+推送到 `master` 后固定执行一条发布路径：`Deploy Backend` 先判断本次提交是否包含后端改动；存在改动时，先运行 ESLint、Lambda/基础设施单元测试与 API 集成测试，再构建 Python 镜像并执行其中的完整 `pytest` 声学测试。镜像阶段只推送 `github.sha` 标签；SAM validate/build/deploy 成功后，统一工作流使用仓库配置的 ECR URI 与同一提交 SHA 组成不可变镜像地址并发布到 Python Lambda，随后初始化朗读稿件。这条地址不依赖复用 job 输出，因此仅重跑失败的部署 job 时仍能定位同一份已验证镜像。没有后端改动时该工作流只完成变更分类，不写入 AWS。
 
 只有同一提交的 `Deploy Backend` 工作流成功后，`Deploy to GitHub Pages` 才会检出该工作流的 `head_sha`，执行前端单元测试、浏览器测试和生产 PWA 离线测试并发布。后端失败会阻止依赖新协议的前端版本上线；前端工作流不提供绕过顺序的独立手动发布入口，需要重跑时从后端工作流开始。
 

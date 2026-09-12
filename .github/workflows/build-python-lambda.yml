@@ -9,11 +9,6 @@ on:
         required: false
         default: false
         type: boolean
-    outputs:
-      image_uri:
-        description: 由调用方在 SAM 成功后发布的不可变镜像地址
-        value: ${{ jobs.build-and-push.outputs.image_uri }}
-
 env:
   ECR_REPOSITORY: vfs-tracker-images
   # v2 管线依赖 filtered autocorrelation；稳定版 0.4.7 尚未提供该命令。
@@ -24,8 +19,6 @@ env:
 jobs:
   build-and-push:
     runs-on: ubuntu-24.04-arm
-    outputs:
-      image_uri: ${{ steps.image-uri.outputs.image_uri }}
     # 首次固定源码构建 Praat 较慢，后续由 BuildKit/GHA 缓存复用。
     timeout-minutes: 45
     
@@ -65,13 +58,6 @@ jobs:
             PARSELMOUTH_SOURCE_COMMIT=${{ env.PARSELMOUTH_SOURCE_COMMIT }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-
-      - name: Export immutable image URI
-        if: inputs.publish
-        id: image-uri
-        run: |
-          IMAGE_URI="${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}"
-          echo "image_uri=${IMAGE_URI}" >> "$GITHUB_OUTPUT"
 
       - name: Output image info
         run: |
