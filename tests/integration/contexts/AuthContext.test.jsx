@@ -5,8 +5,18 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
+import { createAsyncStoragePersister } from '@tanstack/query-async-storage-persister';
+import { persistQueryClientSave } from '@tanstack/query-persist-client-core';
 import { useAuth, AuthProvider } from '../../../src/contexts/AuthContext.jsx';
-import { QUERY_CACHE_STORAGE_KEY } from '../../../src/query/AppQueryProvider.jsx';
+import {
+  createAppQueryClient,
+  QUERY_CACHE_STORAGE_KEY,
+} from '../../../src/query/AppQueryProvider.jsx';
+import {
+  PROFILE_CACHE_MAX_AGE_MS,
+  profileQueryKey,
+  profileQueryOptions,
+} from '../../../src/query/profileQuery.js';
 import { server } from '../../../src/test-utils/mocks/msw-server.js';
 import { completeProfileUser } from '../../../src/test-utils/fixtures/index.js';
 import { http, HttpResponse } from 'msw';
@@ -342,27 +352,33 @@ describe('AuthContext 集成测试', () => {
         profile: { ...completeProfileUser.profile, name: '离线可见名称' },
       };
       let getCalls = 0;
-      server.use(
-        http.get(`${API_URL}/user/us-east-1:test-user-001`, () => {
-          getCalls += 1;
-          return HttpResponse.json(cachedProfile);
-        }),
-      );
       mockUseAuthenticator.mockReturnValue({
         authStatus: 'authenticated',
         user: { userId: cachedProfile.userId, username: 'testuser' },
       });
 
-      const firstMount = renderHook(() => useAuth(), { wrapper: AuthProvider });
-      await waitFor(() => expect(firstMount.result.current.userProfile?.profile?.name).toBe('离线可见名称'));
-      await act(async () => {
-        await firstMount.result.current.loadUserProfile(cachedProfile.userId);
+      // 通过公开持久化 API 明确完成磁盘写入，避免用节流定时器推测保存时点。
+      const seedClient = createAppQueryClient();
+      await seedClient.fetchQuery({
+        ...profileQueryOptions(cachedProfile.userId),
+        queryFn: async () => cachedProfile,
       });
-      await waitFor(() => {
-        expect(localStorage.getItem(QUERY_CACHE_STORAGE_KEY)).toContain('离线可见名称');
-      }, { timeout: 2000 });
-      const readsAfterSeed = getCalls;
-      firstMount.unmount();
+      const persister = createAsyncStoragePersister({
+        storage: localStorage,
+        key: QUERY_CACHE_STORAGE_KEY,
+        throttleTime: 0,
+      });
+      await persistQueryClientSave({
+        queryClient: seedClient,
+        persister,
+        maxAge: PROFILE_CACHE_MAX_AGE_MS,
+        buster: 'profile-query-v1',
+        dehydrateOptions: {
+          shouldDehydrateQuery: query => query.meta?.persist === true && query.state.status === 'success',
+        },
+      });
+      expect(localStorage.getItem(QUERY_CACHE_STORAGE_KEY)).toContain('离线可见名称');
+      seedClient.clear();
 
       // 若恢复后仍绕过 staleTime，这个处理器会使测试失败并暴露重复读取。
       server.use(
@@ -377,7 +393,7 @@ describe('AuthContext 集成测试', () => {
         expect(restoredMount.result.current.userProfile?.profile?.name).toBe('离线可见名称');
       }, { timeout: 2000 });
       expect(restoredMount.result.current.needsProfileSetup).toBe(false);
-      expect(getCalls).toBe(readsAfterSeed);
+      expect(getCalls).toBe(0);
     });
 
     it('切换账号时不会展示持久化的上一账号资料', async () => {
