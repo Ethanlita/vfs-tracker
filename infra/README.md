@@ -137,6 +137,8 @@ GET/POST /edge-probe        → edge-probe (公开)
 
 GitHub Actions 使用控制台管理的 `vfs-tracker-github-actions-role` 部署栈。它的 `VFSTrackerDeployPolicy` 必须允许对 `arn:aws:events:us-east-1:296821242554:rule/vfs-tracker-*` 执行 `PutRule`、`DescribeRule`、`DeleteRule`、`PutTargets`、`RemoveTargets`、`ListTargetsByRule`、`ListTagsForResource`、`TagResource` 和 `UntagResource`，否则 CloudFormation 无法管理 `cleanupStorage` 的每日计划规则。
 
+同一内联策略还必须仅对 `arn:aws:dynamodb:us-east-1:296821242554:table/VoiceFemReadingPassages` 允许 `dynamodb:PutItem`，供 `Seed default reading passages` 步骤幂等写入默认稿件。无需授予其他表的写入权限，也无需为播种步骤授予 `UpdateItem`、`DeleteItem` 或 `Scan`。
+
 ---
 
 ## 🚀 快速开始
