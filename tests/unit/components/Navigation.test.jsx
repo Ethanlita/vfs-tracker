@@ -34,6 +34,11 @@ describe('功能导航',()=>{
   render(<MemoryRouter><Header/></MemoryRouter>);
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   const trigger=screen.getByRole('button',{name:'打开菜单'});
+  // 顶栏入口仅展示图标；可访问名称不依赖可见文字。
+  expect(trigger).toHaveTextContent('');
+  expect(trigger).toHaveClass('h-10','w-10','shrink-0','justify-center');
+  expect(trigger.closest('nav')).toHaveClass('w-full','px-2');
+  expect(trigger.closest('nav')).not.toHaveClass('container','mx-auto');
   fireEvent.click(trigger);
   expect(screen.getByRole('dialog',{name:'全部功能'})).toBeInTheDocument();
   expect(screen.getByRole('button',{name:'关闭菜单'})).toHaveFocus();

@@ -77,9 +77,9 @@ const Header = ({ AuthComponent }) => {
   return (
     <>
       <header className="bg-white shadow-lg sticky top-0 z-40 w-full">
-        <nav className="container mx-auto px-4 sm:px-6 lg:px-8 h-16 sm:h-20 flex items-center">
+        <nav className="h-16 w-full px-2 sm:h-20 sm:px-4 lg:px-6 flex items-center">
           <div className="flex items-center justify-between w-full">
-            <div className="flex items-center gap-3">
+            <div className="flex min-w-0 items-center gap-2 sm:gap-3">
               <button
                 ref={menuButtonRef}
                 type="button"
@@ -88,12 +88,11 @@ const Header = ({ AuthComponent }) => {
                 aria-controls="site-navigation"
                 aria-expanded={sidebarOpen}
                 onClick={() => setSidebarOpen(true)}
-                className="flex items-center gap-2 rounded-lg p-2 hover:bg-gray-100 text-gray-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-pink-500"
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-gray-700 transition-colors hover:bg-gray-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-pink-500"
               >
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
                   <path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
                 </svg>
-                <span className="hidden lg:inline text-sm font-medium">全部功能</span>
               </button>
               <NavLink
                 to="/"
