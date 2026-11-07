@@ -12,6 +12,8 @@
       "patternOffsets": [0, 2, 4, 2, 0],
       "beatStructure": { "finalRests": 0 },
       "transposeStep": 1,
+      "defaultBpm": 100,
+      "noteValue": "quarter",
       "difficulty": "简单"
     },
     {
@@ -26,6 +28,8 @@
       "patternOffsets": [0, 2, 4, 5, 7],
       "beatStructure": { "finalRests": 0 },
       "transposeStep": 1,
+      "defaultBpm": 100,
+      "noteValue": "quarter",
       "targetNoteIndex": 4,
       "difficulty": "简单"
     },
@@ -41,6 +45,8 @@
       "patternOffsets": [7, 5, 4, 2, 0],
       "beatStructure": { "finalRests": 0 },
       "transposeStep": 1,
+      "defaultBpm": 100,
+      "noteValue": "quarter",
       "targetNoteIndex": 0,
       "difficulty": "简单"
     },
@@ -56,6 +62,8 @@
       "patternOffsets": [0, 2, 4, 5, 12],
       "beatStructure": { "finalRests": 0 },
       "transposeStep": 1,
+      "defaultBpm": 100,
+      "noteValue": "quarter",
       "targetNoteIndex": 4,
       "difficulty": "一般"
     },
@@ -70,6 +78,8 @@
       "patternOffsets": [0, 2, 4, 5, 7, 5],
       "beatStructure": { "finalRests": 0 },
       "transposeStep": 1,
+      "defaultBpm": 100,
+      "noteValue": "quarter",
       "targetNoteIndex": 4,
       "difficulty": "一般"
     },
@@ -85,6 +95,8 @@
       "patternOffsets": [0, 4, 7, 4, 0],
       "beatStructure": { "finalRests": 0 },
       "transposeStep": 1,
+      "defaultBpm": 100,
+      "noteValue": "quarter",
       "targetNoteIndex": 2,
       "difficulty": "一般"
     },
@@ -100,6 +112,8 @@
       "patternOffsets": [0, 1, 2, 1, 0],
       "beatStructure": { "finalRests": 0 },
       "transposeStep": 1,
+      "defaultBpm": 100,
+      "noteValue": "quarter",
       "targetNoteIndex": 2,
       "difficulty": "入门"
     },
@@ -115,6 +129,8 @@
       "patternOffsets": [0, 4, 7, 12, 7],
       "beatStructure": { "finalRests": 0 },
       "transposeStep": 1,
+      "defaultBpm": 100,
+      "noteValue": "quarter",
       "targetNoteIndex": 3,
       "difficulty": "高级"
     },
@@ -130,6 +146,8 @@
       "patternOffsets": [0, 4, 8, 4, 0],
       "beatStructure": { "finalRests": 0 },
       "transposeStep": 1,
+      "defaultBpm": 100,
+      "noteValue": "quarter",
       "targetNoteIndex": 2,
       "difficulty": "一般"
     },
@@ -145,6 +163,8 @@
       "patternOffsets": [0, 3, 5, 7, 5, 3, 0],
       "beatStructure": { "finalRests": 0 },
       "transposeStep": 1,
+      "defaultBpm": 100,
+      "noteValue": "quarter",
       "targetNoteIndex": 3,
       "difficulty": "一般"
     },
@@ -160,6 +180,8 @@
       "patternOffsets": [0, 4, 7, 12, 7, 4, 0],
       "beatStructure": { "finalRests": 0 },
       "transposeStep": 1,
+      "defaultBpm": 100,
+      "noteValue": "quarter",
       "targetNoteIndex": 3,
       "difficulty": "高级"
     },
@@ -175,6 +197,8 @@
       "patternOffsets": [0, 4, 2, 5, 4],
       "beatStructure": { "finalRests": 0 },
       "transposeStep": 1,
+      "defaultBpm": 100,
+      "noteValue": "quarter",
       "targetNoteIndex": 3,
       "difficulty": "一般"
     },
@@ -190,27 +214,31 @@
       "patternOffsets": [0, 4, 2, 5, 4],
       "beatStructure": { "finalRests": 0 },
       "transposeStep": 1,
+      "defaultBpm": 100,
+      "noteValue": "quarter",
       "targetNoteIndex": 4,
       "difficulty": "一般"
     },
     {
       "id": "turnback_123454321",
       "name": "九度回转 123454321",
-      "description": "完整九度回转：示范 1，空拍，练习 1-2-3-4-5-4-3-2-1，末尾五拍空拍收尾。",
+      "description": "完整九度回转：示范 1，空拍，练习 1-2-3-4-5-4-3-2-1，末尾一拍空拍收尾。",
       "prologue": [
         { "type": "example", "count": 1, "offset": 0 },
         { "type": "rest", "count": 1 }
       ],
       "patternOffsets": [0, 2, 4, 5, 7, 5, 4, 2, 0],
-      "beatStructure": { "finalRests": 5 },
+      "beatStructure": { "finalRests": 1 },
       "transposeStep": 1,
+      "defaultBpm": 100,
+      "noteValue": "quarter",
       "targetNoteIndex": 4,
       "difficulty": "高级"
     },
     {
       "id": "turnback_123454321_16th",
       "name": "九度回转 123454321（16分音符版）",
-      "description": "与标准九度回转相同音型，但采用更短拍值（16 分音符）快速往返，适合灵活度练习。",
+      "description": "与标准九度回转相同音型，但采用更短拍值（16 分音符）快速往返，适合灵活度练习。每个音很短，系统只检查音高走势是否唱到位。",
       "prologue": [
         { "type": "example", "count": 1, "offset": 0 },
         { "type": "rest", "count": 1 }
@@ -218,6 +246,8 @@
       "patternOffsets": [0, 2, 4, 5, 7, 5, 4, 2, 0],
       "beatStructure": { "finalRests": 9 },
       "transposeStep": 1,
+      "defaultBpm": 80,
+      "noteValue": "sixteenth",
       "targetNoteIndex": 4,
       "difficulty": "高级"
     }

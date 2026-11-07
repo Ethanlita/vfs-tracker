@@ -1,4 +1,4 @@
-/** @file 音阶结束流程回归：通过、失败、跳过与资源释放。音高算法独立测试。 */
+/** @file 音阶结束流程回归：通过、失败、跳过、资源释放与「再来一次」。音高算法独立测试。 */
 import React from 'react';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
@@ -7,21 +7,23 @@ vi.mock('react-router-dom',()=>({useNavigate:()=>vi.fn()}));
 vi.mock('../../../src/api.js',()=>({getSongRecommendations:mocks.recommend}));
 vi.mock('soundfont-player',()=>({default:{instrument:mocks.instrument}}));
 vi.mock('pitchy',()=>({PitchDetector:{forFloat32Array:n=>({inputLength:n,findPitch:()=>[180,1]})}}));
-vi.mock('../../../src/utils/scalePracticeEval.js',async load=>({...await load(),evaluateNoteStability:mocks.evaluate,detectEarlyVoicing:()=>({early:false})}));
+vi.mock('../../../src/utils/scalePracticeEval.js',async load=>({...await load(),evaluatePhrase:mocks.evaluate,detectEarlyVoicing:()=>({early:false})}));
 import ScalePractice from '../../../src/components/ScalePractice.jsx';
+import { BPM_STORAGE_KEY } from '../../../src/utils/scaleModes.js';
 
 beforeEach(()=>{
- vi.useFakeTimers();vi.clearAllMocks();mocks.contexts=[];
+ vi.useFakeTimers();vi.clearAllMocks();mocks.contexts=[];localStorage.clear();
  mocks.evaluate.mockReturnValue({passed:false,failedNote:{idx:0,freq:180,type:'miss'}});
  vi.stubGlobal('navigator',{onLine:false,mediaDevices:{getUserMedia:async()=>({getTracks:()=>[{stop:mocks.stop}]})}});
  vi.stubGlobal('requestAnimationFrame',cb=>setTimeout(()=>cb(performance.now()),16));
  vi.stubGlobal('cancelAnimationFrame',id=>clearTimeout(id));
- const param=()=>({value:0,setValueAtTime:vi.fn(),exponentialRampToValueAtTime:vi.fn()});
+ const param=()=>({value:0,setValueAtTime:vi.fn(),setTargetAtTime:vi.fn(),exponentialRampToValueAtTime:vi.fn()});
  vi.stubGlobal('AudioContext',class{
-  state='running';sampleRate=48000;currentTime=0;destination={};
+  state='running';sampleRate=48000;currentTime=0;destination={};gains=[];
   constructor(){mocks.contexts.push(this)}
   createMediaStreamSource(){return {connect:vi.fn()}}
-  createGain(){return {gain:param(),connect:vi.fn()}}
+  // 记录创建的 GainNode：第一个是输入端软件增益
+  createGain(){const node={gain:param(),connect:vi.fn()};this.gains.push(node);return node}
   createOscillator(){return {frequency:param(),connect:vi.fn(),start:vi.fn(),stop:vi.fn()}}
   createAnalyser(){return {fftSize:2048,frequencyBinCount:1024,getFloatTimeDomainData:a=>a.fill(.1),getFloatFrequencyData:a=>a.fill(-80)}}
   close(){this.state='closed';return Promise.resolve()}
@@ -94,4 +96,73 @@ it.each(['rms','frequency','tone','calibrationDelay','calibrationTone','calibrat
  view.unmount();await tick(10000);
  expect(mocks.stop).toHaveBeenCalledTimes(1);expect(mocks.contexts.every(c=>c.state==='closed')).toBe(true);
  expect(mocks.evaluate).not.toHaveBeenCalled();expect(vi.getTimerCount()).toBe(0);
+});
+
+/** 读取音高轨迹 polyline 当前绘制的点数。 */
+function trailPointCount(container){const line=container.querySelector('polyline');return line?line.getAttribute('points').trim().split(/\s+/).length:0}
+
+it('速度滑块更新每音时长与判定方式，并按模式记住设置',async()=>{
+ await setup();
+ const slider=screen.getByLabelText(/速度/);expect(slider).toHaveValue('100');
+ expect(screen.getByTestId('scale-judge-regime')).toHaveTextContent('稳定保持');
+ await act(async()=>fireEvent.change(slider,{target:{value:'160'}}));
+ expect(screen.getByText(/一轮约/)).toHaveTextContent('每个音 375 ms');
+ expect(screen.getByTestId('scale-judge-regime')).toHaveTextContent('只看音高走势');
+ const modeId=screen.getAllByRole('combobox')[0].value;
+ expect(JSON.parse(localStorage.getItem(BPM_STORAGE_KEY))).toEqual({[modeId]:160});
+ await click('恢复默认（100）');expect(slider).toHaveValue('100');
+});
+it('用户速度传入整句判定：练习音时长与名义区间来自所选 BPM',async()=>{
+ await setup();await act(async()=>fireEvent.change(screen.getByLabelText(/速度/),{target:{value:'60'}}));
+ await click('开始练习');await waitFailure();
+ const args=mocks.evaluate.mock.calls[0][0];
+ expect(args.noteMs).toBeCloseTo(1000,5);expect(args.noteSteps).toHaveLength(5);
+ args.noteSteps.forEach(step=>expect(step.endT).toBeGreaterThan(step.startT));
+ for(let i=1;i<args.noteSteps.length;i++)expect(args.noteSteps[i].startT).toBe(args.noteSteps[i-1].endT);
+ expect(args.frames.length).toBeGreaterThan(0);
+});
+it('长轮次中音高轨迹持续绘制，不会在 320 点后冻结',async()=>{
+ const{container}=render(<ScalePractice/>);await click('我已知晓，开始');await click('进入耳机检测');await tick(5500);await click('开始录音');await tick(3400);
+ await act(async()=>fireEvent.change(screen.getByLabelText(/速度/),{target:{value:'40'}}));
+ await click('开始练习');await tick(6000);const early=trailPointCount(container);await tick(4000);const later=trailPointCount(container);
+ expect(early).toBeGreaterThan(100);expect(later).toBeGreaterThan(320);expect(later).toBeGreaterThan(early);
+});
+
+/** 让麦克风申请返回一条新的音轨（停止时计入 mocks.stop）。 */
+function grantMic(){const gum=vi.fn(async()=>({getTracks:()=>[{stop:mocks.stop}]}));navigator.mediaDevices.getUserMedia=gum;return gum}
+it('再来一次跳过权限说明、耳机检测与校准，直接回到设置页；结果清空，起始音与增益沿用',async()=>{
+ await setup();
+ await act(async()=>fireEvent.change(screen.getByLabelText('起始音'),{target:{value:'3'}}));
+ await act(async()=>fireEvent.change(screen.getByLabelText('麦克风软件增益'),{target:{value:'0.5'}}));
+ mocks.evaluate.mockReturnValueOnce({passed:true});await click('开始练习');await waitFailure();await click('结束并查看结果');
+ expect(screen.getByText(/最高音：.*Hz/)).toBeInTheDocument();
+ const gum=grantMic();await click('再来一次');await tick(0);
+ expect(gum).toHaveBeenCalledTimes(1);
+ expect(screen.getByRole('button',{name:'开始练习',exact:true})).toBeInTheDocument();
+ expect(screen.queryByRole('button',{name:'进入耳机检测'})).not.toBeInTheDocument();
+ expect(screen.queryByRole('button',{name:'开始录音'})).not.toBeInTheDocument();
+ expect(screen.getByLabelText('起始音')).toHaveValue('3');
+ expect(screen.getByLabelText('麦克风软件增益')).toHaveValue('0.5');
+ // 新会话的输入增益直接使用当前设置，而不是 0 dB
+ expect(mocks.contexts).toHaveLength(2);expect(mocks.contexts[1].gains[0].gain.value).toBe(0.5);
+ await click('开始练习');await click('结束练习并查看结果');
+ expect(screen.getByText('最高音：未测得')).toBeInTheDocument();expect(screen.getByText('最低音：未测得')).toBeInTheDocument();
+ expect(mocks.stop).toHaveBeenCalledTimes(2);expect(mocks.contexts.every(c=>c.state==='closed')).toBe(true);
+});
+it('再来一次打开麦克风失败时转到权限页显示错误，可从那里走完整流程',async()=>{
+ await setup();await click('开始练习');await click('结束练习并查看结果');
+ navigator.mediaDevices.getUserMedia=vi.fn(async()=>{throw new Error('denied')});
+ await click('再来一次');await tick(0);
+ expect(screen.getByRole('alert')).toHaveTextContent('无法获取麦克风权限');
+ expect(screen.queryByRole('button',{name:'开始练习',exact:true})).not.toBeInTheDocument();
+ expect(mocks.contexts.every(c=>c.state==='closed')).toBe(true);
+ grantMic();await click('重新尝试获取权限');await tick(0);
+ expect(screen.getByRole('button',{name:'进入耳机检测'})).toBeInTheDocument();
+});
+it('再来一次等待授权时离开，迟到音轨关闭且不创建新上下文',async()=>{
+ await setup();await click('开始练习');await click('结束练习并查看结果');
+ let release;navigator.mediaDevices.getUserMedia=vi.fn(()=>new Promise(resolve=>{release=resolve}));
+ await click('再来一次');expect(screen.getByText('正在重新打开麦克风…')).toBeInTheDocument();
+ cleanup();await act(async()=>release({getTracks:()=>[{stop:mocks.stop}]}));
+ expect(mocks.stop).toHaveBeenCalledTimes(2);expect(mocks.contexts).toHaveLength(1);expect(mocks.contexts[0].state).toBe('closed');
 });

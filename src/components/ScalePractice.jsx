@@ -5,8 +5,24 @@ import { PitchDetector } from 'pitchy';
 import Soundfont from 'soundfont-player';
 import { createDisplayPitchSmoother } from '../utils/pitchEval.js';
 import modesConfig from '../config/scaleModes.json';
-import { buildBeatTimeline, deriveModePitchMeta, planBeatSchedule } from '../utils/scaleModes.js';
-import { calcMedian, detectEarlyVoicing, evaluateNoteStability } from '../utils/scalePracticeEval.js';
+import {
+  BPM_RANGE,
+  NOTE_VALUE_LABELS,
+  buildBeatTimeline,
+  clampBpm,
+  deriveModePitchMeta,
+  getBrowserStorage,
+  loadSavedBpmMap,
+  planBeatSchedule,
+  saveBpmMap
+} from '../utils/scaleModes.js';
+import {
+  PHRASE_EVAL_CONFIG,
+  calcMedian,
+  detectEarlyVoicing,
+  evaluatePhrase,
+  resolveJudgeRegime
+} from '../utils/scalePracticeEval.js';
 import { getSongRecommendations } from '../api.js'; // Import the new API function
 import { ensureAppError } from '../utils/apiError.js';
 import { ApiErrorNotice } from './ApiErrorNotice.jsx';
@@ -31,7 +47,7 @@ const frequencyToNoteName = (frequency) => {
 
 /**
  * @zh 根据失败原因生成提示文案。
- * @param {{ idx: number, freq: number, type: 'miss'|'high'|'low'|'unstable'|'invalidFrame', requiredMs?: number, stableMs?: number }} fail 失败信息
+ * @param {{ idx: number, freq: number, type: 'miss'|'high'|'low'|'unstable'|'brief', requiredMs?: number, stableMs?: number }} fail 失败信息
  * @returns {string} 用户可读提示
  */
 const formatFailMessage = (fail) => {
@@ -46,8 +62,9 @@ const formatFailMessage = (fail) => {
       return `第${fail.idx}个音${noteLabel}不够高`;
     case 'unstable':
       return `第${fail.idx}个音${noteLabel}保持不足${Math.round(fail.requiredMs ?? 0)}ms`;
-    case 'invalidFrame':
-      return '录音数据异常，请检查麦克风输入或刷新页面后重试';
+    case 'brief':
+      // 走势判定：音太短，只要求唱到位（容差内短暂停留）
+      return `第${fail.idx}个音${noteLabel}没有唱到位（停留不足${Math.round(fail.requiredMs ?? 0)}ms）`;
     default:
       return '未达到目标音，是否重试？';
   }
@@ -97,6 +114,20 @@ const computeModeFloorFreq = (mode, startOffsetVal, semitoneRatioVal) => {
 const MIN_SEMITONE_OFFSET = -36; // C1
 const MAX_SEMITONE_OFFSET = 36;  // C7
 
+/**
+ * 基频检测的固定采样间隔（毫秒）。
+ * 检测循环用 setInterval 驱动而不是 requestAnimationFrame：RAF 跟随屏幕刷新率（60/120/144 Hz，
+ * 省电模式下可能只有 30 Hz），会让每秒帧数、轨迹点数和评估采样密度随设备变化。
+ * 固定 ~60 Hz 让所有设备得到一致的时间分辨率；评估仍按每帧的真实时间戳计算时长。
+ */
+const PITCH_FRAME_INTERVAL_MS = 16;
+
+/**
+ * 通过后到下一轮开始的等待（毫秒）。每轮结束后已额外采集 PHRASE_EVAL_CONFIG.lagMaxMs 的尾段，
+ * 两者相加保持约 800 ms 的轮间停顿。
+ */
+const NEXT_CYCLE_DELAY_MS = 800 - PHRASE_EVAL_CONFIG.lagMaxMs;
+
 /** 每次初始化只加载所属上下文的音色，不在模块中持有已关闭的上下文。 */
 const loadPianoInstrument = ctx => Soundfont.instrument(ctx, 'acoustic_grand_piano');
 
@@ -139,6 +170,8 @@ const ScalePractice = () => {
     return sorted[0]?.id ?? '';
   });
   const [modeError, setModeError] = useState('');
+  // 用户为各模式设置的速度（♩ = BPM）；未设置过的模式使用配置里的 defaultBpm。持久化到 localStorage。
+  const [bpmByMode, setBpmByMode] = useState(() => loadSavedBpmMap(getBrowserStorage()));
   const [cycleBeats, setCycleBeats] = useState(() => {
     try {
       const sorted = sortModesByDifficulty(modesConfig?.modes ?? []);
@@ -151,6 +184,18 @@ const ScalePractice = () => {
     () => modes.find(mode => mode.id === selectedModeId),
     [modes, selectedModeId]
   );
+  // 当前模式实际使用的速度
+  const currentBpm = currentMode ? (bpmByMode[currentMode.id] ?? currentMode.defaultBpm) : BPM_RANGE.min;
+  useEffect(() => { saveBpmMap(getBrowserStorage(), bpmByMode); }, [bpmByMode]);
+
+  /**
+   * @zh 设置当前模式的速度（自动规整到合法范围）。
+   * @param {number} bpm 新速度
+   */
+  const handleBpmChange = (bpm) => {
+    if (!currentMode) return;
+    setBpmByMode(prev => ({ ...prev, [currentMode.id]: clampBpm(bpm) }));
+  };
 
   // --- 练习结果 ---
   const [highestHz, setHighestHz] = useState(0);
@@ -169,7 +214,9 @@ const ScalePractice = () => {
   const analyserRef = useRef(null);
   const detectorRef = useRef(null);
   const mediaStreamRef = useRef(null);
-  const rafRef = useRef(null);
+  const pitchTimerRef = useRef(null); // 固定间隔基频检测的 setInterval 句柄
+  // 浏览器报告的设备延迟（毫秒，未知为 null），仅用于诊断面板
+  const deviceLatencyRef = useRef({ outputMs: null, baseMs: null, inputMs: null });
   const pianoRef = useRef(null); // 采样钢琴音色
   // 预分配的 pitchLoop 输入缓冲区，避免每帧 new Float32Array(2048) 制造 ~1 MB/s 的 GC 垃圾。
   // initAudio / reinitAnalyserForPitch 在 fftSize 变化时重建。
@@ -178,19 +225,16 @@ const ScalePractice = () => {
   // --- 练习参数与缓存 ---
   const baselineRmsRef = useRef(0);
   const tolerance = 75; // 允许的音差（cents）
-  const stableWindowMs = 250; // 判定所需的稳定时间（与拍长取较小值的60%）
+  // 稳定判定要求的保持时长；每音时长 × 0.5 小于它（每音短于 400 ms）时自动切换为走势判定（见 resolveJudgeRegime）
+  const stableWindowMs = 200;
   // 显示和评分都用 0.45：换声区（女声 A#4 附近）clarity 常常跌到 0.4-0.6，0.6 会把这部分信号
-  // 全部过滤掉。0.45 让换声区也被检测；噪声方面有能量门限（deltaDb=12）+ 稳定窗口（250ms）
+  // 全部过滤掉。0.45 让换声区也被检测；噪声方面有能量门限（deltaDb=12）+ 稳定窗口（200ms）
   // + smoother 的中值/八度锁存兜底，false positive 不会影响最终判定。
   const clarityTheta = 0.45;
   const deltaDb = 12;
   const paddingCents = 150; // 音高指示器上下留白（cents）
-  const baseQuarterMs = 600; // 基准四分音符时长，后续按模式缩放
-  // 轨迹的最大点数：在 60Hz 下大约能保留 ~5 秒（覆盖一整个 cycle）。超出后按时间滚动丢弃最老的。
-  const MAX_TRAIL_POINTS = 320;
   const currentFramesRef = useRef([]);
   const collectingRef = useRef(false);
-  const frameDurationRef = useRef(0);
   const semitoneRatio = Math.pow(2, 1 / 12);
   const rootIndexRef = useRef(0); // 起始音相对C4的半音数
   const descendingIndexRef = useRef(0);
@@ -203,9 +247,11 @@ const ScalePractice = () => {
   const [currentF0, setCurrentF0] = useState(0);
   const [timelineProgress, setTimelineProgress] = useState(0);
   const [beatCenters, setBeatCenters] = useState([]);
-  const [, setTrailVersion] = useState(0); // 用于触发轨迹重绘
+  // 轨迹版本号：trailRef 每次被修改（新增点 / 清空）后递增并触发重绘；
+  // 下方 trailPoints 的 useMemo 以它为依赖，版本不变时复用序列化结果。
+  const [trailVersion, setTrailVersion] = useState(0);
 
-  // 用于在 RAF 循环中读取最新 indicatorRange 而不用重建 pitchLoop
+  // 用于在检测循环中读取最新 indicatorRange 而不用重建 pitchLoop
   const indicatorRangeRef = useRef({ min: 0, max: 0 });
   useEffect(() => { indicatorRangeRef.current = indicatorRange; }, [indicatorRange]);
 
@@ -216,12 +262,11 @@ const ScalePractice = () => {
   const cycleTotalDurationRef = useRef(0);
   // 最近一次 setCurrentF0 的值与时间，用于节流再渲染
   const lastF0PostedRef = useRef(0);
-  // 当前 cycle 的音高轨迹（视图坐标 0..100）
-  // 用环形缓冲：超过 MAX_TRAIL_POINTS 时按 push/shift 滚动，限制内存与渲染成本。
+  // 当前 cycle 的音高轨迹（视图坐标 0..100）。
+  // 采样由固定间隔的 pitchLoop 驱动（与屏幕刷新率无关），且只记录 [0, cycle 总时长] 内的点，
+  // 所以点数天然以「cycle 时长 / 采样间隔」为上限，不需要再丢弃最老的点——一轮的轨迹从头到尾完整保留。
   const trailRef = useRef([]);
   const lastTrailRenderRef = useRef(0);
-  // 缓存上次序列化结果，trail 长度未变时直接复用，避免每次重渲染都做 300 次 .map().join()。
-  const trailPointsCacheRef = useRef({ length: 0, points: '' });
 
   // F0 显示平滑器：滚动中值 + 八度跳跃锁存，专门抑制 UI 上的视觉抖动
   const displaySmootherRef = useRef(null);
@@ -235,8 +280,11 @@ const ScalePractice = () => {
 
   // 软件麦克风增益（线性 0.1–2.0；0.5 = -6 dB；1.0 = 0 dB；2.0 = +6 dB）
   const [micGain, setMicGain] = useState(1.0);
+  // 最新的增益设置，供新建音频会话时直接写入 GainNode（「再来一次」会重建整条音频链路）
+  const micGainRef = useRef(micGain);
   // 当 micGain 状态变化时把值写到 GainNode；audioCtx 还没建好就先存着
   useEffect(() => {
+    micGainRef.current = micGain;
     if (inputGainRef.current && audioCtxRef.current) {
       inputGainRef.current.gain.setTargetAtTime(
         micGain,
@@ -269,6 +317,8 @@ const ScalePractice = () => {
     smoothedNonZero: 0   // smoother 输出非 0
   });
   const diagCountersRef = useRef(makeEmptyCounters());
+  // 最近一轮 evaluatePhrase 的结果（判定方式、估计延迟、逐音中位偏差），展示在诊断面板
+  const lastEvaluationRef = useRef(null);
   const resetDiagnostics = () => {
     diagCountersRef.current = makeEmptyCounters();
     diagHistoryRef.current = [];
@@ -277,21 +327,29 @@ const ScalePractice = () => {
   };
 
   // 预计算当前模式的拍数分布
+  // 同时给出当前速度下的每拍时长、一轮总时长与判定方式（设置页展示用）
   const modeStats = useMemo(() => {
-    if (!currentMode) return { examples: 0, rests: 0, notes: 0, total: 0, beatUnit: 'quarter' };
+    const empty = { examples: 0, rests: 0, notes: 0, total: 0, beatUnit: 'quarter', beatMs: 0, cycleMs: 0, regime: 'stable', requiredMs: 0 };
+    if (!currentMode) return empty;
     try {
-      const { timeline, beatUnit } = planBeatSchedule(currentMode, baseQuarterMs);
+      const { timeline, beatUnit, beatMs } = planBeatSchedule(currentMode, currentBpm);
+      const { regime, requiredMs } = resolveJudgeRegime(beatMs, stableWindowMs);
       return {
         examples: timeline.filter(t => t.type === 'example').length,
         rests: timeline.filter(t => t.type === 'rest').length,
         notes: timeline.filter(t => t.type === 'note').length,
         total: timeline.length,
-        beatUnit
+        beatUnit,
+        beatMs,
+        cycleMs: beatMs * timeline.length,
+        regime,
+        requiredMs
       };
     } catch {
-      return { examples: 0, rests: 0, notes: 0, total: 0, beatUnit: 'quarter' };
+      // 配置错误由下方「模式校验」effect 展示为 modeError
+      return empty;
     }
-  }, [currentMode, baseQuarterMs]);
+  }, [currentMode, currentBpm]);
 
   // --- 模式校验与拍数同步 ---
   useEffect(() => {
@@ -304,7 +362,8 @@ const ScalePractice = () => {
       return;
     }
     try {
-      const { timeline } = planBeatSchedule(currentMode);
+      // 拍数与速度无关，用模式默认速度校验配置即可
+      const { timeline } = planBeatSchedule(currentMode, currentMode.defaultBpm);
       setCycleBeats(timeline.length);
       setModeError('');
     } catch (err) {
@@ -334,7 +393,6 @@ const ScalePractice = () => {
     setTimelineProgress(0);
     // 新一轮 cycle 开始：清空轨迹 + 重置平滑器（避免上一 cycle 的尾音影响新 cycle 的冷启动）
     trailRef.current = [];
-    trailPointsCacheRef.current = { length: 0, points: '' };
     setTrailVersion(v => (v + 1) & 0xffff);
     if (displaySmootherRef.current) displaySmootherRef.current.reset();
     clipNoticeRef.current = 0;
@@ -386,9 +444,9 @@ const ScalePractice = () => {
     audioTasksRef.current?.cancel();
     requestingAudioRef.current = false;
     cancelPendingCycle();
-    if (rafRef.current) {
-      cancelAnimationFrame(rafRef.current);
-      rafRef.current = null;
+    if (pitchTimerRef.current) {
+      clearInterval(pitchTimerRef.current);
+      pitchTimerRef.current = null;
     }
     if (mediaStreamRef.current) {
       mediaStreamRef.current.getTracks().forEach(t => t.stop());
@@ -406,7 +464,6 @@ const ScalePractice = () => {
     pitchInputBufferRef.current = null;
     pianoRef.current = null;
     trailRef.current = [];
-    trailPointsCacheRef.current = { length: 0, points: '' };
     cycleTotalDurationRef.current = 0;
     progressStartRef.current = 0;
     if (displaySmootherRef.current) displaySmootherRef.current.reset();
@@ -515,10 +572,8 @@ const ScalePractice = () => {
         const xPct = (elapsed / totalMs) * 100;
         const yRatio = freqToPercent(smoothed, range);
         const yPct = (1 - yRatio) * 100; // SVG 视图：0=top, 100=bottom
-        const trail = trailRef.current;
-        trail.push({ x: xPct, y: yPct });
-        // 环形容量保护，避免极端情况下（比如长 cycle、慢 GC 后追赶推送）无限增长
-        if (trail.length > MAX_TRAIL_POINTS) trail.shift();
+        // 只记录本轮 [0, totalMs] 内的点，点数上限由轮次时长与固定采样间隔决定，无需截断。
+        trailRef.current.push({ x: xPct, y: yPct });
         if (now - lastTrailRenderRef.current > 33) {
           lastTrailRenderRef.current = now;
           setTrailVersion(v => (v + 1) & 0xffff);
@@ -561,8 +616,6 @@ const ScalePractice = () => {
       lastDiagRenderRef.current = now;
       setDiagVersion(v => (v + 1) & 0xffff);
     }
-
-    rafRef.current = requestAnimationFrame(pitchLoop);
   }, []);
 
   const initAudio = useCallback(async (generation) => {
@@ -613,7 +666,8 @@ const ScalePractice = () => {
     // 浏览器没有提供直接调节 mic gain 的 API（OS 层），但软件衰减能避免硬削波之外
     // 的"信号过热"问题，并给 analyser/pitchy 一个合理动态范围。
     const inputGain = ctx.createGain();
-    inputGain.gain.value = 1.0; // 初始 0 dB；下面 micGain useEffect 会同步用户调过的值
+    // 直接使用当前增益设置：micGain 的 effect 只在设置变化时同步，重建链路时不会再触发
+    inputGain.gain.value = micGainRef.current;
     source.connect(inputGain);
     inputGainRef.current = inputGain;
 
@@ -626,10 +680,16 @@ const ScalePractice = () => {
     detectorRef.current = PitchDetector.forFloat32Array(analyser.fftSize);
     // 不在这里固定 clarityThreshold——pitchLoop 会按帧动态切换：先用严格 0.9 试，
     // 拿不到（[0,0]）再降到 0.6 fallback（针对假声 / 弱基频）。
-    // 注意：此值不再用作"稳定窗口累加 dt"——评估改为按帧时间戳计算。
-    // 仍保留以防其他逻辑兜底使用（取 RAF 的近似间隔，约 16.7 ms）。
-    frameDurationRef.current = 1000 / 60;
+    // 浏览器报告的设备延迟只用于诊断面板展示：各浏览器支持不一（部分 Safari 没有 outputLatency），
+    // 蓝牙耳机也常常低报。判定所用的延迟由每轮数据自行估计（见 evaluatePhrase）。
+    const inputTrack = stream.getAudioTracks?.()[0];
+    deviceLatencyRef.current = {
+      outputMs: Number.isFinite(ctx.outputLatency) ? ctx.outputLatency * 1000 : null,
+      baseMs: Number.isFinite(ctx.baseLatency) ? ctx.baseLatency * 1000 : null,
+      inputMs: Number.isFinite(inputTrack?.getSettings?.().latency) ? inputTrack.getSettings().latency * 1000 : null
+    };
     pitchLoop();
+    pitchTimerRef.current = setInterval(pitchLoop, PITCH_FRAME_INTERVAL_MS);
     return true;
   }, [pitchLoop]);
 
@@ -716,32 +776,44 @@ const ScalePractice = () => {
     });
   };
 
-  // --- Step0: 申请权限 ---
-  const requestPermission = useCallback(async () => {
-    if (requestingAudioRef.current) return;
+  /**
+   * @zh 打开一次新的音频会话：清理旧会话 → 新建等待/采样任务 → 申请麦克风并建立分析链路。
+   * 权限页和结果页的「再来一次」共用这一条路径。失败时释放已获得的音轨与上下文，并显示权限错误。
+   * @returns {Promise<'ready'|'failed'|'cancelled'>} ready：会话可用；failed：申请或初始化失败；
+   * cancelled：已有申请在进行，或等待期间被离开 / 清理取代，调用方不应再改动界面。
+   */
+  const openAudioSession = useCallback(async () => {
+    if (requestingAudioRef.current) return 'cancelled';
     cleanupAudio();
     requestingAudioRef.current = true;
     audioTasksRef.current = createAudioTasks();
     const generation = audioGenerationRef.current;
-    setPermissionMsg('正在申请麦克风权限...');
     setPermissionError('');
     setPermissionGranted(false);
     try {
-      if (!await initAudio(generation)) return;
-      setPermissionMsg('已成功获取麦克风权限，请戴上耳机');
+      if (!await initAudio(generation)) return 'cancelled';
       setPermissionGranted(true);
+      return 'ready';
     } catch {
-      if (generation !== audioGenerationRef.current) return;
+      if (generation !== audioGenerationRef.current) return 'cancelled';
       cleanupAudio();
-
-      setPermissionMsg('');
       setPermissionGranted(false);
       setPermissionError('无法获取麦克风权限，请确认已授予浏览器麦克风访问权限。');
+      return 'failed';
     }
     finally {
       if (generation === audioGenerationRef.current) requestingAudioRef.current = false;
     }
   }, [initAudio, cleanupAudio]);
+
+  // --- Step0: 申请权限 ---
+  const requestPermission = useCallback(async () => {
+    if (requestingAudioRef.current) return;
+    setPermissionMsg('正在申请麦克风权限...');
+    const status = await openAudioSession();
+    if (status === 'ready') setPermissionMsg('已成功获取麦克风权限，请戴上耳机');
+    else if (status === 'failed') setPermissionMsg('');
+  }, [openAudioSession]);
 
   // --- Step1: 耳机检测 ---
   // 测试音始终走振荡器（不依赖钢琴 soundfont 是否加载、不依赖网络），增益设为 4，
@@ -815,13 +887,13 @@ const ScalePractice = () => {
       return false;
     }
     try {
-      planBeatSchedule(currentMode, baseQuarterMs);
+      planBeatSchedule(currentMode, currentBpm);
     } catch (err) {
       setModeError(err.message);
       return false;
     }
     return true;
-  }, [currentMode]);
+  }, [currentMode, currentBpm]);
 
   // --- 节拍循环与练习逻辑 ---
   /**
@@ -850,17 +922,15 @@ const ScalePractice = () => {
     let timeline;
     let beatDur;
     try {
-      const plan = planBeatSchedule(currentMode, baseQuarterMs);
+      const plan = planBeatSchedule(currentMode, currentBpm);
       timeline = plan.timeline;
-      beatDur = plan.beatMs; // 使用模式规划的拍长，避免硬编码节奏偏差
+      beatDur = plan.beatMs; // 每拍时长 = 60000 / BPM × 时值倍数
       setCycleBeats(timeline.length);
     } catch (err) {
       setModeError(err.message);
       return;
     }
-    const beatDurations = timeline.map(item =>
-      typeof item.durationMs === 'number' && item.durationMs > 0 ? item.durationMs : beatDur
-    );
+    const beatDurations = timeline.map(() => beatDur);
 
     const {
       indicatorRange: modeRange,
@@ -875,18 +945,17 @@ const ScalePractice = () => {
 
     setStep(isDemo ? 'demoLoop' : direction);
     startProgressAnimation(beatDurations);
-    const beatData = [];
-    const noteSteps = timeline
-      .map((item, idx) => (item.type === 'note' ? { ...item, beatIdx: idx } : null))
-      .filter(Boolean);
-    const firstNoteIdx = noteSteps.length ? noteSteps[0].beatIdx : timeline.length;
+    // 整轮连续采集：每帧带真实时间戳，只记录每拍的实际开始时间，评估时由 evaluatePhrase 按时间对齐切分，
+    // 不再按拍切窗（按拍切窗会把延迟导致的上一个音残留算进下一拍）。
+    currentFramesRef.current = [];
+    collectingRef.current = true;
+    const beatStarts = [];
     for (let i = 0; i < timeline.length; i++) {
       if (cycleAbortedRef.current) {
         stopProgressAnimation(true);
         return;
       }
-      currentFramesRef.current = [];
-      collectingRef.current = true;
+      beatStarts.push(performance.now());
       const beatNumber = i + 1;
       setBeat(beatNumber);
       let freq = null;
@@ -907,36 +976,47 @@ const ScalePractice = () => {
       } else {
         if (!await audioTasksRef.current.wait(beatDur)) return;
       }
-      collectingRef.current = false;
-      beatData.push([...currentFramesRef.current]);
     }
+    const cycleEndT = performance.now();
+    // 尾段继续采集 lagMaxMs：允许用户整体晚到，最后一个音晚到的部分也要参与判定
+    if (!await audioTasksRef.current.wait(PHRASE_EVAL_CONFIG.lagMaxMs)) return;
+    collectingRef.current = false;
 
     if (cycleAbortedRef.current) {
       stopProgressAnimation(true);
       return;
     }
 
-    const evaluation = evaluateNoteStability({
-      beatData,
+    const frames = currentFramesRef.current;
+    // 练习音的名义区间：起点为该拍实际开始时间，终点为下一拍开始时间（练习音在时间线中连续排列）
+    const noteSteps = timeline
+      .map((item, idx) => (item.type === 'note'
+        ? { offset: item.offset ?? 0, startT: beatStarts[idx], endT: beatStarts[idx + 1] ?? cycleEndT }
+        : null))
+      .filter(Boolean);
+
+    const evaluation = evaluatePhrase({
+      frames,
       noteSteps,
+      noteMs: beatDur,
       baseFreq,
       semitoneRatio,
       tolerance,
       baselineRms: baselineRmsRef.current,
       deltaDb,
       clarityTheta,
-      frameDuration: frameDurationRef.current,
-      stableWindowMs,
-      beatDurations
+      stableWindowMs
     });
+    lastEvaluationRef.current = evaluation;
+    setDiagVersion(v => (v + 1) & 0xffff);
 
     // "切入过早"检测：要求示例 / 空拍阶段累计连续发声时长超过阈值才判定。
-    // 阈值取 min(250 ms, beatDur*0.5)：beatDur 越短（八分音符 / 十六分音符模式）阈值越小，
-    // 但单帧 / 短瞬态（漏音、咔哒声、清嗓子）始终不会触发。
+    // 阈值取 min(250 ms, beatDur*0.5)：拍越短阈值越小，但单帧 / 短瞬态（漏音、咔哒声、清嗓子）始终不会触发。
+    // 检查窗口截止到「第一个练习音开始 + lagMinMs」，允许范围内的轻微抢拍不算切入过早。
     const earlyVoicingThresholdMs = Math.min(250, beatDur * 0.5);
     const earlyResult = detectEarlyVoicing({
-      beatData,
-      firstNoteIdx,
+      frames,
+      endT: noteSteps[0].startT + PHRASE_EVAL_CONFIG.lagMinMs,
       baselineRms: baselineRmsRef.current,
       deltaDb,
       clarityTheta,
@@ -981,7 +1061,7 @@ const ScalePractice = () => {
       cycleTimeoutRef.current = setTimeout(() => {
         cycleTimeoutRef.current = null;
         if (!cycleAbortedRef.current) runCycle('ascending');
-      }, 800);
+      }, NEXT_CYCLE_DELAY_MS);
     } else {
       setStep('descending');
       const cycleLow = baseFreq * Math.pow(semitoneRatio, minOffset);
@@ -991,7 +1071,7 @@ const ScalePractice = () => {
       cycleTimeoutRef.current = setTimeout(() => {
         cycleTimeoutRef.current = null;
         if (!cycleAbortedRef.current) runCycle('descending');
-      }, 800);
+      }, NEXT_CYCLE_DELAY_MS);
     }
   };
 
@@ -1080,6 +1160,33 @@ const ScalePractice = () => {
     setStep('result');
   };
 
+  /**
+   * @zh 结果页「再来一次」：重新打开麦克风后直接回到设置页，跳过权限说明、耳机检测与起始音校准。
+   * 沿用本次的环境噪声基线、起始音（含手动调整）、模式、速度与软件增益；音域结果与歌曲推荐从零开始。
+   * 麦克风打开失败时转到权限页显示错误，由用户从那里走完整流程。
+   */
+  const handlePracticeAgain = async () => {
+    setStep('reopening');
+    setMessage('');
+    setBeat(0);
+    setHighestHz(0);
+    setLowestHz(0);
+    lowestFloorRef.current = 0;
+    setRecommendations([]);
+    setRecommendationError(null);
+    setRateLimitMessage(null);
+    lastEvaluationRef.current = null;
+    const status = await openAudioSession();
+    if (status === 'ready') {
+      // 与校准完成时一致：按起始音选择分析器窗口（低音区用 4096）
+      reinitAnalyserForPitch(261.63 * Math.pow(semitoneRatio, startOffset));
+      setStep('setup');
+    } else if (status === 'failed') {
+      setPermissionMsg('');
+      setStep('permission');
+    }
+  };
+
   // --- 获取歌曲推荐 ---
   const handleGetRecommendations = async () => {
     // 两个方向均有检测通过的有效边界才能请求推荐。
@@ -1122,24 +1229,21 @@ const ScalePractice = () => {
   // 3. 通过 SVG `<polyline>` 绘制 cycle 内的音高轨迹（trailRef 在 pitchLoop 中实时
   //    采样），让用户能直观看到自己的音高变化。SVG viewBox 0..100，y 用
   //    (1 - freqToPercent) * 100 做翻转，与 div bottom 对齐。
+  // 轨迹序列化只在 trailVersion 变化时重算：currentF0 等高频状态触发的重渲染直接复用结果。
+  // 注意：缓存必须以版本号为键。旧实现以「点数」为键，环形缓冲填满后点数恒定，
+  // 导致之后的重绘永远复用旧字符串——这就是「练习途中轨迹停止绘制」的根因。
+  const trailPoints = useMemo(
+    () => trailRef.current.map(p => `${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(' '),
+    // trailRef 是可变引用，trailVersion 才是它内容变化的信号
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [trailVersion]
+  );
+
   const renderPitchIndicator = () => {
     if (!indicatorRange.min || !indicatorRange.max || !ladderNotes.length) return null;
     const sortedNotes = [...new Set(ladderNotes)].sort((a, b) => a - b);
     const dotBottomPct = Math.max(0, Math.min(100, freqToPercent(currentF0, indicatorRange) * 100));
     const dotLeftPct = Math.max(0, Math.min(100, timelineProgress * 100));
-    // trail 长度未变化时复用缓存的 points 字符串，避免每次 render 都跑 .map().join() 制造垃圾。
-    // 长度变化时重算（因为 push 总是 append，老点位置不会变；shift 会改变点序列但仍要重算）。
-    const trail = trailRef.current;
-    const cache = trailPointsCacheRef.current;
-    let trailPoints;
-    if (cache.length === trail.length) {
-      trailPoints = cache.points;
-    } else {
-      trailPoints = trail
-        .map(p => `${p.x.toFixed(2)},${p.y.toFixed(2)}`)
-        .join(' ');
-      trailPointsCacheRef.current = { length: trail.length, points: trailPoints };
-    }
 
     return (
       <div className="relative bg-gray-100 rounded mb-4 overflow-hidden h-[32rem]">
@@ -1321,7 +1425,7 @@ const ScalePractice = () => {
       )}
 
       {/* ============== 麦克风音量监视 + 增益控制 ============== */}
-      {permissionGranted && !['intro', 'permission', 'result'].includes(step) && (() => {
+      {permissionGranted && !['intro', 'permission', 'reopening', 'result'].includes(step) && (() => {
         const stats = diagLatestRef.current;
         const rms = stats?.rms ?? 0;
         const peak = stats?.peak ?? 0;
@@ -1442,6 +1546,14 @@ const ScalePractice = () => {
         </div>
       )}
 
+      {step === 'reopening' && (
+        <div className="bg-white p-6 rounded-xl shadow-md mb-6 text-center">
+          <div className="text-6xl mb-4 animate-bounce">🎧</div>
+          <p className="text-gray-700 mb-2">正在重新打开麦克风…</p>
+          <p className="text-sm text-gray-500">沿用上次的环境噪声检测和起始音。如果浏览器再次询问麦克风权限，请点击“允许”。</p>
+        </div>
+      )}
+
       {step === 'headphone' && (
         <div className="bg-white p-6 rounded-xl shadow-md mb-6 text-center">
           <p className="text-gray-700 mb-2">{message}</p>
@@ -1533,8 +1645,44 @@ const ScalePractice = () => {
                   </span>
                 </div>
                 <p className="text-xs text-gray-500">
-                  每轮拍数：{modeStats.total}（示范 {modeStats.examples} 拍 / 空拍 {modeStats.rests} 拍 / 音符 {modeStats.notes} 拍），节奏单位：{modeStats.beatUnit === 'quarter' ? '四分音符' : modeStats.beatUnit === 'eighth' ? '八分音符' : '十六分音符'}
+                  每轮拍数：{modeStats.total}（示范 {modeStats.examples} 拍 / 空拍 {modeStats.rests} 拍 / 音符 {modeStats.notes} 拍），每拍为{NOTE_VALUE_LABELS[modeStats.beatUnit]}
                 </p>
+                {/* 速度设置：BPM 按四分音符计；每个音的时长决定判定方式（稳定保持 / 只看音高走势） */}
+                <div className="mt-3 border-t border-gray-200 pt-3">
+                  <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
+                    <label htmlFor="scale-practice-bpm" className="font-medium text-gray-700">
+                      速度：♩ = <span className="tabular-nums">{currentBpm}</span> BPM
+                    </label>
+                    {currentBpm !== currentMode.defaultBpm && (
+                      <button
+                        type="button"
+                        onClick={() => handleBpmChange(currentMode.defaultBpm)}
+                        className="text-xs text-gray-500 hover:text-gray-800 px-2 py-0.5 border border-gray-300 rounded"
+                      >
+                        恢复默认（{currentMode.defaultBpm}）
+                      </button>
+                    )}
+                  </div>
+                  <input
+                    id="scale-practice-bpm"
+                    type="range"
+                    min={BPM_RANGE.min}
+                    max={BPM_RANGE.max}
+                    step="1"
+                    value={currentBpm}
+                    onChange={e => handleBpmChange(Number(e.target.value))}
+                    className="w-full accent-pink-500"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    每个音 <span className="tabular-nums">{Math.round(modeStats.beatMs)}</span> ms，一轮约 <span className="tabular-nums">{(modeStats.cycleMs / 1000).toFixed(1)}</span> 秒。
+                  </p>
+                  <p className="text-xs mt-1 text-gray-600" data-testid="scale-judge-regime">
+                    {modeStats.regime === 'stable'
+                      ? `判定方式：稳定保持——每个音需在容差内连续保持 ${Math.round(modeStats.requiredMs)} ms。`
+                      : `判定方式：只看音高走势——每个音很短，唱到位（容差内停留 ${Math.round(modeStats.requiredMs)} ms）即可。`}
+                    {`每个音短于约 ${Math.round(stableWindowMs / PHRASE_EVAL_CONFIG.stableRatio)} ms 时自动改为只看走势。`}
+                  </p>
+                </div>
               </div>
             )}
           </div>
@@ -1572,6 +1720,7 @@ const ScalePractice = () => {
               value={startOffset}
               onChange={e => setStartOffset(parseInt(e.target.value))}
               className="w-full"
+              aria-label="起始音"
             />
             <div className="flex justify-center gap-4 mt-2">
               <button
@@ -1624,7 +1773,7 @@ const ScalePractice = () => {
           {step === 'demoLoop' && (
             <div className="bg-blue-100 rounded-lg p-4 text-left text-gray-700 mb-4">
               <p className="mb-3 text-gray-700">
-                演示说明：本模式每轮 {cycleBeats} 拍，示范 {modeStats.examples} 拍、空拍 {modeStats.rests} 拍、练习音 {modeStats.notes} 拍。
+                演示说明：本模式每轮 {cycleBeats} 拍，示范 {modeStats.examples} 拍、空拍 {modeStats.rests} 拍、练习音 {modeStats.notes} 拍；速度 ♩ = {currentBpm} BPM，每个音 {Math.round(modeStats.beatMs)} ms。
               </p>
               <p className="mb-2">
                 演示周期结束后会显示提示信息；正式练习周期如果通过，会自动移调进入下一轮。
@@ -1737,12 +1886,19 @@ const ScalePractice = () => {
           {renderRangeKeyboard()}
           <p className="mt-4 text-sm text-gray-600">结果仅包含检测通过的轮次，手动跳过不计入。数据不足时不能获取歌曲推荐；推荐需要联网登录。</p>
           <p className="mt-2 text-sm text-gray-500">练习已结束，麦克风已关闭。</p>
-          <div className="flex justify-center gap-4 mt-6">
+          <div className="flex flex-wrap justify-center gap-3 mt-6">
             <button
               onClick={() => navigate('/')}
               className="bg-gray-200 hover:bg-gray-300 text-gray-800 px-4 py-2 rounded-lg font-semibold"
             >
               返回
+            </button>
+            <button
+              onClick={handlePracticeAgain}
+              disabled={isGenerating}
+              className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold disabled:bg-blue-300 disabled:cursor-not-allowed"
+            >
+              再来一次
             </button>
             <button
               onClick={handleGetRecommendations}
@@ -1821,6 +1977,7 @@ const ScalePractice = () => {
           const latest = diagLatestRef.current;
           const counters = diagCountersRef.current;
           const history = diagHistoryRef.current;
+          const lastEvaluation = lastEvaluationRef.current;
           const fmt = (n, d = 2) => (n == null || !Number.isFinite(n) ? '--' : n.toFixed(d));
           const pct = (n, total) => total > 0 ? `${(n / total * 100).toFixed(1)}%` : '0%';
           const ctxSr = audioCtxRef.current?.sampleRate ?? '?';
@@ -1828,7 +1985,29 @@ const ScalePractice = () => {
           return (
             <div className="bg-gray-900 text-green-300 font-mono text-xs p-3 rounded space-y-3">
               <div className="text-yellow-200">
-                AudioContext: sampleRate={ctxSr} Hz | analyser.fftSize={fft} | clarityTheta(外部)={clarityTheta} | pitch range=(50, 2000)
+                AudioContext: sampleRate={ctxSr} Hz | analyser.fftSize={fft} | clarityTheta(外部)={clarityTheta} | pitch range=(50, 2000) | 检测间隔={PITCH_FRAME_INTERVAL_MS}ms
+              </div>
+
+              {/* 判定相关：上一轮的估计延迟与逐音结果，以及浏览器报告的设备延迟（仅供参考，不参与判定） */}
+              <div className="border border-gray-700 rounded p-2">
+                <div className="text-cyan-200 mb-1">▼ 上一轮判定</div>
+                <div>
+                  设备延迟（浏览器报告）: output={fmt(deviceLatencyRef.current.outputMs, 0)}ms base={fmt(deviceLatencyRef.current.baseMs, 0)}ms input={fmt(deviceLatencyRef.current.inputMs, 0)}ms
+                </div>
+                {lastEvaluation ? (
+                  <div className="space-y-0.5">
+                    <div>
+                      方式={lastEvaluation.regime === 'stable' ? '稳定保持' : '只看走势'} | 每音要求={fmt(lastEvaluation.requiredMs, 0)}ms | 估计总延迟（设备+跟唱）={fmt(lastEvaluation.lagMs, 0)}ms | {lastEvaluation.passed
+                        ? <span className="text-green-400">通过</span>
+                        : <span className="text-red-400">未通过：{formatFailMessage(lastEvaluation.failedNote)}</span>}
+                    </div>
+                    {lastEvaluation.notes.map(note => (
+                      <div key={note.idx} className="text-gray-300">
+                        #{note.idx} {frequencyToNoteName(note.freq)}: 偏差={fmt(note.cents, 0)}c 稳定={fmt(note.stableMs, 0)}ms 有声帧={note.voicedFrames}
+                      </div>
+                    ))}
+                  </div>
+                ) : <div className="text-gray-500">尚无判定</div>}
               </div>
 
               <div className="border border-gray-700 rounded p-2">
