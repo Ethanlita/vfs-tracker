@@ -22,6 +22,8 @@
  * @property {number} [transposeStep=1] 每轮移调的半音步长
  * @property {number} [targetNoteIndex] 目标音在序列中的索引（可选）
  * @property {PrologueStep[]} [prologue] 可选：显式定义示范/空拍顺序，优先级高于 beatStructure
+ * @property {number} defaultBpm 默认速度（♩ = BPM，四分音符每分钟拍数），用户可在设置页调整
+ * @property {'quarter'|'eighth'|'sixteenth'} noteValue 时间线上「一拍」的时值
  */
 
 /**
@@ -134,49 +136,131 @@ export const deriveModePitchMeta = (
   };
 };
 
-const BEAT_UNITS = [
-  { name: 'quarter', factor: 1 }, // 四分音符
-  { name: 'eighth', factor: 0.5 }, // 八分音符
-  { name: 'sixteenth', factor: 0.25 } // 十六分音符
-];
+/**
+ * @zh 每种音符时值相对四分音符的倍数。BPM 一律按四分音符计（♩ = BPM），
+ * 模式的 noteValue 决定时间线上「一拍」是几分音符。
+ */
+export const NOTE_VALUE_FACTORS = {
+  quarter: 1, // 四分音符
+  eighth: 0.5, // 八分音符
+  sixteenth: 0.25 // 十六分音符
+};
+
+/** @zh 各时值的中文名，用于界面展示。 */
+export const NOTE_VALUE_LABELS = {
+  quarter: '四分音符',
+  eighth: '八分音符',
+  sixteenth: '十六分音符'
+};
+
+/** @zh 用户可设置的速度范围（♩ = BPM）。 */
+export const BPM_RANGE = { min: 40, max: 160 };
 
 /**
- * @zh 规划节拍时值，保证一轮练习总时长不超过两个全音符；若不足整小节（4 拍）则补齐空拍。
+ * @zh 把任意输入规整为合法 BPM（四舍五入到整数并夹在 BPM_RANGE 内）。
+ * @param {number} bpm 原始 BPM
+ * @returns {number} 合法 BPM
+ */
+export const clampBpm = (bpm) => Math.min(BPM_RANGE.max, Math.max(BPM_RANGE.min, Math.round(bpm)));
+
+/**
+ * @zh 校验模式的速度配置：每个模式都必须声明 defaultBpm 与 noteValue。
  * @param {ScaleMode} mode 模式配置
- * @param {number} [baseQuarterMs=600] 基准四分音符时长（毫秒）
+ * @throws {Error} 缺少或非法时抛出，提示补全配置
+ */
+const assertTempoConfig = (mode) => {
+  if (!Object.prototype.hasOwnProperty.call(NOTE_VALUE_FACTORS, mode?.noteValue)) {
+    throw new Error(`模式「${mode?.name ?? mode?.id ?? '未命名'}」缺少合法的 noteValue（quarter / eighth / sixteenth）。`);
+  }
+  const bpm = mode.defaultBpm;
+  if (!Number.isFinite(bpm) || bpm < BPM_RANGE.min || bpm > BPM_RANGE.max) {
+    throw new Error(`模式「${mode.name ?? mode.id}」的 defaultBpm 必须在 ${BPM_RANGE.min}–${BPM_RANGE.max} 之间。`);
+  }
+};
+
+/**
+ * @zh 计算给定速度与时值下「一拍」的毫秒数：60000 / BPM × 时值倍数。
+ * @param {number} bpm 速度（♩ = BPM）
+ * @param {'quarter'|'eighth'|'sixteenth'} noteValue 一拍的时值
+ * @returns {number} 每拍毫秒数
+ */
+export const computeBeatMs = (bpm, noteValue) => {
+  const factor = NOTE_VALUE_FACTORS[noteValue];
+  if (!factor) throw new Error(`未知的音符时值：${noteValue}`);
+  if (!Number.isFinite(bpm) || bpm <= 0) throw new Error(`BPM 必须为正数，收到：${bpm}`);
+  return (60000 / bpm) * factor;
+};
+
+/**
+ * @zh 规划一轮练习的节拍：时间线补齐到 4 拍的整数倍（补空拍），每拍时长由用户速度与模式时值决定。
+ * 不再为了「塞进两个全音符」自动缩短时值——速度完全由 BPM 控制，拍数多的模式一轮就更长。
+ * @param {ScaleMode} mode 模式配置（必须包含 defaultBpm 与 noteValue）
+ * @param {number} bpm 本次使用的速度（♩ = BPM），通常来自用户设置或 mode.defaultBpm
  * @returns {{ timeline: BeatStep[], beatMs: number, beatUnit: 'quarter'|'eighth'|'sixteenth', beatsPerMeasure: number }}
  */
-export const planBeatSchedule = (mode, baseQuarterMs = 600) => {
+export const planBeatSchedule = (mode, bpm) => {
   const timeline = buildBeatTimeline(mode);
-  const rawBeats = timeline.length;
+  assertTempoConfig(mode);
   const beatsPerMeasure = 4;
-  const paddedBeats = Math.ceil(rawBeats / beatsPerMeasure) * beatsPerMeasure;
-  const maxBeatsInQuarter = 8; // 两个全音符 = 8 个四分音符
-
-  let selectedUnit = null;
-  for (const unit of BEAT_UNITS) {
-    if (paddedBeats * unit.factor <= maxBeatsInQuarter) {
-      selectedUnit = unit;
-      break;
-    }
-  }
-
-  if (!selectedUnit) {
-    throw new Error(`模式节拍过长，无法在两个全音符内完成（总拍数 ${paddedBeats}）。`);
-  }
-
-  const beatMs = baseQuarterMs * selectedUnit.factor;
+  const paddedBeats = Math.ceil(timeline.length / beatsPerMeasure) * beatsPerMeasure;
+  const beatMs = computeBeatMs(bpm, mode.noteValue);
 
   const paddedTimeline = [...timeline];
-  const needPad = paddedBeats - rawBeats;
-  for (let i = 0; i < needPad; i++) {
+  while (paddedTimeline.length < paddedBeats) {
     paddedTimeline.push({ index: paddedTimeline.length, type: 'rest', offset: 0 });
   }
 
   return {
     timeline: paddedTimeline,
     beatMs,
-    beatUnit: selectedUnit.name,
+    beatUnit: mode.noteValue,
     beatsPerMeasure
   };
+};
+
+/**
+ * @zh 取得浏览器 localStorage。部分沙箱 iframe / 隐私模式下访问属性本身就会抛错，此时返回 undefined。
+ * @returns {Storage|undefined} 可用的存储对象
+ */
+export const getBrowserStorage = () => {
+  try {
+    return typeof window === 'undefined' ? undefined : window.localStorage;
+  } catch {
+    return undefined;
+  }
+};
+
+/** @zh 本地存储键：记住用户为每个模式设置的速度。 */
+export const BPM_STORAGE_KEY = 'vfs-tracker:scale-practice:bpm-by-mode';
+
+/**
+ * @zh 读取用户为各模式保存的速度。存储不可用或内容损坏时返回空对象（只影响「记住上次速度」这一便利功能）。
+ * @param {Storage|undefined} storage 一般传 window.localStorage
+ * @returns {Record<string, number>} 模式 id → BPM
+ */
+export const loadSavedBpmMap = (storage) => {
+  try {
+    const parsed = JSON.parse(storage?.getItem(BPM_STORAGE_KEY) ?? '{}');
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+    return Object.fromEntries(
+      Object.entries(parsed)
+        .filter(([, value]) => Number.isFinite(value))
+        .map(([id, value]) => [id, clampBpm(value)])
+    );
+  } catch {
+    return {};
+  }
+};
+
+/**
+ * @zh 保存各模式的速度。写入失败（隐私模式、配额满）时静默忽略。
+ * @param {Storage|undefined} storage 一般传 window.localStorage
+ * @param {Record<string, number>} bpmMap 模式 id → BPM
+ */
+export const saveBpmMap = (storage, bpmMap) => {
+  try {
+    storage?.setItem(BPM_STORAGE_KEY, JSON.stringify(bpmMap));
+  } catch {
+    // 存储不可用只会让下次进入时回到模式默认速度
+  }
 };
