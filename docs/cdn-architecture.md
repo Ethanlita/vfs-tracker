@@ -225,6 +225,8 @@ try {
   - 对已知前端路由直接返回 index.html 和 200
   - 对源站 404 的未知路径返回 index.html 和 200，让 React Router 接管 404 页面
   - 使用 X-SPA-Route 与 X-SPA-Fallback 标记命中的处理路径
+- 缓存：静态资源（包括 `sw.js`）直接放行到源站，由 Cloudflare 按 GitHub Pages 的 `max-age=600` 做边缘缓存（2026-11-08 实测 `/sw.js` 为 `CF-Cache-Status: HIT`）；Cloudflare 还把浏览器侧头改写为 `max-age=14400`（区域 Browser Cache TTL 默认值）
+- 发布后清缓存：GitHub Pages 部署成功后，`deploy.yml` 的 `purge-cloudflare` 任务调用 `scripts/purge-cloudflare-cache.mjs` 清空整个 Zone 的缓存，否则部署后约 10 分钟内浏览器的 Service Worker 更新检查仍会拿到旧 `sw.js`。所需 Secrets：`CLOUDFLARE_ZONE_ID` 与 `CLOUDFLARE_API_TOKEN`（Token 需对 vfs-tracker.app 具有"清除缓存"权限）。PWA 更新流程见 [PWA 版本与更新](pwa-update-coordination.md)
 
 #### vfs-tracker-trans-router
 
@@ -273,7 +275,7 @@ GitHub Pages 是静态文件托管，直接访问非首页路径时会返回 404
 
 - 配置仍然保持单源：.cn 站点不需要单独维护一套前端部署产物
 - 主站解耦：.cn 已不再通过 .app 的 Cloudflare Worker 才能获得 SPA fallback
-- 自动化发布：GitHub Pages 发布后会继续部署 ESA Routine 并刷新 ESA 缓存
+- 自动化发布：GitHub Pages 发布后会继续部署 ESA Routine 并刷新 ESA 缓存，同时清空 .app 的 Cloudflare 缓存
 - 压缩配置随发布自动核对，避免控制台规则漂移后让 Routine 返回的 JS/CSS 退回未压缩传输
 - API 与存储拆分清晰：.cn 下的 api 和 storage 已经各自指向独立上游，不与主站混在同一个源站里
 - 应用逻辑透明：前端只依赖当前 hostname，后端只依赖请求头，不需要额外的环境分叉

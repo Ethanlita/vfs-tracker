@@ -5,6 +5,7 @@ import wasm from 'vite-plugin-wasm'
 import { readFileSync, readdirSync, statSync } from 'fs'
 import { join } from 'path'
 import { createProductionConsoleGuardPlugin, getBuildLoggingOptions } from './config/buildLogging.js'
+import { resolveAppVersion } from './config/appVersion.js'
 
 /** 将公开文档作为构建资源输出，遵守实际outDir且在SW生成前可见。 */
 const copyPostsPlugin = () => {
@@ -36,13 +37,18 @@ export default defineConfig(({ command }) => ({
   optimizeDeps: { include: ['rubberband-wasm'] },
   base: '/', // Set base to root ('/') for custom domain deployment
   esbuild: getBuildLoggingOptions(command),
+  // 显式版本号：页脚展示、问题反馈时可据此追溯到具体提交。
+  define: { __APP_VERSION__: JSON.stringify(resolveAppVersion(command)) },
   plugins: [
     createProductionConsoleGuardPlugin(),
     wasm(),  // WASM 支持（RubberBand, World.JS）
     react(),
     copyPostsPlugin(),
     VitePWA({
+      // prompt：生成的 sw.js 不会自动 skipWaiting，只在收到 SKIP_WAITING 消息时激活。
       registerType: 'prompt',
+      // 注册、检测与激活全部由 src/pwa/updateController.js 负责；不注入 registerSW.js，避免重复注册。
+      injectRegister: false,
       cleanupOutdatedCaches: true, // Automatically delete old caches
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
       manifest: {

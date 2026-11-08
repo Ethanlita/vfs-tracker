@@ -111,25 +111,14 @@ Amplify.configure(amplifyConfig);
 // 导入App组件（在Amplify配置完成后）
 import App from './App.jsx'
 
-// 注册 Service Worker 并在检测到新版本后提示用户刷新
-// Register Service Worker and prompt user to refresh when a new version is detected
-import { registerSW } from 'virtual:pwa-register'
+// 注册 Service Worker 并管理版本更新（检测、定时检查、静默/手动激活与刷新）
+// Register the Service Worker and manage version updates; see src/pwa/updateController.js
+import { startPwaUpdates } from './pwa/updateController.js'
+import ServiceWorkerUpdateBanner from './components/ServiceWorkerUpdateBanner.jsx'
 
+// 开发服务器不生成 Service Worker，只有生产构建启用更新控制器。
 if (import.meta.env.PROD) {
-  let updateSW;
-  updateSW = registerSW({
-    onNeedRefresh() {
-
-      window.dispatchEvent(new CustomEvent('sw:update-available', {
-        detail: {
-          updateSW: (reload) => updateSW(reload)
-        }
-      }));
-    },
-    onOfflineReady() {
-
-    },
-  })
+  startPwaUpdates();
 }
 
 createRoot(document.getElementById('root')).render(
@@ -137,5 +126,7 @@ createRoot(document.getElementById('root')).render(
     <BrowserRouter>
       <App />
     </BrowserRouter>
+    {/* 更新横幅独立于路由与登录状态：认证加载期间也能显示，不会错过提示。 */}
+    <ServiceWorkerUpdateBanner />
   </StrictMode>,
 )

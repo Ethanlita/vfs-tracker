@@ -119,10 +119,11 @@ VFS Tracker 是一个**声音训练、监测与数据可视化平台**，主要�
 - 文章/帖子支持
   - 构建时自动生成 posts.json；构建产物复制 posts 目录到 dist/posts
 - **PWA 支持**
-  - 使用 `vite-plugin-pwa` 自动生成 Service Worker，支持离线访问与自动更新。
+  - 使用 `vite-plugin-pwa` 生成 Service Worker，支持离线访问；注册与版本更新由 `src/pwa/updateController.js` 统一管理：页面刚打开且未操作时静默切到新版本，否则显示更新横幅；长时间打开的页面每 30 分钟及切回前台时检查新版本。页脚显示当前版本号。详见 [PWA 版本与更新](docs/pwa-update-coordination.md)。
+  - 发布后自动清空 Cloudflare（.app）与 ESA（.cn）缓存，确保用户尽快检查到新的 `sw.js`。
   - 首页按路由加载图表、文档和音频工具；WORLD 只在效果预览页初始化，并由生产构建体积预算防止首屏回退。详见 [前端加载性能](docs/frontend-loading-performance.md)。
   - 自动缓存静态资源与 Google Fonts。
-  - 激活更新前会检查所有本站标签页中的未完成表单、上传、录音和练习进度；存在未保存工作时保留等待中的版本并提示处理。详见 [PWA 跨标签页更新协调](docs/pwa-update-coordination.md)。
+  - 激活更新前会检查所有本站标签页中的未完成表单、上传、录音和练习进度；存在未保存工作时保留等待中的版本并提示处理。
 
 ## 目录结构（摘录）
 
