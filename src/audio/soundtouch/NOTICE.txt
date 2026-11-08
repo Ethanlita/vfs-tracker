@@ -1,0 +1,19 @@
+VSC Pitch Lab — local proof of concept, 2026-11-07
+
+The DSP modules dsp.mjs and streaming-dsp.mjs reconstruct/adapt the
+SoundTouch 1.7.0 integer pitch-shifting path, based on analysis of VSC 2.2
+and the author's corresponding source archive.
+
+SoundTouch: Copyright (c) Olli Parviainen 2001-2012.
+https://www.surina.net/soundtouch/
+Reference source: https://www.surina.net/soundtouch/soundtouch-1.7.0.tar.gz
+The adapted DSP modules are provided under LGPL-2.1-or-later.
+The complete DSP source is included in these modules; see LICENSE.txt.
+
+This PoC includes offline and stateful mono streaming JavaScript paths. It is not the
+original VSC source or a native/MMX/bit-exact emulation. Tail flushing,
+Float32/Int16 conversion, wide accumulation and safe output-length handling
+are documented in IMPLEMENTATION.md and DSP-API.md.
+
+
+VFS Tracker adaptation: fractional semitones and Vite Worker integration.
