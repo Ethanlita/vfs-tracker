@@ -1,7 +1,11 @@
 import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Recorder from './Recorder';
-import { processWithRubberBand } from '../utils/rubberbandProcessor';
+import LiveEffectPreview from './LiveEffectPreview.jsx';
+import { EFFECT_ALGORITHMS, emptyEffectResults, getEffectAlgorithm } from '../audio/effectAlgorithms.js';
+import { getPitchParameters, estimateReferencePitch } from '../audio/pitchParameters.js';
+import { processRecordedEffect } from '../audio/processRecordedEffect.js';
+import { usePwaUpdateBlocker } from '../hooks/usePwaUpdateBlocker.js';
 import { createTemporaryAudioContext } from '../utils/audioContextManager';
 import { loadWorldJs } from '../utils/worldJsLoader.js';
 import { useDocumentMeta } from '../hooks/useDocumentMeta';
@@ -21,7 +25,7 @@ const PREVIEW_RECORDING_LIMIT_SECONDS = 15;
  *
  * 功能特点：
  * - 用户可以录制自己的声音
- * - 选择变调的程度（10-100Hz）
+ * - 选择变调的程度（0-100Hz）
  * - 播放处理后的音频以预览效果
  * - 提供免责说明和原理说明
  *
@@ -44,7 +48,7 @@ const VFSEffectPreview = ({ initialProcessedBlobs = null } = {}) => {
   // 状态管理
   const [recordedBlob, setRecordedBlob] = useState(null); // 原始录音
   const [pitchShift, setPitchShift] = useState(50); // 变调量（Hz），默认50Hz
-  const [selectedAlgorithm, setSelectedAlgorithm] = useState('rubberband'); // 'td-psola' | 'rubberband' | 'world'
+  const [selectedAlgorithm, setSelectedAlgorithm] = useState('rubberband'); // 算法标识由统一目录校验
   const [isProcessing, setIsProcessing] = useState(false); // 处理中状态
   const [processingProgress, setProcessingProgress] = useState(0); // 处理进度 (0-1)
   const [isWorldJSLoaded, setIsWorldJSLoaded] = useState(false); // World.JS 加载状态
@@ -52,9 +56,7 @@ const VFSEffectPreview = ({ initialProcessedBlobs = null } = {}) => {
 
   // 多版本处理结果
   const [processedBlobs, setProcessedBlobs] = useState(() => ({
-    'td-psola': null,
-    'rubberband': null,
-    'world': null,
+    ...emptyEffectResults(),
     ...(initialProcessedBlobs || {})
   }));
 
@@ -63,6 +65,19 @@ const VFSEffectPreview = ({ initialProcessedBlobs = null } = {}) => {
   const [currentTime, setCurrentTime] = useState(0); // 播放进度
   const [duration, setDuration] = useState(0); // 音频总时长
   const [detectedF0, setDetectedF0] = useState(0); // 检测到的基频
+
+  const [mode, setMode] = useState('recorded');
+  const [referenceF0, setReferenceF0] = useState(150);
+  const [isDetectingPitch, setIsDetectingPitch] = useState(false);
+  const [isRecordingTake, setIsRecordingTake] = useState(false);
+  const [processingError, setProcessingError] = useState(null);
+  const operationRef = useRef(0);
+  const recordingGenerationRef = useRef(0);
+  const abortProcessingRef = useRef(null);
+  const closeDecodeRef = useRef(null);
+  const closePitchDecodeRef = useRef(null);
+  const audioUrlRef = useRef(null);
+  usePwaUpdateBlocker(isProcessing, '音频处理');
 
   // 引用
   const audioElementRef = useRef(null);
@@ -95,152 +110,42 @@ const VFSEffectPreview = ({ initialProcessedBlobs = null } = {}) => {
    * @zh 录音完成回调
    * @param {Blob} blob - 录制的音频Blob
    */
+  /** 新录音拥有独立代次，迟到的基频检测不得覆盖下一次录音。 */
   const handleRecordingComplete = useCallback((blob) => {
+    const generation = ++recordingGenerationRef.current;
+    setIsRecordingTake(false);
     setRecordedBlob(blob);
-    setProcessedBlobs({ 'td-psola': null, 'rubberband': null, 'world': null });
+    setProcessedBlobs(emptyEffectResults());
     setDetectedF0(0);
-    setProcessingProgress(0);
-    // 尝试检测基频
-    detectPitch(blob);
+    setReferenceF0(150);
+    setProcessingError(null);
+    setIsDetectingPitch(true);
+    void (async () => {
+      let closePitchContext;
+      try {
+        const bytes = await blob.arrayBuffer();
+        if (generation !== recordingGenerationRef.current) return;
+        const temporary = createTemporaryAudioContext();
+        let closing;
+        closePitchContext = () => closing ??= temporary.close().catch(() => undefined);
+        closePitchDecodeRef.current = closePitchContext;
+        const decoded = await temporary.context.decodeAudioData(bytes);
+        if (generation !== recordingGenerationRef.current) return;
+        const samples = decoded.getChannelData(0);
+        const start = Math.max(0, Math.floor((samples.length - 8192) / 2));
+        const detected = estimateReferencePitch(samples.subarray(start, start + 8192), decoded.sampleRate);
+        if (detected) { setDetectedF0(Math.round(detected)); setReferenceF0(Math.round(detected)); }
+      } catch {
+        // 检测不可靠时保留可见、可编辑的 150 Hz 参考值，不改变变调定义。
+      } finally {
+        await closePitchContext?.();
+        if (closePitchDecodeRef.current === closePitchContext) closePitchDecodeRef.current = null;
+        if (generation === recordingGenerationRef.current) setIsDetectingPitch(false);
+      }
+    })();
   }, []);
 
-  /**
-   * @zh 检测音频的基频（F0）
-   * 使用改进的自相关法（Autocorrelation Function）
-   * @param {Blob} blob - 音频Blob
-   */
-  const detectPitch = async (blob) => {
-    // 创建临时 AudioContext 用于解码
-    const { context: audioContext, close: closeContext } = createTemporaryAudioContext();
-    let detectionResult = null;
-
-    try {
-      const arrayBuffer = await blob.arrayBuffer();
-      const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-
-      // 获取音频数据
-      const channelData = audioBuffer.getChannelData(0);
-      const sampleRate = audioBuffer.sampleRate;
-
-      // 使用更大的窗口以包含更多周期，提高低频检测精度
-      const bufferSize = Math.min(8192, channelData.length);
-
-      // 从音频中间部分取样，避免开始和结束的静音或瞬态
-      const startOffset = Math.floor((channelData.length - bufferSize) / 2);
-      const buffer = channelData.slice(startOffset, startOffset + bufferSize);
-
-      // 计算信号能量，用于判断是否为有效语音
-      let energy = 0;
-      for (let i = 0; i < buffer.length; i++) {
-        energy += buffer[i] * buffer[i];
-      }
-      energy = energy / buffer.length;
-
-      // 能量阈值：如果信号太弱，认为是静音
-      const energyThreshold = 0.001;
-      if (energy >= energyThreshold) {
-        // 中心削波：减少共振峰的影响
-        const clippingLevel = Math.sqrt(energy) * 0.3;
-        const clippedBuffer = buffer.map(sample => {
-          if (Math.abs(sample) < clippingLevel) return 0;
-          return sample > 0 ? sample - clippingLevel : sample + clippingLevel;
-        });
-
-        // 归一化自相关
-        const minLag = Math.floor(sampleRate / 500); // 最高500Hz
-        const maxLag = Math.floor(sampleRate / 80);  // 最低80Hz
-
-        const correlations = [];
-
-        // 计算lag=0的自相关（用于归一化）
-        let r0 = 0;
-        for (let i = 0; i < bufferSize; i++) {
-          r0 += clippedBuffer[i] * clippedBuffer[i];
-        }
-
-        // 计算各个lag的归一化自相关
-        for (let lag = minLag; lag <= maxLag; lag++) {
-          let sum = 0;
-          let rLag = 0;
-
-          for (let i = 0; i < bufferSize - lag; i++) {
-            sum += clippedBuffer[i] * clippedBuffer[i + lag];
-          }
-
-          // 计算lag位置的自相关能量
-          for (let i = 0; i < bufferSize - lag; i++) {
-            rLag += clippedBuffer[i + lag] * clippedBuffer[i + lag];
-          }
-
-          // 归一化：ACF(lag) / sqrt(ACF(0) * ACF_lag(0))
-          const normalizedCorrelation = sum / Math.sqrt(r0 * rLag);
-
-          correlations.push({
-            lag,
-            correlation: normalizedCorrelation
-          });
-        }
-
-        // 寻找第一个显著峰值（而不是全局最大值）
-        // 峰值必须：1) 大于阈值  2) 大于相邻点
-        const threshold = 0.3; // 相关性阈值
-        let maxPeak = { lag: 0, correlation: -1 };
-
-        for (let i = 1; i < correlations.length - 1; i++) {
-          const prev = correlations[i - 1].correlation;
-          const curr = correlations[i].correlation;
-          const next = correlations[i + 1].correlation;
-
-          // 检查是否为局部峰值
-          if (curr > prev && curr > next && curr > threshold) {
-            // 找到第一个显著峰值后即返回
-            if (curr > maxPeak.correlation) {
-              maxPeak = correlations[i];
-              // 找到第一个强峰值就可以了
-              if (curr > 0.7) {
-                break;
-              }
-            }
-          }
-        }
-
-        if (maxPeak.correlation >= threshold) {
-          // 抛物线插值以提高精度
-          const lagIndex = correlations.findIndex(c => c.lag === maxPeak.lag);
-          let refinedLag = maxPeak.lag;
-
-          if (lagIndex > 0 && lagIndex < correlations.length - 1) {
-            const y1 = correlations[lagIndex - 1].correlation;
-            const y2 = correlations[lagIndex].correlation;
-            const y3 = correlations[lagIndex + 1].correlation;
-
-            // 抛物线插值公式
-            const delta = 0.5 * (y1 - y3) / (y1 - 2 * y2 + y3);
-            refinedLag = maxPeak.lag + delta;
-          }
-
-          detectionResult = sampleRate / refinedLag;
-
-
-          if (detectionResult >= 80 && detectionResult <= 500) {
-            setDetectedF0(Math.round(detectionResult));
-          }
-        }
-      }
-
-    } catch {
-      // 自动检测失败时保留默认基频，用户仍可手动调整后处理。
-    } finally {
-      // 确保 AudioContext 被关闭，避免资源泄漏
-      await closeContext();
-    }
-
-    return detectionResult;
-  };
-
-  const hasAnyProcessedAudio = useMemo(() => (
-    ['td-psola', 'rubberband', 'world'].some(key => Boolean(processedBlobs[key]))
-  ), [processedBlobs]);
+  const hasAnyProcessedAudio = useMemo(() => Object.values(processedBlobs).some(Boolean), [processedBlobs]);
 
   /**
    * @zh 处理音频变调
@@ -249,67 +154,52 @@ const VFSEffectPreview = ({ initialProcessedBlobs = null } = {}) => {
    * - RubberBand: 成熟的 RubberBand Library WASM 版本
    * - WORLD: WORLD Vocoder 算法，高质量语音分析合成
    */
+  /** 按统一参考比例处理录音；完成前冻结参数，取消后丢弃旧结果。 */
   const processAudio = async () => {
-    if (!recordedBlob) return;
-
-    setIsProcessing(true);
-    setProcessingProgress(0);
-
-    // 创建临时 AudioContext 用于解码
-    const { context: audioContext, close: closeContext } = createTemporaryAudioContext();
-
+    if (!recordedBlob || isProcessing || isDetectingPitch) return;
+    const operation = ++operationRef.current;
+    const abort = new AbortController();
+    abortProcessingRef.current = abort;
+    const algorithm = selectedAlgorithm;
+    setIsProcessing(true); setProcessingError(null); setProcessingProgress(0);
+    let closeContext = async () => {};
     try {
-      // 读取原始音频
-      const arrayBuffer = await recordedBlob.arrayBuffer();
-      const sourceBuffer = await audioContext.decodeAudioData(arrayBuffer);
-
-      // 计算音高参数
-      const estimatedOriginalF0 = detectedF0 || 150;
-      const targetF0 = estimatedOriginalF0 + pitchShift;
-
-
-
+      const temporary = createTemporaryAudioContext();
+      const audioContext = temporary.context;
+      let closing;
+      closeContext = () => closing ??= temporary.close().catch(() => undefined);
+      closeDecodeRef.current = closeContext;
+      getEffectAlgorithm(algorithm);
+      const parameters = getPitchParameters(referenceF0, pitchShift);
+      const sourceBuffer = await audioContext.decodeAudioData(await recordedBlob.arrayBuffer());
+      if (operation !== operationRef.current) return;
       let processedBuffer;
-
-      if (selectedAlgorithm === 'rubberband') {
-        // 使用 RubberBand 处理
-        processedBuffer = await processWithRubberBand(
-          sourceBuffer,
-          pitchShift,
-          (progress) => setProcessingProgress(progress)
-        );
-      } else if (selectedAlgorithm === 'world') {
-        // 使用 World.JS WORLD Vocoder 处理
-        processedBuffer = await processAudioWithWorld(
-          sourceBuffer,
-          pitchShift,
-          estimatedOriginalF0
-        );
-      } else {
-        // 使用 TD-PSOLA 处理
-        const pitchRatio = targetF0 / estimatedOriginalF0;
-        processedBuffer = await processAudioWithTDPSOLA(sourceBuffer, pitchRatio, estimatedOriginalF0);
-        setProcessingProgress(1.0);
+      switch (algorithm) {
+        case 'soundtouch':
+        case 'rubberband': {
+          const channels = await processRecordedEffect(sourceBuffer, algorithm, parameters, {
+            signal: abort.signal,
+            onProgress: progress => { if (operation === operationRef.current) setProcessingProgress(progress); },
+          });
+          if (operation !== operationRef.current) return;
+          processedBuffer = audioContext.createBuffer(channels.length, channels[0].length, sourceBuffer.sampleRate);
+          channels.forEach((channel, ch) => processedBuffer.copyToChannel(channel, ch));
+          break;
+        }
+        case 'world': processedBuffer = await processAudioWithWorld(sourceBuffer, parameters.ratio); break;
+        case 'td-psola': processedBuffer = await processAudioWithTDPSOLA(sourceBuffer, parameters.ratio, referenceF0); break;
+        default: throw new Error('未知的处理算法');
       }
-
-      // 将处理后的音频转换为Blob
+      if (operation !== operationRef.current) return;
       const wavBlob = await audioBufferToWav(processedBuffer);
-
-      // 保存到对应算法的结果中
-      setProcessedBlobs(prev => ({
-        ...prev,
-        [selectedAlgorithm]: wavBlob
-      }));
-
-
+      if (operation !== operationRef.current) return;
+      setProcessedBlobs(previous => ({ ...previous, [algorithm]: wavBlob }));
     } catch (error) {
-
-      alert(`音频处理失败: ${error.message}`);
+      if (operation === operationRef.current && error.name !== 'AbortError') setProcessingError(`音频处理失败：${error.message}`);
     } finally {
-      // 确保 AudioContext 被关闭，避免资源泄漏
       await closeContext();
-      setIsProcessing(false);
-      setProcessingProgress(0);
+      if (closeDecodeRef.current === closeContext) closeDecodeRef.current = null;
+      if (operation === operationRef.current) { setIsProcessing(false); setProcessingProgress(0); }
     }
   };
 
@@ -919,11 +809,11 @@ const VFSEffectPreview = ({ initialProcessedBlobs = null } = {}) => {
    * @zh World.JS WORLD Vocoder 音高变换实现
    * 使用 WORLD 算法进行高质量的音高变换
    * @param {AudioBuffer} sourceBuffer - 原始音频缓冲区
-   * @param {number} pitchShiftHz - 音高变化量（Hz）
+   * @param {number} pitchRatio - 所有算法共用的固定参考变调比例
    * @param {number} estimatedF0 - 估计的基频（Hz）
    * @returns {Promise<AudioBuffer>} 处理后的音频缓冲区
    */
-  const processAudioWithWorld = async (sourceBuffer, pitchShiftHz, estimatedF0) => {
+  const processAudioWithWorld = async (sourceBuffer, pitchRatio) => {
     // 确保 WorldJS Module 已加载
     if (!isWorldJSLoaded || typeof window.Module === 'undefined' || !window.Module.Dio_JS) {
       throw new Error('World.JS 模块未加载。请刷新页面或稍后重试。');
@@ -999,7 +889,7 @@ const VFSEffectPreview = ({ initialProcessedBlobs = null } = {}) => {
 
 
       // 步骤5: 修改 F0（音高变换）
-      const pitchRatio = (estimatedF0 + pitchShiftHz) / estimatedF0;
+      // 所有算法使用上层统一计算的固定参考比例。
 
 
 
@@ -1172,83 +1062,56 @@ const VFSEffectPreview = ({ initialProcessedBlobs = null } = {}) => {
    * @zh 播放音频
    * @param {'original' | 'td-psola' | 'rubberband' | 'world'} type - 播放类型
    */
+  /** 停止播放并撤销对应 Blob URL，避免重复试听积累资源。 */
+  const stopPlayback = useCallback(() => {
+    if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+    const audio = audioElementRef.current;
+    audioElementRef.current = null;
+    if (audio) { audio.pause(); audio.removeAttribute('src'); audio.load?.(); }
+    if (audioUrlRef.current) URL.revokeObjectURL(audioUrlRef.current);
+    audioUrlRef.current = null;
+    setIsPlaying(false); setCurrentTime(0); setPlaybackType(null);
+  }, []);
+
+  /** 每次播放拥有独立元素，旧元素事件不能修改当前播放状态。 */
   const playAudio = useCallback((type) => {
-    let blob;
-    if (type === 'original') {
-      blob = recordedBlob;
-    } else {
-      blob = processedBlobs[type];
-    }
-
+    const blob = type === 'original' ? recordedBlob : processedBlobs[type];
     if (!blob) return;
-
-    // 停止当前播放
-    if (audioElementRef.current) {
-      audioElementRef.current.pause();
-      audioElementRef.current.currentTime = 0;
-    }
-
-    // 创建新的音频元素
-    const audio = new Audio(URL.createObjectURL(blob));
+    stopPlayback();
+    const url = URL.createObjectURL(blob);
+    audioUrlRef.current = url;
+    const audio = new Audio(url);
     audioElementRef.current = audio;
-    setPlaybackType(type);
-    setIsPlaying(true);
-
-    audio.addEventListener('loadedmetadata', () => {
-      setDuration(audio.duration);
+    setPlaybackType(type); setIsPlaying(true);
+    audio.addEventListener('loadedmetadata', () => { if (audioElementRef.current === audio) setDuration(audio.duration); });
+    audio.addEventListener('ended', () => { if (audioElementRef.current === audio) stopPlayback(); });
+    const played = audio.play();
+    played?.catch(() => {
+      if (audioElementRef.current === audio) { stopPlayback(); setProcessingError('无法播放音频，请重新点击播放。'); }
     });
-
-    audio.addEventListener('ended', () => {
-      setIsPlaying(false);
-      setCurrentTime(0);
-      setPlaybackType(null);
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-      }
-    });
-
-    audio.play();
-
-    // 更新播放进度
     const updateProgress = () => {
-      if (audioElementRef.current) {
-        setCurrentTime(audioElementRef.current.currentTime);
-        animationFrameRef.current = requestAnimationFrame(updateProgress);
-      }
+      if (audioElementRef.current !== audio) return;
+      setCurrentTime(audio.currentTime);
+      animationFrameRef.current = requestAnimationFrame(updateProgress);
     };
     updateProgress();
-  }, [recordedBlob, processedBlobs]);
+  }, [recordedBlob, processedBlobs, stopPlayback]);
 
-  /**
-   * @zh 停止播放
-   */
-  const stopPlayback = useCallback(() => {
-    if (audioElementRef.current) {
-      audioElementRef.current.pause();
-      audioElementRef.current.currentTime = 0;
-    }
-    setIsPlaying(false);
-    setCurrentTime(0);
-    setPlaybackType(null);
-    if (animationFrameRef.current) {
-      cancelAnimationFrame(animationFrameRef.current);
-    }
+  /** 卸载时中止 Worker、作废迟到结果，并释放本页音频资源。 */
+  useEffect(() => () => {
+    recordingGenerationRef.current++; operationRef.current++;
+    abortProcessingRef.current?.abort();
+    void closeDecodeRef.current?.();
+    void closePitchDecodeRef.current?.();
+    if (audioElementRef.current) audioElementRef.current.pause();
+    if (audioUrlRef.current) URL.revokeObjectURL(audioUrlRef.current);
+    if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
   }, []);
 
-  /**
-   * @zh 清理音频资源
-   */
-  useEffect(() => {
-    return () => {
-      if (audioElementRef.current) {
-        audioElementRef.current.pause();
-        audioElementRef.current = null;
-      }
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-      }
-    };
-  }, []);
+  /** 修改变调量或参考基频后旧结果失效，同时停止旧参数的播放。 */
+  const changePitch = value => {
+    stopPlayback(); setPitchShift(value); setProcessedBlobs(emptyEffectResults());
+  };
 
   /**
    * @zh 格式化时间显示
@@ -1265,8 +1128,11 @@ const VFSEffectPreview = ({ initialProcessedBlobs = null } = {}) => {
    * @zh 重新录音
    */
   const resetRecording = () => {
+    recordingGenerationRef.current++;
+    void closePitchDecodeRef.current?.();
+    setReferenceF0(150); setIsDetectingPitch(false); setProcessingError(null);
     setRecordedBlob(null);
-    setProcessedBlobs({ 'td-psola': null, 'rubberband': null, 'world': null });
+    setProcessedBlobs(emptyEffectResults());
     setDetectedF0(0);
     setProcessingProgress(0);
     stopPlayback();
@@ -1288,41 +1154,67 @@ const VFSEffectPreview = ({ initialProcessedBlobs = null } = {}) => {
         {/* 原理说明与免责声明 */}
         <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
           <div className="space-y-4">
-            <div className="border-l-4 border-green-500 pl-4">
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                  📌 提示
-              </h3>
+            <details className="group border-l-4 border-green-500 pl-4">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-4 rounded py-1 focus-visible:outline-2 focus-visible:outline-purple-600 [&::-webkit-details-marker]:hidden">
+                <h3 className="text-lg font-semibold text-gray-900">📌 提示</h3>
+                <svg aria-hidden="true" className="h-5 w-5 shrink-0 text-gray-500 transition-transform group-open:rotate-180" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m6 9 6 6 6-6" /></svg>
+              </summary>
+              <div className="pt-3">
               <p className="text-gray-700">
                 这个功能仍处于测试阶段，虽然我们尝试了几种不同的常用算法，但是效果仍然很难谈得上“完美”。
                 特别是，我们无法直接预测您在VFS后的发声方式和共鸣特性的改变，我们也尚未就该功能的具体边界应该在哪里得出结论。（例如我们是否模拟共鸣特征的改变等）。
                 也许我们未来有了很多用户的数据以后可以基于深度学习重做一个更加完善的预览，但现阶段，您只能使用这个功能直观感受一下VFS后的音高变化。
-              </p>
-            </div>
+              </p></div>
+            </details>
 
-            <div className="border-l-4 border-blue-500 pl-4">
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                💡 原理说明
-              </h3>
+            <details className="group border-l-4 border-blue-500 pl-4">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-4 rounded py-1 focus-visible:outline-2 focus-visible:outline-purple-600 [&::-webkit-details-marker]:hidden">
+                <h3 className="text-lg font-semibold text-gray-900">💡 原理说明</h3>
+                <svg aria-hidden="true" className="h-5 w-5 shrink-0 text-gray-500 transition-transform group-open:rotate-180" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m6 9 6 6 6-6" /></svg>
+              </summary>
+              <div className="pt-3">
               <p className="text-gray-700">
                 VFS（嗓音女性化手术）主要改变声音的基础频率（音高），但不会直接地改变共鸣腔体、发声习惯等其他声学特征。
                 本工具通过调整录音的音高来模拟VFS后的效果，让您预先感受不同程度的音高变化。
-              </p>
-            </div>
+              </p></div>
+            </details>
 
-            <div className="border-l-4 border-amber-500 pl-4">
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                ⚠️ 免责声明
-              </h3>
+            <details className="group border-l-4 border-amber-500 pl-4">
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-4 rounded py-1 focus-visible:outline-2 focus-visible:outline-purple-600 [&::-webkit-details-marker]:hidden">
+                <h3 className="text-lg font-semibold text-gray-900">⚠️ 免责声明</h3>
+                <svg aria-hidden="true" className="h-5 w-5 shrink-0 text-gray-500 transition-transform group-open:rotate-180" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m6 9 6 6 6-6" /></svg>
+              </summary>
+              <div className="pt-3">
               <p className="text-gray-700">
                 <strong>仅供参考：</strong>本工具使用经验公式进行模拟，实际VFS后的效果会因个体差异、手术方式、
                 术后发声习惯的改变等因素而有所不同，这里的效果并不能等同于“一定会发生的真实效果。”。
-              </p>
-            </div>
+              </p></div>
+            </details>
           </div>
         </div>
 
+        <div role="tablist" aria-label="试听模式" className="mb-6 grid grid-cols-2 rounded-xl bg-white p-1.5 shadow-sm">
+          {[['recorded', '录音对比'], ['live', '实时试听']].map(([id, label]) => (
+            <button key={id} id={`effect-tab-${id}`} type="button" role="tab" aria-selected={mode === id}
+              aria-controls={`effect-panel-${id}`} tabIndex={mode === id ? 0 : -1} disabled={isProcessing || isRecordingTake}
+              onKeyDown={event => {
+                if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+                event.preventDefault();
+                const next = event.key === 'Home' ? 'recorded' : event.key === 'End' ? 'live' : mode === 'recorded' ? 'live' : 'recorded';
+                stopPlayback(); setMode(next); document.getElementById(`effect-tab-${next}`)?.focus();
+              }}
+              onClick={() => { stopPlayback(); setMode(id); }}
+              className={`rounded-lg px-4 py-3 font-medium transition-colors disabled:opacity-60 ${mode === id ? 'bg-purple-600 text-white shadow-sm' : 'text-gray-600 hover:bg-purple-50'}`}>{label}</button>
+          ))}
+        </div>
+
+        {mode === 'live' && <div id="effect-panel-live" role="tabpanel" aria-labelledby="effect-tab-live" className="mb-6 rounded-xl bg-white p-5 shadow-lg sm:p-8">
+          <LiveEffectPreview detectedF0={detectedF0} shiftHz={pitchShift} onShiftChange={changePitch} />
+        </div>}
+
         {/* 主功能区 */}
-        <div className="bg-white rounded-xl shadow-lg p-8 mb-6">
+        <div id="effect-panel-recorded" role="tabpanel" aria-labelledby="effect-tab-recorded" hidden={mode !== 'recorded'} className="bg-white rounded-xl shadow-lg p-5 sm:p-8 mb-6">
+          {processingError && <div role="alert" className="mb-4 rounded-lg bg-red-50 p-4 text-sm text-red-800">{processingError}</div>}
           {/* 步骤1: 录音 */}
           <div className="mb-8">
             <h2 className="text-2xl font-semibold text-gray-900 mb-4 flex items-center">
@@ -1337,10 +1229,12 @@ const VFSEffectPreview = ({ initialProcessedBlobs = null } = {}) => {
                 <p className="text-gray-600 mb-4">
                   请录制一段3-{PREVIEW_RECORDING_LIMIT_SECONDS}秒的声音。暂停时间不计入录音时长。建议使用平稳的发音，比如持续发"啊"音，或朗读一句话。
                 </p>
-                <Recorder
+                {mode === 'recorded' && <Recorder
                   onRecordingComplete={handleRecordingComplete}
                   maxDurationSec={PREVIEW_RECORDING_LIMIT_SECONDS}
-                />
+                  onStartRecording={() => setIsRecordingTake(true)}
+                  onDiscardRecording={() => setIsRecordingTake(false)}
+                />}
               </div>
             ) : (
               <div className="bg-green-50 border border-green-200 rounded-lg p-6">
@@ -1358,6 +1252,7 @@ const VFSEffectPreview = ({ initialProcessedBlobs = null } = {}) => {
                   </div>
                   <button
                     onClick={resetRecording}
+                    disabled={isProcessing}
                     className="px-4 py-2 text-sm text-purple-600 hover:text-purple-700 font-medium transition-colors"
                   >
                     重新录制
@@ -1415,42 +1310,38 @@ const VFSEffectPreview = ({ initialProcessedBlobs = null } = {}) => {
 
               <div className="bg-gray-50 rounded-lg p-6">
                 <div className="mb-4">
-                  <label className="block text-gray-700 font-medium mb-2">
+                  <label htmlFor="recorded-pitch-shift" className="block text-gray-700 font-medium mb-2">
                     音高变化量: <span className="text-purple-600 text-xl font-bold">+{pitchShift} Hz</span>
                   </label>
                   <input
                     type="range"
-                    min="10"
+                    min="0"
                     max="100"
                     step="5"
+                    id="recorded-pitch-shift"
+                    disabled={isProcessing}
                     value={pitchShift}
-                    onChange={(e) => {
-                      setPitchShift(Number(e.target.value));
-                      setProcessedBlobs({ 'td-psola': null, 'rubberband': null, 'world': null }); // 清除之前的处理结果
-                    }}
+                    onChange={event => changePitch(Number(event.target.value))}
                     className="w-full h-3 bg-gradient-to-r from-blue-300 via-purple-300 to-pink-300 rounded-lg appearance-none cursor-pointer slider"
                   />
                   <div className="flex justify-between text-sm text-gray-600 mt-2">
-                    <span>10 Hz (轻微)</span>
+                    <span>0 Hz (原调)</span>
                     <span>55 Hz (中等)</span>
                     <span>100 Hz (明显)</span>
                   </div>
                 </div>
 
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
-                  <p className="text-sm text-gray-700">
-                    <strong>说明：</strong>
-                    {detectedF0 > 0 ? (
-                      <>
-                        您的原始基频约为 <strong>{detectedF0} Hz</strong>，
-                        增加 <strong>{pitchShift} Hz</strong> 后将变为约 <strong>{detectedF0 + pitchShift} Hz</strong>。
-                      </>
-                    ) : (
-                      <>
-                        音高将提高约 <strong>{pitchShift} Hz</strong>。
-                        一般来说，10-30Hz为轻微变化，30-60Hz为中等变化，60Hz以上为明显变化。
-                      </>
-                    )}
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4 space-y-3">
+                  <label className="block text-sm text-gray-700">参考基频（Hz）
+                    <input aria-label="录音参考基频（Hz）" type="number" min="80" max="500" value={referenceF0}
+                      disabled={isProcessing || isDetectingPitch} onChange={event => {
+                        stopPlayback(); setReferenceF0(Number(event.target.value)); setProcessedBlobs(emptyEffectResults());
+                      }} className="ml-3 w-28 rounded-lg border border-blue-200 bg-white p-2" />
+                  </label>
+                  <p className="text-sm text-gray-700">{isDetectingPitch ? '正在检测基频…' : detectedF0 > 0
+                    ? `检测基频约 ${detectedF0} Hz，可手动修正参考值。`
+                    : '未检测到可靠基频，当前参考值为 150 Hz，可手动修正。'}
+                    {referenceF0 >= 80 && referenceF0 <= 500 && ` 所有算法按同一比例变调：${referenceF0} → 约 ${referenceF0 + pitchShift} Hz。`}
                   </p>
                 </div>
 
@@ -1460,88 +1351,18 @@ const VFSEffectPreview = ({ initialProcessedBlobs = null } = {}) => {
                     🎛️ 选择处理算法：
                   </label>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <button
-                      type="button"
-                      onClick={() => setSelectedAlgorithm('rubberband')}
-                      className={`p-4 rounded-lg border-2 text-left transition-all ${
-                        selectedAlgorithm === 'rubberband'
-                          ? 'border-purple-600 bg-purple-50 shadow-md'
-                          : 'border-gray-200 hover:border-purple-300'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="font-semibold text-gray-900">RubberBand</span>
-                        {selectedAlgorithm === 'rubberband' && (
-                          <svg className="w-5 h-5 text-purple-600" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                          </svg>
-                        )}
-                      </div>
-                      <p className="text-sm text-gray-600">专业级库，音质优秀（推荐）</p>
-                      {processedBlobs['rubberband'] && (
-                        <span className="inline-block mt-2 text-xs px-2 py-1 bg-green-100 text-green-700 rounded">
-                          ✓ 已处理
-                        </span>
-                      )}
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setSelectedAlgorithm('td-psola')}
-                      className={`p-4 rounded-lg border-2 text-left transition-all ${
-                        selectedAlgorithm === 'td-psola'
-                          ? 'border-purple-600 bg-purple-50 shadow-md'
-                          : 'border-gray-200 hover:border-purple-300'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="font-semibold text-gray-900">TD-PSOLA</span>
-                        {selectedAlgorithm === 'td-psola' && (
-                          <svg className="w-5 h-5 text-purple-600" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                          </svg>
-                        )}
-                      </div>
-                      <p className="text-sm text-gray-600">Naive算法，效果不太好</p>
-                      {processedBlobs['td-psola'] && (
-                        <span className="inline-block mt-2 text-xs px-2 py-1 bg-green-100 text-green-700 rounded">
-                          ✓ 已处理
-                        </span>
-                      )}
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setSelectedAlgorithm('world')}
-                      disabled={!isWorldJSLoaded}
-                      className={`p-4 rounded-lg border-2 text-left transition-all ${
-                        selectedAlgorithm === 'world'
-                          ? 'border-purple-600 bg-purple-50 shadow-md'
-                          : isWorldJSLoaded
-                            ? 'border-gray-200 hover:border-purple-300'
-                            : 'border-gray-200 bg-gray-50 opacity-60 cursor-not-allowed'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="font-semibold text-gray-900">WORLD Vocoder</span>
-                        {selectedAlgorithm === 'world' && (
-                          <svg className="w-5 h-5 text-purple-600" fill="currentColor" viewBox="0 0 20 20">
-                            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                          </svg>
-                        )}
-                      </div>
-                      <p className="text-sm text-gray-600">
-                        高保真声码器算法（处理耗时约1-2分钟）
-                        {!isWorldJSLoaded && (
-                          <span className="text-orange-600 block mt-1">{worldLoadError ? '（加载失败）' : '（加载中...）'}</span>
-                        )}
-                      </p>
-                      {processedBlobs['world'] && (
-                        <span className="inline-block mt-2 text-xs px-2 py-1 bg-green-100 text-green-700 rounded">
-                          ✓ 已处理
-                        </span>
-                      )}
-                    </button>
+                    {EFFECT_ALGORITHMS.map(algorithm => (
+                      <button key={algorithm.id} type="button" onClick={() => setSelectedAlgorithm(algorithm.id)}
+                        aria-pressed={selectedAlgorithm === algorithm.id}
+                        disabled={isProcessing || (algorithm.id === 'world' && !isWorldJSLoaded)}
+                        className={`rounded-lg border-2 p-4 text-left transition-all disabled:cursor-not-allowed disabled:opacity-60 ${selectedAlgorithm === algorithm.id ? 'border-purple-600 bg-purple-50 shadow-md' : 'border-gray-200 hover:border-purple-300'}`}>
+                        <span className="font-semibold text-gray-900">{algorithm.name}</span>
+                        {algorithm.live && <span className="ml-2 rounded bg-purple-100 px-2 py-0.5 text-xs text-purple-700">可实时试听</span>}
+                        <p className="mt-1 text-sm text-gray-600">{algorithm.description}</p>
+                        {algorithm.id === 'world' && !isWorldJSLoaded && <span className="text-xs text-orange-700">{worldLoadError ? '加载失败' : '加载中…'}</span>}
+                        {processedBlobs[algorithm.id] && <span className="mt-2 inline-block text-xs text-green-700">✓ 已处理</span>}
+                      </button>
+                    ))}
                   </div>
                   {worldLoadError && (
                     <div role="alert" className="mt-3 rounded-lg bg-orange-50 p-3 text-sm text-orange-800">
@@ -1553,7 +1374,7 @@ const VFSEffectPreview = ({ initialProcessedBlobs = null } = {}) => {
 
                 <button
                   onClick={processAudio}
-                  disabled={isProcessing}
+                  disabled={isProcessing || isDetectingPitch || referenceF0 < 80 || referenceF0 > 500}
                   className="w-full px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium text-lg flex flex-col items-center justify-center gap-2"
                 >
                   {isProcessing ? (
@@ -1580,9 +1401,7 @@ const VFSEffectPreview = ({ initialProcessedBlobs = null } = {}) => {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                       </svg>
                       <span>处理音频 ({
-                        selectedAlgorithm === 'rubberband' ? 'RubberBand' :
-                        selectedAlgorithm === 'world' ? 'WORLD' :
-                        'TD-PSOLA'
+                        getEffectAlgorithm(selectedAlgorithm).name
                       })</span>
                     </div>
                   )}
@@ -1639,98 +1458,17 @@ const VFSEffectPreview = ({ initialProcessedBlobs = null } = {}) => {
                     </button>
                   </div>
 
-                  {/* RubberBand 处理结果 */}
-                  {processedBlobs['rubberband'] && (
-                    <div className="bg-white rounded-lg p-4 shadow border-2 border-purple-300">
-                      <h4 className="font-medium text-gray-900 mb-2">RubberBand</h4>
-                      <p className="text-sm text-gray-500 mb-3">
-                        +{pitchShift} Hz {detectedF0 > 0 && `(→ ${detectedF0 + pitchShift} Hz)`}
-                      </p>
-                      <button
-                        onClick={() => playAudio('rubberband')}
-                        disabled={isPlaying && playbackType === 'rubberband'}
-                        className="w-full px-4 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
-                      >
-                        {isPlaying && playbackType === 'rubberband' ? (
-                          <>
-                            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                              <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z" />
-                            </svg>
-                            播放中
-                          </>
-                        ) : (
-                          <>
-                            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                              <path d="M8 5v14l11-7z" />
-                            </svg>
-                            播放
-                          </>
-                        )}
+                  {EFFECT_ALGORITHMS.filter(algorithm => processedBlobs[algorithm.id]).map(algorithm => (
+                    <div key={algorithm.id} className="rounded-lg border-2 border-purple-200 bg-white p-4 shadow">
+                      <h4 className="mb-2 font-medium text-gray-900">{algorithm.name}</h4>
+                      <p className="mb-3 text-sm text-gray-500">+{pitchShift} Hz · 参考 {referenceF0} → {referenceF0 + pitchShift} Hz</p>
+                      <button type="button" aria-label={`播放 ${algorithm.name}`} onClick={() => playAudio(algorithm.id)}
+                        disabled={isPlaying && playbackType === algorithm.id}
+                        className="w-full rounded-lg bg-purple-600 px-4 py-3 text-white hover:bg-purple-700 disabled:bg-gray-400">
+                        {isPlaying && playbackType === algorithm.id ? '播放中' : '播放'}
                       </button>
                     </div>
-                  )}
-
-                  {/* TD-PSOLA 处理结果 */}
-                  {processedBlobs['td-psola'] && (
-                    <div className="bg-white rounded-lg p-4 shadow border-2 border-indigo-300">
-                      <h4 className="font-medium text-gray-900 mb-2">TD-PSOLA</h4>
-                      <p className="text-sm text-gray-500 mb-3">
-                        +{pitchShift} Hz {detectedF0 > 0 && `(→ ${detectedF0 + pitchShift} Hz)`}
-                      </p>
-                      <button
-                        onClick={() => playAudio('td-psola')}
-                        disabled={isPlaying && playbackType === 'td-psola'}
-                        className="w-full px-4 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
-                      >
-                        {isPlaying && playbackType === 'td-psola' ? (
-                          <>
-                            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                              <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z" />
-                            </svg>
-                            播放中
-                          </>
-                        ) : (
-                          <>
-                            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                              <path d="M8 5v14l11-7z" />
-                            </svg>
-                            播放
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  )}
-
-                  {/* WORLD Vocoder 处理结果 */}
-                  {processedBlobs['world'] && (
-                    <div className="bg-white rounded-lg p-4 shadow border-2 border-teal-300">
-                      <h4 className="font-medium text-gray-900 mb-2">WORLD Vocoder</h4>
-                      <p className="text-sm text-gray-500 mb-3">
-                        +{pitchShift} Hz {detectedF0 > 0 && `(→ ${detectedF0 + pitchShift} Hz)`}
-                      </p>
-                      <button
-                        onClick={() => playAudio('world')}
-                        disabled={isPlaying && playbackType === 'world'}
-                        className="w-full px-4 py-3 bg-teal-600 text-white rounded-lg hover:bg-teal-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
-                      >
-                        {isPlaying && playbackType === 'world' ? (
-                          <>
-                            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                              <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z" />
-                            </svg>
-                            播放中
-                          </>
-                        ) : (
-                          <>
-                            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                              <path d="M8 5v14l11-7z" />
-                            </svg>
-                            播放
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  )}
+                  ))}
                 </div>
 
                 {isPlaying && (
@@ -1744,9 +1482,7 @@ const VFSEffectPreview = ({ initialProcessedBlobs = null } = {}) => {
                     <div className="mt-2 text-center text-sm text-gray-600">
                       正在播放: {
                         playbackType === 'original' ? '原始录音' :
-                        playbackType === 'rubberband' ? 'RubberBand' :
-                        playbackType === 'world' ? 'WORLD' :
-                        'TD-PSOLA'
+                        getEffectAlgorithm(playbackType).name
                       } - {formatTime(currentTime)} / {formatTime(duration)}
                     </div>
                     <div className="mt-2 w-full bg-gray-200 rounded-full h-2">
@@ -1759,11 +1495,10 @@ const VFSEffectPreview = ({ initialProcessedBlobs = null } = {}) => {
                 )}
 
                 {/* 对比提示 */}
-                {processedBlobs['rubberband'] && processedBlobs['td-psola'] && (
+                {Object.values(processedBlobs).filter(Boolean).length >= 2 && (
                   <div className="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-3">
                     <p className="text-sm text-blue-800">
-                      💡 <strong>对比建议：</strong>您已处理了两种算法的版本，可以分别播放对比音质效果。
-                      RubberBand 是专业级库，TD-PSOLA 是我们自研的轻量级实现。
+                      💡 <strong>对比建议：</strong>您已处理了多种算法的版本，可以分别播放，比较相同变调比例下的音质效果。
                     </p>
                   </div>
                 )}
@@ -1788,7 +1523,7 @@ const VFSEffectPreview = ({ initialProcessedBlobs = null } = {}) => {
             </li>
             <li className="flex items-start">
               <span className="text-purple-600 mr-2">•</span>
-              <span>我们实现了几种“保留共鸣特征”的算法，在听感上略有差异</span>
+              <span>不同算法对音色的影响不同；SoundTouch 不提供独立的共振峰保持功能</span>
             </li>
             <li className="flex items-start">
               <span className="text-purple-600 mr-2">•</span>
@@ -1808,6 +1543,8 @@ const VFSEffectPreview = ({ initialProcessedBlobs = null } = {}) => {
             </li>
           </ul>
         </div>
+
+        <p className="mb-6 text-center text-xs text-gray-500">SoundTouch DSP · LGPL-2.1-or-later · <a href="/licenses/SoundTouch-LGPL-2.1.txt" className="underline">许可证</a> · <a href="/licenses/SoundTouch-source.zip" className="underline">对应源码</a></p>
 
         {/* 返回按钮 */}
         <div className="text-center">

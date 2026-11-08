@@ -31,6 +31,9 @@ const copyPostsPlugin = () => {
 
 // https://vite.dev/config/
 export default defineConfig(({ command }) => ({
+  worker: { format: 'es' }, // 音频 Worker 按需加载 RubberBand WASM 适配器。
+  // 首次在 Worker 使用 RubberBand 时不能触发依赖优化重载，否则会丢失录音。
+  optimizeDeps: { include: ['rubberband-wasm'] },
   base: '/', // Set base to root ('/') for custom domain deployment
   esbuild: getBuildLoggingOptions(command),
   plugins: [

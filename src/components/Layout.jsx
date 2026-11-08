@@ -28,7 +28,8 @@ const Layout = ({ children, AuthComponent, onProfileSetupClick }) => {
                 <div className="container mx-auto py-6 px-4 sm:px-6 lg:px-8 vfs-footer-text">
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                         <div className="flex flex-col gap-1">
-                            <p>&copy; 2025 VFS Tracker. 一个开源项目。</p>
+                            {/* 显示项目开始至本次维护的年份范围。 */}
+                            <p>&copy; 2025-2026 VFS Tracker. 一个开源项目。</p>
                         </div>
                     </div>
                 </div>
