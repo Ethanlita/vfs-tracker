@@ -1,0 +1,9 @@
+name: benign-control
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+jobs:
+  hello:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "benign control run"
