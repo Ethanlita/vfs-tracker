@@ -6,8 +6,9 @@
  * 1. 开发模式和生产模式的渲染
  * 2. 路由配置和导航
  * 3. 认证保护路由
- * 4. Service Worker 更新横幅
- * 5. 资料设置引导
+ * 4. 资料设置引导
+ *
+ * 新版本提示横幅已移到 main.jsx 根节点，见 tests/unit/components/ServiceWorkerUpdateBanner.test.jsx。
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
@@ -16,12 +17,8 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import App from '../../../src/App';
 
-const activatePwaUpdateSafely = vi.hoisted(() => vi.fn(async activate => {
-  await activate();
-  return { activated: true, labels: [] };
-}));
+// 页面组件会登记未完成工作；集成测试只关心页面行为，不建立跨标签页通道。
 vi.mock('../../../src/utils/pwaUpdateCoordinator.js', () => ({
-  activatePwaUpdateSafely,
   setPwaUpdateBlocker: vi.fn(),
 }));
 
@@ -351,113 +348,6 @@ describe('App Component', () => {
       
       // 不应该看到资料设置向导的主要标题（排除横幅按钮）
       expect(screen.queryByRole('heading', { name: /资料设置|完善资料|Profile Setup/i })).not.toBeInTheDocument();
-    });
-  });
-
-  describe('Service Worker 更新横幅', () => {
-    beforeEach(() => {
-      activatePwaUpdateSafely.mockImplementation(async activate => {
-        await activate();
-        return { activated: true, labels: [] };
-      });
-    });
-    it('收到更新事件时应该显示横幅', async () => {
-      setupDefaultAuth();
-      
-      render(
-        <MemoryRouter initialEntries={['/']}>
-          <App />
-        </MemoryRouter>
-      );
-
-      // 触发 SW 更新事件
-      const event = new Event('sw:update-available');
-      window.dispatchEvent(event);
-
-      await waitFor(() => {
-        expect(screen.getByText('检测到应用有新版本可用。')).toBeInTheDocument();
-      });
-    });
-
-    it('点击立即刷新按钮应该通过协调器激活更新', async () => {
-      setupDefaultAuth();
-      const updateSW = vi.fn();
-      
-      render(
-        <MemoryRouter initialEntries={['/']}>
-          <App />
-        </MemoryRouter>
-      );
-
-      // 触发更新事件
-      window.dispatchEvent(new CustomEvent('sw:update-available', { detail: { updateSW } }));
-
-      await waitFor(() => {
-        expect(screen.getByText('检测到应用有新版本可用。')).toBeInTheDocument();
-      });
-
-      // 点击刷新按钮
-      const reloadButton = screen.getByRole('button', { name: '立即刷新' });
-      await user.click(reloadButton);
-
-      await waitFor(() => expect(updateSW).toHaveBeenCalledWith(true));
-      expect(activatePwaUpdateSafely).toHaveBeenCalledTimes(1);
-    });
-
-    it('其他标签页有未完成工作时保留更新并显示原因', async () => {
-      setupDefaultAuth();
-      const updateSW = vi.fn();
-      activatePwaUpdateSafely.mockResolvedValueOnce({
-        activated: false,
-        labels: ['新增事件表单'],
-        reason: 'blocked',
-      });
-      render(<MemoryRouter initialEntries={['/']}><App /></MemoryRouter>);
-      window.dispatchEvent(new CustomEvent('sw:update-available', { detail: { updateSW } }));
-
-      await user.click(await screen.findByRole('button', { name: '立即刷新' }));
-      expect(await screen.findByRole('alert')).toHaveTextContent('新增事件表单尚未完成');
-      expect(updateSW).not.toHaveBeenCalled();
-      expect(screen.getByRole('button', { name: '立即刷新' })).toBeEnabled();
-    });
-
-    it('更新启动失败时显示错误并允许重试', async () => {
-      setupDefaultAuth();
-      const updateSW = vi.fn();
-      activatePwaUpdateSafely.mockRejectedValueOnce(new Error('service worker communication failed'));
-      render(<MemoryRouter initialEntries={['/']}><App /></MemoryRouter>);
-      window.dispatchEvent(new CustomEvent('sw:update-available', { detail: { updateSW } }));
-
-      await user.click(await screen.findByRole('button', { name: '立即刷新' }));
-
-      expect(await screen.findByRole('alert')).toHaveTextContent('更新暂时无法启动，请检查网络后重试。');
-      expect(screen.getByRole('button', { name: '立即刷新' })).toBeEnabled();
-      expect(screen.getByRole('button', { name: '稍后提醒' })).toBeEnabled();
-    });
-
-    it('点击稍后提醒应该隐藏横幅', async () => {
-      setupDefaultAuth();
-      
-      render(
-        <MemoryRouter initialEntries={['/']}>
-          <App />
-        </MemoryRouter>
-      );
-
-      // 触发更新事件
-      window.dispatchEvent(new Event('sw:update-available'));
-
-      await waitFor(() => {
-        expect(screen.getByText('检测到应用有新版本可用。')).toBeInTheDocument();
-      });
-
-      // 点击稍后提醒
-      const dismissButton = screen.getByRole('button', { name: '稍后提醒' });
-      await user.click(dismissButton);
-
-      await waitFor(() => {
-        expect(screen.queryByText('检测到应用有新版本可用。')).not.toBeInTheDocument();
-      });
     });
   });
 

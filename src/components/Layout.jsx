@@ -3,6 +3,7 @@ import ProfileCompletionBanner from './ProfileCompletionBanner';
 import { useAuth } from '../contexts/AuthContext';
 import ICPBadge from './ICPBadge.jsx';
 import Header from './Header.jsx';
+import { formatAppVersion } from '../appVersion.js';
 
 const Layout = ({ children, AuthComponent, onProfileSetupClick }) => {
     const { isAuthenticated, needsProfileSetup } = useAuth();
@@ -30,6 +31,8 @@ const Layout = ({ children, AuthComponent, onProfileSetupClick }) => {
                         <div className="flex flex-col gap-1">
                             {/* 显示项目开始至本次维护的年份范围。 */}
                             <p>&copy; 2025-2026 VFS Tracker. 一个开源项目。</p>
+                            {/* 当前运行的版本，反馈问题时可据此定位到具体提交。 */}
+                            <p className="text-xs text-gray-500">版本 {formatAppVersion()}</p>
                         </div>
                     </div>
                 </div>

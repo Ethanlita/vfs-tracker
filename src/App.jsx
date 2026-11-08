@@ -9,7 +9,7 @@ import Auth from './components/Auth';
 import Home from './components/Home';
 import RegionSwitchBanner from './components/RegionSwitchBanner.jsx';
 import NotFoundPage from './components/NotFoundPage'; // 404 页面
-import ServiceWorkerUpdateBanner from './components/ServiceWorkerUpdateBanner.jsx';
+// 新版本提示横幅挂在 main.jsx 根节点，独立于路由与登录状态，这里不再渲染。
 
 // 每个业务页面按路由加载，首页不再解析图表、录音、Markdown 或管理端依赖。
 const MyPage = lazy(() => import('./components/MyPage'));
@@ -48,9 +48,6 @@ const AdminLoadingFallback = () => (
   </div>
 );
 
-/**
- * 当检测到有新的 Service Worker 版本准备就绪时，提示用户刷新
- */
 /**
  * @en The main content container of the application. It wraps the router
  * with a consistent layout.
@@ -108,8 +105,6 @@ const AppContent = () => {
           </Routes>
         </Suspense>
       </Layout>
-
-      <ServiceWorkerUpdateBanner />
     </>
   );
 };

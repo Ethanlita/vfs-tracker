@@ -32,6 +32,20 @@ describe('release pipeline', () => {
     expect(pullRequest).toContain('cancel-in-progress: true');
   });
 
+  it('前端构建检出完整历史以生成版本号，Pages 部署后清空 Cloudflare 缓存', async () => {
+    const frontend = (await readFile('.github/workflows/deploy.yml', 'utf8')).replaceAll('\r\n', '\n');
+    const deployJob = frontend.indexOf('\n  deploy:\n');
+    const purgeJob = frontend.indexOf('\n  purge-cloudflare:\n');
+    const purgeSection = frontend.slice(purgeJob, frontend.indexOf('\n  deploy-esa:\n'));
+
+    expect(frontend).toContain('fetch-depth: 0');
+    expect(purgeJob).toBeGreaterThan(deployJob);
+    expect(purgeSection).toContain('needs: deploy');
+    expect(purgeSection).toContain('node scripts/purge-cloudflare-cache.mjs');
+    expect(purgeSection).toContain('CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}');
+    expect(purgeSection).toContain('CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}');
+  });
+
   it('后端部署与镜像更新都依赖自动回归验证', async () => {
     const [workflow, imageWorkflow] = await Promise.all([
       readFile('.github/workflows/deploy-backend.yml', 'utf8'),
