@@ -161,30 +161,37 @@ export function createPwaUpdateController({
 
   /** 新版本已安装完毕、正在等待激活。 */
   const handleUpdateReady = () => {
-    if (snapshot.status === 'applying' || snapshot.status === 'reloadPending') return;
+    // 只从空闲状态进入：已在提示、更新中、已延后或等待刷新时，重复的"就绪"不应覆盖当前状态与提示原因。
+    if (snapshot.status !== 'idle') return;
     if (isPristine()) {
       void applyUpdate({ silent: true });
       return;
     }
-    if (snapshot.status !== 'dismissed') setSnapshot({ status: 'available', silent: false, notice: '' });
+    setSnapshot({ status: 'available', silent: false, notice: '' });
   };
 
   /** @param {ServiceWorkerRegistration} reg @returns {boolean} 是否存在等待激活的新版本（而非首次安装）。 */
   const isUpdateReady = reg => Boolean(reg.waiting && reg.active);
 
   /**
-   * 监听注册对象上的新版本：注册时已在等待的，以及之后安装完成的。
+   * 监听注册对象上的新版本：注册时已在等待的、注册时正在安装的，以及之后发现并安装完成的。
    * @param {ServiceWorkerRegistration} reg - 当前注册。
    */
   const watchRegistration = reg => {
-    if (isUpdateReady(reg)) handleUpdateReady();
-    reg.addEventListener('updatefound', () => {
-      const worker = reg.installing;
-      if (!worker) return;
+    /** @param {ServiceWorker} worker - 正在安装的 worker；装完且已有 active 时即为新版本。 */
+    const observeInstalling = worker => {
       worker.addEventListener('statechange', () => {
         // 首次安装时没有 active，worker 会直接激活，不需要提示。
         if (worker.state === 'installed' && isUpdateReady(reg)) handleUpdateReady();
       });
+    };
+
+    if (isUpdateReady(reg)) handleUpdateReady();
+    // 按规范 register() 会排在进行中的安装之后才兑现，但不能依赖所有实现都如此；
+    // 注册时已在安装的 worker 不会再触发 updatefound，所以同样需要观察。
+    if (reg.installing) observeInstalling(reg.installing);
+    reg.addEventListener('updatefound', () => {
+      if (reg.installing) observeInstalling(reg.installing);
     });
   };
 

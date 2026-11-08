@@ -74,14 +74,28 @@ export function removeVersions(root) {
 
 /**
  * 启动可切换版本的静态服务器（行为与 GitHub Pages + SPA 回退一致，所有响应 no-cache）。
+ * 可为指定路径设置响应延迟，用于模拟慢网络下页面加载与新版本安装的时序。
  * @param {{a: string, b: string}} dirs - 两个版本的构建目录。
- * @returns {Promise<{url: (pathname: string) => string, deploy: (version: 'a'|'b') => void, close: () => Promise<void>}>}
+ * @returns {Promise<{url: (pathname: string) => string, deploy: (version: 'a'|'b') => void,
+ *   delay: (pathname: string, ms: number) => void, clearDelays: () => void, close: () => Promise<void>}>}
  */
 export async function startVersionedServer(dirs) {
   let current = 'a';
+  /** @type {Map<string, number>} 路径 → 响应延迟（毫秒）。 */
+  const delays = new Map();
   const server = http.createServer((request, response) => {
     const pathname = decodeURIComponent(new URL(request.url, 'http://127.0.0.1').pathname);
     const root = dirs[current];
+    setTimeout(() => serve(response, root, pathname), delays.get(pathname) ?? 0);
+  });
+
+  /**
+   * 按 GitHub Pages 的规则返回一个文件。
+   * @param {http.ServerResponse} response - 响应对象。
+   * @param {string} root - 请求到达时所部署版本的目录。
+   * @param {string} pathname - 请求路径。
+   */
+  function serve(response, root, pathname) {
     let file = path.join(root, pathname);
     const exists = file.startsWith(root) && existsSync(file) && statSync(file).isFile();
     if (!exists) {
@@ -98,12 +112,15 @@ export async function startVersionedServer(dirs) {
       'Cache-Control': 'no-cache',
     });
     createReadStream(file).pipe(response);
-  });
+  }
+
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   const { port } = server.address();
   return {
     url: pathname => `http://127.0.0.1:${port}${pathname}`,
     deploy: version => { current = version; },
+    delay: (pathname, ms) => { delays.set(pathname, ms); },
+    clearDelays: () => delays.clear(),
     close: () => new Promise(resolve => server.close(() => resolve())),
   };
 }

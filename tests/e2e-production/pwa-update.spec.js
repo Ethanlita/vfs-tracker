@@ -34,6 +34,7 @@ test.afterAll(async () => {
 test.beforeEach(async ({}, testInfo) => {
   test.skip(testInfo.project.name !== DESKTOP_PROJECT, 'Service Worker 更新流程与视口无关，只在桌面项目验证');
   site.deploy('a');
+  site.clearDelays();
 });
 
 /**
@@ -93,6 +94,33 @@ test('部署后打开：唯一标签页且未操作时静默切到新版本，�
     await expect.poll(() => version(page), { timeout: 20_000 }).toBe('B');
     await expect(page.getByRole('heading', { name: '欢迎来到VFS Tracker!' })).toBeVisible();
     expect(bannerSeen).toBe(false);
+  } finally {
+    await context.close();
+  }
+});
+
+// 规范规定同一作用域的注册与更新任务排队执行：页面的 register() 会等进行中的安装完成后才兑现，
+// 因此这里验证的是慢网络下的完整时序，而不是"错过 updatefound"（该情况由单元测试覆盖）。
+test('慢网络：页面加载完成时新版本仍在下载，装完后照样静默切到新版本', async ({ browser }) => {
+  const context = await browser.newContext();
+  try {
+    await (await openControlledA(context)).close();
+    site.deploy('b');
+    // 浏览器在导航后约 2 秒就开始安装新版本（与 load 无关）。把页面 load 拖到约 6 秒（注册在 load 之后），
+    // 并把新版本入口脚本（预缓存中唯一必须重新下载的大文件之一）拖到约 10 秒：页面注册时新版本仍在
+    // installing，updatefound 早已触发。内容未变的预缓存文件不会重新下载，延迟它们不起作用。
+    site.delay('/__e2e/slow-image.png', 6000);
+    site.delay(`/${versions.entries.B}`, 8000);
+
+    const page = await context.newPage();
+    await page.addInitScript(() => {
+      const image = document.createElement('img');
+      image.src = '/__e2e/slow-image.png';
+      document.documentElement.appendChild(image);
+    });
+    await page.goto(site.url('/'), { waitUntil: 'commit' });
+
+    await expect.poll(() => version(page), { timeout: 30_000 }).toBe('B');
   } finally {
     await context.close();
   }

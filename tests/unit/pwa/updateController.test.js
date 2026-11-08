@@ -169,6 +169,23 @@ describe('PWA 版本更新控制器', () => {
       expect(ctx.coordinator.activatePwaUpdateSafely).not.toHaveBeenCalled();
     });
 
+    it('注册时新版本已在安装中（updatefound 已错过）：装完后同样提示', async () => {
+      const registration = new FakeRegistration({ active: new FakeWorker('activated') });
+      const installing = new FakeWorker('installing');
+      registration.installing = installing;
+      const ctx = setup({ registration, elapsed: PRISTINE_WINDOW_MS + 1 });
+
+      ctx.controller.start();
+      await settle();
+      expect(ctx.controller.getSnapshot().status).toBe('idle');
+
+      registration.installing = null;
+      registration.waiting = installing;
+      installing.setState('installed');
+
+      expect(ctx.controller.getSnapshot().status).toBe('available');
+    });
+
     it('首次安装（还没有 active）不提示更新', async () => {
       const ctx = setup({ registration: new FakeRegistration() });
       ctx.controller.start();
@@ -293,6 +310,21 @@ describe('PWA 版本更新控制器', () => {
       await pending;
 
       expect(ctx.controller.getSnapshot().notice).toBe(UPDATE_MESSAGES.failed);
+    });
+
+    it('横幅已显示阻塞原因时，再次发现新版本不会清掉原因', async () => {
+      const ctx = await withBanner({
+        activatePwaUpdateSafely: vi.fn().mockResolvedValue({ activated: false, labels: ['录音任务'], reason: 'blocked' }),
+      });
+      await ctx.controller.applyUpdate();
+
+      installUpdate(ctx.registration);
+
+      expect(ctx.controller.getSnapshot()).toEqual({
+        status: 'available',
+        silent: false,
+        notice: UPDATE_MESSAGES.blocked(['录音任务']),
+      });
     });
 
     it('选择"下次打开时更新"后，本页不再因新版本弹出横幅', async () => {
