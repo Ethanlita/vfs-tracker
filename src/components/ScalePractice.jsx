@@ -47,11 +47,16 @@ const frequencyToNoteName = (frequency) => {
 
 /**
  * @zh 根据失败原因生成提示文案。
- * @param {{ idx: number, freq: number, type: 'miss'|'high'|'low'|'unstable'|'brief', requiredMs?: number, stableMs?: number }} fail 失败信息
+ * @param {{ idx: number, freq: number, type: 'miss'|'high'|'low'|'unstable'|'brief', requiredMs?: number, stableMs?: number }
+ *   | { type: 'late', lagMs: number, limitMs: number }} fail 失败信息（late 为整句跟唱太晚，没有对应的音）
  * @returns {string} 用户可读提示
  */
 const formatFailMessage = (fail) => {
   if (!fail) return '未达到目标音，是否重试？';
+  if (fail.type === 'late') {
+    // 估计延迟包含设备延迟，蓝牙耳机常常就占去一大半
+    return `跟唱慢了约${Math.round(fail.lagMs)}ms：请和系统播放的目标音同时唱；蓝牙耳机延迟较大，可换用有线耳机`;
+  }
   const noteLabel = frequencyToNoteName(fail.freq);
   switch (fail.type) {
     case 'miss':

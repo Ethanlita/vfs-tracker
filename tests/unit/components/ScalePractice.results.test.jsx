@@ -121,6 +121,13 @@ it('用户速度传入整句判定：练习音时长与名义区间来自所选 
  for(let i=1;i<args.noteSteps.length;i++)expect(args.noteSteps[i].startT).toBe(args.noteSteps[i-1].endT);
  expect(args.frames.length).toBeGreaterThan(0);
 });
+it('整句判为跟唱太晚时提示估计延迟与耳机建议，本轮按失败处理',async()=>{
+ await setup();
+ mocks.evaluate.mockReturnValue({passed:false,regime:'stable',requiredMs:200,lagMs:612,notes:[],failedNote:{type:'late',lagMs:612,limitMs:500}});
+ await click('开始练习');await waitFailure();
+ expect(screen.getByText(/跟唱慢了约612ms/)).toHaveTextContent('蓝牙耳机延迟较大，可换用有线耳机');
+ expect(screen.getByRole('button',{name:'强制通过',exact:true})).toBeInTheDocument();
+});
 it('长轮次中音高轨迹持续绘制，不会在 320 点后冻结',async()=>{
  const{container}=render(<ScalePractice/>);await click('我已知晓，开始');await click('进入耳机检测');await tick(5500);await click('开始录音');await tick(3400);
  await act(async()=>fireEvent.change(screen.getByLabelText(/速度/),{target:{value:'40'}}));
