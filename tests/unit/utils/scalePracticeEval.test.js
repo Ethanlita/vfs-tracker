@@ -1,15 +1,17 @@
 /**
  * 单元测试：src/utils/scalePracticeEval.js
  *
- * 覆盖整句判定（延迟估计、换音点对齐、稳定 / 走势两种判定方式）与切入过早检测。
+ * 覆盖整句判定（延迟估计、换音点对齐、首尾音边界、稳定 / 走势两种判定方式）与切入过早检测。
  * 帧数据由合成「歌唱」生成：按固定 16 ms 采样间隔，在给定时间区间内输出指定半音的基频。
  */
 import { describe, it, expect } from 'vitest';
 import {
+  PHRASE_EVAL_CONFIG,
   detectEarlyVoicing,
   estimateGlobalLag,
   evaluatePhrase,
-  resolveJudgeRegime
+  resolveJudgeRegime,
+  resolveLateLimitMs
 } from '../../../src/utils/scalePracticeEval.js';
 
 const SEMITONE = Math.pow(2, 1 / 12);
@@ -108,26 +110,34 @@ describe('estimateGlobalLag', () => {
   const toVoiced = frames => frames
     .filter(f => f.pitch > 0)
     .map(f => ({ t: f.t, cents: 1200 * Math.log2(f.pitch / BASE_FREQ) }));
+  // 与 evaluatePhrase 相同的搜索上限：lagMaxMs + 每音时长
+  const maxLag = PHRASE_EVAL_CONFIG.lagMaxMs + 300;
 
   it('准时演唱估计为 0 ms', () => {
     const steps = makeNoteSteps([0, 2, 4, 5, 7], 300);
-    expect(estimateGlobalLag(toVoiced(singSteps(steps)), notes)).toBe(0);
+    expect(estimateGlobalLag(toVoiced(singSteps(steps)), notes, maxLag)).toBe(0);
   });
 
   it('整体晚 200 ms 演唱时估计约 200 ms', () => {
     const steps = makeNoteSteps([0, 2, 4, 5, 7], 300);
-    const lag = estimateGlobalLag(toVoiced(singSteps(steps, { lagMs: 200 })), notes);
+    const lag = estimateGlobalLag(toVoiced(singSteps(steps, { lagMs: 200 })), notes, maxLag);
     expect(Math.abs(lag - 200)).toBeLessThanOrEqual(20);
   });
 
   it('最后一个音拖长不会把延迟估大', () => {
     const steps = makeNoteSteps([0, 2, 4, 5, 7], 300);
-    const lag = estimateGlobalLag(toVoiced(singSteps(steps, { release: 600 })), notes);
+    const lag = estimateGlobalLag(toVoiced(singSteps(steps, { release: 600 })), notes, maxLag);
     expect(lag).toBe(0);
   });
 
   it('没有有声帧时返回 0', () => {
-    expect(estimateGlobalLag([], notes)).toBe(0);
+    expect(estimateGlobalLag([], notes, maxLag)).toBe(0);
+  });
+
+  it('晚一整拍（300 ms）时估计约 300 ms，而不是卡在旧的 350 ms 范围内错位', () => {
+    const steps = makeNoteSteps([0, 2, 4, 5, 7], 300);
+    const lag = estimateGlobalLag(toVoiced(singSteps(steps, { lagMs: 300 })), notes, maxLag);
+    expect(Math.abs(lag - 300)).toBeLessThanOrEqual(20);
   });
 });
 
@@ -193,10 +203,23 @@ describe('evaluatePhrase — 稳定判定（每音 600 ms）', () => {
     expect(result.failedNote).toMatchObject({ idx: 1, type: 'miss' });
   });
 
-  it('晚一整拍（600 ms）演唱超出允许延迟，不能通过', () => {
+  it('晚一整拍（600 ms）演唱超出允许延迟，整句判为跟唱太晚', () => {
+    // 旧实现只是碰巧因为末音被裁短而失败；现在由延迟上限明确拒绝
     const frames = singSteps(steps, { lagMs: 600 });
     const result = evaluatePhrase({ ...baseParams, frames, noteSteps: steps, noteMs: 600 });
     expect(result.passed).toBe(false);
+    expect(result.failedNote).toMatchObject({ type: 'late', limitMs: 500 });
+    expect(Math.abs(result.failedNote.lagMs - 600)).toBeLessThanOrEqual(20);
+    expect(result.lagMs).toBe(result.failedNote.lagMs);
+    expect(result.notes).toEqual([]);
+  });
+
+  it('晚 400 ms 且每音有 60 ms 滑音（估计约 460 ms，上限 500 ms 以内）仍可通过', () => {
+    // 延迟估计的是音高真正到位的时刻，滑音时间也算在内
+    const frames = singSteps(steps, { lagMs: 400, transitionMs: 60 });
+    const result = evaluatePhrase({ ...baseParams, frames, noteSteps: steps, noteMs: 600 });
+    expect(result.passed).toBe(true);
+    expect(Math.abs(result.lagMs - 460)).toBeLessThanOrEqual(20);
   });
 });
 
@@ -242,6 +265,205 @@ describe('evaluatePhrase — 走势判定（每音 300 ms / 150 ms）', () => {
     const result = evaluatePhrase({ ...baseParams, frames, noteSteps: steps, noteMs: 300 });
     expect(result.passed).toBe(false);
     expect(result.failedNote?.idx).toBe(5);
+  });
+});
+
+/**
+ * 合成「接近真人」的演唱：每 16 ms 一帧，可设采样起始相位、整体延迟、固定偏差和逐帧随机抖动。
+ * 随机数用固定种子的线性同余生成器，结果可复现。
+ * @param {Array<{ offset:number, startT:number, endT:number }>} steps 名义练习音
+ * @param {Object} [opts]
+ * @param {number} [opts.lagMs=0] 整体延迟
+ * @param {number} [opts.phaseMs=0] 第一帧的时间戳（模拟采样相位）
+ * @param {number} [opts.biasCents=0] 每帧固定偏差
+ * @param {number} [opts.jitterCents=0] 每帧随机抖动幅度（±）
+ * @param {number} [opts.seed=1] 随机种子
+ * @param {Object<number, { from?:number, to?:number, cents?:number }>} [opts.overrides]
+ *   按音下标替换演唱：只在该音开始后 [from, to) 毫秒内发声，并额外偏离 cents
+ * @param {{ ms:number, cents:number }|null} [opts.tail] 最后一个音结束后继续发声 ms 毫秒，偏离最后一个音 cents
+ * @param {number} [opts.release=350] 最后一个音之后的总采集时长
+ */
+const singRealistic = (steps, {
+  lagMs = 0,
+  phaseMs = 0,
+  biasCents = 0,
+  jitterCents = 0,
+  seed = 1,
+  overrides = {},
+  tail = null,
+  release = 350
+} = {}) => {
+  let state = seed;
+  const rand = () => {
+    state = (state * 1664525 + 1013904223) % 4294967296;
+    return state / 4294967296;
+  };
+  const last = steps[steps.length - 1];
+  const lastEnd = last.endT + lagMs;
+  const frames = [];
+  for (let t = phaseMs; t < lastEnd + release; t += FRAME_MS) {
+    const i = steps.findIndex(s => t >= s.startT + lagMs && t < s.endT + lagMs);
+    let cents = null;
+    if (i >= 0) {
+      const { from = 0, to = Infinity, cents: extra = 0 } = overrides[i] ?? {};
+      const local = t - (steps[i].startT + lagMs);
+      if (local >= from && local < to) {
+        cents = steps[i].offset * 100 + biasCents + extra + (rand() * 2 - 1) * jitterCents;
+      }
+    } else if (tail && t >= lastEnd && t < lastEnd + tail.ms) {
+      cents = last.offset * 100 + tail.cents;
+    }
+    frames.push(cents === null
+      ? { t, pitch: 0, clarity: 0, rms: 0.001 }
+      : { t, pitch: BASE_FREQ * Math.pow(2, cents / 1200), clarity: 0.95, rms: 0.3 });
+  }
+  return frames;
+};
+
+describe('evaluatePhrase — 首尾音边界', () => {
+  // 16 分音符版的九音音型；每音时长 = 60000 / BPM / 4
+  const offsets = [0, 2, 4, 5, 7, 5, 4, 2, 0];
+  const sixteenth = bpm => 60000 / bpm / 4;
+
+  /**
+   * 首尾音完整唱满时，保留下来的稳定时长应接近整个音长：
+   * 名义区间内最多因采样相位少两帧（首帧晚到、末帧早结束），不应再被裁掉更多。
+   */
+  const expectEdgesKept = (result, noteMs) => {
+    expect(result.notes[0].stableMs).toBeGreaterThanOrEqual(noteMs - 2 * FRAME_MS);
+    expect(result.notes[offsets.length - 1].stableMs).toBeGreaterThanOrEqual(noteMs - 2 * FRAME_MS);
+  };
+
+  it.each([80, 140, 160])('16 分音符 %i BPM、音高准确且无延迟时通过，首尾音不被裁短', bpm => {
+    const noteMs = sixteenth(bpm);
+    const steps = makeNoteSteps(offsets, noteMs);
+    const result = evaluatePhrase({ ...baseParams, frames: singRealistic(steps), noteSteps: steps, noteMs });
+    expect(result.regime).toBe('contour');
+    expect(result.lagMs).toBe(0);
+    expect(result.passed).toBe(true);
+    expectEdgesKept(result, noteMs);
+  });
+
+  it.each([
+    { label: '120 BPM、每帧抖动 ±15 cents', bpm: 120, jitterCents: 15, biasCents: 0 },
+    { label: '140 BPM、每帧抖动 ±15 cents', bpm: 140, jitterCents: 15, biasCents: 0 },
+    { label: '160 BPM、每帧抖动 ±15 cents', bpm: 160, jitterCents: 15, biasCents: 0 },
+    { label: '160 BPM、整体偏高 8 cents', bpm: 160, jitterCents: 0, biasCents: 8 }
+  ].map(c => [c.label, c]))('16 分音符 %s 且晚 220 ms 时通过', (_label, { bpm, jitterCents, biasCents }) => {
+    // 旧实现下首尾音只剩 32–48 ms，被判为没唱到位
+    const noteMs = sixteenth(bpm);
+    const steps = makeNoteSteps(offsets, noteMs);
+    const frames = singRealistic(steps, { lagMs: 220, jitterCents, biasCents });
+    const result = evaluatePhrase({ ...baseParams, frames, noteSteps: steps, noteMs });
+    expect(result.passed).toBe(true);
+    expectEdgesKept(result, noteMs);
+  });
+
+  it.each([
+    { label: '采样相位 5 ms、准时', phaseMs: 5, lagMs: 0 },
+    { label: '采样相位 11 ms、晚 120 ms', phaseMs: 11, lagMs: 120 },
+    { label: '采样相位 3 ms、晚 300 ms', phaseMs: 3, lagMs: 300 },
+    { label: '采样相位 8 ms、抢拍 60 ms', phaseMs: 8, lagMs: -60 }
+  ].map(c => [c.label, c]))('16 分音符 160 BPM、%s 时通过', (_label, { phaseMs, lagMs }) => {
+    const noteMs = sixteenth(160);
+    const steps = makeNoteSteps(offsets, noteMs);
+    const frames = singRealistic(steps, { phaseMs, lagMs, jitterCents: 10 });
+    const result = evaluatePhrase({ ...baseParams, frames, noteSteps: steps, noteMs });
+    expect(result.passed).toBe(true);
+    expectEdgesKept(result, noteMs);
+  });
+
+  it('稳定判定下（四分音符 150 BPM，每音 400 ms）首尾音同样保留整个音长', () => {
+    // 旧实现下首音约 272 ms、末音约 224 ms，离 200 ms 的要求只差一点
+    const steps = makeNoteSteps(offsets, 400);
+    const frames = singRealistic(steps, { lagMs: 220, jitterCents: 15 });
+    const result = evaluatePhrase({ ...baseParams, frames, noteSteps: steps, noteMs: 400 });
+    expect(result.regime).toBe('stable');
+    expect(result.passed).toBe(true);
+    expectEdgesKept(result, 400);
+  });
+
+  it('末音之后滑走的帧（偏低 300 cents）不计入末音，整句仍通过', () => {
+    const noteMs = sixteenth(160);
+    const steps = makeNoteSteps(offsets, noteMs);
+    const frames = singRealistic(steps, { lagMs: 220, jitterCents: 10, tail: { ms: 200, cents: -300 } });
+    const result = evaluatePhrase({ ...baseParams, frames, noteSteps: steps, noteMs });
+    expect(result.passed).toBe(true);
+    expect(Math.abs(result.notes[offsets.length - 1].cents)).toBeLessThanOrEqual(75);
+  });
+
+  describe('首尾音真的有问题时仍然判失败（16 分音符 160 BPM，晚 220 ms）', () => {
+    const noteMs = sixteenth(160);
+    const steps = makeNoteSteps(offsets, noteMs);
+    const last = offsets.length - 1;
+    const run = overrides => evaluatePhrase({
+      ...baseParams,
+      frames: singRealistic(steps, { lagMs: 220, jitterCents: 10, overrides }),
+      noteSteps: steps,
+      noteMs
+    });
+
+    it('末音只唱了 32 ms 就停下，判为没唱到位', () => {
+      expect(run({ [last]: { to: 32 } }).failedNote).toMatchObject({ idx: 9, type: 'brief' });
+    });
+
+    it('末音唱高 150 cents，判为偏高', () => {
+      expect(run({ [last]: { cents: 150 } }).failedNote).toMatchObject({ idx: 9, type: 'high' });
+    });
+
+    it('末音没有唱出来，判为未检测到', () => {
+      expect(run({ [last]: { to: 0 } }).failedNote).toMatchObject({ idx: 9, type: 'miss' });
+    });
+
+    it('首音晚进、只唱了最后 32 ms，判为没唱到位', () => {
+      expect(run({ 0: { from: noteMs - 32 } }).failedNote).toMatchObject({ idx: 1, type: 'brief' });
+    });
+
+    it('首音唱低 150 cents，判为偏低', () => {
+      expect(run({ 0: { cents: -150 } }).failedNote).toMatchObject({ idx: 1, type: 'low' });
+    });
+  });
+});
+
+describe('evaluatePhrase — 跟唱太晚', () => {
+  const offsets = [0, 2, 4, 5, 7, 5, 4, 2, 0];
+
+  it('上限为 350 ms + 换音点浮动：每音 ≥ 333 ms 时 500 ms，更快时随每音时长缩小', () => {
+    expect(resolveLateLimitMs(600)).toBe(500);
+    expect(resolveLateLimitMs(1500)).toBe(500);
+    expect(resolveLateLimitMs(187.5)).toBeCloseTo(434.375, 5);
+    expect(resolveLateLimitMs(93.75)).toBeCloseTo(392.1875, 5);
+  });
+
+  it('每音 400 ms、晚 450 ms 时通过（旧实现因末音被裁短误判为保持不足）', () => {
+    const steps = makeNoteSteps(offsets, 400);
+    const frames = singRealistic(steps, { lagMs: 450, jitterCents: 15 });
+    const result = evaluatePhrase({ ...baseParams, frames, noteSteps: steps, noteMs: 400 });
+    expect(result.passed).toBe(true);
+  });
+
+  it('每音 1500 ms（40 BPM）、晚 600 ms 时判为跟唱太晚（旧实现在慢速下从不拒绝）', () => {
+    const steps = makeNoteSteps([0, 2, 4, 5, 7], 1500);
+    const frames = singRealistic(steps, { lagMs: 600, jitterCents: 15 });
+    const result = evaluatePhrase({ ...baseParams, frames, noteSteps: steps, noteMs: 1500 });
+    expect(result.failedNote).toMatchObject({ type: 'late', limitMs: 500 });
+  });
+
+  it('16 分音符 80 BPM、晚 500 ms（上限约 434 ms）时判为跟唱太晚', () => {
+    const noteMs = 187.5;
+    const steps = makeNoteSteps(offsets, noteMs);
+    const frames = singRealistic(steps, { lagMs: 500, jitterCents: 15 });
+    const result = evaluatePhrase({ ...baseParams, frames, noteSteps: steps, noteMs });
+    expect(result.failedNote?.type).toBe('late');
+    expect(result.failedNote.limitMs).toBeCloseTo(434.375, 5);
+  });
+
+  it('16 分音符 80 BPM、晚 400 ms（上限以内）时通过', () => {
+    const noteMs = 187.5;
+    const steps = makeNoteSteps(offsets, noteMs);
+    const frames = singRealistic(steps, { lagMs: 400, jitterCents: 15 });
+    const result = evaluatePhrase({ ...baseParams, frames, noteSteps: steps, noteMs });
+    expect(result.passed).toBe(true);
   });
 });
 
